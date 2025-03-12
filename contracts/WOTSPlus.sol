@@ -77,14 +77,6 @@ library WOTSPlus {
         require(message.length == MessageLen, string.concat("message length must be ", "32", " bytes"));
         require(signature.length == NumSignatureChunks, "Invalid signature length");
         
-        // Immediately log received signature values
-        console2.log("Received in verify:");
-        for (uint i = 0; i < signature.length; i++) {
-            console2.log("Signature chunk %d:", i);
-            console2.logBytes32(signature[i]);
-            require(uint256(signature[i]) != 0, "Signature segment is zero in verify");
-        }
-        
         bytes32 publicSeed = bytes32(publicKey[0:HashLen]);
         bytes32 publicKeyHash = bytes32(publicKey[HashLen:PublicKeySize]);
 
@@ -94,11 +86,6 @@ library WOTSPlus {
         console2.logBytes32(publicKeyHash);
         console2.log("Message:");
         console2.logBytes(message);
-        console2.log("Signature:");
-        for (uint i = 0; i < signature.length; i++) {
-            console2.log("Signature segment %d:", i);
-            console2.logBytes32(signature[i]);
-        }
 
         bytes memory publicKeySegments = new bytes(NumMessageChunks + NumChecksumChunks);
 

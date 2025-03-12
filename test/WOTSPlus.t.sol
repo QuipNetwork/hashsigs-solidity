@@ -42,8 +42,6 @@ contract WOTSPlusTest is Test {
 
         for (uint i = 0; i < NUM_SIGNATURE_CHUNKS; i++) {
             signatureArray[i] = signature[i];
-            console2.log("RECEIVED Signature chunk %d:", i);
-            console2.logBytes32(signature[i]);
             assertTrue(uint256(signature[i]) != 0, "Signature segment is zero");
         }
         
@@ -91,8 +89,6 @@ contract WOTSPlusTest is Test {
         bytes32[] memory signature = new bytes32[](NUM_SIGNATURE_CHUNKS);
         for (uint i = 0; i < NUM_SIGNATURE_CHUNKS; i++) {
             signature[i] = signatureFixed[i];
-            console2.log("Signature chunk %d before verify:", i);
-            console2.logBytes32(signature[i]);
         }
         
         // Verify the signature
