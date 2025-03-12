@@ -90,6 +90,8 @@ library WOTSPlus {
             string.concat("signature length must be 67"));
         
         bytes32 publicSeed = bytes32(publicKey[0:HashLen]);
+        bytes32[] memory randomizationElements = generateRandomizationElements(publicSeed);
+
         bytes32 publicKeyHash = bytes32(publicKey[HashLen:PublicKeySize]);
 
         // DEBUG: console.log("Public key seed:");
@@ -111,7 +113,7 @@ library WOTSPlus {
             uint8 numIterations = ChainLen - chainIdx - 1;
             bytes32 prevChainOut = signature[i];
 
-            bytes32 segment = chain(prevChainOut, publicSeed, chainIdx, numIterations);
+            bytes32 segment = chain(prevChainOut, randomizationElements, chainIdx, numIterations);
 
             // Copy bytes32 to the correct position in publicKeySegments
             uint16 offset = uint16(i) * uint16(HashLen);
@@ -132,6 +134,71 @@ library WOTSPlus {
         return computedHash == publicKeyHash;
     }
 
+    // verify: Verify a WOTS+ signature. 
+    // 1. The first part of the publicKey is a public seed used to regenerate the randomization elements. (`r` from the paper).
+    // 2. The second part of the publicKey is the hash of the NumMessageChunks + NumChecksumChunks public key segments.
+    // 3. Convert the Message to "base-w" representation (or base of ChainLen representation).
+    // 4. Compute and add the checksum. 
+    // 5. Run the chain function on each segment to reproduce each public key segment.
+    // 6. Hash all public key segments together to recreate the original public key.
+    function verifyWithRandomizationElements(
+        bytes32 publicKeyHash, 
+        bytes calldata message, 
+        bytes32[] memory signature,
+        bytes32[] memory randomizationElements
+    ) public pure returns (bool) {
+        // DEBUG: require(publicKey.length == PublicKeySize, 
+        // DEBUG:     string.concat("public key length must be ", vm.toString(PublicKeySize), " bytes"));
+        // DEBUG: require(message.length == MessageLen, 
+        // DEBUG:     string.concat("message length must be ", vm.toString(MessageLen), " bytes"));
+        // DEBUG: require(signature.length == NumSignatureChunks, 
+        // DEBUG:     string.concat("signature length must be ", vm.toString(NumSignatureChunks), " bytes, not", vm.toString(signature.length)));
+        require(publicKeyHash.length == HashLen, 
+            string.concat("public key hash length must be 32 bytes"));
+        require(message.length == MessageLen, 
+            string.concat("message length must be 32 bytes"));
+        require(signature.length == NumSignatureChunks, 
+            string.concat("signature length must be 67"));
+        
+
+        // DEBUG: console.log("Public key hash:");
+        // DEBUG: console.logBytes32(publicKeyHash);
+        // DEBUG: console.log("Message:");
+        // DEBUG: console.logBytes(message);
+
+        bytes memory publicKeySegments = new bytes(SignatureSize);
+
+        uint8[] memory chainSegments = ComputeMessageHashChainIndexes(message);
+
+
+        // Compute each public key segment. These are done by taking the signature, which is prevChainOut at chainIdx - 1, 
+        // and completing the hash chain via the chain function to recompute the public key segment.
+        for (uint8 i = 0; i < chainSegments.length; i++ ) {
+            uint8 chainIdx = chainSegments[i];
+            uint8 numIterations = ChainLen - chainIdx - 1;
+            bytes32 prevChainOut = signature[i];
+
+            bytes32 segment = chain(prevChainOut, randomizationElements, chainIdx, numIterations);
+
+            // Copy bytes32 to the correct position in publicKeySegments
+            uint16 offset = uint16(i) * uint16(HashLen);
+            setSlice32(publicKeySegments, segment, offset);
+        }
+
+        // DEBUG: console.log("Computed Public key segments:");
+        // DEBUG: console.logBytes(publicKeySegments);
+        
+
+        // Hash all public key segments together to recreate the original public key.
+        bytes32 computedHash = Hash(publicKeySegments);
+
+        // DEBUG: console.log("Computed public key hash:");
+        // DEBUG: console.logBytes32(computedHash);
+
+        // Compare computed hash with stored public key hash
+        return computedHash == publicKeyHash;
+    }    
+
     // sign: Sign a message with a WOTS+ private key. Do not use this, it is present as an example and
     // you should be using a typescript version of this function because it requires your private key.
     function sign(bytes32 privateKey, bytes calldata message) public pure returns (bytes32[NumSignatureChunks] memory) {
@@ -146,14 +213,16 @@ library WOTSPlus {
             string.concat("message length must be 32 bytes"));
 
         bytes32 publicSeed = prf(privateKey, 0);
+        bytes32[] memory randomizationElements = generateRandomizationElements(publicSeed);
+        bytes32 functionKey = randomizationElements[0];
         bytes32[NumSignatureChunks] memory signature;
 
         uint8[] memory chainSegments = ComputeMessageHashChainIndexes(message);
 
         for (uint8 i = 0; i < chainSegments.length; i++ ) {
             uint16 chainIdx = chainSegments[i];
-            bytes32 secretKeySegment = prf(privateKey, i + 1);
-            signature[i] = chain(secretKeySegment, publicSeed, 0, chainIdx);
+            bytes32 secretKeySegment = Hash(abi.encodePacked(functionKey, prf(privateKey, i + 1)));
+            signature[i] = chain(secretKeySegment, randomizationElements, 0, chainIdx);
         }
 
         return signature;
@@ -166,11 +235,21 @@ library WOTSPlus {
         bytes32 privateKey = prf(privateSeed, 0);
         bytes32 publicSeed = prf(privateKey, 0);
 
+        bytes32[] memory randomizationElements = generateRandomizationElements(publicSeed);
+        // functionKey is `k` from the paper, we define it as the index 0 from the prf, 
+        // as the prf output is not used on the first element in the chain function.
+        // This is hashed in on each chain iteration along with the randomization element.
+        // It is part of the public key, so safe to define it with the public seed.
+        // To set it, we hash it into the first segment with the secret key.
+        // TODO: take a closer look at XMSS et al and see how they handle this, we should be
+        // doing the same.
+        bytes32 functionKey = randomizationElements[0];
+
         bytes memory publicKeySegments = new bytes(SignatureSize);
 
         for (uint8 i = 0; i < NumSignatureChunks; i++) {
-            bytes32 secretKeySegment = prf(privateKey, i + 1);
-            bytes32 segment = chain(secretKeySegment, publicSeed, 0, ChainLen - 1);
+            bytes32 secretKeySegment = Hash(abi.encodePacked(functionKey, prf(privateKey, i + 1)));
+            bytes32 segment = chain(secretKeySegment, randomizationElements, 0, ChainLen - 1);
 
             // Copy bytes32 to the correct position in publicKeySegments
             uint16 offset = uint16(i) * uint16(HashLen);
@@ -189,33 +268,25 @@ library WOTSPlus {
         return (publicKey, privateKey);
     }
 
+    function generateRandomizationElements(bytes32 publicSeed) public pure returns (bytes32[] memory) {
+        bytes32[] memory elements = new bytes32[](NumSignatureChunks);
+        for (uint8 i = 0; i < NumSignatureChunks; i++) {
+            elements[i] = prf(publicSeed, i);
+        }
+        return elements;
+    }
+
     // chain is the c_k^i function, 
     // the hash of (prevChainOut XOR randomization element at index).
     // As a practical matter, we generate the randomization elements
     // via a seed like in XMSS(rfc8391) with a defined PRF.
-    function chain(bytes32 prevChainOut, bytes32 publicSeed, uint16 index, uint16 steps) private pure returns (bytes32) {
-        require((index + steps) < ChainLen, 
-            string.concat("steps + index must be less than 16"));
+    function chain(bytes32 prevChainOut, bytes32[] memory randomizationElements, uint16 index, uint16 steps) private pure returns (bytes32) {
         // DEBUG: require((index + steps) < ChainLen, 
         // DEBUG:     string.concat("steps + index must be less than ", vm.toString(ChainLen)));
 
-        // Skip the functionKey calculation when it is unneeded. 
-        if (steps == 0) {
-            return prevChainOut;
-        }
-
-        // functionKey is `k` from the paper, we define it as the index 0 from the prf, 
-        // as the prf output is not used on the first element in the chain function.
-        // This is hashed in on each chain iteration along with the randomization element.
-        // It is part of the public key, so safe to define it with the public seed.
-        // note: maybe worthwhile to calculate this outside this function, e.g., in keygen
-        // off the public seed and/or store it
-        bytes32 functionKey = prf(publicSeed, 0);
-    
         bytes32 chainOut = prevChainOut;
         for (uint8 i = 1; i <= steps; i++) {
-            bytes32 randomizationElement = prf(publicSeed, index + i);
-            chainOut = Hash(abi.encodePacked(functionKey, xor(chainOut, randomizationElement)));
+            chainOut = Hash(abi.encodePacked(xor(chainOut, randomizationElements[i + index])));
         }
         return chainOut;
     }

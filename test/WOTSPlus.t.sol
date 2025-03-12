@@ -70,4 +70,55 @@ contract WOTSPlusTest is Test {
 
         assertTrue(isValid, "Signature verification failed");
     }
+
+    function testVerifyValidSignatureRandomizationElements() public pure {
+        bytes32 privateSeed = bytes32(uint256(1));
+        (bytes memory publicKey, bytes32 privateKey) = WOTSPlus.generateKeyPair(privateSeed);
+        
+        // Create a test message
+        bytes memory message = new bytes(WOTSPlus.MessageLen);
+        for (uint i = 0; i < WOTSPlus.MessageLen; i++) {
+            message[i] = bytes1(uint8(i));
+        }
+        
+        // Sign the message
+        bytes32[NUM_SIGNATURE_CHUNKS] memory signatureFixed = WOTSPlus.sign(privateKey, message);
+
+        bytes32 publicSeed;
+        assembly {
+            publicSeed := mload(add(publicKey, 32))  
+        }
+        bytes32 publicKeyHash;
+        assembly {
+            publicKeyHash := mload(add(publicKey, 64))
+        }
+
+        bytes32[] memory randomizationElements = WOTSPlus.generateRandomizationElements(publicSeed);
+        
+        // Convert fixed array to dynamic array
+        bytes32[] memory signature = new bytes32[](NUM_SIGNATURE_CHUNKS);
+        for (uint i = 0; i < NUM_SIGNATURE_CHUNKS; i++) {
+            signature[i] = signatureFixed[i];
+        }
+        
+        // Verify the signature
+        bool isValid = WOTSPlus.verifyWithRandomizationElements(publicKeyHash, message, signature, randomizationElements);
+
+        assertTrue(isValid, "Signature verification failed");
+    }
+    
+    function testVerifyMany() public noGasMetering {
+        for (uint i = 1; i < 2; i++) {
+            bytes32 privateSeed = bytes32(uint256(i));
+            (bytes memory publicKey, bytes32 privateKey) = WOTSPlus.generateKeyPair(privateSeed);
+            bytes memory message = bytes.concat(keccak256(abi.encodePacked("Hello World", i)));
+            bytes32[NUM_SIGNATURE_CHUNKS] memory signatureFixed = WOTSPlus.sign(privateKey, message);
+            bytes32[] memory signature = new bytes32[](NUM_SIGNATURE_CHUNKS);
+            for (uint j = 0; j < NUM_SIGNATURE_CHUNKS; j++) {
+                signature[j] = signatureFixed[j];
+            }
+            bool isValid = WOTSPlus.verify(publicKey, message, signature);
+            assertTrue(isValid, "Signature verification failed");
+        }
+    }    
 }
