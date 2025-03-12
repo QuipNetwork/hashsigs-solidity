@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 pragma solidity^0.8.28;
 
+import {console2} from "forge-std/console2.sol";
+
 library WOTSPlus {
     // SignatureSize: The size of the signature in bytes.
     uint8 public constant SignatureSize = NumSignatureChunks * HashLen;
@@ -66,12 +68,37 @@ library WOTSPlus {
     // 4. Compute and add the checksum. 
     // 5. Run the chain function on each segment to reproduce each public key segment.
     // 6. Hash all public key segments together to recreate the original public key.
-    function verify(bytes calldata publicKey, bytes calldata message, bytes32[NumSignatureChunks] calldata signature) public pure returns (bool) {
+    function verify(
+        bytes calldata publicKey, 
+        bytes calldata message, 
+        bytes32[] memory signature
+    ) public pure returns (bool) {
         require(publicKey.length == PublicKeySize, string.concat("public key length must be ", "64", " bytes"));
         require(message.length == MessageLen, string.concat("message length must be ", "32", " bytes"));
+        require(signature.length == NumSignatureChunks, "Invalid signature length");
+        
+        // Immediately log received signature values
+        console2.log("Received in verify:");
+        for (uint i = 0; i < signature.length; i++) {
+            console2.log("Signature chunk %d:", i);
+            console2.logBytes32(signature[i]);
+            require(uint256(signature[i]) != 0, "Signature segment is zero in verify");
+        }
         
         bytes32 publicSeed = bytes32(publicKey[0:HashLen]);
         bytes32 publicKeyHash = bytes32(publicKey[HashLen:PublicKeySize]);
+
+        console2.log("Public key seed:");
+        console2.logBytes32(publicSeed);
+        console2.log("Public key hash:");
+        console2.logBytes32(publicKeyHash);
+        console2.log("Message:");
+        console2.logBytes(message);
+        console2.log("Signature:");
+        for (uint i = 0; i < signature.length; i++) {
+            console2.log("Signature segment %d:", i);
+            console2.logBytes32(signature[i]);
+        }
 
         bytes memory publicKeySegments = new bytes(NumMessageChunks + NumChecksumChunks);
 
@@ -86,6 +113,11 @@ library WOTSPlus {
             bytes32 prevChainOut = signature[i];
 
             bytes32 segment = chain(prevChainOut, publicSeed, chainIdx, numIterations);
+            // Debug prints
+            console2.log("Starting signature segment %d:", i);
+            console2.logBytes32(signature[i]);
+            console2.log("Generated public key segment %d:", i);
+            console2.logBytes32(segment);
 
             publicKeySegments = bytes.concat(publicKeySegments, segment);
         }
@@ -99,12 +131,12 @@ library WOTSPlus {
 
     // sign: Sign a message with a WOTS+ private key. Do not use this, it is present as an example and
     // you should be using a typescript version of this function because it requires your private key.
-    function sign(bytes32 privateKey, bytes calldata message) public pure returns (bytes memory) {
+    function sign(bytes32 privateKey, bytes calldata message) public pure returns (bytes32[NumSignatureChunks] memory) {
         require(privateKey.length == HashLen, string.concat("private key length must be ", "32", " bytes"));
         require(message.length == MessageLen, string.concat("message length must be ", "32", " bytes"));
 
         bytes32 publicSeed = prf(privateKey, 0);
-        bytes32[] memory signature = new bytes32[](NumMessageChunks + NumChecksumChunks);
+        bytes32[NumSignatureChunks] memory signature;
 
         uint8[] memory chainSegments = ComputeMessageHashChainIndexes(message);
 
@@ -112,9 +144,13 @@ library WOTSPlus {
             uint16 chainIdx = chainSegments[i];
             bytes32 secretKeySegment = prf(privateKey, i + 1);
             signature[i] = chain(secretKeySegment, publicSeed, 0, chainIdx);
+            
+            // Debug prints
+            console2.log("Signature segment %d:", i);
+            console2.logBytes32(signature[i]);
         }
 
-        return abi.encodePacked(signature);
+        return signature;
     }
 
     // generateKeyPair: Generate a WOTS+ key pair. Do not use this, it is present as an example and
@@ -128,6 +164,10 @@ library WOTSPlus {
         for (uint8 i = 0; i < publicKeySegments.length; i++) {
             bytes32 secretKeySegment = prf(privateKey, i + 1);
             publicKeySegments[i] = chain(secretKeySegment, publicSeed, 0, ChainLen - 1);
+
+            console2.log("Public key segment %d:", i);
+            console2.logBytes32(publicKeySegments[i]);
+
         }
 
         bytes memory publicKey = abi.encodePacked(publicSeed, Hash(abi.encodePacked(publicKeySegments)));
