@@ -57,6 +57,8 @@ contract WOTSPlusTest is Test {
         // Generate a key pair
         bytes32 privateSeed = bytes32(uint256(1));
         (bytes memory publicKey, bytes32 privateKey) = WOTSPlus.generateKeyPair(privateSeed);
+
+        require(uint256(privateKey) != 0, "Private key is zero");
         
         // Create a test message
         bytes memory message = new bytes(WOTSPlus.MessageLen);
@@ -65,14 +67,14 @@ contract WOTSPlusTest is Test {
         }
         
         // Create an invalid signature (all zeros)
-        bytes32[] memory invalidSignature;
+        bytes32[] memory invalidSignature = new bytes32[](NUM_SIGNATURE_CHUNKS);
         
         // Verify should return false
         bool isValid = WOTSPlus.verify(publicKey, message, invalidSignature);
         assertFalse(isValid, "Invalid signature was incorrectly verified");
     }
 
-    function testVerifyValidSignature() public {
+    function testVerifyValidSignature() pure public {
         bytes32 privateSeed = bytes32(uint256(1));
         (bytes memory publicKey, bytes32 privateKey) = WOTSPlus.generateKeyPair(privateSeed);
         

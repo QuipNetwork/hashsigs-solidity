@@ -1,11 +1,14 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 pragma solidity^0.8.28;
 
-import {console2} from "forge-std/console2.sol";
+import {console2 as console} from "forge-std/console2.sol";
+import {Vm} from "forge-std/Vm.sol";
 
 library WOTSPlus {
+    Vm constant vm = Vm(address(uint160(uint256(keccak256("hevm cheat code")))));
+
     // SignatureSize: The size of the signature in bytes.
-    uint8 public constant SignatureSize = NumSignatureChunks * HashLen;
+    uint16 public constant SignatureSize = uint16(NumSignatureChunks) * uint16(HashLen);
     // PublicKeySize: The size of the public key in bytes.
     uint8 public constant PublicKeySize = HashLen * 2;
 
@@ -73,21 +76,24 @@ library WOTSPlus {
         bytes calldata message, 
         bytes32[] memory signature
     ) public pure returns (bool) {
-        require(publicKey.length == PublicKeySize, string.concat("public key length must be ", "64", " bytes"));
-        require(message.length == MessageLen, string.concat("message length must be ", "32", " bytes"));
-        require(signature.length == NumSignatureChunks, "Invalid signature length");
+        require(publicKey.length == PublicKeySize, 
+            string.concat("public key length must be ", vm.toString(PublicKeySize), " bytes"));
+        require(message.length == MessageLen, 
+            string.concat("message length must be ", vm.toString(MessageLen), " bytes"));
+        require(signature.length == NumSignatureChunks, 
+            string.concat("signature length must be ", vm.toString(NumSignatureChunks), " bytes, not", vm.toString(signature.length)));
         
         bytes32 publicSeed = bytes32(publicKey[0:HashLen]);
         bytes32 publicKeyHash = bytes32(publicKey[HashLen:PublicKeySize]);
 
-        console2.log("Public key seed:");
-        console2.logBytes32(publicSeed);
-        console2.log("Public key hash:");
-        console2.logBytes32(publicKeyHash);
-        console2.log("Message:");
-        console2.logBytes(message);
+        console.log("Public key seed:");
+        console.logBytes32(publicSeed);
+        console.log("Public key hash:");
+        console.logBytes32(publicKeyHash);
+        console.log("Message:");
+        console.logBytes(message);
 
-        bytes memory publicKeySegments = new bytes(NumMessageChunks + NumChecksumChunks);
+        bytes memory publicKeySegments = new bytes(SignatureSize);
 
         // would it be clearer to compute these together in a subfunction, hiding the checksum details entirely?
         uint8[] memory chainSegments = ComputeMessageHashChainIndexes(message);
@@ -100,27 +106,33 @@ library WOTSPlus {
             bytes32 prevChainOut = signature[i];
 
             bytes32 segment = chain(prevChainOut, publicSeed, chainIdx, numIterations);
-            // Debug prints
-            console2.log("Starting signature segment %d:", i);
-            console2.logBytes32(signature[i]);
-            console2.log("Generated public key segment %d:", i);
-            console2.logBytes32(segment);
 
-            publicKeySegments = bytes.concat(publicKeySegments, segment);
+            // Copy bytes32 to the correct position in publicKeySegments
+            uint16 offset = uint16(i) * uint16(HashLen);
+            setSlice32(publicKeySegments, segment, offset);
         }
+
+        console.log("Computed Public key segments:");
+        console.logBytes(publicKeySegments);
+        
 
         // Hash all public key segments together to recreate the original public key.
         bytes32 computedHash = Hash(publicKeySegments);
 
+        console.log("Computed public key hash:");
+        console.logBytes32(computedHash);
+
         // Compare computed hash with stored public key hash
-        return computedHash == bytes32(publicKeyHash);
+        return computedHash == publicKeyHash;
     }
 
     // sign: Sign a message with a WOTS+ private key. Do not use this, it is present as an example and
     // you should be using a typescript version of this function because it requires your private key.
     function sign(bytes32 privateKey, bytes calldata message) public pure returns (bytes32[NumSignatureChunks] memory) {
-        require(privateKey.length == HashLen, string.concat("private key length must be ", "32", " bytes"));
-        require(message.length == MessageLen, string.concat("message length must be ", "32", " bytes"));
+        require(privateKey.length == HashLen, 
+            string.concat("private key length must be ", vm.toString(HashLen), " bytes"));
+        require(message.length == MessageLen, 
+            string.concat("message length must be ", vm.toString(MessageLen), " bytes"));
 
         bytes32 publicSeed = prf(privateKey, 0);
         bytes32[NumSignatureChunks] memory signature;
@@ -131,10 +143,6 @@ library WOTSPlus {
             uint16 chainIdx = chainSegments[i];
             bytes32 secretKeySegment = prf(privateKey, i + 1);
             signature[i] = chain(secretKeySegment, publicSeed, 0, chainIdx);
-            
-            // Debug prints
-            console2.log("Signature segment %d:", i);
-            console2.logBytes32(signature[i]);
         }
 
         return signature;
@@ -147,17 +155,26 @@ library WOTSPlus {
         bytes32 privateKey = prf(privateSeed, 0);
         bytes32 publicSeed = prf(privateKey, 0);
 
-        bytes32[] memory publicKeySegments = new bytes32[](NumMessageChunks + NumChecksumChunks);
-        for (uint8 i = 0; i < publicKeySegments.length; i++) {
+        bytes memory publicKeySegments = new bytes(SignatureSize);
+
+        for (uint8 i = 0; i < NumSignatureChunks; i++) {
             bytes32 secretKeySegment = prf(privateKey, i + 1);
-            publicKeySegments[i] = chain(secretKeySegment, publicSeed, 0, ChainLen - 1);
+            bytes32 segment = chain(secretKeySegment, publicSeed, 0, ChainLen - 1);
 
-            console2.log("Public key segment %d:", i);
-            console2.logBytes32(publicKeySegments[i]);
-
+            // Copy bytes32 to the correct position in publicKeySegments
+            uint16 offset = uint16(i) * uint16(HashLen);
+            setSlice32(publicKeySegments, segment, offset);
         }
 
-        bytes memory publicKey = abi.encodePacked(publicSeed, Hash(abi.encodePacked(publicKeySegments)));
+        console.log("Public key segments:");
+        console.logBytes(publicKeySegments);
+
+        bytes32 publicKeyHash = Hash(publicKeySegments);
+
+        console.log("Public key hash:");
+        console.logBytes32(publicKeyHash);
+
+        bytes memory publicKey = abi.encodePacked(publicSeed, publicKeyHash);
         return (publicKey, privateKey);
     }
 
@@ -166,10 +183,8 @@ library WOTSPlus {
     // As a practical matter, we generate the randomization elements
     // via a seed like in XMSS(rfc8391) with a defined PRF.
     function chain(bytes32 prevChainOut, bytes32 publicSeed, uint16 index, uint16 steps) private pure returns (bytes32) {
-        // fail fast when out of range
-        // note: maybe this is wasteful since the functions calling this one should never send it?
-        require ((index + steps) < ChainLen, 
-            string.concat("steps + index must be less than ", "16"));
+        require((index + steps) < ChainLen, 
+            string.concat("steps + index must be less than ", vm.toString(ChainLen)));
 
         // Skip the functionKey calculation when it is unneeded. 
         if (steps == 0) {
@@ -195,6 +210,13 @@ library WOTSPlus {
     // xor: XOR two bytes32 values
     function xor(bytes32 a, bytes32 b) internal pure returns (bytes32) {
         return bytes32(uint256(a) ^ uint256(b));
+    }
+
+    // There's no built-in x[a:b] semantic for bytes or bytes32 unless it's calldata, apparently...
+    function setSlice32(bytes memory dst, bytes32 src, uint16 offset) internal pure {
+        assembly {
+            mstore(add(add(dst, 32), offset), src)
+        }
     }
 
     // prf: Generate randomization elements from seed and index
