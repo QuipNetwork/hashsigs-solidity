@@ -107,8 +107,8 @@ contract WOTSPlusTest is Test {
         assertTrue(isValid, "Signature verification failed");
     }
     
-    function testVerifyMany() public noGasMetering {
-        for (uint i = 1; i < 2; i++) {
+    function testVerifyMany() public pure {
+        for (uint i = 1; i < 200; i++) {
             bytes32 privateSeed = bytes32(uint256(i));
             (bytes memory publicKey, bytes32 privateKey) = WOTSPlus.generateKeyPair(privateSeed);
             bytes memory message = bytes.concat(keccak256(abi.encodePacked("Hello World", i)));
@@ -121,4 +121,29 @@ contract WOTSPlusTest is Test {
             assertTrue(isValid, "Signature verification failed");
         }
     }    
+
+    function testVerifyManyWithRandomizationElements() public pure {
+        for (uint i = 1; i < 200; i++) {
+            bytes32 privateSeed = bytes32(uint256(i));
+            (bytes memory publicKey, bytes32 privateKey) = WOTSPlus.generateKeyPair(privateSeed);
+            bytes memory message = bytes.concat(keccak256(abi.encodePacked("Hello World", i)));
+            bytes32[NUM_SIGNATURE_CHUNKS] memory signatureFixed = WOTSPlus.sign(privateKey, message);
+            bytes32[] memory signature = new bytes32[](NUM_SIGNATURE_CHUNKS);
+            for (uint j = 0; j < NUM_SIGNATURE_CHUNKS; j++) {
+                signature[j] = signatureFixed[j];
+            }
+            bytes32 publicSeed;
+            assembly {
+                publicSeed := mload(add(publicKey, 32))  
+            }
+            bytes32 publicKeyHash;
+            assembly {
+                publicKeyHash := mload(add(publicKey, 64))
+            }
+            bytes32[] memory randomizationElements = WOTSPlus.generateRandomizationElements(publicSeed);
+            bool isValid = WOTSPlus.verifyWithRandomizationElements(publicKeyHash, message, signature, randomizationElements);
+            assertTrue(isValid, "Signature verification failed");
+        }
+    }    
+
 }
