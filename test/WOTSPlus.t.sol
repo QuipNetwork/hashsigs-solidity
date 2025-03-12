@@ -28,9 +28,7 @@ contract WOTSPlusTest is Test {
     function testSignAndVerifyEmptySignature() public {
         // Generate a key pair
         bytes32 privateSeed = bytes32(uint256(1));
-        vm.startSnapshotGas("WOTS+ KeyGen");
         (bytes memory publicKey, bytes32 privateKey) = WOTSPlus.generateKeyPair(privateSeed);
-        uint256 keyGenGas = vm.stopSnapshotGas("WOTS+ KeyGen");
         
         // Create a test message
         bytes memory message = new bytes(WOTSPlus.MessageLen);
@@ -40,21 +38,14 @@ contract WOTSPlusTest is Test {
         
         bytes32[] memory signatureArray = new bytes32[](NUM_SIGNATURE_CHUNKS);
         
-        vm.startSnapshotGas("WOTS+ Verify");
         bool isValid = WOTSPlus.verify(publicKey, message, signatureArray);
-        uint256 verifyGas = vm.stopSnapshotGas("WOTS+ Verify");
 
         assertFalse(isValid, "Signature verification should have failed");
-
-        console.log("Gas used for key generation:", keyGenGas);
-        console.log("Gas used for verification:", verifyGas);
     }
 
     function testVerifyValidSignature() public {
         bytes32 privateSeed = bytes32(uint256(1));
-        vm.startSnapshotGas("WOTS+ KeyGen");
         (bytes memory publicKey, bytes32 privateKey) = WOTSPlus.generateKeyPair(privateSeed);
-        uint256 keyGenGas = vm.stopSnapshotGas("WOTS+ KeyGen");
         
         // Create a test message
         bytes memory message = new bytes(WOTSPlus.MessageLen);
@@ -63,9 +54,7 @@ contract WOTSPlusTest is Test {
         }
         
         // Sign the message
-        vm.startSnapshotGas("WOTS+ Sign");
         bytes32[NUM_SIGNATURE_CHUNKS] memory signatureFixed = WOTSPlus.sign(privateKey, message);
-        uint256 signGas = vm.stopSnapshotGas("WOTS+ Sign");
         
         // Convert fixed array to dynamic array
         bytes32[] memory signature = new bytes32[](NUM_SIGNATURE_CHUNKS);
@@ -74,14 +63,8 @@ contract WOTSPlusTest is Test {
         }
         
         // Verify the signature
-        vm.startSnapshotGas("WOTS+ Verify");
         bool isValid = WOTSPlus.verify(publicKey, message, signature);
-        uint256 verifyGas = vm.stopSnapshotGas("WOTS+ Verify");
 
         assertTrue(isValid, "Signature verification failed");
-
-        console.log("Gas used for key generation:", keyGenGas);
-        console.log("Gas used for signing:", signGas);
-        console.log("Gas used for verification:", verifyGas);
     }
 }
