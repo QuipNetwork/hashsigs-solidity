@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 pragma solidity^0.8.28;
 
-import {console2 as console} from "forge-std/console2.sol";
-import {Vm} from "forge-std/Vm.sol";
+// DEBUG: import {Vm} from "../lib/forge-std/src/Vm.sol";
+// DEBUG: import {console} from "../lib/forge-std/src/console.sol";
 
 library WOTSPlus {
-    Vm constant vm = Vm(address(uint160(uint256(keccak256("hevm cheat code")))));
+    // DEBUG: Vm constant vm = Vm(address(uint160(uint256(keccak256("hevm cheat code")))));
 
     // SignatureSize: The size of the signature in bytes.
     uint16 public constant SignatureSize = uint16(NumSignatureChunks) * uint16(HashLen);
@@ -76,22 +76,28 @@ library WOTSPlus {
         bytes calldata message, 
         bytes32[] memory signature
     ) public pure returns (bool) {
+        // DEBUG: require(publicKey.length == PublicKeySize, 
+        // DEBUG:     string.concat("public key length must be ", vm.toString(PublicKeySize), " bytes"));
+        // DEBUG: require(message.length == MessageLen, 
+        // DEBUG:     string.concat("message length must be ", vm.toString(MessageLen), " bytes"));
+        // DEBUG: require(signature.length == NumSignatureChunks, 
+        // DEBUG:     string.concat("signature length must be ", vm.toString(NumSignatureChunks), " bytes, not", vm.toString(signature.length)));
         require(publicKey.length == PublicKeySize, 
-            string.concat("public key length must be ", vm.toString(PublicKeySize), " bytes"));
+            string.concat("public key length must be 64 bytes"));
         require(message.length == MessageLen, 
-            string.concat("message length must be ", vm.toString(MessageLen), " bytes"));
+            string.concat("message length must be 32 bytes"));
         require(signature.length == NumSignatureChunks, 
-            string.concat("signature length must be ", vm.toString(NumSignatureChunks), " bytes, not", vm.toString(signature.length)));
+            string.concat("signature length must be 67"));
         
         bytes32 publicSeed = bytes32(publicKey[0:HashLen]);
         bytes32 publicKeyHash = bytes32(publicKey[HashLen:PublicKeySize]);
 
-        console.log("Public key seed:");
-        console.logBytes32(publicSeed);
-        console.log("Public key hash:");
-        console.logBytes32(publicKeyHash);
-        console.log("Message:");
-        console.logBytes(message);
+        // DEBUG: console.log("Public key seed:");
+        // DEBUG: console.logBytes32(publicSeed);
+        // DEBUG: console.log("Public key hash:");
+        // DEBUG: console.logBytes32(publicKeyHash);
+        // DEBUG: console.log("Message:");
+        // DEBUG: console.logBytes(message);
 
         bytes memory publicKeySegments = new bytes(SignatureSize);
 
@@ -112,15 +118,15 @@ library WOTSPlus {
             setSlice32(publicKeySegments, segment, offset);
         }
 
-        console.log("Computed Public key segments:");
-        console.logBytes(publicKeySegments);
+        // DEBUG: console.log("Computed Public key segments:");
+        // DEBUG: console.logBytes(publicKeySegments);
         
 
         // Hash all public key segments together to recreate the original public key.
         bytes32 computedHash = Hash(publicKeySegments);
 
-        console.log("Computed public key hash:");
-        console.logBytes32(computedHash);
+        // DEBUG: console.log("Computed public key hash:");
+        // DEBUG: console.logBytes32(computedHash);
 
         // Compare computed hash with stored public key hash
         return computedHash == publicKeyHash;
@@ -129,10 +135,15 @@ library WOTSPlus {
     // sign: Sign a message with a WOTS+ private key. Do not use this, it is present as an example and
     // you should be using a typescript version of this function because it requires your private key.
     function sign(bytes32 privateKey, bytes calldata message) public pure returns (bytes32[NumSignatureChunks] memory) {
+        // DEBUG: require(privateKey.length == HashLen, 
+        // DEBUG:     string.concat("private key length must be ", vm.toString(HashLen), " bytes"));
+        // DEBUG: require(message.length == MessageLen, 
+        // DEBUG:     string.concat("message length must be ", vm.toString(MessageLen), " bytes"));
+
         require(privateKey.length == HashLen, 
-            string.concat("private key length must be ", vm.toString(HashLen), " bytes"));
+            string.concat("private key length must be 32 bytes"));
         require(message.length == MessageLen, 
-            string.concat("message length must be ", vm.toString(MessageLen), " bytes"));
+            string.concat("message length must be 32 bytes"));
 
         bytes32 publicSeed = prf(privateKey, 0);
         bytes32[NumSignatureChunks] memory signature;
@@ -166,13 +177,13 @@ library WOTSPlus {
             setSlice32(publicKeySegments, segment, offset);
         }
 
-        console.log("Public key segments:");
-        console.logBytes(publicKeySegments);
+        // DEBUG: console.log("Public key segments:");
+        // DEBUG: console.logBytes(publicKeySegments);
 
         bytes32 publicKeyHash = Hash(publicKeySegments);
 
-        console.log("Public key hash:");
-        console.logBytes32(publicKeyHash);
+        // DEBUG: console.log("Public key hash:");
+        // DEBUG: console.logBytes32(publicKeyHash);
 
         bytes memory publicKey = abi.encodePacked(publicSeed, publicKeyHash);
         return (publicKey, privateKey);
@@ -184,7 +195,9 @@ library WOTSPlus {
     // via a seed like in XMSS(rfc8391) with a defined PRF.
     function chain(bytes32 prevChainOut, bytes32 publicSeed, uint16 index, uint16 steps) private pure returns (bytes32) {
         require((index + steps) < ChainLen, 
-            string.concat("steps + index must be less than ", vm.toString(ChainLen)));
+            string.concat("steps + index must be less than 16"));
+        // DEBUG: require((index + steps) < ChainLen, 
+        // DEBUG:     string.concat("steps + index must be less than ", vm.toString(ChainLen)));
 
         // Skip the functionKey calculation when it is unneeded. 
         if (steps == 0) {

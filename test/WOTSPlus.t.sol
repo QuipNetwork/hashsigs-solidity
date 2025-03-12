@@ -25,10 +25,13 @@ contract WOTSPlusTest is Test {
         assertTrue(uint256(privateKey) != 0);
     }
 
-    function testSignAndVerifyEmptySignature() public {
+    function testSignAndVerifyEmptySignature() public pure {
         // Generate a key pair
         bytes32 privateSeed = bytes32(uint256(1));
         (bytes memory publicKey, bytes32 privateKey) = WOTSPlus.generateKeyPair(privateSeed);
+
+        require(publicKey.length == WOTSPlus.PublicKeySize, "Public key length is incorrect");
+        require(uint256(privateKey) != 0, "Private key is zero");
         
         // Create a test message
         bytes memory message = new bytes(WOTSPlus.MessageLen);
@@ -43,7 +46,7 @@ contract WOTSPlusTest is Test {
         assertFalse(isValid, "Signature verification should have failed");
     }
 
-    function testVerifyValidSignature() public {
+    function testVerifyValidSignature() public pure {
         bytes32 privateSeed = bytes32(uint256(1));
         (bytes memory publicKey, bytes32 privateKey) = WOTSPlus.generateKeyPair(privateSeed);
         
