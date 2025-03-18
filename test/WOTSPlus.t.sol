@@ -144,6 +144,143 @@ contract WOTSPlusTest is Test {
             bool isValid = WOTSPlus.verifyWithRandomizationElements(publicKeyHash, message, signature, randomizationElements);
             assertTrue(isValid, "Signature verification failed");
         }
-    }    
+    }
 
+    struct TestVector {
+        bytes32 privateKey;
+        bytes32 publicSeed;
+        bytes32[] publicKeySegments;
+        bytes32[] randomizationElements;
+        bytes publicKey;
+        bytes message;
+        bytes32[] signature;
+    }
+
+    function testVectors() public {
+        string memory vectorPath = "test/test_vectors/wotsplus_keccak256.json";
+        uint256 numVectors = 5;
+        TestVector[] memory vectors = new TestVector[](numVectors);
+        
+        // First, generate all vectors
+        for (uint i = 0; i < numVectors; i++) {
+            // Generate deterministic test data
+            bytes32 privateSeed = keccak256(abi.encodePacked("seed", i));
+            bytes memory message = new bytes(WOTSPlus.MessageLen);
+            for (uint j = 0; j < WOTSPlus.MessageLen; j++) {
+                message[j] = bytes1(uint8((i * j) % 256)); // Deterministic message
+            }
+            
+            // Generate key pair and signature
+            (bytes memory publicKey, bytes32 privateKey) = WOTSPlus.generateKeyPair(privateSeed);
+            
+            bytes32 publicSeed;
+            assembly {
+                publicSeed := mload(add(publicKey, 32))
+            }
+            
+            bytes32[] memory randomizationElements = WOTSPlus.generateRandomizationElements(publicSeed);
+            bytes32[] memory publicKeySegments = new bytes32[](NUM_SIGNATURE_CHUNKS);
+            for (uint j = 0; j < NUM_SIGNATURE_CHUNKS; j++) {
+                publicKeySegments[j] = randomizationElements[j];
+            }
+            
+            bytes32[NUM_SIGNATURE_CHUNKS] memory signatureFixed = WOTSPlus.sign(privateKey, message);
+            bytes32[] memory signature = new bytes32[](NUM_SIGNATURE_CHUNKS);
+            for (uint j = 0; j < NUM_SIGNATURE_CHUNKS; j++) {
+                signature[j] = signatureFixed[j];
+            }
+            
+            vectors[i] = TestVector({
+                privateKey: privateKey,
+                publicSeed: publicSeed,
+                publicKeySegments: publicKeySegments,
+                randomizationElements: randomizationElements,
+                publicKey: publicKey,
+                message: message,
+                signature: signature
+            });
+            
+            // Verify generated signature
+            bool isValid = WOTSPlus.verify(publicKey, message, signature);
+            assertTrue(isValid, string.concat("Generated vector ", vm.toString(i), " signature invalid"));
+        }
+        
+        // Try to read existing file and verify
+        try vm.readFile(vectorPath) {
+            // Format the existing JSON using jq to ensure consistent formatting
+            string[] memory command = new string[](3);
+            command[0] = "jq";
+            command[1] = ".";
+            command[2] = vectorPath;
+            string memory formattedExisting = string(vm.ffi(command));
+            
+            // Generate new vectors and format them the same way
+            string memory newJson = generateVectorJson(vectors);
+            string memory testFilePath = "test/test_vectors/tmp.json";
+            vm.writeFile(testFilePath, newJson);
+            command[2] = testFilePath;
+            string memory formattedNew = string(vm.ffi(command));
+            
+            assertEq(formattedExisting, formattedNew, "Test vector JSON mismatch");
+        } catch {
+            // Generate and write new vectors as before
+            string memory newJson = generateVectorJson(vectors);
+            vm.writeJson(newJson, vectorPath);
+            
+            // Format using jq
+            string[] memory command = new string[](3);
+            command[0] = "jq";
+            command[1] = ".";
+            command[2] = vectorPath;
+            bytes memory formattedJson = vm.ffi(command);
+            vm.writeFile(vectorPath, string(formattedJson));
+            
+            emit log_string("WARNING: Test vectors file not found or unreadable. New vectors were generated.");
+            emit log_string("Please commit the new test vectors file and verify its contents.");
+            assertTrue(false, "Test failed: vectors file needs to be generated");
+        }
+    }
+
+    function generateVectorJson(TestVector[] memory vectors) internal pure returns (string memory) {
+        string memory completeJson = "{";
+        for (uint i = 0; i < vectors.length; i++) {
+            if (i > 0) completeJson = string.concat(completeJson, ",");
+            string memory vectorName = string.concat('"vector', vm.toString(i), '":');
+            string memory vectorJson = "{";
+            
+            vectorJson = string.concat(vectorJson, '"privateKey":"', vm.toString(vectors[i].privateKey), '"');
+            vectorJson = string.concat(vectorJson, ',"publicSeed":"', vm.toString(vectors[i].publicSeed), '"');
+            
+            string memory segmentsJson = "[";
+            for (uint j = 0; j < vectors[i].publicKeySegments.length; j++) {
+                if (j > 0) segmentsJson = string.concat(segmentsJson, ",");
+                segmentsJson = string.concat(segmentsJson, '"', vm.toString(vectors[i].publicKeySegments[j]), '"');
+            }
+            segmentsJson = string.concat(segmentsJson, "]");
+            vectorJson = string.concat(vectorJson, ',"publicKeySegments":', segmentsJson);
+
+            segmentsJson = "[";
+            for (uint j = 0; j < vectors[i].randomizationElements.length; j++) {
+                if (j > 0) segmentsJson = string.concat(segmentsJson, ",");
+                segmentsJson = string.concat(segmentsJson, '"', vm.toString(vectors[i].randomizationElements[j]), '"');
+            }
+            segmentsJson = string.concat(segmentsJson, "]");
+            vectorJson = string.concat(vectorJson, ',"randomizationElements":', segmentsJson);
+
+            vectorJson = string.concat(vectorJson, ',"publicKey":"', vm.toString(vectors[i].publicKey), '"');
+            vectorJson = string.concat(vectorJson, ',"message":"', vm.toString(vectors[i].message), '"');
+            
+            segmentsJson = "[";
+            for (uint j = 0; j < vectors[i].signature.length; j++) {
+                if (j > 0) segmentsJson = string.concat(segmentsJson, ",");
+                segmentsJson = string.concat(segmentsJson, '"', vm.toString(vectors[i].signature[j]), '"');
+            }
+            segmentsJson = string.concat(segmentsJson, "]");
+            vectorJson = string.concat(vectorJson, ',"signature":', segmentsJson);
+            
+            vectorJson = string.concat(vectorJson, "}");
+            completeJson = string.concat(completeJson, vectorName, vectorJson);
+        }
+        return string.concat(completeJson, "}");
+    }
 }
