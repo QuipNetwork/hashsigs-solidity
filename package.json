@@ -7,6 +7,7 @@
   "author": "quip.network",
   "files": [
     "src/**/*.sol",
+    "package.json",
     "README.md",
     "LICENSE"
   ],
