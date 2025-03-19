@@ -1,5 +1,5 @@
 {
-  "name": "@quipnetwork/hashsigs-solidity",
+  "name": "@quip.network/hashsigs-solidity",
   "version": "0.0.1",
   "private": false,
   "description": "A Solidity implementation of the Winternitz One-Time Signature Plus (WOTS+) scheme",
