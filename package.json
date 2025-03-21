@@ -1,12 +1,12 @@
 {
   "name": "@quip.network/hashsigs-solidity",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "private": false,
   "description": "A Solidity implementation of the Winternitz One-Time Signature Plus (WOTS+) scheme",
   "license": "AGPL-3.0-or-later",
   "author": "quip.network",
   "files": [
-    "src/**/*.sol",
+    "contracts/*.sol",
     "package.json",
     "README.md",
     "LICENSE"
