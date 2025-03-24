@@ -164,7 +164,7 @@ library WOTSPlus {
         WinternitzAddress calldata quipAddress, 
         WinternitzMessage calldata message, 
         WinternitzElements calldata signature,
-        WinternitzElements calldata randomizationElements
+        WinternitzElements memory randomizationElements
     ) public pure returns (bool) {
         // DEBUG: require(publicKey.length == PublicKeySize, 
         // DEBUG:     string.concat("public key length must be ", vm.toString(PublicKeySize), " bytes"));

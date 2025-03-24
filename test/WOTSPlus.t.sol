@@ -33,11 +33,15 @@ contract WOTSPlusTest is Test {
         bytes32 privateSeed = bytes32(uint256(1)); // Example seed
         (WOTSPlus.WinternitzAddress memory publicKey, bytes32 privateKey) = WOTSPlus.generateKeyPair(privateSeed);
                
+        require(publicKey.publicKeyHash != 0, "Public key is zero");
+        require(publicKey.publicSeed != 0, "Public seed is zero");
         // Verify private key is not zero
         assertTrue(uint256(privateKey) != 0);
     }
 
-    function testSignAndVerifyEmptySignature() public pure {
+    function testSignAndVerifyEmptySignature() public {
+        vm.pauseGasMetering();
+
         // Generate a key pair
         bytes32 privateSeed = bytes32(uint256(1));
         (WOTSPlus.WinternitzAddress memory publicKey, bytes32 privateKey) = WOTSPlus.generateKeyPair(privateSeed);
@@ -59,13 +63,15 @@ contract WOTSPlusTest is Test {
         WOTSPlus.WinternitzElements memory signatureArrayElements = WOTSPlus.WinternitzElements({
             elements: signatureArray
         });
-        
+        vm.resumeGasMetering();
+
         bool isValid = WOTSPlus.verify(publicKey, messageData, signatureArrayElements);
 
         assertFalse(isValid, "Signature verification should have failed");
     }
 
-    function testVerifyValidSignature() public pure {
+    function testVerifyValidSignature() public {
+        vm.pauseGasMetering();
         bytes32 privateSeed = bytes32(uint256(1));
         (WOTSPlus.WinternitzAddress memory publicKey, bytes32 privateKey) = WOTSPlus.generateKeyPair(privateSeed);
         
@@ -84,13 +90,16 @@ contract WOTSPlusTest is Test {
             elements: signatureFixed
         });
        
+        vm.resumeGasMetering();
+
         // Verify the signature
         bool isValid = WOTSPlus.verify(publicKey, messageData, signature);
 
         assertTrue(isValid, "Signature verification failed");
     }
 
-    function testVerifyValidSignatureRandomizationElements() public pure {
+    function testVerifyValidSignatureRandomizationElements() public {
+        vm.pauseGasMetering();
         bytes32 privateSeed = bytes32(uint256(1));
         (WOTSPlus.WinternitzAddress memory publicKey, bytes32 privateKey) = WOTSPlus.generateKeyPair(privateSeed);
         
@@ -111,15 +120,17 @@ contract WOTSPlusTest is Test {
 
         WOTSPlus.WinternitzElements memory randomizationElements = WOTSPlus.generateRandomizationElements(publicKey.publicSeed);
         
-        
+        vm.resumeGasMetering();
+
         // Verify the signature
         bool isValid = WOTSPlus.verifyWithRandomizationElements(publicKey, messageData, signature, randomizationElements);
 
         assertTrue(isValid, "Signature verification failed");
     }
     
-    function testVerifyMany() public pure {
+    function testVerifyMany() public {
         for (uint i = 1; i < 200; i++) {
+            vm.pauseGasMetering();
             bytes32 privateSeed = bytes32(uint256(i));
             (WOTSPlus.WinternitzAddress memory publicKey, bytes32 privateKey) = WOTSPlus.generateKeyPair(privateSeed);
             WOTSPlus.WinternitzMessage memory message = WOTSPlus.WinternitzMessage({messageHash: keccak256(abi.encodePacked("Hello World", i))});
@@ -127,13 +138,15 @@ contract WOTSPlusTest is Test {
             WOTSPlus.WinternitzElements memory signature = WOTSPlus.WinternitzElements({
                 elements: signatureFixed
             });
+            vm.resumeGasMetering();
             bool isValid = WOTSPlus.verify(publicKey, message, signature);
             assertTrue(isValid, "Signature verification failed");
         }
     }    
 
-    function testVerifyManyWithRandomizationElements() public pure {
+    function testVerifyManyWithRandomizationElements() public {
         for (uint i = 1; i < 200; i++) {
+            vm.pauseGasMetering();
             bytes32 privateSeed = bytes32(uint256(i));
             (WOTSPlus.WinternitzAddress memory publicKey, bytes32 privateKey) = WOTSPlus.generateKeyPair(privateSeed);
             WOTSPlus.WinternitzMessage memory message = WOTSPlus.WinternitzMessage({messageHash: keccak256(abi.encodePacked("Hello World", i))});
@@ -142,6 +155,7 @@ contract WOTSPlusTest is Test {
                 elements: signatureFixed
             });
             WOTSPlus.WinternitzElements memory randomizationElements = WOTSPlus.generateRandomizationElements(publicKey.publicSeed);
+            vm.resumeGasMetering();
             bool isValid = WOTSPlus.verifyWithRandomizationElements(publicKey, message, signature, randomizationElements);
             assertTrue(isValid, "Signature verification failed");
         }
@@ -158,6 +172,7 @@ contract WOTSPlusTest is Test {
     }
 
     function testVectors() public {
+        vm.pauseGasMetering();
         string memory vectorPath = "test/test_vectors/wotsplus_keccak256.json";
         uint256 numVectors = 5;
         TestVector[] memory vectors = new TestVector[](numVectors);
@@ -199,10 +214,12 @@ contract WOTSPlusTest is Test {
             });
             
             // Verify generated signature
+            vm.resumeGasMetering();
             bool isValid = WOTSPlus.verify(publicKey, messageData, signature);
+            vm.pauseGasMetering();
             assertTrue(isValid, string.concat("Generated vector ", vm.toString(i), " signature invalid"));
         }
-        
+        vm.pauseGasMetering();
         // Try to read existing file and verify
         try vm.readFile(vectorPath) {
             // Format the existing JSON using jq to ensure consistent formatting
