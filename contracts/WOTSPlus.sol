@@ -296,7 +296,7 @@ library WOTSPlus {
         WinternitzElements memory randomizationElements, 
         uint16 index, 
         uint16 steps
-    ) private pure returns (bytes32) {
+    ) public pure returns (bytes32) {
         // DEBUG: require((index + steps) < ChainLen, 
         // DEBUG:     string.concat("steps + index must be less than ", vm.toString(ChainLen)));
 

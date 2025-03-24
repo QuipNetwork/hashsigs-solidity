@@ -22,13 +22,8 @@ import {console2 as console} from "../lib/forge-std/src/console2.sol";
 import {Vm} from "../lib/forge-std/src/Vm.sol";
 
 contract WOTSPlusTest is Test {
-    // Add the constant here in the test contract
-    uint8 constant NUM_SIGNATURE_CHUNKS = 67; // 64 + 3 (NumMessageChunks + NumChecksumChunks)
-
-    function setUp() public {
-        // Setup code if needed
-    }
-
+    uint256 constant NUM_SIGNATURE_CHUNKS = 67; // WOTS+ standard number of signature chunks
+    
     function testGenerateKeyPair() public pure {
         bytes32 privateSeed = bytes32(uint256(1)); // Example seed
         (WOTSPlus.WinternitzAddress memory publicKey, bytes32 privateKey) = WOTSPlus.generateKeyPair(privateSeed);
@@ -194,8 +189,10 @@ contract WOTSPlusTest is Test {
             
             WOTSPlus.WinternitzElements memory randomizationElements = WOTSPlus.generateRandomizationElements(publicKey.publicSeed);
             WOTSPlus.WinternitzElements memory publicKeySegments;
-            for (uint j = 0; j < NUM_SIGNATURE_CHUNKS; j++) {
-                publicKeySegments.elements[j] = randomizationElements.elements[j];
+            bytes32 functionKey = randomizationElements.elements[0];
+            for (uint16 j = 0; j < NUM_SIGNATURE_CHUNKS; j++) {
+                bytes32 secretKeySegment = WOTSPlus.Hash(abi.encodePacked(functionKey, WOTSPlus.prf(privateKey, j + 1)));
+                publicKeySegments.elements[j] = WOTSPlus.chain(secretKeySegment, randomizationElements, 0, WOTSPlus.ChainLen - 1);
             }
             
             bytes32[NUM_SIGNATURE_CHUNKS] memory signatureFixed = WOTSPlus.sign(privateKey, messageData);
