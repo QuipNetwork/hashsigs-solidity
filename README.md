@@ -1,20 +1,12 @@
-# Sample Hardhat Project
+# WOTS+ Solidity Implementation
 
-This project demonstrates a basic Hardhat use case. It comes with a sample contract, a test for that contract, and a Hardhat Ignition module that deploys that contract.
+A Solidity implementation of the Winternitz One-Time Signature Plus (WOTS+) scheme.
 
-Try running some of the following tasks:
+## Development
 
-```shell
-npx hardhat help
-npx hardhat test
-REPORT_GAS=true npx hardhat test
-npx hardhat node
-npx hardhat ignition deploy ./ignition/modules/Lock.ts
-```
+This project uses both Hardhat and Foundry for development and testing.
 
-## Testing with Foundry
-
-### Installation
+### Prerequisites
 
 1. Install Foundry:
 ```bash
@@ -22,21 +14,39 @@ curl -L https://foundry.paradigm.xyz | bash
 foundryup
 ```
 
-2. Initialize Foundry in your project:
+2. Install Node.js dependencies:
 ```bash
-forge init --no-commit
+npm install
 ```
 
-3. Install dependencies:
-```bash
-forge install foundry-rs/forge-std
-```
+### Testing
 
-### Running Tests
-
-Run the tests with:
+Run the Foundry tests:
 ```bash
 forge test -vv
 ```
 
 The `-vv` flag increases verbosity to show more test details. Use `-vvv` for even more detailed output including stack traces.
+
+### Building
+
+```bash
+forge build
+```
+
+## License
+
+Copyright (C) 2024 quip.network
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program. If not, see <https://www.gnu.org/licenses/>.

@@ -1,5 +1,36 @@
 {
-  "name": "hardhat-project",
+  "name": "@quip.network/hashsigs-solidity",
+  "version": "0.0.2",
+  "private": false,
+  "description": "A Solidity implementation of the Winternitz One-Time Signature Plus (WOTS+) scheme",
+  "license": "AGPL-3.0-or-later",
+  "author": "quip.network",
+  "files": [
+    "contracts/*.sol",
+    "package.json",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "forge build",
+    "test": "forge test",
+    "prepare": "forge build"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/quipnetwork/hashsigs-solidity.git"
+  },
+  "keywords": [
+    "solidity",
+    "ethereum",
+    "smart-contracts",
+    "wots",
+    "cryptography",
+    "signatures",
+    "hash",
+    "post-quantum",
+    "quantum"
+  ],
   "devDependencies": {
     "@nomicfoundation/hardhat-toolbox-viem": "^3.0.0",
     "hardhat": "^2.22.19"

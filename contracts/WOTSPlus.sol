@@ -1,3 +1,18 @@
+// Copyright (C) 2024 quip.network
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Affero General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with this program.  If not, see <https://www.gnu.org/licenses/>.
+//
 // SPDX-License-Identifier: AGPL-3.0-or-later
 pragma solidity^0.8.28;
 
@@ -64,6 +79,19 @@ library WOTSPlus {
 
     uint8 public constant NumSignatureChunks = NumMessageChunks + NumChecksumChunks;
 
+    struct WinternitzAddress {
+        bytes32 publicSeed;
+        bytes32 publicKeyHash;
+    }
+
+    struct WinternitzElements {
+        bytes32[NumSignatureChunks] elements;
+    }
+
+    struct WinternitzMessage {
+        bytes32 messageHash;
+    }
+
     // verify: Verify a WOTS+ signature. 
     // 1. The first part of the publicKey is a public seed used to regenerate the randomization elements. (`r` from the paper).
     // 2. The second part of the publicKey is the hash of the NumMessageChunks + NumChecksumChunks public key segments.
@@ -72,9 +100,9 @@ library WOTSPlus {
     // 5. Run the chain function on each segment to reproduce each public key segment.
     // 6. Hash all public key segments together to recreate the original public key.
     function verify(
-        bytes calldata publicKey, 
-        bytes calldata message, 
-        bytes32[] memory signature
+        WinternitzAddress calldata quipAddress, 
+        WinternitzMessage calldata message, 
+        WinternitzElements calldata signature
     ) public pure returns (bool) {
         // DEBUG: require(publicKey.length == PublicKeySize, 
         // DEBUG:     string.concat("public key length must be ", vm.toString(PublicKeySize), " bytes"));
@@ -82,17 +110,8 @@ library WOTSPlus {
         // DEBUG:     string.concat("message length must be ", vm.toString(MessageLen), " bytes"));
         // DEBUG: require(signature.length == NumSignatureChunks, 
         // DEBUG:     string.concat("signature length must be ", vm.toString(NumSignatureChunks), " bytes, not", vm.toString(signature.length)));
-        require(publicKey.length == PublicKeySize, 
-            string.concat("public key length must be 64 bytes"));
-        require(message.length == MessageLen, 
-            string.concat("message length must be 32 bytes"));
-        require(signature.length == NumSignatureChunks, 
-            string.concat("signature length must be 67"));
         
-        bytes32 publicSeed = bytes32(publicKey[0:HashLen]);
-        bytes32[] memory randomizationElements = generateRandomizationElements(publicSeed);
-
-        bytes32 publicKeyHash = bytes32(publicKey[HashLen:PublicKeySize]);
+        WinternitzElements memory randomizationElements = generateRandomizationElements(quipAddress.publicSeed);
 
         // DEBUG: console.log("Public key seed:");
         // DEBUG: console.logBytes32(publicSeed);
@@ -111,7 +130,7 @@ library WOTSPlus {
         for (uint8 i = 0; i < chainSegments.length; i++ ) {
             uint8 chainIdx = chainSegments[i];
             uint8 numIterations = ChainLen - chainIdx - 1;
-            bytes32 prevChainOut = signature[i];
+            bytes32 prevChainOut = signature.elements[i];
 
             bytes32 segment = chain(prevChainOut, randomizationElements, chainIdx, numIterations);
 
@@ -131,7 +150,7 @@ library WOTSPlus {
         // DEBUG: console.logBytes32(computedHash);
 
         // Compare computed hash with stored public key hash
-        return computedHash == publicKeyHash;
+        return computedHash == quipAddress.publicKeyHash;
     }
 
     // verify: Verify a WOTS+ signature. 
@@ -142,10 +161,10 @@ library WOTSPlus {
     // 5. Run the chain function on each segment to reproduce each public key segment.
     // 6. Hash all public key segments together to recreate the original public key.
     function verifyWithRandomizationElements(
-        bytes32 publicKeyHash, 
-        bytes calldata message, 
-        bytes32[] memory signature,
-        bytes32[] memory randomizationElements
+        WinternitzAddress calldata quipAddress, 
+        WinternitzMessage calldata message, 
+        WinternitzElements calldata signature,
+        WinternitzElements memory randomizationElements
     ) public pure returns (bool) {
         // DEBUG: require(publicKey.length == PublicKeySize, 
         // DEBUG:     string.concat("public key length must be ", vm.toString(PublicKeySize), " bytes"));
@@ -153,12 +172,6 @@ library WOTSPlus {
         // DEBUG:     string.concat("message length must be ", vm.toString(MessageLen), " bytes"));
         // DEBUG: require(signature.length == NumSignatureChunks, 
         // DEBUG:     string.concat("signature length must be ", vm.toString(NumSignatureChunks), " bytes, not", vm.toString(signature.length)));
-        require(publicKeyHash.length == HashLen, 
-            string.concat("public key hash length must be 32 bytes"));
-        require(message.length == MessageLen, 
-            string.concat("message length must be 32 bytes"));
-        require(signature.length == NumSignatureChunks, 
-            string.concat("signature length must be 67"));
         
 
         // DEBUG: console.log("Public key hash:");
@@ -176,7 +189,7 @@ library WOTSPlus {
         for (uint8 i = 0; i < chainSegments.length; i++ ) {
             uint8 chainIdx = chainSegments[i];
             uint8 numIterations = ChainLen - chainIdx - 1;
-            bytes32 prevChainOut = signature[i];
+            bytes32 prevChainOut = signature.elements[i];
 
             bytes32 segment = chain(prevChainOut, randomizationElements, chainIdx, numIterations);
 
@@ -196,12 +209,12 @@ library WOTSPlus {
         // DEBUG: console.logBytes32(computedHash);
 
         // Compare computed hash with stored public key hash
-        return computedHash == publicKeyHash;
+        return computedHash == quipAddress.publicKeyHash;
     }    
 
     // sign: Sign a message with a WOTS+ private key. Do not use this, it is present as an example and
     // you should be using a typescript version of this function because it requires your private key.
-    function sign(bytes32 privateKey, bytes calldata message) public pure returns (bytes32[NumSignatureChunks] memory) {
+    function sign(bytes32 privateKey, WinternitzMessage calldata message) public pure returns (bytes32[NumSignatureChunks] memory) {
         // DEBUG: require(privateKey.length == HashLen, 
         // DEBUG:     string.concat("private key length must be ", vm.toString(HashLen), " bytes"));
         // DEBUG: require(message.length == MessageLen, 
@@ -209,12 +222,10 @@ library WOTSPlus {
 
         require(privateKey.length == HashLen, 
             string.concat("private key length must be 32 bytes"));
-        require(message.length == MessageLen, 
-            string.concat("message length must be 32 bytes"));
 
         bytes32 publicSeed = prf(privateKey, 0);
-        bytes32[] memory randomizationElements = generateRandomizationElements(publicSeed);
-        bytes32 functionKey = randomizationElements[0];
+        WinternitzElements memory randomizationElements = generateRandomizationElements(publicSeed);
+        bytes32 functionKey = randomizationElements.elements[0];
         bytes32[NumSignatureChunks] memory signature;
 
         uint8[] memory chainSegments = ComputeMessageHashChainIndexes(message);
@@ -230,12 +241,12 @@ library WOTSPlus {
 
     // generateKeyPair: Generate a WOTS+ key pair. Do not use this, it is present as an example and
     // you should be using a typescript version of this function, presumably with better entropy source.
-    function generateKeyPair(bytes32 privateSeed) public pure returns (bytes memory, bytes32) {
+    function generateKeyPair(bytes32 privateSeed) public pure returns (WinternitzAddress memory, bytes32) {
 
         bytes32 privateKey = prf(privateSeed, 0);
         bytes32 publicSeed = prf(privateKey, 0);
 
-        bytes32[] memory randomizationElements = generateRandomizationElements(publicSeed);
+        WinternitzElements memory randomizationElements = generateRandomizationElements(publicSeed);
         // functionKey is `k` from the paper, we define it as the index 0 from the prf, 
         // as the prf output is not used on the first element in the chain function.
         // This is hashed in on each chain iteration along with the randomization element.
@@ -243,7 +254,7 @@ library WOTSPlus {
         // To set it, we hash it into the first segment with the secret key.
         // TODO: take a closer look at XMSS et al and see how they handle this, we should be
         // doing the same.
-        bytes32 functionKey = randomizationElements[0];
+        bytes32 functionKey = randomizationElements.elements[0];
 
         bytes memory publicKeySegments = new bytes(SignatureSize);
 
@@ -264,29 +275,34 @@ library WOTSPlus {
         // DEBUG: console.log("Public key hash:");
         // DEBUG: console.logBytes32(publicKeyHash);
 
-        bytes memory publicKey = abi.encodePacked(publicSeed, publicKeyHash);
+        WinternitzAddress memory publicKey = WinternitzAddress({publicKeyHash: publicKeyHash, publicSeed: publicSeed});
         return (publicKey, privateKey);
     }
 
-    function generateRandomizationElements(bytes32 publicSeed) public pure returns (bytes32[] memory) {
-        bytes32[] memory elements = new bytes32[](NumSignatureChunks);
+    function generateRandomizationElements(bytes32 publicSeed) public pure returns (WinternitzElements memory) {
+        bytes32[NumSignatureChunks] memory elements;
         for (uint8 i = 0; i < NumSignatureChunks; i++) {
             elements[i] = prf(publicSeed, i);
         }
-        return elements;
+        return WinternitzElements({elements: elements});
     }
 
     // chain is the c_k^i function, 
     // the hash of (prevChainOut XOR randomization element at index).
     // As a practical matter, we generate the randomization elements
     // via a seed like in XMSS(rfc8391) with a defined PRF.
-    function chain(bytes32 prevChainOut, bytes32[] memory randomizationElements, uint16 index, uint16 steps) private pure returns (bytes32) {
+    function chain(
+        bytes32 prevChainOut, 
+        WinternitzElements memory randomizationElements, 
+        uint16 index, 
+        uint16 steps
+    ) public pure returns (bytes32) {
         // DEBUG: require((index + steps) < ChainLen, 
         // DEBUG:     string.concat("steps + index must be less than ", vm.toString(ChainLen)));
 
         bytes32 chainOut = prevChainOut;
         for (uint8 i = 1; i <= steps; i++) {
-            chainOut = Hash(abi.encodePacked(xor(chainOut, randomizationElements[i + index])));
+            chainOut = Hash(abi.encodePacked(xor(chainOut, randomizationElements.elements[i + index])));
         }
         return chainOut;
     }
@@ -318,9 +334,9 @@ library WOTSPlus {
     // ComputeMessageHashChainIndexes: Compute the chain indexes for a message. 
     // We convert the message to base-w representation (or base of ChainLen representation)
     // We attach the checksum, also in base-w representation, to the end of the hash chain index list. 
-    function ComputeMessageHashChainIndexes(bytes calldata message) internal pure returns (uint8[] memory) {
+    function ComputeMessageHashChainIndexes(WinternitzMessage calldata message) internal pure returns (uint8[] memory) {
         uint8[] memory chainIndexes = new uint8[](NumMessageChunks + NumChecksumChunks);
-        toBaseW(message, NumMessageChunks, chainIndexes, 0); 
+        toBaseW(abi.encodePacked(message.messageHash), NumMessageChunks, chainIndexes, 0);
         checksum(chainIndexes);
         return chainIndexes;
     }
