@@ -11,7 +11,7 @@ contract ShrincsForsCNoMaskVerifier is ShrincsStatelessForsC, ShrincsStatelessHy
         bytes calldata message,
         StatelessSignature calldata signature
     ) external pure returns (bool) {
-        ParamsView memory p = variantParamsView(params, MODE_FORS_C, false); // false for no mask
+        ParamsView memory p = variantParamsView(params, MODE_FORS_C);
         if (!validParams(p, publicKey)) return false;
 
         if (signature.hypertree.length == 0) return false;

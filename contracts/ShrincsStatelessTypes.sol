@@ -1,16 +1,12 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.28;
 
-import { Hashing } from "../../src/Hashing.sol";
-
 abstract contract ShrincsStatelessTypes {
     uint8 public constant MODE_FORS_C = 1;
-    uint8 public constant MODE_PORS_FP = 2;
 
     uint32 internal constant WOTS_HASH_TYPE = 0;
     uint32 internal constant TREE_TYPE = 2;
     uint32 internal constant FORS_TREE_TYPE = 3;
-    uint32 internal constant PORS_TREE_TYPE = 128;
     uint16 internal constant STATEFUL_PUBLIC_KEY_BYTES = 68; // pkSeed || root || maxSignatures
 
     struct Params {
@@ -23,8 +19,6 @@ abstract contract ShrincsStatelessTypes {
         uint16 w;
         uint16 l;
         uint32 wotsTargetSum;
-        uint16 porsMaxAuth;
-        bool wotsMask;
     }
 
     struct VariantParams {
@@ -36,7 +30,6 @@ abstract contract ShrincsStatelessTypes {
         uint16 w;
         uint16 l;
         uint32 wotsTargetSum;
-        uint16 porsMaxAuth;
     }
 
     struct ParamsView {
@@ -49,8 +42,6 @@ abstract contract ShrincsStatelessTypes {
         uint16 w;
         uint16 l;
         uint32 wotsTargetSum;
-        uint16 porsMaxAuth;
-        bool wotsMask;
     }
 
     struct PublicKey {
@@ -73,24 +64,6 @@ abstract contract ShrincsStatelessTypes {
         ForsEntry[] entries;
     }
 
-    struct PorsLeaf {
-        uint32 leafIndex;
-        bytes sk;
-    }
-
-    struct PorsAuthNode {
-        uint32 level;
-        uint32 index;
-        bytes value;
-    }
-
-    struct PorsFpSignature {
-        bytes randomizer;
-        uint32 counter;
-        PorsLeaf[] leaves;
-        PorsAuthNode[] authSet;
-    }
-
     struct WotsCSignature {
         bytes randomizer;
         uint32 counter;
@@ -107,7 +80,6 @@ abstract contract ShrincsStatelessTypes {
 
     struct StatelessSignature {
         ForsSignature fors;
-        PorsFpSignature pors;
         HypertreeLayerSignature[] hypertree;
     }
 
@@ -121,13 +93,11 @@ abstract contract ShrincsStatelessTypes {
             k: params.k,
             w: params.w,
             l: params.l,
-            wotsTargetSum: params.wotsTargetSum,
-            porsMaxAuth: params.porsMaxAuth,
-            wotsMask: params.wotsMask
+            wotsTargetSum: params.wotsTargetSum
         });
     }
 
-    function variantParamsView(VariantParams calldata params, uint8 mode, bool wotsMask) internal pure returns (ParamsView memory) {
+    function variantParamsView(VariantParams calldata params, uint8 mode) internal pure returns (ParamsView memory) {
         return ParamsView({
             mode: mode,
             nBytes: params.nBytes,
@@ -137,9 +107,7 @@ abstract contract ShrincsStatelessTypes {
             k: params.k,
             w: params.w,
             l: params.l,
-            wotsTargetSum: params.wotsTargetSum,
-            porsMaxAuth: params.porsMaxAuth,
-            wotsMask: wotsMask // True for Mask variant, False for NoMask variant
+            wotsTargetSum: params.wotsTargetSum
         });
     }
 
@@ -158,7 +126,6 @@ abstract contract ShrincsStatelessTypes {
         }
         if (!validCompositePublicKey(publicKey)) return false;
         if (uint256(params.k) * (uint256(1) << params.a) > type(uint32).max) return false;
-        if (params.mode == MODE_PORS_FP && params.porsMaxAuth == 0) return false;
         return true;
     }
 
@@ -191,13 +158,13 @@ abstract contract ShrincsStatelessTypes {
         pure
         returns (bytes memory)
     {
-        if (outLen <= 32) return firstBytes(Hashing.hash(abi.encodePacked(domain, seed, data)), outLen);
+        if (outLen <= 32) return firstBytes(keccak256(abi.encodePacked(domain, seed, data)), outLen);
 
         bytes memory out = new bytes(outLen);
         uint256 offset;
         uint32 counter;
         while (offset < outLen) {
-            bytes32 blockHash = Hashing.hash(abi.encodePacked(domain, seed, data, counter));
+            bytes32 blockHash = keccak256(abi.encodePacked(domain, seed, data, counter));
             uint256 chunk = outLen - offset;
             if (chunk > 32) chunk = 32;
             for (uint256 i = 0; i < chunk;) {

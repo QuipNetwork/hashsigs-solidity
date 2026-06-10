@@ -9,7 +9,6 @@ abstract contract ShrincsStatelessWotsC is ShrincsStatelessTypes {
         uint32 layer;
         uint64 tree;
         uint32 keypair;
-        bool useMask;
     }
 
     function verifyWotsC(
@@ -30,7 +29,7 @@ abstract contract ShrincsStatelessWotsC is ShrincsStatelessTypes {
             abi.encodePacked(expectedPkHash, signature.randomizer, signature.counter, message),
             wotsDigestBytes(params)
         );
-        WotsContext memory ctx = WotsContext({ w: params.w, layer: layer, tree: tree, keypair: keypair, useMask: params.wotsMask });
+        WotsContext memory ctx = WotsContext({ w: params.w, layer: layer, tree: tree, keypair: keypair });
         (bytes memory segments, uint32 digitSum) = wotsSegmentsAndSum(params.l, pkSeed, ctx, digest, signature);
         if (segments.length == 0 || digitSum != params.wotsTargetSum) return false;
         return eq(domainKeccakBytes('wots-c-pk', pkSeed, segments, params.nBytes), expectedPkHash);
@@ -76,9 +75,7 @@ abstract contract ShrincsStatelessWotsC is ShrincsStatelessTypes {
             if (chain.length != 32) return false;
             uint32 digit = baseWDigit(params.w, digest, i);
             digitSum += digit;
-            bytes32 segment = params.wotsMask
-                ? wotsChain32MaskedBase(params.w, pkSeed, addressBase, uint32(i), chain, digit)
-                : wotsChain32NoMaskBase(params.w, pkSeed, addressBase, uint32(i), chain, digit);
+            bytes32 segment = wotsChain32NoMaskBase(params.w, pkSeed, addressBase, uint32(i), chain, digit);
             assembly {
                 mstore(add(add(pkInput, 41), mul(i, 32)), segment)
             }
@@ -135,23 +132,6 @@ abstract contract ShrincsStatelessWotsC is ShrincsStatelessTypes {
         }
     }
 
-    function wotsChain32MaskedBase(uint16 w, bytes32 pkSeed, uint256 addressBase, uint32 chainIdx, bytes calldata value, uint32 digit)
-        internal
-        pure
-        returns (bytes32 out)
-    {
-        assembly {
-            out := calldataload(value.offset)
-        }
-        uint256 steps = uint256(w - 1) - digit;
-        for (uint256 j = 0; j < steps;) {
-            out = hashWotsCChainMasked32(pkSeed, bytes32(addressBase | (uint256(chainIdx) << 32) | (uint256(digit) + j)), out);
-            unchecked {
-                ++j;
-            }
-        }
-    }
-
     function wotsSegmentsAndSum(
         uint16 chainCount,
         bytes calldata pkSeed,
@@ -165,12 +145,7 @@ abstract contract ShrincsStatelessWotsC is ShrincsStatelessTypes {
             if (signature.chains[i].length != 32) return ('', 0);
             uint32 digit = baseWDigit(ctx.w, digest, i);
             digitSum += digit;
-            bytes32 segment;
-            if (ctx.useMask) {
-                segment = wotsChain32Masked(ctx, pkSeed, uint32(i), signature.chains[i], digit);
-            } else {
-                segment = wotsChain32NoMask(ctx, pkSeed, uint32(i), signature.chains[i], digit);
-            }
+            bytes32 segment = wotsChain32NoMask(ctx, pkSeed, uint32(i), signature.chains[i], digit);
             setSlice32(segments, segment, i * 32);
             unchecked {
                 ++i;
@@ -197,25 +172,6 @@ abstract contract ShrincsStatelessWotsC is ShrincsStatelessTypes {
         return out;
     }
 
-    function wotsChain32Masked(WotsContext memory ctx, bytes calldata pkSeedBytes, uint32 chainIdx, bytes calldata value, uint32 digit) internal pure returns (bytes32) {
-        bytes32 pkSeed;
-        bytes32 out;
-        assembly {
-            pkSeed := calldataload(pkSeedBytes.offset)
-            out := calldataload(value.offset)
-        }
-
-        uint32 steps = uint32(ctx.w - 1) - digit;
-        for (uint32 j = 0; j < steps; ) {
-            bytes32 addressWord = addressWord32(ctx.layer, ctx.tree, WOTS_HASH_TYPE, ctx.keypair, chainIdx, digit + j);
-            out = hashWotsCChainMasked32(pkSeed, addressWord, out);
-            unchecked {
-                ++j;
-            }
-        }
-        return out;
-    }
-
     function hashWotsCChainNoMask32(bytes32 pkSeed, bytes32 addressWord, bytes32 segment) internal pure returns (bytes32 out) {
         assembly {
             // keccak256("wots-c-chain" || pkSeed || addressWord || segment)
@@ -224,25 +180,6 @@ abstract contract ShrincsStatelessWotsC is ShrincsStatelessTypes {
             mstore(add(ptr, 12), pkSeed)
             mstore(add(ptr, 44), addressWord)
             mstore(add(ptr, 76), segment)
-            out := keccak256(ptr, 108)
-        }
-    }
-
-    function hashWotsCChainMasked32(bytes32 pkSeed, bytes32 addressWord, bytes32 segment) internal pure returns (bytes32 out) {
-        bytes32 mask;
-        assembly {
-            //keccak256("wots-c-mask" || pkSeed || addressWord) gives the mask for the current step
-            let ptr := mload(0x40)
-            mstore(ptr, 'wots-c-mask')
-            mstore(add(ptr, 11), pkSeed)
-            mstore(add(ptr, 43), addressWord)
-            mask := keccak256(ptr, 75)
-
-            //keccak256("wots-c-chain" || pkSeed || addressWord || (segment XOR mask)) gives the next chain value
-            mstore(ptr, 'wots-c-chain')
-            mstore(add(ptr, 12), pkSeed)
-            mstore(add(ptr, 44), addressWord)
-            mstore(add(ptr, 76), xor(segment, mask))
             out := keccak256(ptr, 108)
         }
     }

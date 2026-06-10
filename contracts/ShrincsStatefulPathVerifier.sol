@@ -77,58 +77,6 @@ contract ShrincsStatefulPathVerifier {
         return (keccak256(abi.encodePacked("uxmss-wots-pk", pkSeed, leafIndex, segments)), true);
     }
 
-    // Derives the WOTS-C public key from signature and message using masked chain hashing (side-channel resistant).
-    function compactWotsPublicKeyFromSignatureMasked(
-        bytes32 pkSeed,
-        uint32 leafIndex,
-        bytes calldata message,
-        Signature calldata signature
-    ) public pure returns (bytes32 pkHash, bool ok) {
-        // Domain-separated digest used to produce base-W digits.
-        bytes32 digest = keccak256(abi.encodePacked("uxmss-wots-digits", pkSeed, leafIndex, signature.randomizer, signature.counter, message));
-
-        uint32 digitSum;
-        bytes memory segments = new bytes(WOTS_CHAINS * 32);
-
-        // For each chain: extract digit, advance chain using masked hashing, store result.
-        for (uint256 i = 0; i < WOTS_CHAINS;) {
-            uint32 digit = baseW16Digit(digest, i);
-            digitSum += digit;
-            bytes32 segment = chainMasked(pkSeed, leafIndex, uint32(i), signature.chains[i], digit, WOTS_BASE - 1 - digit);
-            setSlice32(segments, segment, i * 32);
-            unchecked { ++i; }
-        }
-
-        // Checksum-like sum validation; reject if mismatch.
-        if (digitSum != WOTS_TARGET_SUM) return (bytes32(0), false);
-        return (keccak256(abi.encodePacked("uxmss-wots-pk", pkSeed, leafIndex, segments)), true);
-    }
-
-    //verifies signature using masked chain hashing for side-channel resistance
-    function verifyMasked(PublicKey calldata publicKey, bytes calldata message, Signature calldata signature)
-        external
-        pure
-        returns (bool)
-    {
-        uint32 leafIndex = uint32(signature.authPath.length);
-        if (leafIndex == 0 || leafIndex > publicKey.maxSignatures) return false;
-
-        // Step 1: Recover the WOTS-C public key (leaf node) from the signature and message.
-        // Uses masked chain hashing for resistance against side-channel attacks.
-        // Returns empty bytes if checksum validation fails.
-        (bytes32 pkHash, bool validWots) = compactWotsPublicKeyFromSignatureMasked(publicKey.pkSeed, leafIndex, message, signature);
-        if (!validWots) return false;
-
-        // Step 2: Compute the tree root by hashing up the authentication path.
-        // Starting from the recovered leaf (pkHash), combine with each sibling to rebuild the root.
-        (bytes32 root, bool validPath) = rootFromUnbalancedPath(publicKey.pkSeed, leafIndex, pkHash, signature.authPath);
-
-        // Step 3: Verify that the recomputed root matches the stored public key root.
-        return validPath && publicKey.root == root;
-
-    }
-
-
     function rootFromUnbalancedPath(
         bytes32 pkSeed,
         uint32 leafIndex,
@@ -187,22 +135,6 @@ contract ShrincsStatefulPathVerifier {
         }
     }
 
-    // Finish a WOTS-C chain using masking (side-channel resistant).
-    function chainMasked(
-        bytes32 pkSeed,
-        uint32 leafIndex,
-        uint32 chainIdx,
-        bytes32 value,
-        uint32 start,
-        uint32 steps
-    ) internal pure returns (bytes32 out) {
-        out = value;
-        for (uint32 j = 0; j < steps;) {
-            bytes32 addressWord = addressWord32(0, 0, WOTS_HASH_TYPE, leafIndex, chainIdx, start + j);
-            out = hashWotsCChainMasked32(pkSeed, addressWord, out);
-            unchecked { ++j; }
-        }
-    }
     // hash for one WOTS-C chain step without masking, using a compact fixed-layout Keccak input for efficiency.
     // Keccak layout: keccak("wots-c-chain" || pkSeed || addressWord || segment)
     // All memory writes are arranged for compact fixed-size inputs (108 bytes total).
@@ -222,32 +154,6 @@ contract ShrincsStatefulPathVerifier {
             // write segment at ptr+76
             mstore(add(ptr, 76), segment)
             // keccak over 108 bytes (12 + 32 + 32 + 32)
-            out := keccak256(ptr, 108)
-        }
-    }
-
-    // hash for one WOTS-C chain step with masking, using a compact fixed-layout Keccak input for efficiency.
-    // Masked variant: first derive mask = keccak("wots-c-mask" || pkSeed || addressWord)
-    // then compute keccak("wots-c-chain" || pkSeed || addressWord || (segment XOR mask))
-    function hashWotsCChainMasked32(bytes32 pkSeed, bytes32 addressWord, bytes32 segment)
-        internal
-        pure
-        returns (bytes32 out)
-    {
-        bytes32 mask;
-        assembly {
-            let ptr := mload(0x40)
-            // derive mask using smaller input (75 bytes)
-            mstore(ptr, "wots-c-mask")
-            mstore(add(ptr, 11), pkSeed)
-            mstore(add(ptr, 43), addressWord)
-            mask := keccak256(ptr, 75)
-
-            // compute chain hash with masked segment
-            mstore(ptr, "wots-c-chain")
-            mstore(add(ptr, 12), pkSeed)
-            mstore(add(ptr, 44), addressWord)
-            mstore(add(ptr, 76), xor(segment, mask))
             out := keccak256(ptr, 108)
         }
     }

@@ -31,7 +31,7 @@ abstract contract ShrincsStatelessHypertree is ShrincsStatelessMerkle, ShrincsSt
             if (layerSig.authPath.length != subtreeHeight) return false;
 
             // Verify that the WOTS-C signature at this layer signs `current`.
-            // At layer 0, `current` is the FORS-C/PORS-FP message root. After that,
+            // At layer 0, `current` is the FORS-C message root. After that,
             // `current` is the root reconstructed from the previous XMSS subtree.
             if (
                 !verifyWotsC32(
