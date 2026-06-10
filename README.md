@@ -26,6 +26,11 @@ Run the Foundry tests:
 forge test -vv
 ```
 
+Run the SHRINCS compile tests:
+```bash
+forge test --match-contract Shrincs --force --via-ir
+```
+
 The `-vv` flag increases verbosity to show more test details. Use `-vvv` for even more detailed output including stack traces.
 
 ### Building

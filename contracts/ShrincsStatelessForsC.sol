@@ -50,6 +50,7 @@ abstract contract ShrincsStatelessForsC is ShrincsStatelessMerkle {
             if (entry.sk.length != 32 || entry.auth.length != a) return "";
             uint32 leafIndex = readBits32(digest.digest, tree * a, params.a);
             bytes32 root = forsEntryRoot32(uint32(a), pkSeed, xmssTree, xmssKeypair, uint32(tree), leafIndex, entry);
+            if (root == bytes32(0)) return "";
             assembly {
                 mstore(add(add(forsPkInput, 39), mul(tree, 32)), root)
             }
@@ -193,12 +194,14 @@ abstract contract ShrincsStatelessForsC is ShrincsStatelessMerkle {
         uint32 blockCounter;
         while (offset < digestBytes) {
             bytes32 digestWord;
+            uint256 chunk = digestBytes - offset;
+            if (chunk > 32) chunk = 32;
             assembly {
                 mstore(add(ptr, baseLen), shl(224, blockCounter))
                 digestWord := keccak256(ptr, totalLen)
-                mstore(add(add(out, 32), offset), digestWord)
             }
-            offset += 32;
+            setHashChunk(out, digestWord, offset, chunk);
+            offset += chunk;
             unchecked {
                 ++blockCounter;
             }

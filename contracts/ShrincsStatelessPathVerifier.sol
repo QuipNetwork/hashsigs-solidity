@@ -15,7 +15,6 @@ contract ShrincsStatelessPathVerifier is ShrincsStatelessForsC, ShrincsStateless
         if (!validParams(p, publicKey)) return false;
 
         bytes memory messageRoot;
-        if (p.mode != MODE_FORS_C) return false;
         if (signature.hypertree.length == 0) return false;
         messageRoot = verifyForsCAndReturnRoot(
             p, publicKey, message, signature.fors, signature.hypertree[0].treeIndex, signature.hypertree[0].leafIndex

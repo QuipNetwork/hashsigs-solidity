@@ -11,7 +11,7 @@ abstract contract ShrincsStatelessMerkle is ShrincsStatelessTypes {
         bytes memory leaf,
         bytes[] calldata authPath,
         bytes calldata pkSeed,
-        uint8 treeMode,
+        bool isForsTree,
         uint32 layer,
         uint64 addressTree,
         uint32 keypair,
@@ -31,7 +31,7 @@ abstract contract ShrincsStatelessMerkle is ShrincsStatelessTypes {
                 left = authPath[level];
                 right = node;
             }
-            if (treeMode == MODE_FORS_C) {
+            if (isForsTree) {
                 node = domainKeccakBytes(
                     'fors-node',
                     pkSeed,
@@ -70,7 +70,7 @@ abstract contract ShrincsStatelessMerkle is ShrincsStatelessTypes {
     ) internal pure returns (bytes memory) {
         // calculate the expected root of this XMSS subtree from the provided leaf and authentication path
         // `addressTree` and `keypair` are FORS-only fields in `merkleRootFromPath`; hypertree mode uses `layer` and `treeIndex`.
-        return merkleRootFromPath(params.nBytes, uint32(params.h / params.d), leafIndex, leaf, authPath, pkSeed, 0, layer, treeIndex, 0, treeIndex);
+        return merkleRootFromPath(params.nBytes, uint32(params.h / params.d), leafIndex, leaf, authPath, pkSeed, false, layer, treeIndex, 0, treeIndex);
     }
 
     function hypertreeRootFromPath32(

@@ -2,26 +2,12 @@
 pragma solidity ^0.8.28;
 
 abstract contract ShrincsStatelessTypes {
-    uint8 public constant MODE_FORS_C = 1;
-
     uint32 internal constant WOTS_HASH_TYPE = 0;
     uint32 internal constant TREE_TYPE = 2;
     uint32 internal constant FORS_TREE_TYPE = 3;
     uint16 internal constant STATEFUL_PUBLIC_KEY_BYTES = 68; // pkSeed || root || maxSignatures
 
     struct Params {
-        uint8 mode;
-        uint16 nBytes;
-        uint8 h;
-        uint8 d;
-        uint8 a;
-        uint8 k;
-        uint16 w;
-        uint16 l;
-        uint32 wotsTargetSum;
-    }
-
-    struct VariantParams {
         uint16 nBytes;
         uint8 h;
         uint8 d;
@@ -33,7 +19,6 @@ abstract contract ShrincsStatelessTypes {
     }
 
     struct ParamsView {
-        uint8 mode;
         uint16 nBytes;
         uint8 h;
         uint8 d;
@@ -85,21 +70,6 @@ abstract contract ShrincsStatelessTypes {
 
     function paramsView(Params calldata params) internal pure returns (ParamsView memory) {
         return ParamsView({
-            mode: params.mode,
-            nBytes: params.nBytes,
-            h: params.h,
-            d: params.d,
-            a: params.a,
-            k: params.k,
-            w: params.w,
-            l: params.l,
-            wotsTargetSum: params.wotsTargetSum
-        });
-    }
-
-    function variantParamsView(VariantParams calldata params, uint8 mode) internal pure returns (ParamsView memory) {
-        return ParamsView({
-            mode: mode,
             nBytes: params.nBytes,
             h: params.h,
             d: params.d,
@@ -114,7 +84,7 @@ abstract contract ShrincsStatelessTypes {
     function validParams(ParamsView memory params, PublicKey calldata publicKey) internal pure returns (bool) {
         if (params.nBytes != 32) return false;
         if (params.h == 0 || params.d == 0 || params.h % params.d != 0) return false;
-        if (params.a == 0 || params.k == 0 || params.l == 0) return false;
+        if (params.a == 0 || params.k < 2 || params.l == 0) return false;
         if (params.h > 64 || params.a >= 32 || params.h / params.d >= 32) return false;
         if (params.w != 16 && params.w != 256) return false;
         if (
@@ -167,18 +137,22 @@ abstract contract ShrincsStatelessTypes {
             bytes32 blockHash = keccak256(abi.encodePacked(domain, seed, data, counter));
             uint256 chunk = outLen - offset;
             if (chunk > 32) chunk = 32;
-            for (uint256 i = 0; i < chunk;) {
-                out[offset + i] = blockHash[i];
-                unchecked {
-                    ++i;
-                }
-            }
+            setHashChunk(out, blockHash, offset, chunk);
             offset += chunk;
             unchecked {
                 ++counter;
             }
         }
         return out;
+    }
+
+    function setHashChunk(bytes memory out, bytes32 blockHash, uint256 offset, uint256 chunk) internal pure {
+        for (uint256 i = 0; i < chunk;) {
+            out[offset + i] = blockHash[i];
+            unchecked {
+                ++i;
+            }
+        }
     }
 
     function firstBytes(bytes32 word, uint256 outLen) internal pure returns (bytes memory out) {

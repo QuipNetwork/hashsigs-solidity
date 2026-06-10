@@ -6,12 +6,12 @@ import { ShrincsStatelessHypertree } from './ShrincsStatelessHypertree.sol';
 
 contract ShrincsForsCNoMaskVerifier is ShrincsStatelessForsC, ShrincsStatelessHypertree {
     function verify(
-        VariantParams calldata params,
+        Params calldata params,
         PublicKey calldata publicKey,
         bytes calldata message,
         StatelessSignature calldata signature
     ) external pure returns (bool) {
-        ParamsView memory p = variantParamsView(params, MODE_FORS_C);
+        ParamsView memory p = paramsView(params);
         if (!validParams(p, publicKey)) return false;
 
         if (signature.hypertree.length == 0) return false;
