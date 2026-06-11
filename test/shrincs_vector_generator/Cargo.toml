@@ -1,8 +1,0 @@
-[package]
-name = "shrincs_vector_gen"
-version = "0.1.0"
-edition = "2021"
-
-[dependencies]
-ethers = { version = "2", default-features = false, features = ["abigen", "rustls"] }
-sha3 = "0.11.0"
