@@ -41,6 +41,7 @@ library SHRINCS {
         ShrincsType.ActionContext calldata context,
         ShrincsType.StatefulSignature calldata signature
     ) internal pure returns (bool) {
+        if (!_validActionContext(context)) return false;
         bytes memory message = abi.encodePacked(
             statefulActionMessageHash(parameterSetId, expectedCompositePublicKey, context)
         );
@@ -67,6 +68,7 @@ library SHRINCS {
         ShrincsType.ActionContext calldata context,
         ShrincsType.StatelessSignature calldata signature
     ) internal pure returns (bool) {
+        if (!_validActionContext(context)) return false;
         bytes memory message = abi.encodePacked(
             statelessActionMessageHash(parameterSetId, expectedCompositePublicKey, context)
         );
@@ -86,6 +88,7 @@ library SHRINCS {
         ShrincsType.ParamsView memory p = _paramsView(parameterSetId);
         if (!_validParameterSetBinding(p, parameterSetId, currentPublicKey.parameterSetId)) return bytes32(0);
         if (!_matchesExpectedCompositePublicKey(currentPublicKey, expectedCompositePublicKey)) return bytes32(0);
+        if (!_validRotationContext(context)) return bytes32(0);
         if (!_validParams(p, currentPublicKey)) return bytes32(0);
         if (!_validParameterSetBinding(p, parameterSetId, nextStatefulKey.parameterSetId)) return bytes32(0);
         if (nextStatefulKey.statefulPublicKey.length != ShrincsType.STATEFUL_PUBLIC_KEY_BYTES) return bytes32(0);
@@ -116,6 +119,7 @@ library SHRINCS {
         ShrincsType.ParamsView memory p = _paramsView(parameterSetId);
         if (!_validParameterSetBinding(p, parameterSetId, currentPublicKey.parameterSetId)) return bytes32(0);
         if (!_matchesExpectedCompositePublicKey(currentPublicKey, expectedCompositePublicKey)) return bytes32(0);
+        if (!_validRotationContext(context)) return bytes32(0);
         if (!_validParams(p, currentPublicKey)) return bytes32(0);
         if (!_validParameterSetBinding(p, parameterSetId, nextKey.parameterSetId)) return bytes32(0);
         if (
@@ -280,6 +284,15 @@ library SHRINCS {
     ) private pure returns (bool) {
         return params.parameterSetId == requestedParameterSetId && declaredParameterSetId == requestedParameterSetId
             && params.hashSuiteId == ShrincsType.HASH_SUITE_KECCAK_256;
+    }
+
+    function _validActionContext(ShrincsType.ActionContext calldata context) private pure returns (bool) {
+        return context.domainSeparator != bytes32(0) && context.actionType != bytes32(0)
+            && context.payloadHash != bytes32(0);
+    }
+
+    function _validRotationContext(ShrincsType.RotationContext calldata context) private pure returns (bool) {
+        return context.domainSeparator != bytes32(0);
     }
 
     // Shared stateless verification core that accepts either calldata messages from
@@ -843,6 +856,7 @@ library SHRINCS {
         pure
         returns (bool)
     {
+        if (expectedCompositePublicKey == bytes32(0)) return false;
         return _compositePublicKeyWord(publicKey.compositePublicKey) == expectedCompositePublicKey;
     }
 

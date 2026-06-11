@@ -3,6 +3,7 @@ pragma solidity ^0.8.28;
 
 library ShrincsType {
     uint32 internal constant HASH_SUITE_KECCAK_256 = 1;
+    uint32 internal constant HASH_SUITE_UNSUPPORTED = 2;
     bytes32 internal constant OP_VERIFY_STATEFUL = keccak256("shrincs-verify-stateful");
     bytes32 internal constant OP_VERIFY_STATELESS = keccak256("shrincs-verify-stateless");
     bytes32 internal constant OP_ROTATE_STATEFUL = keccak256("shrincs-rotate-stateful");
@@ -18,7 +19,8 @@ library ShrincsType {
     uint32 internal constant WOTS_TARGET_SUM_STATEFUL = 480;
 
     enum ParameterSetId {
-        Sphincs256sKeccak
+        Sphincs256sKeccak,
+        Unsupported
     }
 
     struct ParamsView {
@@ -138,6 +140,21 @@ library ShrincsType {
             return ParamsView({
                 parameterSetId: ParameterSetId.Sphincs256sKeccak,
                 hashSuiteId: HASH_SUITE_KECCAK_256,
+                nBytes: 32,
+                h: 64,
+                d: 8,
+                a: 14,
+                k: 22,
+                w: 16,
+                l: 64,
+                wotsTargetSum: WOTS_TARGET_SUM_STATEFUL
+            });
+        }
+
+        if (parameterSetId == ParameterSetId.Unsupported) {
+            return ParamsView({
+                parameterSetId: ParameterSetId.Unsupported,
+                hashSuiteId: HASH_SUITE_UNSUPPORTED,
                 nBytes: 32,
                 h: 64,
                 d: 8,
