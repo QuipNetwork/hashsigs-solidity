@@ -3,7 +3,7 @@ pragma solidity ^0.8.28;
 
 import { Test } from "../lib/forge-std/src/Test.sol";
 import { SHRINCS } from "../contracts/SHRINCS.sol";
-import { ShrincsType } from "../contracts/ShrincsType.sol";
+import { ShrincsType } from "../contracts/ShrincsTypes.sol";
 
 contract StatefulHarness {
     function verify(

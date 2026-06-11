@@ -1,30 +1,9 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.28;
 
-import { ShrincsType } from "./ShrincsType.sol";
+import { ShrincsType } from "./ShrincsTypes.sol";
 
 library SHRINCS {
-    uint16 internal constant STATEFUL_PUBLIC_KEY_BYTES = 68;
-    uint16 internal constant WOTS_CHAINS_STATEFUL = 64;
-    uint16 internal constant WOTS_BASE_STATEFUL = 16;
-    uint32 internal constant WOTS_TARGET_SUM_STATEFUL = 480;
-    uint32 internal constant WOTS_HASH_TYPE = 0;
-    uint32 internal constant TREE_TYPE = 2;
-    uint32 internal constant FORS_TREE_TYPE = 3;
-
-    struct WotsContext {
-        uint16 w;
-        uint32 layer;
-        uint64 tree;
-        uint32 keypair;
-    }
-
-    struct ForsDigest {
-        uint64 xmssTree;
-        uint32 xmssKeypair;
-        bytes digest;
-    }
-
     error NotImplemented(string step);
 
     // Stateful path:
@@ -42,7 +21,7 @@ library SHRINCS {
 
         uint32 leafIndex = uint32(signature.authPath.length);
         if (leafIndex == 0 || leafIndex > statefulKey.maxSignatures) return false;
-        if (signature.chains.length != WOTS_CHAINS_STATEFUL) return false;
+        if (signature.chains.length != ShrincsType.WOTS_CHAINS_STATEFUL) return false;
 
         (bytes32 pkHash, bool validWots) =
             _compactStatefulWotsPublicKeyFromSignature(statefulKey.pkSeed, leafIndex, message, signature);
@@ -69,6 +48,8 @@ library SHRINCS {
         return _verifyHypertree(p, publicKey, messageRoot, signature.hypertree);
     }
 
+    // Placeholder for a future on-chain flow where a stateless signature authorizes
+    // replacement of only the stateful SHRINCS component.
     function rotateStatefulViaStateless(
         ShrincsType.Params calldata params,
         ShrincsType.PublicKey calldata currentPublicKey,
@@ -84,6 +65,8 @@ library SHRINCS {
         revert NotImplemented("rotateStatefulViaStateless");
     }
 
+    // Placeholder for a future on-chain flow where a stateless signature authorizes
+    // a full SHRINCS key rotation to a fresh composite public key.
     function rotateFullShrincsKey(
         ShrincsType.Params calldata params,
         ShrincsType.PublicKey calldata currentPublicKey,
@@ -99,6 +82,8 @@ library SHRINCS {
         revert NotImplemented("rotateShrincsKey");
     }
 
+    // Generic routed entry point reserved for callers that want one encoded
+    // verification surface instead of explicit stateful/stateless calls.
     function verify(
         ShrincsType.VerificationPath path,
         bytes calldata encodedRequest
@@ -108,21 +93,14 @@ library SHRINCS {
         revert NotImplemented("verify");
     }
 
+    // Resolve explicit params or fall back to the defaults registered in ShrincsType
+    // for the selected parameter set and hash suite.
     function _paramsView(ShrincsType.Params calldata params) private pure returns (ShrincsType.ParamsView memory) {
-        return ShrincsType.ParamsView({
-            parameterSetId: params.parameterSetId,
-            hashSuiteId: params.hashSuiteId,
-            nBytes: params.nBytes,
-            h: params.h,
-            d: params.d,
-            a: params.a,
-            k: params.k,
-            w: params.w,
-            l: params.l,
-            wotsTargetSum: params.wotsTargetSum
-        });
+        return ShrincsType.resolveParamsView(params);
     }
 
+    // Enforce the parameter/profile invariants expected by this verifier and check
+    // that the public key declares the same parameter-set identity.
     function _validParams(ShrincsType.ParamsView memory params, ShrincsType.PublicKey calldata publicKey)
         private
         pure
@@ -139,6 +117,8 @@ library SHRINCS {
         return true;
     }
 
+    // Verify each hypertree XMSS layer in sequence, carrying the reconstructed root
+    // from one layer into the next until the public hypertree root is reached.
     function _verifyHypertree(
         ShrincsType.ParamsView memory params,
         ShrincsType.PublicKey calldata publicKey,
@@ -195,6 +175,8 @@ library SHRINCS {
         return current == expectedRoot;
     }
 
+    // Rebuild the WOTS-C public-key hash for one hypertree layer and compare it to
+    // the expected leaf commitment carried in the layer signature.
     function _verifyWotsC32(
         ShrincsType.ParamsView memory params,
         bytes calldata pkSeedBytes,
@@ -252,6 +234,8 @@ library SHRINCS {
         return computedPkHash == expectedPkHash;
     }
 
+    // Derive the WOTS-C message digest bytes from the public seed, randomizer,
+    // counter, expected public-key hash, and message.
     function _wotsDigest32(
         bytes32 pkSeed,
         bytes32 expectedPkHash,
@@ -275,6 +259,8 @@ library SHRINCS {
         }
     }
 
+    // Finish a stateless WOTS-C chain from the received signature element to its
+    // terminal value using compact per-step addressing.
     function _wotsChain32NoMaskBase(uint16 w, bytes32 pkSeed, uint256 addressBase, uint32 chainIdx, bytes calldata value, uint32 digit)
         private
         pure
@@ -292,8 +278,10 @@ library SHRINCS {
         }
     }
 
+    // Finish a stateless WOTS-C chain using the structured WOTS context variant.
+    // This helper remains available for paths that use full address composition.
     function _wotsChain32NoMask(
-        WotsContext memory ctx,
+        ShrincsType.WotsContext memory ctx,
         bytes calldata pkSeedBytes,
         uint32 chainIdx,
         bytes calldata value,
@@ -306,7 +294,8 @@ library SHRINCS {
         }
         uint32 steps = uint32(ctx.w - 1) - digit;
         for (uint32 j = 0; j < steps;) {
-            bytes32 addressWord = _addressWord32(ctx.layer, ctx.tree, WOTS_HASH_TYPE, ctx.keypair, chainIdx, digit + j);
+            bytes32 addressWord =
+                _addressWord32(ctx.layer, ctx.tree, ShrincsType.WOTS_HASH_TYPE, ctx.keypair, chainIdx, digit + j);
             out = _hashStatelessWotsCChainNoMask32(pkSeed, addressWord, out);
             unchecked {
                 ++j;
@@ -314,6 +303,8 @@ library SHRINCS {
         }
     }
 
+    // Hash one stateless WOTS-C chain step under the chain domain separator and
+    // encoded address word.
     function _hashStatelessWotsCChainNoMask32(bytes32 pkSeed, bytes32 addressWord, bytes32 segment)
         private
         pure
@@ -329,11 +320,15 @@ library SHRINCS {
         }
     }
 
+    // Return the number of digest bytes needed to encode all base-W WOTS digits for
+    // the current stateless parameter set.
     function _wotsDigestBytes(ShrincsType.ParamsView memory params) private pure returns (uint256) {
         uint256 bitsPerDigit = params.w == 256 ? 8 : 4;
         return (uint256(params.l) * bitsPerDigit + 7) / 8;
     }
 
+    // Verify the FORS-C portion of the stateless signature and return the message
+    // root that seeds the first hypertree layer on success.
     function _verifyForsCAndReturnRoot(
         ShrincsType.ParamsView memory params,
         ShrincsType.PublicKey calldata publicKey,
@@ -345,7 +340,8 @@ library SHRINCS {
         uint256 signedTrees = uint256(params.k) - 1;
         if (signature.randomizer.length != 32 || signature.entries.length != signedTrees) return "";
 
-        ForsDigest memory digest = _forsDigest(params, publicKey, message, signature.randomizer, signature.counter);
+        ShrincsType.ForsDigest memory digest =
+            _forsDigest(params, publicKey, message, signature.randomizer, signature.counter);
         uint256 a = uint256(params.a);
         if (_readBits32Fast(digest.digest, signedTrees * a, params.a) != 0) return "";
         if (digest.xmssTree != xmssTree || digest.xmssKeypair != xmssKeypair) return "";
@@ -386,6 +382,8 @@ library SHRINCS {
         return computedRoot32 == expectedRoot ? abi.encodePacked(computedRoot32) : bytes("");
     }
 
+    // Reconstruct one FORS tree root from the revealed secret leaf and its
+    // authentication path.
     function _forsEntryRoot32(
         uint32 height,
         bytes calldata pkSeed,
@@ -420,10 +418,13 @@ library SHRINCS {
         }
     }
 
+    // Build the common high bits of a FORS address from the XMSS tree and keypair
+    // coordinates.
     function _forsAddressBase(uint64 xmssTree, uint32 xmssKeypair) private pure returns (uint256) {
-        return (uint256(xmssTree) << 128) | (uint256(FORS_TREE_TYPE) << 96) | (uint256(xmssKeypair) << 64);
+        return (uint256(xmssTree) << 128) | (uint256(ShrincsType.FORS_TREE_TYPE) << 96) | (uint256(xmssKeypair) << 64);
     }
 
+    // Hash one FORS secret value into its leaf under the FORS leaf domain.
     function _hashForsLeaf32(bytes calldata pkSeed, bytes32 addressWord, bytes calldata sk) private pure returns (bytes32 out) {
         assembly {
             let ptr := mload(0x40)
@@ -436,6 +437,7 @@ library SHRINCS {
         }
     }
 
+    // Hash two FORS child nodes into their parent under the FORS node domain.
     function _hashForsNode32(bytes calldata pkSeed, bytes32 addressWord, bytes32 left, bytes32 right)
         private
         pure
@@ -453,13 +455,15 @@ library SHRINCS {
         }
     }
 
+    // Derive the FORS message digest and split out the hypertree coordinates used
+    // by the first XMSS layer.
     function _forsDigest(
         ShrincsType.ParamsView memory params,
         ShrincsType.PublicKey calldata publicKey,
         bytes calldata message,
         bytes calldata randomizer,
         uint32 counter
-    ) private pure returns (ForsDigest memory out) {
+    ) private pure returns (ShrincsType.ForsDigest memory out) {
         uint32 indexBits = uint32(params.k) * uint32(params.a);
         uint32 subtreeHeight = uint32(params.h / params.d);
         uint32 treeBits = uint32(params.h) - subtreeHeight;
@@ -473,6 +477,8 @@ library SHRINCS {
         out.digest = digest;
     }
 
+    // Hash the message, randomizer, and public context into the variable-length byte
+    // string consumed by FORS digit extraction.
     function _forsDigestBytes(
         bytes calldata pkSeed,
         bytes calldata hypertreeRoot,
@@ -525,6 +531,8 @@ library SHRINCS {
         }
     }
 
+    // Rebuild one hypertree XMSS root from a leaf and its authentication path using
+    // compact Keccak-based node hashing.
     function _hypertreeRootFromPath32(
         uint32 height,
         bytes calldata pkSeed,
@@ -539,7 +547,8 @@ library SHRINCS {
         assembly {
             pkSeedWord := calldataload(pkSeed.offset)
         }
-        uint256 addressBase = (uint256(layer) << 224) | (uint256(treeIndex) << 128) | (uint256(TREE_TYPE) << 96);
+        uint256 addressBase =
+            (uint256(layer) << 224) | (uint256(treeIndex) << 128) | (uint256(ShrincsType.TREE_TYPE) << 96);
         node = leaf;
         uint256 index = leafIndex;
         for (uint256 level = 0; level < height;) {
@@ -560,6 +569,8 @@ library SHRINCS {
         ok = true;
     }
 
+    // Hash two hypertree child nodes into their parent under the hypertree node
+    // domain separator.
     function _hashHypertreeNode32(bytes32 pkSeed, bytes32 addressWord, bytes32 left, bytes32 right)
         private
         pure
@@ -576,12 +587,15 @@ library SHRINCS {
         }
     }
 
+    // Extract one base-W digit from the packed digest bytes used by stateless WOTS-C.
     function _baseWDigit(uint16 w, bytes memory digest, uint256 index) private pure returns (uint32) {
         if (w == 256) return uint8(digest[index]);
         uint8 b = uint8(digest[index >> 1]);
         return index & 1 == 0 ? b >> 4 : b & 0x0f;
     }
 
+    // Copy a partial 32-byte hash block into an output byte string at the requested
+    // offset.
     function _setHashChunk(bytes memory out, bytes32 blockHash, uint256 offset, uint256 chunk) private pure {
         for (uint256 i = 0; i < chunk;) {
             out[offset + i] = blockHash[i];
@@ -591,6 +605,8 @@ library SHRINCS {
         }
     }
 
+    // Read up to 32 bits from a packed big-endian bitstring without branching over
+    // byte boundaries.
     function _readBits32Fast(bytes memory input, uint256 startBit, uint32 bitLen) private pure returns (uint32) {
         uint256 byteOffset = startBit >> 3;
         uint256 bitOffset = startBit & 7;
@@ -603,6 +619,8 @@ library SHRINCS {
         return uint32(shifted & mask);
     }
 
+    // Read up to 64 bits from a packed big-endian bitstring without materializing
+    // intermediate slices.
     function _readBits64Fast(bytes memory input, uint256 startBit, uint32 bitLen) private pure returns (uint64) {
         uint256 byteOffset = startBit >> 3;
         uint256 bitOffset = startBit & 7;
@@ -615,13 +633,18 @@ library SHRINCS {
         return uint64(shifted & mask);
     }
 
+    // Check the composite public-key layout and recompute its commitment from the
+    // embedded stateful and stateless public components.
     function _validStatefulCompositePublicKey(ShrincsType.PublicKey calldata publicKey) private pure returns (bool) {
         if (publicKey.compositePublicKey.length != 32) return false;
-        if (publicKey.statefulPublicKey.length != STATEFUL_PUBLIC_KEY_BYTES) return false;
+        if (publicKey.statefulPublicKey.length != ShrincsType.STATEFUL_PUBLIC_KEY_BYTES) return false;
         if (publicKey.messagePkSeed.length != 32) return false;
         if (publicKey.messageRoot.length != 32) return false;
         if (publicKey.hypertreePkSeed.length != 32) return false;
         if (publicKey.hypertreeRoot.length != 32) return false;
+
+        uint256 statefulPkLen = ShrincsType.STATEFUL_PUBLIC_KEY_BYTES;
+        uint256 compositeInputLen = 18 + statefulPkLen + 32 + 32 + 32 + 32;
 
         bytes32 computed;
         bytes32 expected;
@@ -634,24 +657,26 @@ library SHRINCS {
         assembly {
             let ptr := mload(0x40)
             mstore(ptr, "shrincs-public-key")
-            calldatacopy(add(ptr, 18), statefulPublicKey.offset, 68)
-            calldatacopy(add(ptr, 86), messagePkSeed.offset, 32)
-            calldatacopy(add(ptr, 118), messageRoot.offset, 32)
-            calldatacopy(add(ptr, 150), hypertreePkSeed.offset, 32)
-            calldatacopy(add(ptr, 182), hypertreeRoot.offset, 32)
-            computed := keccak256(ptr, 214)
+            calldatacopy(add(ptr, 18), statefulPublicKey.offset, statefulPkLen)
+            calldatacopy(add(ptr, add(18, statefulPkLen)), messagePkSeed.offset, 32)
+            calldatacopy(add(ptr, add(50, statefulPkLen)), messageRoot.offset, 32)
+            calldatacopy(add(ptr, add(82, statefulPkLen)), hypertreePkSeed.offset, 32)
+            calldatacopy(add(ptr, add(114, statefulPkLen)), hypertreeRoot.offset, 32)
+            computed := keccak256(ptr, compositeInputLen)
             expected := calldataload(compositePublicKey.offset)
             mstore(0x40, add(ptr, 224))
         }
         return computed == expected;
     }
 
+    // Decode the packed stateful public key bytes into the typed `pkSeed`, `root`,
+    // and `maxSignatures` fields expected by the stateful verifier path.
     function _decodeStatefulPublicKey(bytes calldata encoded)
         private
         pure
         returns (ShrincsType.StatefulPublicKey memory publicKey, bool ok)
     {
-        if (encoded.length != STATEFUL_PUBLIC_KEY_BYTES) return (publicKey, false);
+        if (encoded.length != ShrincsType.STATEFUL_PUBLIC_KEY_BYTES) return (publicKey, false);
         assembly {
             publicKey := mload(0x40)
             mstore(publicKey, calldataload(encoded.offset))
@@ -662,6 +687,8 @@ library SHRINCS {
         return (publicKey, true);
     }
 
+    // Rebuild the compact stateful WOTS-C public-key hash from the signature chains
+    // and the message-derived base-16 digits.
     function _compactStatefulWotsPublicKeyFromSignature(
         bytes32 pkSeed,
         uint32 leafIndex,
@@ -673,12 +700,17 @@ library SHRINCS {
         );
 
         uint32 digitSum;
-        bytes memory segments = new bytes(WOTS_CHAINS_STATEFUL * 32);
-        for (uint256 i = 0; i < WOTS_CHAINS_STATEFUL;) {
+        bytes memory segments = new bytes(ShrincsType.WOTS_CHAINS_STATEFUL * 32);
+        for (uint256 i = 0; i < ShrincsType.WOTS_CHAINS_STATEFUL;) {
             uint32 digit = _baseW16Digit(digest, i);
             digitSum += digit;
             bytes32 segment = _statefulChainNoMask(
-                pkSeed, leafIndex, uint32(i), signature.chains[i], digit, WOTS_BASE_STATEFUL - 1 - digit
+                pkSeed,
+                leafIndex,
+                uint32(i),
+                signature.chains[i],
+                digit,
+                ShrincsType.WOTS_BASE_STATEFUL - 1 - digit
             );
             _setSlice32(segments, segment, i * 32);
             unchecked {
@@ -686,10 +718,12 @@ library SHRINCS {
             }
         }
 
-        if (digitSum != WOTS_TARGET_SUM_STATEFUL) return (bytes32(0), false);
+        if (digitSum != ShrincsType.WOTS_TARGET_SUM_STATEFUL) return (bytes32(0), false);
         return (keccak256(abi.encodePacked("uxmss-wots-pk", pkSeed, leafIndex, segments)), true);
     }
 
+    // Verify the unbalanced XMSS-style authentication path used by the SHRINCS
+    // stateful path.
     function _rootFromUnbalancedPath(
         bytes32 pkSeed,
         uint32 leafIndex,
@@ -707,6 +741,8 @@ library SHRINCS {
         ok = true;
     }
 
+    // Hash two stateful XMSS nodes into their parent under the unbalanced XMSS node
+    // domain.
     function _statefulParentHash(bytes32 pkSeed, uint32 leftLeafIndex, bytes32 left, bytes32 right)
         private
         pure
@@ -723,6 +759,8 @@ library SHRINCS {
         }
     }
 
+    // Finish one stateful WOTS-C chain from its signed digit to the chain endpoint
+    // used in the compact public-key hash.
     function _statefulChainNoMask(
         bytes32 pkSeed,
         uint32 leafIndex,
@@ -733,7 +771,8 @@ library SHRINCS {
     ) private pure returns (bytes32 out) {
         out = value;
         for (uint32 j = 0; j < steps;) {
-            bytes32 addressWord = _addressWord32(0, 0, WOTS_HASH_TYPE, leafIndex, chainIdx, start + j);
+            bytes32 addressWord =
+                _addressWord32(0, 0, ShrincsType.WOTS_HASH_TYPE, leafIndex, chainIdx, start + j);
             out = _hashStatefulWotsCChainNoMask32(pkSeed, addressWord, out);
             unchecked {
                 ++j;
@@ -741,6 +780,7 @@ library SHRINCS {
         }
     }
 
+    // Hash one stateful WOTS-C chain step under the shared WOTS chain domain.
     function _hashStatefulWotsCChainNoMask32(bytes32 pkSeed, bytes32 addressWord, bytes32 segment)
         private
         pure
@@ -756,6 +796,7 @@ library SHRINCS {
         }
     }
 
+    // Extract one base-16 digit from the packed stateful WOTS digest.
     function _baseW16Digit(bytes32 digest, uint256 index) private pure returns (uint32 digit) {
         assembly {
             let b := byte(shr(1, index), digest)
@@ -764,12 +805,15 @@ library SHRINCS {
         }
     }
 
+    // Store one 32-byte segment into a byte buffer at a fixed offset.
     function _setSlice32(bytes memory dst, bytes32 src, uint256 offset) private pure {
         assembly {
             mstore(add(add(dst, 32), offset), src)
         }
     }
 
+    // Pack the compact 32-byte address word used by the stateful and stateless
+    // Keccak-based hash domains in this verifier.
     function _addressWord32(uint32 layer, uint64 tree, uint32 addressType, uint32 keypair, uint32 chain, uint32 step)
         private
         pure
