@@ -61,6 +61,13 @@ It is meant for vectors, compatibility checks, and tightly controlled integratio
 
 `payloadHash` should be the hash of a typed action payload. The verifier does not accept free-form account-operation bytes on this path.
 
+The account-style path also rejects invalid contexts:
+
+- `expectedCompositePublicKey == 0`
+- `domainSeparator == 0`
+- `actionType == 0`
+- `payloadHash == 0`
+
 Both forms verify:
 
 - the provided `expectedCompositePublicKey` matches `publicKey.compositePublicKey`
@@ -82,6 +89,13 @@ It is meant for vectors, compatibility checks, and tightly controlled integratio
 `verifyStateless(...)` is the account-style path. It computes a canonical hash from `ActionContext`.
 
 `payloadHash` should be the hash of a typed action payload.
+
+The account-style path also rejects invalid contexts:
+
+- `expectedCompositePublicKey == 0`
+- `domainSeparator == 0`
+- `actionType == 0`
+- `payloadHash == 0`
 
 Both forms verify:
 
@@ -117,6 +131,8 @@ It:
   - `nextStatefulKey`
 - verifies a stateless recovery signature over that canonical hash under the current key
 - validates a proposed next stateful public key
+- rejects zero `domainSeparator`
+- rejects mismatched rotation target `parameterSetId`
 - returns the next composite public-key commitment on success
 - returns `bytes32(0)` on failure
 
@@ -145,6 +161,8 @@ It:
   - the full `nextKey` bundle
 - verifies the current stateless recovery signature over that canonical hash
 - validates the full next key payload
+- rejects zero `domainSeparator`
+- rejects mismatched rotation target `parameterSetId`
 - recomputes the next composite public-key commitment
 - checks that it matches `nextKey.compositePublicKey`
 - returns `bytes32(0)` on failure
@@ -156,6 +174,8 @@ The verifier currently accepts only predefined parameter sets selected by enum:
 ```solidity
 ShrincsType.ParameterSetId.Sphincs256sKeccak
 ```
+
+There is also a reserved `ShrincsType.ParameterSetId.Unsupported` enum value used only for negative tests. It is not a valid production profile and is rejected by the library.
 
 The concrete values are resolved internally in [ShrincsTypes.sol](./contracts/ShrincsTypes.sol). Callers do not supply arbitrary numeric parameter tuples anymore.
 
@@ -197,6 +217,108 @@ For rotation flows, the integrating contract should also supply a `rotationConte
 
 The library uses that context to build the canonical rotation message hash that must be signed by the stateless recovery path.
 
+## Example Wrapper Contract
+
+The library is intentionally storage-free. A real on-chain verifier or account contract must own the account state and feed that state into the library on every call.
+
+Example shape:
+
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.28;
+
+import {SHRINCS} from "./contracts/SHRINCS.sol";
+import {ShrincsType} from "./contracts/ShrincsTypes.sol";
+
+contract ShrincsAccountVerifier {
+    bytes32 public currentShrincsPublicKey;
+    ShrincsType.ParameterSetId public parameterSetId;
+    uint256 public nonce;
+    uint256 public keyVersion;
+
+    bytes32 internal constant DOMAIN_SEPARATOR = keccak256("shrincs-account-v1");
+
+    constructor(bytes32 initialShrincsPublicKey, ShrincsType.ParameterSetId initialParameterSetId) {
+        currentShrincsPublicKey = initialShrincsPublicKey;
+        parameterSetId = initialParameterSetId;
+    }
+
+    function verifyStatefulAction(
+        ShrincsType.PublicKey calldata publicKey,
+        bytes32 actionType,
+        bytes32 payloadHash,
+        ShrincsType.StatefulSignature calldata signature
+    ) external returns (bool) {
+        ShrincsType.ActionContext memory context = ShrincsType.ActionContext({
+            domainSeparator: DOMAIN_SEPARATOR,
+            nonce: nonce,
+            keyVersion: keyVersion,
+            actionType: actionType,
+            payloadHash: payloadHash
+        });
+
+        bool ok = SHRINCS.verifyStateful(
+            parameterSetId,
+            currentShrincsPublicKey,
+            publicKey,
+            context,
+            signature
+        );
+        if (!ok) return false;
+
+        nonce += 1;
+        return true;
+    }
+
+    function rotateFullKey(
+        ShrincsType.PublicKey calldata currentPublicKey,
+        ShrincsType.StatelessSignature calldata recoverySignature,
+        ShrincsType.RotationTarget calldata nextKey
+    ) external returns (bool) {
+        ShrincsType.RotationContext memory context = ShrincsType.RotationContext({
+            domainSeparator: DOMAIN_SEPARATOR,
+            nonce: nonce,
+            keyVersion: keyVersion
+        });
+
+        bytes32 nextCompositePublicKey = SHRINCS.rotateFullShrincsKey(
+            parameterSetId,
+            currentShrincsPublicKey,
+            currentPublicKey,
+            context,
+            recoverySignature,
+            nextKey
+        );
+        if (nextCompositePublicKey == bytes32(0)) return false;
+
+        currentShrincsPublicKey = nextCompositePublicKey;
+        parameterSetId = nextKey.parameterSetId;
+        nonce += 1;
+        keyVersion += 1;
+        return true;
+    }
+}
+```
+
+What the wrapper must handle:
+
+- store `currentShrincsPublicKey`
+- store the active `parameterSetId`
+- store and increment `nonce`
+- store and increment `keyVersion`
+- define a stable `domainSeparator`
+- define the typed action payloads whose hash becomes `payloadHash`
+- decide which path is allowed for which operation
+- update stored key state only after successful rotation authorization
+
+What the wrapper should not delegate to users:
+
+- choosing `expectedCompositePublicKey`
+- choosing the stored `nonce`
+- choosing the stored `keyVersion`
+- choosing an empty `domainSeparator`
+- bypassing the typed `payloadHash` flow for normal account operations
+
 ## Test Coverage
 
 Current tests cover:
@@ -207,8 +329,12 @@ Current tests cover:
 - wrong message is rejected
 - wrong public key is rejected
 - wrong expected composite public key is rejected
+- zero expected composite public key is rejected
+- unsupported requested parameter set is rejected
+- mismatched declared parameter set is rejected
 - corrupted stateful signature is rejected
 - canonical action hash changes when payload changes
+- zeroed account-style action context is rejected
 
 ### Stateless path
 
@@ -218,7 +344,16 @@ Current tests cover:
 - tampered hypertree `WOTS-C` public-key hash is rejected
 - tampered hypertree authentication path is rejected
 - wrong expected composite public key is rejected
+- zero expected composite public key is rejected
+- unsupported requested parameter set is rejected
+- mismatched declared parameter set is rejected
+- malformed `compositePublicKey` length is rejected
+- malformed `messagePkSeed` length is rejected
+- malformed `messageRoot` length is rejected
+- malformed `hypertreePkSeed` length is rejected
+- malformed `hypertreeRoot` length is rejected
 - canonical action hash changes when nonce changes
+- zeroed account-style action context is rejected
 
 ### Rotation authorization helpers
 
@@ -226,11 +361,15 @@ Current tests cover:
   - canonical rotation hash changes when the next stateful key changes
   - rejects legacy stateless signatures that were not signed over the canonical rotation hash
   - rejects malformed next stateful public key
+  - rejects unsupported next parameter set
+  - rejects zero `domainSeparator`
 
 - `rotateFullShrincsKey(...)`
   - canonical rotation hash changes when the next key bundle changes
   - rejects legacy stateless signatures that were not signed over the canonical rotation hash
   - rejects mismatched supplied composite commitment
+  - rejects unsupported next parameter set
+  - rejects zero `domainSeparator`
 
 ## Development
 
@@ -269,7 +408,7 @@ forge test --via-ir
 
 Current expected result:
 
-- `19 passed, 0 failed`
+- `36 passed, 0 failed`
 
 ## Notes
 
