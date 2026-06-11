@@ -2,8 +2,6 @@
 pragma solidity ^0.8.28;
 
 library ShrincsType {
-    uint32 internal constant PARAM_SET_SPHINCS_256S_KECCAK = 1;
-
     uint32 internal constant HASH_SUITE_KECCAK_256 = 1;
 
     uint32 internal constant WOTS_HASH_TYPE = 0;
@@ -20,21 +18,12 @@ library ShrincsType {
         Stateless
     }
 
-    struct Params {
-        uint32 parameterSetId;
-        uint32 hashSuiteId;
-        uint16 nBytes;
-        uint8 h;
-        uint8 d;
-        uint8 a;
-        uint8 k;
-        uint16 w;
-        uint16 l;
-        uint32 wotsTargetSum;
+    enum ParameterSetId {
+        Sphincs256sKeccak
     }
 
     struct ParamsView {
-        uint32 parameterSetId;
+        ParameterSetId parameterSetId;
         uint32 hashSuiteId;
         uint16 nBytes;
         uint8 h;
@@ -60,8 +49,7 @@ library ShrincsType {
     }
 
     struct PublicKey {
-        uint32 parameterSetId;
-        uint32 hashSuiteId;
+        ParameterSetId parameterSetId;
         bytes compositePublicKey;
         bytes statefulPublicKey;
         bytes messagePkSeed;
@@ -114,14 +102,12 @@ library ShrincsType {
     }
 
     struct StatefulRotationTarget {
-        uint32 parameterSetId;
-        uint32 hashSuiteId;
+        ParameterSetId parameterSetId;
         bytes statefulPublicKey;
     }
 
     struct RotationTarget {
-        uint32 parameterSetId;
-        uint32 hashSuiteId;
+        ParameterSetId parameterSetId;
         bytes compositePublicKey;
         bytes statefulPublicKey;
         bytes messagePkSeed;
@@ -130,15 +116,15 @@ library ShrincsType {
         bytes hypertreeRoot;
     }
 
-    function defaultParamsView(uint32 parameterSetId, uint32 hashSuiteId)
+    function defaultParamsView(ParameterSetId parameterSetId)
         internal
         pure
         returns (ParamsView memory)
     {
-        if (parameterSetId == PARAM_SET_SPHINCS_256S_KECCAK) {
+        if (parameterSetId == ParameterSetId.Sphincs256sKeccak) {
             return ParamsView({
-                parameterSetId: PARAM_SET_SPHINCS_256S_KECCAK,
-                hashSuiteId: hashSuiteId == 0 ? HASH_SUITE_KECCAK_256 : hashSuiteId,
+                parameterSetId: ParameterSetId.Sphincs256sKeccak,
+                hashSuiteId: HASH_SUITE_KECCAK_256,
                 nBytes: 32,
                 h: 64,
                 d: 8,
@@ -151,31 +137,5 @@ library ShrincsType {
         }
 
         revert("unknown parameterSetId");
-    }
-
-    function resolveParamsView(Params calldata params)
-        internal
-        pure
-        returns (ParamsView memory)
-    {
-        bool useDefaults = params.nBytes == 0 && params.h == 0 && params.d == 0 && params.a == 0 && params.k == 0
-            && params.w == 0 && params.l == 0 && params.wotsTargetSum == 0;
-
-        if (useDefaults) {
-            return defaultParamsView(params.parameterSetId, params.hashSuiteId);
-        }
-
-        return ParamsView({
-            parameterSetId: params.parameterSetId,
-            hashSuiteId: params.hashSuiteId,
-            nBytes: params.nBytes,
-            h: params.h,
-            d: params.d,
-            a: params.a,
-            k: params.k,
-            w: params.w,
-            l: params.l,
-            wotsTargetSum: params.wotsTargetSum
-        });
     }
 }
