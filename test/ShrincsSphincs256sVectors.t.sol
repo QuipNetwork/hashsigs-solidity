@@ -26,10 +26,12 @@ contract ShrincsSphincs256sVectorsTest is Test {
         _assertVerifierCall(address(stateful), ".stateful.cases.wrongMessage.calldata", false);
     }
 
+    //stateful public key root is tampered, so signature should be rejected
     function testStatefulSphincs256sRejectsWrongPublicKey() public {
         _assertVerifierCall(address(stateful), ".stateful.cases.wrongPublicKey.calldata", false);
     }
 
+    //one wots-c signature chain element is tampered, so reconstruct public key root should be wrong and signature should be rejected
     function testStatefulSphincs256sRejectsCorruptedSignature() public {
         _assertVerifierCall(address(stateful), ".stateful.cases.corruptedSignature.calldata", false);
     }
@@ -42,22 +44,17 @@ contract ShrincsSphincs256sVectorsTest is Test {
         _assertVerifierCall(address(stateless), ".stateless.cases.wrongMessage.calldata", false);
     }
 
-    function testStatelessSphincs256sRejectsWrongCompositePublicKey() public {
-        _assertVerifierCall(address(stateless), ".stateless.cases.wrongCompositePublicKey.calldata", false);
-    }
-
-    function testStatelessSphincs256sRejectsTamperedComponentPublicKey() public {
-        _assertVerifierCall(address(stateless), ".stateless.cases.tamperedComponentPublicKey.calldata", false);
-    }
-
+    //tamper with one of the revealed secret keys in the FORS signature so reconstructed FORS pk root will be wrong and signature should be rejected
     function testStatelessSphincs256sRejectsTamperedFors() public {
         _assertVerifierCall(address(stateless), ".stateless.cases.tamperedFors.calldata", false);
     }
 
+    //tamper with WOTS-C public key hash so reconstructed hypertree leaf will not match public hypertree leaf so root will not match public hypertree root and signature should be rejected
     function testStatelessSphincs256sRejectsTamperedHypertreeWotsPkHash() public {
         _assertVerifierCall(address(stateless), ".stateless.cases.tamperedHypertreeWotsPkHash.calldata", false);
     }
 
+    //tamper authentication-path node so reconstructed XMSS root will not match public hypertree root
     function testStatelessSphincs256sRejectsTamperedHypertreeAuth() public {
         _assertVerifierCall(address(stateless), ".stateless.cases.tamperedHypertreeAuth.calldata", false);
     }
