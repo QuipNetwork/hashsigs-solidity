@@ -3,6 +3,10 @@ pragma solidity ^0.8.28;
 
 library ShrincsType {
     uint32 internal constant HASH_SUITE_KECCAK_256 = 1;
+    bytes32 internal constant OP_VERIFY_STATEFUL = keccak256("shrincs-verify-stateful");
+    bytes32 internal constant OP_VERIFY_STATELESS = keccak256("shrincs-verify-stateless");
+    bytes32 internal constant OP_ROTATE_STATEFUL = keccak256("shrincs-rotate-stateful");
+    bytes32 internal constant OP_ROTATE_FULL = keccak256("shrincs-rotate-full");
 
     uint32 internal constant WOTS_HASH_TYPE = 0;
     uint32 internal constant TREE_TYPE = 2;
@@ -12,11 +16,6 @@ library ShrincsType {
     uint16 internal constant WOTS_CHAINS_STATEFUL = 64;
     uint16 internal constant WOTS_BASE_STATEFUL = 16;
     uint32 internal constant WOTS_TARGET_SUM_STATEFUL = 480;
-
-    enum VerificationPath {
-        Stateful,
-        Stateless
-    }
 
     enum ParameterSetId {
         Sphincs256sKeccak
@@ -104,6 +103,20 @@ library ShrincsType {
     struct StatefulRotationTarget {
         ParameterSetId parameterSetId;
         bytes statefulPublicKey;
+    }
+
+    struct RotationContext {
+        bytes32 domainSeparator;
+        uint256 nonce;
+        uint256 keyVersion;
+    }
+
+    struct ActionContext {
+        bytes32 domainSeparator;
+        uint256 nonce;
+        uint256 keyVersion;
+        bytes32 actionType;
+        bytes32 payloadHash;
     }
 
     struct RotationTarget {

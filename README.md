@@ -44,11 +44,26 @@ Test vectors:
 ### 1. Stateful verification
 
 ```solidity
-SHRINCS.verifyStateful(parameterSetId, publicKey, message, signature)
+SHRINCS.verifyStatefulUnsafeRaw(parameterSetId, expectedCompositePublicKey, publicKey, message, signature)
+SHRINCS.verifyStateful(parameterSetId, expectedCompositePublicKey, publicKey, actionContext, signature)
 ```
 
-This verifies:
+`verifyStatefulUnsafeRaw(...)` verifies an arbitrary caller-provided message.
+It is meant for vectors, compatibility checks, and tightly controlled integrations.
 
+`verifyStateful(...)` is the account-style path. It computes a canonical hash from `ActionContext`:
+
+- `domainSeparator`
+- `nonce`
+- `keyVersion`
+- `actionType`
+- `payloadHash`
+
+`payloadHash` should be the hash of a typed action payload. The verifier does not accept free-form account-operation bytes on this path.
+
+Both forms verify:
+
+- the provided `expectedCompositePublicKey` matches `publicKey.compositePublicKey`
 - the composite SHRINCS public key commitment
 - the embedded stateful public key
 - compact `WOTS-C` reconstruction
@@ -57,11 +72,20 @@ This verifies:
 ### 2. Stateless verification
 
 ```solidity
-SHRINCS.verifyStateless(parameterSetId, publicKey, message, signature)
+SHRINCS.verifyStatelessUnsafeRaw(parameterSetId, expectedCompositePublicKey, publicKey, message, signature)
+SHRINCS.verifyStateless(parameterSetId, expectedCompositePublicKey, publicKey, actionContext, signature)
 ```
 
-This verifies:
+`verifyStatelessUnsafeRaw(...)` verifies an arbitrary caller-provided message.
+It is meant for vectors, compatibility checks, and tightly controlled integrations.
 
+`verifyStateless(...)` is the account-style path. It computes a canonical hash from `ActionContext`.
+
+`payloadHash` should be the hash of a typed action payload.
+
+Both forms verify:
+
+- the provided `expectedCompositePublicKey` matches `publicKey.compositePublicKey`
 - parameter-set compatibility
 - `FORS-C`
 - hypertree layer traversal
@@ -71,14 +95,27 @@ This verifies:
 ### 3. Stateful-key rotation authorization
 
 ```solidity
-SHRINCS.rotateStatefulViaStateless(parameterSetId, currentPublicKey, recoveryMessage, recoverySignature, nextStatefulKey)
+SHRINCS.rotateStatefulViaStateless(
+    parameterSetId,
+    expectedCompositePublicKey,
+    currentPublicKey,
+    rotationContext,
+    recoverySignature,
+    nextStatefulKey
+)
 ```
 
 This is a verifier-side authorization helper, not signer recovery logic.
 
 It:
 
-- verifies a stateless recovery signature under the current key
+- computes a canonical rotation message hash from:
+  - `parameterSetId`
+  - `expectedCompositePublicKey`
+  - `currentPublicKey.compositePublicKey`
+  - `rotationContext`
+  - `nextStatefulKey`
+- verifies a stateless recovery signature over that canonical hash under the current key
 - validates a proposed next stateful public key
 - returns the next composite public-key commitment on success
 - returns `bytes32(0)` on failure
@@ -86,14 +123,27 @@ It:
 ### 4. Full SHRINCS-key rotation authorization
 
 ```solidity
-SHRINCS.rotateFullShrincsKey(parameterSetId, currentPublicKey, recoveryMessage, recoverySignature, nextKey)
+SHRINCS.rotateFullShrincsKey(
+    parameterSetId,
+    expectedCompositePublicKey,
+    currentPublicKey,
+    rotationContext,
+    recoverySignature,
+    nextKey
+)
 ```
 
 This verifies a stateless recovery signature authorizing a full next SHRINCS key bundle.
 
 It:
 
-- verifies the current stateless recovery signature
+- computes a canonical full-rotation message hash from:
+  - `parameterSetId`
+  - `expectedCompositePublicKey`
+  - `currentPublicKey.compositePublicKey`
+  - `rotationContext`
+  - the full `nextKey` bundle
+- verifies the current stateless recovery signature over that canonical hash
 - validates the full next key payload
 - recomputes the next composite public-key commitment
 - checks that it matches `nextKey.compositePublicKey`
@@ -109,6 +159,44 @@ ShrincsType.ParameterSetId.Sphincs256sKeccak
 
 The concrete values are resolved internally in [ShrincsTypes.sol](./contracts/ShrincsTypes.sol). Callers do not supply arbitrary numeric parameter tuples anymore.
 
+The hash suite is currently implied by the parameter set. The canonical account-action and rotation hashes also bind the resolved `hashSuiteId`, so the signed message shape stays stable if more parameter sets are added later.
+
+## On-Chain Integration State
+
+The `SHRINCS` library is only responsible for signature verification and rotation-authorization checking.
+
+It does **not** manage surrounding account or protocol state such as:
+
+- the currently active on-chain SHRINCS public key
+- the selected parameter set for an account
+- nonces / sequence numbers
+- key version / rotation epoch
+- recovery policy flags
+- pending rotation state
+- balances, permissions, or other account logic
+
+So a real on-chain verifier or account contract usually needs an initialization step that stores at least:
+
+- `currentShrincsPublicKey`
+- `parameterSetId`
+
+and usually also:
+
+- `nonce`
+- `keyVersion`
+
+This is outside the SHRINCS library itself. The library only checks whether the provided signature or rotation authorization is valid for the provided inputs.
+
+The integrating contract should pass its stored `currentShrincsPublicKey` into the library as `expectedCompositePublicKey`. The library enforces that the provided `publicKey` bundle is pinned to that expected key.
+
+For rotation flows, the integrating contract should also supply a `rotationContext` carrying at least:
+
+- `domainSeparator`
+- `nonce`
+- `keyVersion`
+
+The library uses that context to build the canonical rotation message hash that must be signed by the stateless recovery path.
+
 ## Test Coverage
 
 Current tests cover:
@@ -118,7 +206,9 @@ Current tests cover:
 - valid stateful signature verifies
 - wrong message is rejected
 - wrong public key is rejected
+- wrong expected composite public key is rejected
 - corrupted stateful signature is rejected
+- canonical action hash changes when payload changes
 
 ### Stateless path
 
@@ -127,17 +217,19 @@ Current tests cover:
 - tampered `FORS` data is rejected
 - tampered hypertree `WOTS-C` public-key hash is rejected
 - tampered hypertree authentication path is rejected
+- wrong expected composite public key is rejected
+- canonical action hash changes when nonce changes
 
 ### Rotation authorization helpers
 
 - `rotateStatefulViaStateless(...)`
-  - returns next composite commitment on valid recovery authorization
-  - rejects wrong recovery message
+  - canonical rotation hash changes when the next stateful key changes
+  - rejects legacy stateless signatures that were not signed over the canonical rotation hash
   - rejects malformed next stateful public key
 
 - `rotateFullShrincsKey(...)`
-  - returns next composite commitment on valid full-key rotation authorization
-  - rejects wrong recovery message
+  - canonical rotation hash changes when the next key bundle changes
+  - rejects legacy stateless signatures that were not signed over the canonical rotation hash
   - rejects mismatched supplied composite commitment
 
 ## Development
@@ -177,7 +269,7 @@ forge test --via-ir
 
 Current expected result:
 
-- `15 passed, 0 failed`
+- `19 passed, 0 failed`
 
 ## Notes
 
