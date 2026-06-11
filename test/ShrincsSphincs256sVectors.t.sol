@@ -2,19 +2,40 @@
 pragma solidity ^0.8.28;
 
 import { Test } from "../lib/forge-std/src/Test.sol";
-import { ShrincsStatefulPathVerifier } from "../contracts/ShrincsStatefulPathVerifier.sol";
-import { ShrincsStatelessPathVerifier } from "../contracts/ShrincsStatelessPathVerifier.sol";
+import { SHRINCS } from "../contracts/SHRINCS.sol";
+import { ShrincsType } from "../contracts/ShrincsType.sol";
+
+contract StatefulHarness {
+    function verify(
+        ShrincsType.PublicKey calldata publicKey,
+        bytes calldata message,
+        ShrincsType.StatefulSignature calldata signature
+    ) external pure returns (bool) {
+        return SHRINCS.verifyStateful(publicKey, message, signature);
+    }
+}
+
+contract StatelessHarness {
+    function verify(
+        ShrincsType.Params calldata params,
+        ShrincsType.PublicKey calldata publicKey,
+        bytes calldata message,
+        ShrincsType.StatelessSignature calldata signature
+    ) external pure returns (bool) {
+        return SHRINCS.verifyStateless(params, publicKey, message, signature);
+    }
+}
 
 contract ShrincsSphincs256sVectorsTest is Test {
     string internal constant VECTOR_PATH = "test/test_vectors/shrincs_sphincs_256s_keccak.json";
 
-    ShrincsStatefulPathVerifier internal stateful;
-    ShrincsStatelessPathVerifier internal stateless;
+    StatefulHarness internal stateful;
+    StatelessHarness internal stateless;
     string internal vectors;
 
     function setUp() public {
-        stateful = new ShrincsStatefulPathVerifier();
-        stateless = new ShrincsStatelessPathVerifier();
+        stateful = new StatefulHarness();
+        stateless = new StatelessHarness();
         vectors = vm.readFile(VECTOR_PATH);
     }
 

@@ -1,3 +1,6 @@
+out/
+ignition/8
+
 node_modules
 .env
 
