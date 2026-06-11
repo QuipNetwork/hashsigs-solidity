@@ -131,6 +131,7 @@ It:
   - `nextStatefulKey`
 - verifies a stateless recovery signature over that canonical hash under the current key
 - validates a proposed next stateful public key
+- decodes the next stateful key and rejects `maxSignatures == 0`
 - rejects zero `domainSeparator`
 - rejects mismatched rotation target `parameterSetId`
 - returns the next composite public-key commitment on success
@@ -161,6 +162,7 @@ It:
   - the full `nextKey` bundle
 - verifies the current stateless recovery signature over that canonical hash
 - validates the full next key payload
+- decodes the next stateful key and rejects `maxSignatures == 0`
 - rejects zero `domainSeparator`
 - rejects mismatched rotation target `parameterSetId`
 - recomputes the next composite public-key commitment
@@ -180,6 +182,21 @@ There is also a reserved `ShrincsType.ParameterSetId.Unsupported` enum value use
 The concrete values are resolved internally in [ShrincsTypes.sol](./contracts/ShrincsTypes.sol). Callers do not supply arbitrary numeric parameter tuples anymore.
 
 The hash suite is currently implied by the parameter set. The canonical account-action and rotation hashes also bind the resolved `hashSuiteId`, so the signed message shape stays stable if more parameter sets are added later.
+
+The current verifier is intentionally pinned to exactly one production profile:
+
+- `parameterSetId = ShrincsType.ParameterSetId.Sphincs256sKeccak`
+- `hashSuiteId = HASH_SUITE_KECCAK_256`
+- `nBytes = 32`
+- `h = 64`
+- `d = 8`
+- `a = 14`
+- `k = 22`
+- `w = 16`
+- `l = 64`
+- `wotsTargetSum = 480`
+
+This is deliberate. The library does not currently claim support for arbitrary future parameter tuples even if they are superficially shape-compatible.
 
 ## On-Chain Integration State
 
@@ -361,6 +378,7 @@ Current tests cover:
   - canonical rotation hash changes when the next stateful key changes
   - rejects legacy stateless signatures that were not signed over the canonical rotation hash
   - rejects malformed next stateful public key
+  - rejects next stateful keys with `maxSignatures == 0`
   - rejects unsupported next parameter set
   - rejects zero `domainSeparator`
 
@@ -368,6 +386,7 @@ Current tests cover:
   - canonical rotation hash changes when the next key bundle changes
   - rejects legacy stateless signatures that were not signed over the canonical rotation hash
   - rejects mismatched supplied composite commitment
+  - rejects next stateful keys with `maxSignatures == 0`
   - rejects unsupported next parameter set
   - rejects zero `domainSeparator`
 
@@ -408,7 +427,7 @@ forge test --via-ir
 
 Current expected result:
 
-- `36 passed, 0 failed`
+- `38 passed, 0 failed`
 
 ## Notes
 

@@ -92,6 +92,11 @@ library SHRINCS {
         if (!_validParams(p, currentPublicKey)) return bytes32(0);
         if (!_validParameterSetBinding(p, parameterSetId, nextStatefulKey.parameterSetId)) return bytes32(0);
         if (nextStatefulKey.statefulPublicKey.length != ShrincsType.STATEFUL_PUBLIC_KEY_BYTES) return bytes32(0);
+        {
+            (ShrincsType.StatefulPublicKey memory decodedNextStatefulKey, bool ok) =
+                _decodeStatefulPublicKey(nextStatefulKey.statefulPublicKey);
+            if (!ok || decodedNextStatefulKey.maxSignatures == 0) return bytes32(0);
+        }
         bytes memory recoveryMessage = abi.encodePacked(
             statefulRotationMessageHash(parameterSetId, expectedCompositePublicKey, currentPublicKey, context, nextStatefulKey)
         );
@@ -130,6 +135,11 @@ library SHRINCS {
                 || nextKey.hypertreePkSeed.length != 32
                 || nextKey.hypertreeRoot.length != 32
         ) return bytes32(0);
+        {
+            (ShrincsType.StatefulPublicKey memory decodedNextStatefulKey, bool ok) =
+                _decodeStatefulPublicKey(nextKey.statefulPublicKey);
+            if (!ok || decodedNextStatefulKey.maxSignatures == 0) return bytes32(0);
+        }
 
         nextCompositePublicKey = _compositePublicKeyCommitment(
             nextKey.statefulPublicKey,
@@ -266,12 +276,12 @@ library SHRINCS {
         pure
         returns (bool)
     {
+        if (params.parameterSetId != ShrincsType.ParameterSetId.Sphincs256sKeccak) return false;
         if (params.nBytes != 32) return false;
         if (params.parameterSetId != publicKey.parameterSetId) return false;
-        if (params.h == 0 || params.d == 0 || params.h % params.d != 0) return false;
-        if (params.a == 0 || params.k < 2 || params.l == 0) return false;
-        if (params.h > 64 || params.a >= 32 || params.h / params.d >= 32) return false;
-        if (params.w != 16 && params.w != 256) return false;
+        if (params.h != 64 || params.d != 8 || params.a != 14) return false;
+        if (params.k != 22 || params.w != 16 || params.l != 64) return false;
+        if (params.wotsTargetSum != ShrincsType.WOTS_TARGET_SUM_STATEFUL) return false;
         if (!_validStatefulCompositePublicKey(publicKey)) return false;
         if (uint256(params.k) * (uint256(1) << params.a) > type(uint32).max) return false;
         return true;

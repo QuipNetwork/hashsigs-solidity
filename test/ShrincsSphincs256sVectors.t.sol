@@ -683,6 +683,33 @@ contract ShrincsSphincs256sVectorsTest is Test {
         assertEq(result, bytes32(0));
     }
 
+    function testRotateStatefulViaStatelessRejectsZeroMaxSignaturesNextStatefulKey() public {
+        (ShrincsType.PublicKey memory publicKey, , ShrincsType.StatelessSignature memory signature) =
+            _decodeStatelessVector(".stateless.cases.valid.calldata");
+
+        ShrincsType.RotationContext memory context =
+            ShrincsType.RotationContext({domainSeparator: keccak256("shrincs-test"), nonce: 7, keyVersion: 1});
+        bytes memory nextStatefulPublicKey = bytes.concat(publicKey.statefulPublicKey);
+        nextStatefulPublicKey[64] = bytes1(0);
+        nextStatefulPublicKey[65] = bytes1(0);
+        nextStatefulPublicKey[66] = bytes1(0);
+        nextStatefulPublicKey[67] = bytes1(0);
+        ShrincsType.StatefulRotationTarget memory target = ShrincsType.StatefulRotationTarget({
+            parameterSetId: publicKey.parameterSetId,
+            statefulPublicKey: nextStatefulPublicKey
+        });
+
+        bytes32 result = rotation.rotateStatefulViaStateless(
+            ShrincsType.ParameterSetId.Sphincs256sKeccak,
+            _compositePublicKeyWord(publicKey),
+            publicKey,
+            context,
+            signature,
+            target
+        );
+        assertEq(result, bytes32(0));
+    }
+
     function testRotateFullShrincsKeyReturnsNextCompositeCommitment() public {
         (ShrincsType.PublicKey memory publicKey, , ShrincsType.StatelessSignature memory signature) =
             _decodeStatelessVector(".stateless.cases.valid.calldata");
@@ -822,6 +849,38 @@ contract ShrincsSphincs256sVectorsTest is Test {
             parameterSetId: publicKey.parameterSetId,
             compositePublicKey: publicKey.compositePublicKey,
             statefulPublicKey: publicKey.statefulPublicKey,
+            messagePkSeed: publicKey.messagePkSeed,
+            messageRoot: publicKey.messageRoot,
+            hypertreePkSeed: publicKey.hypertreePkSeed,
+            hypertreeRoot: publicKey.hypertreeRoot
+        });
+
+        bytes32 result = rotation.rotateFullShrincsKey(
+            ShrincsType.ParameterSetId.Sphincs256sKeccak,
+            _compositePublicKeyWord(publicKey),
+            publicKey,
+            context,
+            signature,
+            target
+        );
+        assertEq(result, bytes32(0));
+    }
+
+    function testRotateFullShrincsKeyRejectsZeroMaxSignaturesNextStatefulKey() public {
+        (ShrincsType.PublicKey memory publicKey, , ShrincsType.StatelessSignature memory signature) =
+            _decodeStatelessVector(".stateless.cases.valid.calldata");
+
+        ShrincsType.RotationContext memory context =
+            ShrincsType.RotationContext({domainSeparator: keccak256("shrincs-test"), nonce: 11, keyVersion: 2});
+        bytes memory nextStatefulPublicKey = bytes.concat(publicKey.statefulPublicKey);
+        nextStatefulPublicKey[64] = bytes1(0);
+        nextStatefulPublicKey[65] = bytes1(0);
+        nextStatefulPublicKey[66] = bytes1(0);
+        nextStatefulPublicKey[67] = bytes1(0);
+        ShrincsType.RotationTarget memory target = ShrincsType.RotationTarget({
+            parameterSetId: publicKey.parameterSetId,
+            compositePublicKey: publicKey.compositePublicKey,
+            statefulPublicKey: nextStatefulPublicKey,
             messagePkSeed: publicKey.messagePkSeed,
             messageRoot: publicKey.messageRoot,
             hypertreePkSeed: publicKey.hypertreePkSeed,
