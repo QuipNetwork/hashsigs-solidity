@@ -29,11 +29,18 @@ library ShrincsHypertree {
         if (layers.length != params.d) return false;
         uint32 subtreeHeight = uint32(params.h / params.d);
         uint32 leafCount = uint32(1) << subtreeHeight;
-
         bytes32 current = messageRoot;
 
         for (uint256 layer = 0; layer < layers.length;) {
             ShrincsTypes.HypertreeLayerSignature calldata layerSig = layers[layer];
+            // NOTE: This verifier currently accepts upper-layer hypertree coordinates directly from
+            // the signature. The Rust signer under code/src/hypertree.rs emits sequential per-layer
+            // tree and leaf indices rather than deriving them from the FORS-pinned layer-0 index.
+            // We keep that compatibility for now because the current vectors were generated against
+            // that signer behavior. This is not directly forgeable: every WOTS-C and hypertree node
+            // hash binds (layer, tree, leaf) into its address word, and the full chain still has to
+            // close at the pinned hypertree root. The full fix is signer/vector regeneration and
+            // then enforcing the FIPS-style recurrence here.
             if (layerSig.leafIndex >= leafCount) return false;
             if (layerSig.wotsCPkHash.length != params.nBytes) return false;
             if (layerSig.authPath.length != subtreeHeight) return false;
