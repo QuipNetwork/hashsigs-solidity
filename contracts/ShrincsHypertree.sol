@@ -225,7 +225,10 @@ library ShrincsHypertree {
             }
             (bytes32 left, bytes32 right) = index & 1 == 0 ? (node, sibling) : (sibling, node);
             uint256 nodeHeight = level + 1;
-            node = hashHypertreeNode32(pkSeedWord, bytes32(addressBase | (nodeHeight << 32) | (index >> 1)), left, right);
+            uint256 shiftedNodeHeight = nodeHeight << 32;
+            uint256 parentIndex = index >> 1;
+            bytes32 addressWord = bytes32(addressBase | shiftedNodeHeight | parentIndex);
+            node = hashHypertreeNode32(pkSeedWord, addressWord, left, right);
             index >>= 1;
             unchecked {
                 ++level;
