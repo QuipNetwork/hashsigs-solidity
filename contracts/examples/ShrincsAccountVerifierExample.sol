@@ -39,7 +39,7 @@ contract ShrincsAccountVerifierExample {
 
     mapping(uint256 keyVersion => mapping(uint256 wordIndex => uint256 usedBits)) internal usedLeafBitmap;
 
-    bytes32 internal constant DOMAIN_SEPARATOR = keccak256("shrincs-account-v1");
+    bytes32 internal constant DOMAIN_TAG = keccak256("shrincs-account-v1");
 
     event StatefulPolicySet(StatefulPolicy indexed policy, uint32 nextStatefulLeafIndex);
     event RecoveryModeEntered(uint256 indexed keyVersion);
@@ -91,7 +91,7 @@ contract ShrincsAccountVerifierExample {
         if (!_precheckStatefulLeafUse(leafIndex)) return false;
 
         ShrincsTypes.ActionContext memory context = ShrincsTypes.ActionContext({
-            domainSeparator: DOMAIN_SEPARATOR,
+            domainSeparator: _domainSeparator(),
             nonce: nonce,
             keyVersion: keyVersion,
             actionType: actionType,
@@ -143,7 +143,7 @@ contract ShrincsAccountVerifierExample {
         if (statelessSignaturesUsed >= limit) return false;
 
         ShrincsTypes.ActionContext memory context = ShrincsTypes.ActionContext({
-            domainSeparator: DOMAIN_SEPARATOR,
+            domainSeparator: _domainSeparator(),
             nonce: nonce,
             keyVersion: keyVersion,
             actionType: actionType,
@@ -175,7 +175,7 @@ contract ShrincsAccountVerifierExample {
         if (statelessSignaturesUsed >= limit) return false;
 
         ShrincsTypes.RotationContext memory context = ShrincsTypes.RotationContext({
-            domainSeparator: DOMAIN_SEPARATOR,
+            domainSeparator: _domainSeparator(),
             nonce: nonce,
             keyVersion: keyVersion
         });
@@ -203,7 +203,7 @@ contract ShrincsAccountVerifierExample {
         if (statelessSignaturesUsed >= limit) return false;
 
         ShrincsTypes.RotationContext memory context = ShrincsTypes.RotationContext({
-            domainSeparator: DOMAIN_SEPARATOR,
+            domainSeparator: _domainSeparator(),
             nonce: nonce,
             keyVersion: keyVersion
         });
@@ -277,6 +277,10 @@ contract ShrincsAccountVerifierExample {
             uint256 bitIndex = uint256(leafIndex) & 0xff;
             usedLeafBitmap[keyVersion][wordIndex] |= uint256(1) << bitIndex;
         }
+    }
+
+    function _domainSeparator() internal view returns (bytes32) {
+        return keccak256(abi.encode(DOMAIN_TAG, block.chainid, address(this)));
     }
 
     function _installFreshKey(
