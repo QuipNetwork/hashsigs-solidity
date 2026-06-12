@@ -23,13 +23,13 @@ library ShrincsHypertree {
     function verifyHypertree(
         ShrincsTypes.ParamsView memory params,
         ShrincsTypes.PublicKey calldata publicKey,
-        bytes32 messageRoot,
+        bytes32 forsRoot,
         ShrincsTypes.HypertreeLayerSignature[] calldata layers
     ) internal pure returns (bool) {
         if (layers.length != params.numHypertreeLayers) return false;
         uint32 subtreeHeight = uint32(params.hypertreeHeight / params.numHypertreeLayers);
         uint32 leafCount = uint32(1) << subtreeHeight;
-        bytes32 current = messageRoot;
+        bytes32 current = forsRoot;
 
         for (uint256 layer = 0; layer < layers.length;) {
             ShrincsTypes.HypertreeLayerSignature calldata layerSig = layers[layer];
@@ -233,7 +233,7 @@ library ShrincsHypertree {
             pkSeedWord := calldataload(pkSeed.offset)
         }
         uint256 addressBase =
-            (uint256(layer) << 224) | (uint256(treeIndex) << 128) | (uint256(ShrincsTypes.TREE_TYPE) << 96);
+            (uint256(layer) << 224) | (uint256(treeIndex) << 128) | (uint256(ShrincsTypes.AddressTypeTree) << 96);
         node = leaf;
         uint256 index = leafIndex;
         for (uint256 level = 0; level < height;) {

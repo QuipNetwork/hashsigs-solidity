@@ -24,9 +24,9 @@ library ShrincsTypes {
     bytes32 internal constant OP_ROTATE_STATEFUL = keccak256("shrincs-rotate-stateful");
     bytes32 internal constant OP_ROTATE_FULL = keccak256("shrincs-rotate-full");
 
-    uint32 internal constant WOTS_HASH_TYPE = 0;
-    uint32 internal constant TREE_TYPE = 2;
-    uint32 internal constant FORS_TREE_TYPE = 3;
+    uint32 internal constant AddressTypeWotsHash = 0;
+    uint32 internal constant AddressTypeTree = 2;
+    uint32 internal constant AddressTypeForsTree = 3;
 
     // Encoded stateful public key layout:
     // 32-byte pkSeed || 32-byte root || 4-byte maxSignatures.
@@ -59,8 +59,8 @@ library ShrincsTypes {
     }
 
     struct ForsDigest {
-        uint64 xmssTree;
-        uint32 xmssKeypair;
+        uint64 treeIndex;
+        uint32 leafIndex;
         bytes digest;
     }
 
@@ -68,8 +68,8 @@ library ShrincsTypes {
         ParameterSetId parameterSetId;
         bytes compositePublicKey;
         bytes statefulPublicKey;
-        bytes messagePkSeed;
-        bytes messageRoot;
+        bytes forsPkSeed;
+        bytes forsRoot;
         bytes hypertreePkSeed;
         bytes hypertreeRoot;
     }
@@ -88,8 +88,8 @@ library ShrincsTypes {
     }
 
     struct ForsEntry {
-        bytes sk;
-        bytes[] auth;
+        bytes secretLeaf;
+        bytes[] authPath;
     }
 
     struct ForsSignature {
@@ -140,8 +140,8 @@ library ShrincsTypes {
         ParameterSetId parameterSetId;
         bytes compositePublicKey;
         bytes statefulPublicKey;
-        bytes messagePkSeed;
-        bytes messageRoot;
+        bytes forsPkSeed;
+        bytes forsRoot;
         bytes hypertreePkSeed;
         bytes hypertreeRoot;
     }

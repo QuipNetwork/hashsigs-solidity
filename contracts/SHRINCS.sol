@@ -85,8 +85,8 @@ library SHRINCS {
             )) return bytes32(0);
         return ShrincsUtils.compositePublicKeyCommitment(
             nextStatefulKey.statefulPublicKey,
-            currentPublicKey.messagePkSeed,
-            currentPublicKey.messageRoot,
+            currentPublicKey.forsPkSeed,
+            currentPublicKey.forsRoot,
             currentPublicKey.hypertreePkSeed,
             currentPublicKey.hypertreeRoot
         );
@@ -112,8 +112,8 @@ library SHRINCS {
         if (!ShrincsUtils.validParameterSetBinding(p, parameterSetId, nextKey.parameterSetId)) return bytes32(0);
         if (
             nextKey.statefulPublicKey.length != ShrincsTypes.STATEFUL_PUBLIC_KEY_BYTES
-                || nextKey.compositePublicKey.length != 32 || nextKey.messagePkSeed.length != 32
-                || nextKey.messageRoot.length != 32 || nextKey.hypertreePkSeed.length != 32
+                || nextKey.compositePublicKey.length != 32 || nextKey.forsPkSeed.length != 32
+                || nextKey.forsRoot.length != 32 || nextKey.hypertreePkSeed.length != 32
                 || nextKey.hypertreeRoot.length != 32
         ) return bytes32(0);
         {
@@ -124,8 +124,8 @@ library SHRINCS {
 
         nextCompositePublicKey = ShrincsUtils.compositePublicKeyCommitment(
             nextKey.statefulPublicKey,
-            nextKey.messagePkSeed,
-            nextKey.messageRoot,
+            nextKey.forsPkSeed,
+            nextKey.forsRoot,
             nextKey.hypertreePkSeed,
             nextKey.hypertreeRoot
         );
@@ -254,8 +254,8 @@ library SHRINCS {
             abi.encodePacked(
                 nextKey.compositePublicKey,
                 nextKey.statefulPublicKey,
-                nextKey.messagePkSeed,
-                nextKey.messageRoot,
+                nextKey.forsPkSeed,
+                nextKey.forsRoot,
                 nextKey.hypertreePkSeed,
                 nextKey.hypertreeRoot
             )
@@ -287,10 +287,10 @@ library SHRINCS {
         if (!ShrincsUtils.validParams(p, publicKey)) return false;
         if (signature.hypertree.length == 0) return false;
 
-        (bytes32 messageRoot, bool ok) = ShrincsForsC.verifyForsCAndReturnRoot(
+        (bytes32 forsRoot, bool ok) = ShrincsForsC.verifyForsCAndReturnRoot(
             p, publicKey, message, signature.fors, signature.hypertree[0].treeIndex, signature.hypertree[0].leafIndex
         );
         if (!ok) return false;
-        return ShrincsHypertree.verifyHypertree(p, publicKey, messageRoot, signature.hypertree);
+        return ShrincsHypertree.verifyHypertree(p, publicKey, forsRoot, signature.hypertree);
     }
 }

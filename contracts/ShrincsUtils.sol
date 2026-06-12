@@ -82,8 +82,8 @@ library ShrincsUtils {
     function validStatefulCompositePublicKey(ShrincsTypes.PublicKey calldata publicKey) internal pure returns (bool) {
         if (publicKey.compositePublicKey.length != 32) return false;
         if (publicKey.statefulPublicKey.length != ShrincsTypes.STATEFUL_PUBLIC_KEY_BYTES) return false;
-        if (publicKey.messagePkSeed.length != 32) return false;
-        if (publicKey.messageRoot.length != 32) return false;
+        if (publicKey.forsPkSeed.length != 32) return false;
+        if (publicKey.forsRoot.length != 32) return false;
         if (publicKey.hypertreePkSeed.length != 32) return false;
         if (publicKey.hypertreeRoot.length != 32) return false;
 
@@ -94,8 +94,8 @@ library ShrincsUtils {
         }
         return compositePublicKeyCommitment(
             publicKey.statefulPublicKey,
-            publicKey.messagePkSeed,
-            publicKey.messageRoot,
+            publicKey.forsPkSeed,
+            publicKey.forsRoot,
             publicKey.hypertreePkSeed,
             publicKey.hypertreeRoot
         ) == expected;
@@ -103,8 +103,8 @@ library ShrincsUtils {
 
     function compositePublicKeyCommitment(
         bytes calldata statefulPublicKey,
-        bytes calldata messagePkSeed,
-        bytes calldata messageRoot,
+        bytes calldata forsPkSeed,
+        bytes calldata forsRoot,
         bytes calldata hypertreePkSeed,
         bytes calldata hypertreeRoot
     ) internal pure returns (bytes32 computed) {
@@ -115,8 +115,8 @@ library ShrincsUtils {
             let ptr := mload(0x40)
             mstore(ptr, "shrincs-public-key")
             calldatacopy(add(ptr, 18), statefulPublicKey.offset, statefulPkLen)
-            calldatacopy(add(ptr, add(18, statefulPkLen)), messagePkSeed.offset, 32)
-            calldatacopy(add(ptr, add(50, statefulPkLen)), messageRoot.offset, 32)
+            calldatacopy(add(ptr, add(18, statefulPkLen)), forsPkSeed.offset, 32)
+            calldatacopy(add(ptr, add(50, statefulPkLen)), forsRoot.offset, 32)
             calldatacopy(add(ptr, add(82, statefulPkLen)), hypertreePkSeed.offset, 32)
             calldatacopy(add(ptr, add(114, statefulPkLen)), hypertreeRoot.offset, 32)
             computed := keccak256(ptr, compositeInputLen)
@@ -170,7 +170,7 @@ library ShrincsUtils {
         }
     }
 
-    function readBits32Fast(bytes memory input, uint256 startBit, uint32 bitLen) internal pure returns (uint32) {
+    function readBits32(bytes memory input, uint256 startBit, uint32 bitLen) internal pure returns (uint32) {
         uint256 byteOffset = startBit >> 3;
         uint256 bitOffset = startBit & 7;
         uint256 word;
@@ -184,7 +184,7 @@ library ShrincsUtils {
         return uint32(shifted & mask);
     }
 
-    function readBits64Fast(bytes memory input, uint256 startBit, uint32 bitLen) internal pure returns (uint64) {
+    function readBits64(bytes memory input, uint256 startBit, uint32 bitLen) internal pure returns (uint64) {
         uint256 byteOffset = startBit >> 3;
         uint256 bitOffset = startBit & 7;
         uint256 word;

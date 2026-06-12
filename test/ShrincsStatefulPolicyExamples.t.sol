@@ -50,15 +50,15 @@ contract ShrincsStatefulPolicyExamplesTest is Test {
     struct LegacyPublicKey {
         bytes compositePublicKey;
         bytes statefulPublicKey;
-        bytes messagePkSeed;
-        bytes messageRoot;
+        bytes forsPkSeed;
+        bytes forsRoot;
         bytes hypertreePkSeed;
         bytes hypertreeRoot;
     }
 
     struct LegacyForsEntry {
-        bytes sk;
-        bytes[] auth;
+        bytes secretLeaf;
+        bytes[] authPath;
     }
 
     struct LegacyForsSignature {
@@ -203,8 +203,8 @@ contract ShrincsStatefulPolicyExamplesTest is Test {
             parameterSetId: publicKey.parameterSetId,
             compositePublicKey: publicKey.compositePublicKey,
             statefulPublicKey: publicKey.statefulPublicKey,
-            messagePkSeed: publicKey.messagePkSeed,
-            messageRoot: publicKey.messageRoot,
+            forsPkSeed: publicKey.forsPkSeed,
+            forsRoot: publicKey.forsRoot,
             hypertreePkSeed: publicKey.hypertreePkSeed,
             hypertreeRoot: publicKey.hypertreeRoot
         });
@@ -270,16 +270,16 @@ contract ShrincsStatefulPolicyExamplesTest is Test {
                     abi.encodePacked(
                         "shrincs-public-key",
                         encodedStatefulKey,
-                        statelessPublicKey.messagePkSeed,
-                        statelessPublicKey.messageRoot,
+                        statelessPublicKey.forsPkSeed,
+                        statelessPublicKey.forsRoot,
                         statelessPublicKey.hypertreePkSeed,
                         statelessPublicKey.hypertreeRoot
                     )
                 )
             ),
             statefulPublicKey: encodedStatefulKey,
-            messagePkSeed: statelessPublicKey.messagePkSeed,
-            messageRoot: statelessPublicKey.messageRoot,
+            forsPkSeed: statelessPublicKey.forsPkSeed,
+            forsRoot: statelessPublicKey.forsRoot,
             hypertreePkSeed: statelessPublicKey.hypertreePkSeed,
             hypertreeRoot: statelessPublicKey.hypertreeRoot
         });
@@ -314,8 +314,8 @@ contract ShrincsStatefulPolicyExamplesTest is Test {
             parameterSetId: ShrincsTypes.ParameterSetId.Sphincs256sKeccakQ20,
             compositePublicKey: legacyPublicKey.compositePublicKey,
             statefulPublicKey: legacyPublicKey.statefulPublicKey,
-            messagePkSeed: legacyPublicKey.messagePkSeed,
-            messageRoot: legacyPublicKey.messageRoot,
+            forsPkSeed: legacyPublicKey.forsPkSeed,
+            forsRoot: legacyPublicKey.forsRoot,
             hypertreePkSeed: legacyPublicKey.hypertreePkSeed,
             hypertreeRoot: legacyPublicKey.hypertreeRoot
         });
@@ -331,7 +331,9 @@ contract ShrincsStatefulPolicyExamplesTest is Test {
     {
         ShrincsTypes.ForsEntry[] memory entries = new ShrincsTypes.ForsEntry[](legacy.fors.entries.length);
         for (uint256 i = 0; i < entries.length; ++i) {
-            entries[i] = ShrincsTypes.ForsEntry({sk: legacy.fors.entries[i].sk, auth: legacy.fors.entries[i].auth});
+            entries[i] = ShrincsTypes.ForsEntry({
+                secretLeaf: legacy.fors.entries[i].secretLeaf, authPath: legacy.fors.entries[i].authPath
+            });
         }
 
         ShrincsTypes.HypertreeLayerSignature[] memory layers =

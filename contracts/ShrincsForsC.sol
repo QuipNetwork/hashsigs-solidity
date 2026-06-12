@@ -25,9 +25,9 @@ library ShrincsForsC {
         ShrincsTypes.PublicKey calldata publicKey,
         bytes memory message,
         ShrincsTypes.ForsSignature calldata signature,
-        uint64 xmssTree,
-        uint32 xmssKeypair
-    ) internal pure returns (bytes32 messageRoot, bool ok) {
+        uint64 treeIndex,
+        uint32 leafIndex
+    ) internal pure returns (bytes32 forsRoot, bool ok) {
         // FORS-C omits the final FORS tree by forcing its digest-selected leaf index to zero.
         // Verification therefore expects only k - 1 revealed entries and rejects any digest
         // whose omitted final tree would require a nonzero leaf.
@@ -37,12 +37,12 @@ library ShrincsForsC {
         ShrincsTypes.ForsDigest memory digest =
             forsDigest(params, publicKey, message, signature.randomizer, signature.counter);
         uint256 a = uint256(params.forsTreeHeight);
-        if (ShrincsUtils.readBits32Fast(digest.digest, signedTrees * a, params.forsTreeHeight) != 0) {
+        if (ShrincsUtils.readBits32(digest.digest, signedTrees * a, params.forsTreeHeight) != 0) {
             return (bytes32(0), false);
         }
-        if (digest.xmssTree != xmssTree || digest.xmssKeypair != xmssKeypair) return (bytes32(0), false);
+        if (digest.treeIndex != treeIndex || digest.leafIndex != leafIndex) return (bytes32(0), false);
 
-        bytes calldata pkSeed = publicKey.messagePkSeed;
+        bytes calldata pkSeed = publicKey.forsPkSeed;
         uint256 forsPkInputLen = 39 + signedTrees * 32;
         uint256 forsPkInput;
         assembly {
@@ -54,11 +54,16 @@ library ShrincsForsC {
 
         for (uint256 tree = 0; tree < signedTrees;) {
             ShrincsTypes.ForsEntry calldata entry = signature.entries[tree];
-            if (entry.sk.length != 32 || entry.auth.length != a) return (bytes32(0), false);
-            uint32 leafIndex = ShrincsUtils.readBits32Fast(digest.digest, tree * a, params.forsTreeHeight);
+            if (entry.secretLeaf.length != 32 || entry.authPath.length != a) return (bytes32(0), false);
+            uint32 entryLeafIndex = ShrincsUtils.readBits32(digest.digest, tree * a, params.forsTreeHeight);
             // casting to 'uint32' is safe because the supported FORS tree height is 14 bits
             // forge-lint: disable-next-line(unsafe-typecast)
-            bytes32 root = forsEntryRoot32(uint32(a), pkSeed, xmssTree, xmssKeypair, uint32(tree), leafIndex, entry);
+            uint32 treeHeight = uint32(a);
+            // casting to 'uint32' is safe because tree ranges over signedTrees, which is 21 in the supported profile
+            // forge-lint: disable-next-line(unsafe-typecast)
+            uint32 forsTreeIndex = uint32(tree);
+            bytes32 root =
+                forsEntryRoot32(treeHeight, pkSeed, treeIndex, leafIndex, forsTreeIndex, entryLeafIndex, entry);
             if (root == bytes32(0)) return (bytes32(0), false);
             assembly {
                 mstore(add(add(forsPkInput, 39), mul(tree, 32)), root)
@@ -72,7 +77,7 @@ library ShrincsForsC {
         assembly {
             computedRoot32 := keccak256(forsPkInput, forsPkInputLen)
         }
-        bytes calldata expectedRootBytes = publicKey.messageRoot;
+        bytes calldata expectedRootBytes = publicKey.forsRoot;
         bytes32 expectedRoot;
         assembly {
             expectedRoot := calldataload(expectedRootBytes.offset)
@@ -83,17 +88,21 @@ library ShrincsForsC {
     function forsEntryRoot32(
         uint32 height,
         bytes calldata pkSeed,
-        uint64 xmssTree,
-        uint32 xmssKeypair,
-        uint32 tree,
+        uint64 treeIndex,
         uint32 leafIndex,
+        uint32 forsTreeIndex,
+        uint32 entryLeafIndex,
         ShrincsTypes.ForsEntry calldata entry
     ) internal pure returns (bytes32 node) {
-        uint256 addressBase = forsAddressBase(xmssTree, xmssKeypair);
-        node = hashForsLeaf32(pkSeed, bytes32(addressBase | ((uint256(tree) << height) + uint256(leafIndex))), entry.sk);
-        uint256 index = leafIndex;
+        uint256 addressBase = forsAddressBase(treeIndex, leafIndex);
+        node = hashForsLeaf32(
+            pkSeed,
+            bytes32(addressBase | ((uint256(forsTreeIndex) << height) + uint256(entryLeafIndex))),
+            entry.secretLeaf
+        );
+        uint256 index = entryLeafIndex;
         for (uint256 level = 0; level < height;) {
-            bytes calldata authNode = entry.auth[level];
+            bytes calldata authNode = entry.authPath[level];
             if (authNode.length != 32) return bytes32(0);
             bytes32 sibling;
             assembly {
@@ -102,7 +111,7 @@ library ShrincsForsC {
             (bytes32 left, bytes32 right) = index & 1 == 0 ? (node, sibling) : (sibling, node);
             uint256 nodeHeight = level + 1;
             uint256 shiftedNodeHeight = nodeHeight << 32;
-            uint256 shiftedTree = uint256(tree) << (height - nodeHeight);
+            uint256 shiftedTree = uint256(forsTreeIndex) << (height - nodeHeight);
             uint256 parentIndex = index >> 1;
             bytes32 addressWord = bytes32(addressBase | shiftedNodeHeight | (shiftedTree + parentIndex));
             node = hashForsNode32(pkSeed, addressWord, left, right);
@@ -113,8 +122,9 @@ library ShrincsForsC {
         }
     }
 
-    function forsAddressBase(uint64 xmssTree, uint32 xmssKeypair) internal pure returns (uint256) {
-        return (uint256(xmssTree) << 128) | (uint256(ShrincsTypes.FORS_TREE_TYPE) << 96) | (uint256(xmssKeypair) << 64);
+    function forsAddressBase(uint64 treeIndex, uint32 leafIndex) internal pure returns (uint256) {
+        return
+            (uint256(treeIndex) << 128) | (uint256(ShrincsTypes.AddressTypeForsTree) << 96) | (uint256(leafIndex) << 64);
     }
 
     function hashForsLeaf32(bytes calldata pkSeed, bytes32 addressWord, bytes calldata sk)
@@ -161,14 +171,13 @@ library ShrincsForsC {
         uint32 subtreeHeight = uint32(params.hypertreeHeight / params.numHypertreeLayers);
         uint32 treeBits = uint32(params.hypertreeHeight) - subtreeHeight;
         uint256 digestBytes = (uint256(indexBits) + uint256(params.hypertreeHeight) + 7) / 8;
-        bytes memory digest = forsDigestBytes(
-            publicKey.messagePkSeed, publicKey.hypertreeRoot, randomizer, counter, message, digestBytes
-        );
+        bytes memory digest =
+            forsDigestBytes(publicKey.forsPkSeed, publicKey.hypertreeRoot, randomizer, counter, message, digestBytes);
 
         uint256 cursor = indexBits;
-        out.xmssTree = ShrincsUtils.readBits64Fast(digest, cursor, treeBits);
+        out.treeIndex = ShrincsUtils.readBits64(digest, cursor, treeBits);
         cursor += treeBits;
-        out.xmssKeypair = ShrincsUtils.readBits32Fast(digest, cursor, subtreeHeight);
+        out.leafIndex = ShrincsUtils.readBits32(digest, cursor, subtreeHeight);
         out.digest = digest;
     }
 

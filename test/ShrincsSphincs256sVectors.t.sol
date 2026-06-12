@@ -166,15 +166,15 @@ contract ShrincsSphincs256sVectorsTest is Test {
     struct LegacyPublicKey {
         bytes compositePublicKey;
         bytes statefulPublicKey;
-        bytes messagePkSeed;
-        bytes messageRoot;
+        bytes forsPkSeed;
+        bytes forsRoot;
         bytes hypertreePkSeed;
         bytes hypertreeRoot;
     }
 
     struct LegacyForsEntry {
-        bytes sk;
-        bytes[] auth;
+        bytes secretLeaf;
+        bytes[] authPath;
     }
 
     struct LegacyForsSignature {
@@ -447,7 +447,7 @@ contract ShrincsSphincs256sVectorsTest is Test {
             bytes memory message,
             ShrincsTypes.StatefulSignature memory signature
         ) = _decodeStatefulVector(".stateful.cases.valid.calldata");
-        publicKey.messagePkSeed = hex"1234";
+        publicKey.forsPkSeed = hex"1234";
         assertEq(
             stateful.verifyUnsafeRaw(
                 ShrincsTypes.ParameterSetId.Sphincs256sKeccakQ20,
@@ -457,7 +457,7 @@ contract ShrincsSphincs256sVectorsTest is Test {
                 signature
             ),
             false,
-            "stateful malformed messagePkSeed length"
+            "stateful malformed forsPkSeed length"
         );
     }
 
@@ -729,7 +729,7 @@ contract ShrincsSphincs256sVectorsTest is Test {
             bytes memory message,
             ShrincsTypes.StatelessSignature memory signature
         ) = _decodeStatelessVector(".stateless.cases.valid.calldata");
-        publicKey.messagePkSeed = hex"1234";
+        publicKey.forsPkSeed = hex"1234";
         assertEq(
             stateless.verifyUnsafeRaw(
                 ShrincsTypes.ParameterSetId.Sphincs256sKeccakQ20,
@@ -739,7 +739,7 @@ contract ShrincsSphincs256sVectorsTest is Test {
                 signature
             ),
             false,
-            "stateless malformed messagePkSeed length"
+            "stateless malformed forsPkSeed length"
         );
     }
 
@@ -749,7 +749,7 @@ contract ShrincsSphincs256sVectorsTest is Test {
             bytes memory message,
             ShrincsTypes.StatelessSignature memory signature
         ) = _decodeStatelessVector(".stateless.cases.valid.calldata");
-        publicKey.messageRoot = hex"1234";
+        publicKey.forsRoot = hex"1234";
         assertEq(
             stateless.verifyUnsafeRaw(
                 ShrincsTypes.ParameterSetId.Sphincs256sKeccakQ20,
@@ -759,7 +759,7 @@ contract ShrincsSphincs256sVectorsTest is Test {
                 signature
             ),
             false,
-            "stateless malformed messageRoot length"
+            "stateless malformed forsRoot length"
         );
     }
 
@@ -932,7 +932,7 @@ contract ShrincsSphincs256sVectorsTest is Test {
             bytes memory message,
             ShrincsTypes.StatelessSignature memory signature
         ) = _decodeStatelessVector(".stateless.cases.valid.calldata");
-        signature.fors.entries[0].sk = hex"1234";
+        signature.fors.entries[0].secretLeaf = hex"1234";
         assertEq(
             stateless.verifyUnsafeRaw(
                 ShrincsTypes.ParameterSetId.Sphincs256sKeccakQ20,
@@ -952,7 +952,7 @@ contract ShrincsSphincs256sVectorsTest is Test {
             bytes memory message,
             ShrincsTypes.StatelessSignature memory signature
         ) = _decodeStatelessVector(".stateless.cases.valid.calldata");
-        signature.fors.entries[0].auth = _dropLastBytes(signature.fors.entries[0].auth);
+        signature.fors.entries[0].authPath = _dropLastBytes(signature.fors.entries[0].authPath);
         assertEq(
             stateless.verifyUnsafeRaw(
                 ShrincsTypes.ParameterSetId.Sphincs256sKeccakQ20,
@@ -972,7 +972,7 @@ contract ShrincsSphincs256sVectorsTest is Test {
             bytes memory message,
             ShrincsTypes.StatelessSignature memory signature
         ) = _decodeStatelessVector(".stateless.cases.valid.calldata");
-        signature.fors.entries[0].auth[0] = hex"1234";
+        signature.fors.entries[0].authPath[0] = hex"1234";
         assertEq(
             stateless.verifyUnsafeRaw(
                 ShrincsTypes.ParameterSetId.Sphincs256sKeccakQ20,
@@ -1398,9 +1398,9 @@ contract ShrincsSphincs256sVectorsTest is Test {
             ShrincsTypes.RotationContext({domainSeparator: keccak256("shrincs-test"), nonce: 11, keyVersion: 2});
         bytes memory nextStatefulPublicKey = bytes.concat(publicKey.statefulPublicKey);
         nextStatefulPublicKey[0] = bytes1(uint8(nextStatefulPublicKey[0]) ^ 0x01);
-        bytes memory nextMessagePkSeed = bytes.concat(publicKey.messagePkSeed);
+        bytes memory nextMessagePkSeed = bytes.concat(publicKey.forsPkSeed);
         nextMessagePkSeed[0] = bytes1(uint8(nextMessagePkSeed[0]) ^ 0x01);
-        bytes memory nextMessageRoot = bytes.concat(publicKey.messageRoot);
+        bytes memory nextMessageRoot = bytes.concat(publicKey.forsRoot);
         nextMessageRoot[0] = bytes1(uint8(nextMessageRoot[0]) ^ 0x01);
         bytes memory nextHypertreePkSeed = bytes.concat(publicKey.hypertreePkSeed);
         nextHypertreePkSeed[0] = bytes1(uint8(nextHypertreePkSeed[0]) ^ 0x01);
@@ -1422,8 +1422,8 @@ contract ShrincsSphincs256sVectorsTest is Test {
             parameterSetId: publicKey.parameterSetId,
             compositePublicKey: abi.encodePacked(expected),
             statefulPublicKey: nextStatefulPublicKey,
-            messagePkSeed: nextMessagePkSeed,
-            messageRoot: nextMessageRoot,
+            forsPkSeed: nextMessagePkSeed,
+            forsRoot: nextMessageRoot,
             hypertreePkSeed: nextHypertreePkSeed,
             hypertreeRoot: nextHypertreeRoot
         });
@@ -1456,8 +1456,8 @@ contract ShrincsSphincs256sVectorsTest is Test {
             parameterSetId: publicKey.parameterSetId,
             compositePublicKey: publicKey.compositePublicKey,
             statefulPublicKey: publicKey.statefulPublicKey,
-            messagePkSeed: publicKey.messagePkSeed,
-            messageRoot: publicKey.messageRoot,
+            forsPkSeed: publicKey.forsPkSeed,
+            forsRoot: publicKey.forsRoot,
             hypertreePkSeed: publicKey.hypertreePkSeed,
             hypertreeRoot: publicKey.hypertreeRoot
         });
@@ -1483,8 +1483,8 @@ contract ShrincsSphincs256sVectorsTest is Test {
             parameterSetId: publicKey.parameterSetId,
             compositePublicKey: abi.encodePacked(bytes32(uint256(1))),
             statefulPublicKey: publicKey.statefulPublicKey,
-            messagePkSeed: publicKey.messagePkSeed,
-            messageRoot: publicKey.messageRoot,
+            forsPkSeed: publicKey.forsPkSeed,
+            forsRoot: publicKey.forsRoot,
             hypertreePkSeed: publicKey.hypertreePkSeed,
             hypertreeRoot: publicKey.hypertreeRoot
         });
@@ -1510,8 +1510,8 @@ contract ShrincsSphincs256sVectorsTest is Test {
             parameterSetId: ShrincsTypes.ParameterSetId.Unsupported,
             compositePublicKey: publicKey.compositePublicKey,
             statefulPublicKey: publicKey.statefulPublicKey,
-            messagePkSeed: publicKey.messagePkSeed,
-            messageRoot: publicKey.messageRoot,
+            forsPkSeed: publicKey.forsPkSeed,
+            forsRoot: publicKey.forsRoot,
             hypertreePkSeed: publicKey.hypertreePkSeed,
             hypertreeRoot: publicKey.hypertreeRoot
         });
@@ -1537,8 +1537,8 @@ contract ShrincsSphincs256sVectorsTest is Test {
             parameterSetId: publicKey.parameterSetId,
             compositePublicKey: publicKey.compositePublicKey,
             statefulPublicKey: publicKey.statefulPublicKey,
-            messagePkSeed: publicKey.messagePkSeed,
-            messageRoot: publicKey.messageRoot,
+            forsPkSeed: publicKey.forsPkSeed,
+            forsRoot: publicKey.forsRoot,
             hypertreePkSeed: publicKey.hypertreePkSeed,
             hypertreeRoot: publicKey.hypertreeRoot
         });
@@ -1569,8 +1569,8 @@ contract ShrincsSphincs256sVectorsTest is Test {
             parameterSetId: publicKey.parameterSetId,
             compositePublicKey: publicKey.compositePublicKey,
             statefulPublicKey: nextStatefulPublicKey,
-            messagePkSeed: publicKey.messagePkSeed,
-            messageRoot: publicKey.messageRoot,
+            forsPkSeed: publicKey.forsPkSeed,
+            forsRoot: publicKey.forsRoot,
             hypertreePkSeed: publicKey.hypertreePkSeed,
             hypertreeRoot: publicKey.hypertreeRoot
         });
@@ -1621,16 +1621,16 @@ contract ShrincsSphincs256sVectorsTest is Test {
                     abi.encodePacked(
                         "shrincs-public-key",
                         encodedStatefulKey,
-                        statelessPublicKey.messagePkSeed,
-                        statelessPublicKey.messageRoot,
+                        statelessPublicKey.forsPkSeed,
+                        statelessPublicKey.forsRoot,
                         statelessPublicKey.hypertreePkSeed,
                         statelessPublicKey.hypertreeRoot
                     )
                 )
             ),
             statefulPublicKey: encodedStatefulKey,
-            messagePkSeed: statelessPublicKey.messagePkSeed,
-            messageRoot: statelessPublicKey.messageRoot,
+            forsPkSeed: statelessPublicKey.forsPkSeed,
+            forsRoot: statelessPublicKey.forsRoot,
             hypertreePkSeed: statelessPublicKey.hypertreePkSeed,
             hypertreeRoot: statelessPublicKey.hypertreeRoot
         });
@@ -1665,8 +1665,8 @@ contract ShrincsSphincs256sVectorsTest is Test {
             parameterSetId: ShrincsTypes.ParameterSetId.Sphincs256sKeccakQ20,
             compositePublicKey: legacyPublicKey.compositePublicKey,
             statefulPublicKey: legacyPublicKey.statefulPublicKey,
-            messagePkSeed: legacyPublicKey.messagePkSeed,
-            messageRoot: legacyPublicKey.messageRoot,
+            forsPkSeed: legacyPublicKey.forsPkSeed,
+            forsRoot: legacyPublicKey.forsRoot,
             hypertreePkSeed: legacyPublicKey.hypertreePkSeed,
             hypertreeRoot: legacyPublicKey.hypertreeRoot
         });
@@ -1682,7 +1682,9 @@ contract ShrincsSphincs256sVectorsTest is Test {
     {
         ShrincsTypes.ForsEntry[] memory entries = new ShrincsTypes.ForsEntry[](legacy.fors.entries.length);
         for (uint256 i = 0; i < entries.length; ++i) {
-            entries[i] = ShrincsTypes.ForsEntry({sk: legacy.fors.entries[i].sk, auth: legacy.fors.entries[i].auth});
+            entries[i] = ShrincsTypes.ForsEntry({
+                secretLeaf: legacy.fors.entries[i].secretLeaf, authPath: legacy.fors.entries[i].authPath
+            });
         }
 
         ShrincsTypes.HypertreeLayerSignature[] memory layers =
@@ -1734,8 +1736,8 @@ contract ShrincsSphincs256sVectorsTest is Test {
                 abi.encodePacked(
                     "shrincs-public-key",
                     publicKey.statefulPublicKey,
-                    publicKey.messagePkSeed,
-                    publicKey.messageRoot,
+                    publicKey.forsPkSeed,
+                    publicKey.forsRoot,
                     publicKey.hypertreePkSeed,
                     publicKey.hypertreeRoot
                 )

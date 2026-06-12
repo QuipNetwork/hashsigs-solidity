@@ -124,7 +124,7 @@ library ShrincsStateful {
         out = value;
         for (uint32 j = 0; j < steps;) {
             bytes32 addressWord =
-                ShrincsUtils.addressWord32(0, 0, ShrincsTypes.WOTS_HASH_TYPE, leafIndex, chainIdx, start + j);
+                ShrincsUtils.addressWord32(0, 0, ShrincsTypes.AddressTypeWotsHash, leafIndex, chainIdx, start + j);
             out = hashStatefulWotsCChainNoMask32(pkSeed, addressWord, out);
             unchecked {
                 ++j;
