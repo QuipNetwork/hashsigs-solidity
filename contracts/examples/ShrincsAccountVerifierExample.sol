@@ -186,7 +186,7 @@ contract ShrincsAccountVerifierExample {
             keyVersion: keyVersion
         });
 
-        bytes32 nextCompositePublicKey = SHRINCS.rotateFullShrincsKey(
+        bytes32 nextCompositePublicKey = SHRINCS.statelessRotate(
             parameterSetId,
             currentShrincsPublicKey,
             currentPublicKey,
@@ -214,7 +214,7 @@ contract ShrincsAccountVerifierExample {
             keyVersion: keyVersion
         });
 
-        bytes32 nextCompositePublicKey = SHRINCS.rotateFullShrincsKey(
+        bytes32 nextCompositePublicKey = SHRINCS.statelessRotate(
             parameterSetId,
             currentShrincsPublicKey,
             currentPublicKey,

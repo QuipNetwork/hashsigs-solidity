@@ -120,7 +120,7 @@ contract RotationHarness {
         );
     }
 
-    function rotateFullShrincsKey(
+    function statelessRotate(
         ShrincsTypes.ParameterSetId parameterSetId,
         bytes32 expectedCompositePublicKey,
         ShrincsTypes.PublicKey calldata currentPublicKey,
@@ -128,7 +128,7 @@ contract RotationHarness {
         ShrincsTypes.StatelessSignature calldata recoverySignature,
         ShrincsTypes.RotationTarget calldata nextKey
     ) external pure returns (bytes32) {
-        return SHRINCS.rotateFullShrincsKey(
+        return SHRINCS.statelessRotate(
             parameterSetId, expectedCompositePublicKey, currentPublicKey, context, recoverySignature, nextKey
         );
     }
@@ -1146,7 +1146,7 @@ contract ShrincsSphincs256sVectorsTest is Test {
             hypertreeRoot: publicKey.hypertreeRoot
         });
 
-        bytes32 result = rotation.rotateFullShrincsKey(
+        bytes32 result = rotation.statelessRotate(
             ShrincsTypes.ParameterSetId.Sphincs256sKeccakQ20,
             _compositePublicKeyWord(publicKey),
             publicKey,
@@ -1173,7 +1173,7 @@ contract ShrincsSphincs256sVectorsTest is Test {
             hypertreeRoot: publicKey.hypertreeRoot
         });
 
-        bytes32 result = rotation.rotateFullShrincsKey(
+        bytes32 result = rotation.statelessRotate(
             ShrincsTypes.ParameterSetId.Sphincs256sKeccakQ20,
             _compositePublicKeyWord(publicKey),
             publicKey,
@@ -1200,7 +1200,7 @@ contract ShrincsSphincs256sVectorsTest is Test {
             hypertreeRoot: publicKey.hypertreeRoot
         });
 
-        bytes32 result = rotation.rotateFullShrincsKey(
+        bytes32 result = rotation.statelessRotate(
             ShrincsTypes.ParameterSetId.Sphincs256sKeccakQ20,
             _compositePublicKeyWord(publicKey),
             publicKey,
@@ -1227,7 +1227,7 @@ contract ShrincsSphincs256sVectorsTest is Test {
             hypertreeRoot: publicKey.hypertreeRoot
         });
 
-        bytes32 result = rotation.rotateFullShrincsKey(
+        bytes32 result = rotation.statelessRotate(
             ShrincsTypes.ParameterSetId.Sphincs256sKeccakQ20,
             _compositePublicKeyWord(publicKey),
             publicKey,
@@ -1259,7 +1259,7 @@ contract ShrincsSphincs256sVectorsTest is Test {
             hypertreeRoot: publicKey.hypertreeRoot
         });
 
-        bytes32 result = rotation.rotateFullShrincsKey(
+        bytes32 result = rotation.statelessRotate(
             ShrincsTypes.ParameterSetId.Sphincs256sKeccakQ20,
             _compositePublicKeyWord(publicKey),
             publicKey,

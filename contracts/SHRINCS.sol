@@ -85,7 +85,7 @@ library SHRINCS {
         );
     }
 
-    function rotateFullShrincsKey(
+    function statelessRotate(
         ShrincsTypes.ParameterSetId parameterSetId,
         bytes32 expectedCompositePublicKey,
         ShrincsTypes.PublicKey calldata currentPublicKey,

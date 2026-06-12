@@ -46,7 +46,7 @@ contract ExampleStatelessHarness {
 }
 
 contract ExampleRotationHarness {
-    function rotateFullShrincsKey(
+    function statelessRotate(
         ShrincsTypes.ParameterSetId parameterSetId,
         bytes32 expectedCompositePublicKey,
         ShrincsTypes.PublicKey calldata currentPublicKey,
@@ -54,7 +54,7 @@ contract ExampleRotationHarness {
         ShrincsTypes.StatelessSignature calldata recoverySignature,
         ShrincsTypes.RotationTarget calldata nextKey
     ) external pure returns (bytes32) {
-        return SHRINCS.rotateFullShrincsKey(
+        return SHRINCS.statelessRotate(
             parameterSetId, expectedCompositePublicKey, currentPublicKey, context, recoverySignature, nextKey
         );
     }
@@ -282,7 +282,7 @@ contract ShrincsAccountVerifierExampleTest is Test {
             hypertreeRoot: publicKey.hypertreeRoot
         });
 
-        bytes32 expected = rotation.rotateFullShrincsKey(
+        bytes32 expected = rotation.statelessRotate(
             ShrincsTypes.ParameterSetId.Sphincs256sKeccakQ20, expectedCompositePublicKey, publicKey, context, signature, target
         );
         bool actual = account.rotateFullKey(publicKey, signature, target);

@@ -140,7 +140,7 @@ It:
 ### 4. Full SHRINCS-key rotation authorization
 
 ```solidity
-SHRINCS.rotateFullShrincsKey(
+SHRINCS.statelessRotate(
     parameterSetId,
     expectedCompositePublicKey,
     currentPublicKey,
@@ -397,7 +397,7 @@ Current tests cover:
   - rejects unsupported next parameter set
   - rejects zero `domainSeparator`
 
-- `rotateFullShrincsKey(...)`
+- `statelessRotate(...)`
   - canonical rotation hash changes when the next key bundle changes
   - rejects legacy stateless signatures that were not signed over the canonical rotation hash
   - rejects mismatched supplied composite commitment
