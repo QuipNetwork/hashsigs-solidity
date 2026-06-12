@@ -19,13 +19,14 @@ library ShrincsType {
     uint32 internal constant WOTS_TARGET_SUM_STATEFUL = 480;
 
     enum ParameterSetId {
-        Sphincs256sKeccak,
+        Sphincs256sKeccakQ20,
         Unsupported
     }
 
     struct ParamsView {
         ParameterSetId parameterSetId;
         uint32 hashSuiteId;
+        uint64 statelessSignatureLimit;
         uint16 nBytes;
         uint8 h;
         uint8 d;
@@ -136,10 +137,11 @@ library ShrincsType {
         pure
         returns (ParamsView memory)
     {
-        if (parameterSetId == ParameterSetId.Sphincs256sKeccak) {
+        if (parameterSetId == ParameterSetId.Sphincs256sKeccakQ20) {
             return ParamsView({
-                parameterSetId: ParameterSetId.Sphincs256sKeccak,
+                parameterSetId: ParameterSetId.Sphincs256sKeccakQ20,
                 hashSuiteId: HASH_SUITE_KECCAK_256,
+                statelessSignatureLimit: 1_048_576,
                 nBytes: 32,
                 h: 64,
                 d: 8,
@@ -155,6 +157,7 @@ library ShrincsType {
             return ParamsView({
                 parameterSetId: ParameterSetId.Unsupported,
                 hashSuiteId: HASH_SUITE_UNSUPPORTED,
+                statelessSignatureLimit: 0,
                 nBytes: 32,
                 h: 64,
                 d: 8,

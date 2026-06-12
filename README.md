@@ -174,7 +174,7 @@ It:
 The verifier currently accepts only predefined parameter sets selected by enum:
 
 ```solidity
-ShrincsType.ParameterSetId.Sphincs256sKeccak
+ShrincsType.ParameterSetId.Sphincs256sKeccakQ20
 ```
 
 There is also a reserved `ShrincsType.ParameterSetId.Unsupported` enum value used only for negative tests. It is not a valid production profile and is rejected by the library.
@@ -185,7 +185,8 @@ The hash suite is currently implied by the parameter set. The canonical account-
 
 The current verifier is intentionally pinned to exactly one production profile:
 
-- `parameterSetId = ShrincsType.ParameterSetId.Sphincs256sKeccak`
+- `parameterSetId = ShrincsType.ParameterSetId.Sphincs256sKeccakQ20`
+- `statelessSignatureLimit = 2^20 = 1,048,576`
 - `hashSuiteId = HASH_SUITE_KECCAK_256`
 - `nBytes = 32`
 - `h = 64`
@@ -252,12 +253,13 @@ contract ShrincsAccountVerifier {
     ShrincsType.ParameterSetId public parameterSetId;
     uint256 public nonce;
     uint256 public keyVersion;
+    uint64 public statelessSignaturesUsed;
 
     bytes32 internal constant DOMAIN_SEPARATOR = keccak256("shrincs-account-v1");
 
-    constructor(bytes32 initialShrincsPublicKey, ShrincsType.ParameterSetId initialParameterSetId) {
+    constructor(bytes32 initialShrincsPublicKey) {
         currentShrincsPublicKey = initialShrincsPublicKey;
-        parameterSetId = initialParameterSetId;
+        parameterSetId = ShrincsType.ParameterSetId.Sphincs256sKeccakQ20;
     }
 
     function verifyStatefulAction(
@@ -287,11 +289,45 @@ contract ShrincsAccountVerifier {
         return true;
     }
 
+    function verifyStatelessAction(
+        ShrincsType.PublicKey calldata publicKey,
+        bytes32 actionType,
+        bytes32 payloadHash,
+        ShrincsType.StatelessSignature calldata signature
+    ) external returns (bool) {
+        uint64 limit = ShrincsType.defaultParamsView(parameterSetId).statelessSignatureLimit;
+        if (statelessSignaturesUsed >= limit) return false;
+
+        ShrincsType.ActionContext memory context = ShrincsType.ActionContext({
+            domainSeparator: DOMAIN_SEPARATOR,
+            nonce: nonce,
+            keyVersion: keyVersion,
+            actionType: actionType,
+            payloadHash: payloadHash
+        });
+
+        bool ok = SHRINCS.verifyStateless(
+            parameterSetId,
+            currentShrincsPublicKey,
+            publicKey,
+            context,
+            signature
+        );
+        if (!ok) return false;
+
+        nonce += 1;
+        statelessSignaturesUsed += 1;
+        return true;
+    }
+
     function rotateFullKey(
         ShrincsType.PublicKey calldata currentPublicKey,
         ShrincsType.StatelessSignature calldata recoverySignature,
         ShrincsType.RotationTarget calldata nextKey
     ) external returns (bool) {
+        uint64 limit = ShrincsType.defaultParamsView(parameterSetId).statelessSignatureLimit;
+        if (statelessSignaturesUsed >= limit) return false;
+
         ShrincsType.RotationContext memory context = ShrincsType.RotationContext({
             domainSeparator: DOMAIN_SEPARATOR,
             nonce: nonce,
@@ -312,6 +348,7 @@ contract ShrincsAccountVerifier {
         parameterSetId = nextKey.parameterSetId;
         nonce += 1;
         keyVersion += 1;
+        statelessSignaturesUsed += 1;
         return true;
     }
 }
@@ -323,6 +360,7 @@ What the wrapper must handle:
 - store the active `parameterSetId`
 - store and increment `nonce`
 - store and increment `keyVersion`
+- store and enforce `statelessSignaturesUsed < statelessSignatureLimit`
 - define a stable `domainSeparator`
 - define the typed action payloads whose hash becomes `payloadHash`
 - decide which path is allowed for which operation

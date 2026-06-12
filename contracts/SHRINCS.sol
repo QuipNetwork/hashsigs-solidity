@@ -38,7 +38,7 @@ library SHRINCS {
         ShrincsType.ParameterSetId parameterSetId,
         bytes32 expectedCompositePublicKey,
         ShrincsType.PublicKey calldata publicKey,
-        ShrincsType.ActionContext calldata context,
+        ShrincsType.ActionContext memory context,
         ShrincsType.StatefulSignature calldata signature
     ) internal pure returns (bool) {
         if (!_validActionContext(context)) return false;
@@ -65,7 +65,7 @@ library SHRINCS {
         ShrincsType.ParameterSetId parameterSetId,
         bytes32 expectedCompositePublicKey,
         ShrincsType.PublicKey calldata publicKey,
-        ShrincsType.ActionContext calldata context,
+        ShrincsType.ActionContext memory context,
         ShrincsType.StatelessSignature calldata signature
     ) internal pure returns (bool) {
         if (!_validActionContext(context)) return false;
@@ -81,7 +81,7 @@ library SHRINCS {
         ShrincsType.ParameterSetId parameterSetId,
         bytes32 expectedCompositePublicKey,
         ShrincsType.PublicKey calldata currentPublicKey,
-        ShrincsType.RotationContext calldata context,
+        ShrincsType.RotationContext memory context,
         ShrincsType.StatelessSignature calldata recoverySignature,
         ShrincsType.StatefulRotationTarget calldata nextStatefulKey
     ) internal pure returns (bytes32 nextStatefulKeyCommitment) {
@@ -117,7 +117,7 @@ library SHRINCS {
         ShrincsType.ParameterSetId parameterSetId,
         bytes32 expectedCompositePublicKey,
         ShrincsType.PublicKey calldata currentPublicKey,
-        ShrincsType.RotationContext calldata context,
+        ShrincsType.RotationContext memory context,
         ShrincsType.StatelessSignature calldata recoverySignature,
         ShrincsType.RotationTarget calldata nextKey
     ) internal pure returns (bytes32 nextCompositePublicKey) {
@@ -170,7 +170,7 @@ library SHRINCS {
     function statefulActionMessageHash(
         ShrincsType.ParameterSetId parameterSetId,
         bytes32 expectedCompositePublicKey,
-        ShrincsType.ActionContext calldata context
+        ShrincsType.ActionContext memory context
     ) internal pure returns (bytes32) {
         ShrincsType.ParamsView memory p = _paramsView(parameterSetId);
         return keccak256(
@@ -191,7 +191,7 @@ library SHRINCS {
     function statelessActionMessageHash(
         ShrincsType.ParameterSetId parameterSetId,
         bytes32 expectedCompositePublicKey,
-        ShrincsType.ActionContext calldata context
+        ShrincsType.ActionContext memory context
     ) internal pure returns (bytes32) {
         ShrincsType.ParamsView memory p = _paramsView(parameterSetId);
         return keccak256(
@@ -215,7 +215,7 @@ library SHRINCS {
         ShrincsType.ParameterSetId parameterSetId,
         bytes32 expectedCompositePublicKey,
         ShrincsType.PublicKey calldata currentPublicKey,
-        ShrincsType.RotationContext calldata context,
+        ShrincsType.RotationContext memory context,
         ShrincsType.StatefulRotationTarget calldata nextStatefulKey
     ) internal pure returns (bytes32) {
         ShrincsType.ParamsView memory p = _paramsView(parameterSetId);
@@ -240,7 +240,7 @@ library SHRINCS {
         ShrincsType.ParameterSetId parameterSetId,
         bytes32 expectedCompositePublicKey,
         ShrincsType.PublicKey calldata currentPublicKey,
-        ShrincsType.RotationContext calldata context,
+        ShrincsType.RotationContext memory context,
         ShrincsType.RotationTarget calldata nextKey
     ) internal pure returns (bytes32) {
         ShrincsType.ParamsView memory p = _paramsView(parameterSetId);
@@ -276,7 +276,7 @@ library SHRINCS {
         pure
         returns (bool)
     {
-        if (params.parameterSetId != ShrincsType.ParameterSetId.Sphincs256sKeccak) return false;
+        if (params.parameterSetId != ShrincsType.ParameterSetId.Sphincs256sKeccakQ20) return false;
         if (params.nBytes != 32) return false;
         if (params.parameterSetId != publicKey.parameterSetId) return false;
         if (params.h != 64 || params.d != 8 || params.a != 14) return false;
@@ -296,12 +296,12 @@ library SHRINCS {
             && params.hashSuiteId == ShrincsType.HASH_SUITE_KECCAK_256;
     }
 
-    function _validActionContext(ShrincsType.ActionContext calldata context) private pure returns (bool) {
+    function _validActionContext(ShrincsType.ActionContext memory context) private pure returns (bool) {
         return context.domainSeparator != bytes32(0) && context.actionType != bytes32(0)
             && context.payloadHash != bytes32(0);
     }
 
-    function _validRotationContext(ShrincsType.RotationContext calldata context) private pure returns (bool) {
+    function _validRotationContext(ShrincsType.RotationContext memory context) private pure returns (bool) {
         return context.domainSeparator != bytes32(0);
     }
 
