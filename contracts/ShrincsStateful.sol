@@ -133,16 +133,15 @@ library ShrincsStateful {
     }
 
     function baseW16Digit(bytes32 digest, uint256 index) internal pure returns (uint32 digit) {
-        assembly {
-            let b := byte(shr(1, index), digest)
-            digit := and(b, 0x0f)
-            if iszero(and(index, 1)) { digit := shr(4, b) }
-        }
+        uint8 b = uint8(digest[index >> 1]);
+        return index & 1 == 0 ? uint32(b >> 4) : uint32(b & 0x0f);
     }
 
     function setSlice32(bytes memory dst, bytes32 src, uint256 offset) internal pure {
         assembly {
-            mstore(add(add(dst, 32), offset), src)
+            let dataPtr := add(dst, 32)
+            let writePtr := add(dataPtr, offset)
+            mstore(writePtr, src)
         }
     }
 }
