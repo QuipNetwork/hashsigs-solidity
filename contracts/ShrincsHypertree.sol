@@ -19,7 +19,8 @@ library ShrincsHypertree {
 
         for (uint256 layer = 0; layer < layers.length;) {
             ShrincsTypes.HypertreeLayerSignature calldata layerSig = layers[layer];
-            if (layerSig.leafIndex >= leafCount || layerSig.wotsCPkHash.length != params.nBytes) return false;
+            if (layerSig.leafIndex >= leafCount) return false;
+            if (layerSig.wotsCPkHash.length != params.nBytes) return false;
             if (layerSig.authPath.length != subtreeHeight) return false;
             if (
                 !verifyWotsC32(
