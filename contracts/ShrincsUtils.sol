@@ -127,9 +127,15 @@ library ShrincsUtils {
         pure
         returns (bytes32)
     {
+        uint256 shiftedLayer = uint256(layer) << 224;
+        uint256 shiftedTree = uint256(tree) << 128;
+        uint256 shiftedAddressType = uint256(addressType) << 96;
+        uint256 shiftedKeypair = uint256(keypair) << 64;
+        uint256 shiftedChain = uint256(chain) << 32;
+        uint256 shiftedStep = uint256(step);
+
         return bytes32(
-            (uint256(layer) << 224) | (uint256(tree) << 128) | (uint256(addressType) << 96) | (uint256(keypair) << 64)
-                | (uint256(chain) << 32) | uint256(step)
+            shiftedLayer | shiftedTree | shiftedAddressType | shiftedKeypair | shiftedChain | shiftedStep
         );
     }
 
