@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+# Run workloads inside the project's containerised Foundry environment.
+#
+#   ./run                 # defaults to: forge test
+#   ./run forge build
+#   ./run forge test -vvv
+#   ./run forge fmt
+#   ./run sh              # interactive shell in the container
+#
+# Override the container engine with CONTAINER_ENGINE=docker if preferred.
+set -euo pipefail
+cd "$(dirname "$0")"
+
+CONTAINER_ENGINE="${CONTAINER_ENGINE:-podman}"
+IMAGE_TAG="hashsigs-foundry:local"
+
+if ! "$CONTAINER_ENGINE" image exists "$IMAGE_TAG" 2>/dev/null; then
+    "$CONTAINER_ENGINE" build -t "$IMAGE_TAG" -f Dockerfile .
+fi
+
+if [ "$#" -eq 0 ]; then
+    set -- forge test
+fi
+
+exec "$CONTAINER_ENGINE" run --rm \
+    --userns=keep-id \
+    --volume "$PWD":/work \
+    --workdir /work \
+    --entrypoint "" \
+    "$IMAGE_TAG" "$@"
