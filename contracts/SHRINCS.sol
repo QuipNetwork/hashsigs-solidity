@@ -8,18 +8,6 @@ import { ShrincsForsC } from "./ShrincsForsC.sol";
 import { ShrincsHypertree } from "./ShrincsHypertree.sol";
 
 library SHRINCS {
-    function verifyStatefulUnsafeRaw(
-        ShrincsTypes.ParameterSetId parameterSetId,
-        bytes32 expectedCompositePublicKey,
-        ShrincsTypes.PublicKey calldata publicKey,
-        bytes memory message,
-        ShrincsTypes.StatefulSignature calldata signature
-    ) internal pure returns (bool) {
-        return ShrincsStateful.verifyStatefulUnsafeRaw(
-            parameterSetId, expectedCompositePublicKey, publicKey, message, signature
-        );
-    }
-
     function verifyStateful(
         ShrincsTypes.ParameterSetId parameterSetId,
         bytes32 expectedCompositePublicKey,
@@ -32,19 +20,6 @@ library SHRINCS {
             statefulActionMessageHash(parameterSetId, expectedCompositePublicKey, context)
         );
         return verifyStatefulUnsafeRaw(parameterSetId, expectedCompositePublicKey, publicKey, message, signature);
-    }
-
-    function verifyStatelessUnsafeRaw(
-        ShrincsTypes.ParameterSetId parameterSetId,
-        bytes32 expectedCompositePublicKey,
-        ShrincsTypes.PublicKey calldata publicKey,
-        bytes memory message,
-        ShrincsTypes.StatelessSignature calldata signature
-    ) internal pure returns (bool) {
-        ShrincsTypes.ParamsView memory p = ShrincsUtils.paramsView(parameterSetId);
-        if (!ShrincsUtils.validParameterSetBinding(p, parameterSetId, publicKey.parameterSetId)) return false;
-        if (!ShrincsUtils.matchesExpectedCompositePublicKey(publicKey, expectedCompositePublicKey)) return false;
-        return _verifyStatelessMemory(parameterSetId, publicKey, message, signature);
     }
 
     function verifyStateless(
@@ -141,6 +116,31 @@ library SHRINCS {
         bytes memory recoveryMessage =
             abi.encodePacked(fullRotationMessageHash(parameterSetId, expectedCompositePublicKey, currentPublicKey, context, nextKey));
         if (!_verifyStatelessRawMemory(parameterSetId, expectedCompositePublicKey, currentPublicKey, recoveryMessage, recoverySignature)) return bytes32(0);
+    }
+
+    function verifyStatefulUnsafeRaw(
+        ShrincsTypes.ParameterSetId parameterSetId,
+        bytes32 expectedCompositePublicKey,
+        ShrincsTypes.PublicKey calldata publicKey,
+        bytes memory message,
+        ShrincsTypes.StatefulSignature calldata signature
+    ) internal pure returns (bool) {
+        return ShrincsStateful.verifyStatefulUnsafeRaw(
+            parameterSetId, expectedCompositePublicKey, publicKey, message, signature
+        );
+    }
+
+    function verifyStatelessUnsafeRaw(
+        ShrincsTypes.ParameterSetId parameterSetId,
+        bytes32 expectedCompositePublicKey,
+        ShrincsTypes.PublicKey calldata publicKey,
+        bytes memory message,
+        ShrincsTypes.StatelessSignature calldata signature
+    ) internal pure returns (bool) {
+        ShrincsTypes.ParamsView memory p = ShrincsUtils.paramsView(parameterSetId);
+        if (!ShrincsUtils.validParameterSetBinding(p, parameterSetId, publicKey.parameterSetId)) return false;
+        if (!ShrincsUtils.matchesExpectedCompositePublicKey(publicKey, expectedCompositePublicKey)) return false;
+        return _verifyStatelessMemory(parameterSetId, publicKey, message, signature);
     }
 
     function statefulActionMessageHash(

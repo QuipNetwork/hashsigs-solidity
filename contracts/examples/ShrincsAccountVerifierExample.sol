@@ -37,38 +37,6 @@ contract ShrincsAccountVerifierExample {
         parameterSetId = ShrincsTypes.ParameterSetId.Sphincs256sKeccakQ20;
     }
 
-    function setStatefulPolicyNone() external onlyOwner {
-        statefulPolicy = StatefulPolicy.None;
-        recoveryMode = false;
-    }
-
-    function setStatefulPolicyMonotonicIndex(uint32 initialLeafIndex) external onlyOwner {
-        statefulPolicy = StatefulPolicy.MonotonicIndex;
-        nextStatefulLeafIndex = initialLeafIndex;
-        recoveryMode = false;
-    }
-
-    function setStatefulPolicyRecoveryRotation() external onlyOwner {
-        statefulPolicy = StatefulPolicy.RecoveryRotation;
-        recoveryMode = false;
-    }
-
-    function setStatefulPolicyLeafBitmap() external onlyOwner {
-        statefulPolicy = StatefulPolicy.LeafBitmap;
-        recoveryMode = false;
-    }
-
-    function enterRecoveryMode() external onlyOwner {
-        if (statefulPolicy != StatefulPolicy.RecoveryRotation) return;
-        recoveryMode = true;
-    }
-
-    function isLeafUsed(uint32 leafIndex) public view returns (bool) {
-        uint256 wordIndex = uint256(leafIndex) >> 8;
-        uint256 bitIndex = uint256(leafIndex) & 0xff;
-        return (usedLeafBitmap[wordIndex] & (uint256(1) << bitIndex)) != 0;
-    }
-
     function verifyStatefulRaw(
         ShrincsTypes.PublicKey calldata publicKey,
         bytes calldata message,
@@ -222,6 +190,38 @@ contract ShrincsAccountVerifierExample {
 
         _installFreshKey(nextCompositePublicKey, nextKey.parameterSetId, false);
         return true;
+    }
+
+    function isLeafUsed(uint32 leafIndex) public view returns (bool) {
+        uint256 wordIndex = uint256(leafIndex) >> 8;
+        uint256 bitIndex = uint256(leafIndex) & 0xff;
+        return (usedLeafBitmap[wordIndex] & (uint256(1) << bitIndex)) != 0;
+    }
+
+    function setStatefulPolicyNone() external onlyOwner {
+        statefulPolicy = StatefulPolicy.None;
+        recoveryMode = false;
+    }
+
+    function setStatefulPolicyMonotonicIndex(uint32 initialLeafIndex) external onlyOwner {
+        statefulPolicy = StatefulPolicy.MonotonicIndex;
+        nextStatefulLeafIndex = initialLeafIndex;
+        recoveryMode = false;
+    }
+
+    function setStatefulPolicyRecoveryRotation() external onlyOwner {
+        statefulPolicy = StatefulPolicy.RecoveryRotation;
+        recoveryMode = false;
+    }
+
+    function setStatefulPolicyLeafBitmap() external onlyOwner {
+        statefulPolicy = StatefulPolicy.LeafBitmap;
+        recoveryMode = false;
+    }
+
+    function enterRecoveryMode() external onlyOwner {
+        if (statefulPolicy != StatefulPolicy.RecoveryRotation) return;
+        recoveryMode = true;
     }
 
     function _precheckStatefulLeafUse(uint32 leafIndex) internal view returns (bool) {
