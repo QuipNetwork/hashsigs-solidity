@@ -197,6 +197,18 @@ The current verifier is intentionally pinned to exactly one production profile:
 - `l = 64`
 - `wotsTargetSum = 480`
 
+For the stateful `WOTS-C` / XMSS path in that profile, the code also assumes:
+
+- `STATEFUL_PUBLIC_KEY_BYTES = 68`
+  - encoded as `pkSeed || root || maxSignatures`
+  - `32 + 32 + 4` bytes
+- `WOTS_CHAINS_STATEFUL = 64`
+  - the stateful compact `WOTS-C` signature carries 64 chains
+- `WOTS_BASE_STATEFUL = 16`
+  - stateful message digits are expanded in base 16
+- `WOTS_TARGET_SUM_STATEFUL = 480`
+  - the 64 base-16 digits must sum to 480 for the signature to verify
+
 This is deliberate. The library does not currently claim support for arbitrary future parameter tuples even if they are superficially shape-compatible.
 
 ## On-Chain Integration State

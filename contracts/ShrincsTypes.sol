@@ -13,9 +13,15 @@ library ShrincsType {
     uint32 internal constant TREE_TYPE = 2;
     uint32 internal constant FORS_TREE_TYPE = 3;
 
-    uint16 internal constant STATEFUL_PUBLIC_KEY_BYTES = 68; // pkSeed || root || maxSignatures
+    // Encoded stateful public key layout:
+    // 32-byte pkSeed || 32-byte root || 4-byte maxSignatures.
+    uint16 internal constant STATEFUL_PUBLIC_KEY_BYTES = 68;
+    // Stateful WOTS-C uses 64 chains in the current supported profile.
     uint16 internal constant WOTS_CHAINS_STATEFUL = 64;
+    // Stateful WOTS-C uses base-16 digits for message expansion.
     uint16 internal constant WOTS_BASE_STATEFUL = 16;
+    // The 64 base-16 digits reconstructed from the stateful message digest must
+    // sum to 480 in the current supported profile.
     uint32 internal constant WOTS_TARGET_SUM_STATEFUL = 480;
 
     enum ParameterSetId {
