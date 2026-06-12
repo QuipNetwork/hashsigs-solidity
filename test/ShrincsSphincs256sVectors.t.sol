@@ -305,7 +305,7 @@ contract ShrincsSphincs256sVectorsTest is Test {
         signature.authPath[0] = signature.authPath[0] ^ bytes32(uint256(1));
         assertEq(
             stateful.verifyUnsafeRaw(
-                ShrincsType.ParameterSetId.Sphincs256sKeccak, _compositePublicKeyWord(publicKey), publicKey, message, signature
+                ShrincsType.ParameterSetId.Sphincs256sKeccakQ20, _compositePublicKeyWord(publicKey), publicKey, message, signature
             ),
             false,
             "stateful tampered auth path"
@@ -318,7 +318,7 @@ contract ShrincsSphincs256sVectorsTest is Test {
         _setStatefulMaxSignatures(publicKey, uint32(signature.authPath.length));
         assertEq(
             stateful.verifyUnsafeRaw(
-                ShrincsType.ParameterSetId.Sphincs256sKeccak, _compositePublicKeyWord(publicKey), publicKey, message, signature
+                ShrincsType.ParameterSetId.Sphincs256sKeccakQ20, _compositePublicKeyWord(publicKey), publicKey, message, signature
             ),
             true,
             "stateful max signatures boundary"
@@ -331,7 +331,7 @@ contract ShrincsSphincs256sVectorsTest is Test {
         _setStatefulMaxSignatures(publicKey, uint32(signature.authPath.length - 1));
         assertEq(
             stateful.verifyUnsafeRaw(
-                ShrincsType.ParameterSetId.Sphincs256sKeccak, _compositePublicKeyWord(publicKey), publicKey, message, signature
+                ShrincsType.ParameterSetId.Sphincs256sKeccakQ20, _compositePublicKeyWord(publicKey), publicKey, message, signature
             ),
             false,
             "stateful exceeds max signatures"
@@ -344,7 +344,7 @@ contract ShrincsSphincs256sVectorsTest is Test {
         publicKey.messagePkSeed = hex"1234";
         assertEq(
             stateful.verifyUnsafeRaw(
-                ShrincsType.ParameterSetId.Sphincs256sKeccak, _compositePublicKeyWord(publicKey), publicKey, message, signature
+                ShrincsType.ParameterSetId.Sphincs256sKeccakQ20, _compositePublicKeyWord(publicKey), publicKey, message, signature
             ),
             false,
             "stateful malformed messagePkSeed length"
@@ -357,7 +357,7 @@ contract ShrincsSphincs256sVectorsTest is Test {
         signature.chains = _dropLastBytes32(signature.chains);
         assertEq(
             stateful.verifyUnsafeRaw(
-                ShrincsType.ParameterSetId.Sphincs256sKeccak, _compositePublicKeyWord(publicKey), publicKey, message, signature
+                ShrincsType.ParameterSetId.Sphincs256sKeccakQ20, _compositePublicKeyWord(publicKey), publicKey, message, signature
             ),
             false,
             "stateful wrong WOTS chain count"
@@ -549,7 +549,7 @@ contract ShrincsSphincs256sVectorsTest is Test {
         signature.hypertree[0].leafIndex = 256;
         assertEq(
             stateless.verifyUnsafeRaw(
-                ShrincsType.ParameterSetId.Sphincs256sKeccak, _compositePublicKeyWord(publicKey), publicKey, message, signature
+                ShrincsType.ParameterSetId.Sphincs256sKeccakQ20, _compositePublicKeyWord(publicKey), publicKey, message, signature
             ),
             false,
             "stateless hypertree leaf index out of range"
@@ -562,7 +562,7 @@ contract ShrincsSphincs256sVectorsTest is Test {
         signature.hypertree[0].wotsCSignature.chains[0] = hex"1234";
         assertEq(
             stateless.verifyUnsafeRaw(
-                ShrincsType.ParameterSetId.Sphincs256sKeccak, _compositePublicKeyWord(publicKey), publicKey, message, signature
+                ShrincsType.ParameterSetId.Sphincs256sKeccakQ20, _compositePublicKeyWord(publicKey), publicKey, message, signature
             ),
             false,
             "stateless malformed hypertree WOTS chain length"
@@ -575,7 +575,7 @@ contract ShrincsSphincs256sVectorsTest is Test {
         signature.hypertree[0].authPath = _dropLastBytes(signature.hypertree[0].authPath);
         assertEq(
             stateless.verifyUnsafeRaw(
-                ShrincsType.ParameterSetId.Sphincs256sKeccak, _compositePublicKeyWord(publicKey), publicKey, message, signature
+                ShrincsType.ParameterSetId.Sphincs256sKeccakQ20, _compositePublicKeyWord(publicKey), publicKey, message, signature
             ),
             false,
             "stateless wrong hypertree auth path length"
