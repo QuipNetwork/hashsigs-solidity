@@ -299,6 +299,71 @@ contract ShrincsSphincs256sVectorsTest is Test {
         );
     }
 
+    function testStatefulSphincs256sRejectsTamperedAuthPath() public {
+        (ShrincsType.PublicKey memory publicKey, bytes memory message, ShrincsType.StatefulSignature memory signature) =
+            _decodeStatefulVector(".stateful.cases.valid.calldata");
+        signature.authPath[0] = signature.authPath[0] ^ bytes32(uint256(1));
+        assertEq(
+            stateful.verifyUnsafeRaw(
+                ShrincsType.ParameterSetId.Sphincs256sKeccak, _compositePublicKeyWord(publicKey), publicKey, message, signature
+            ),
+            false,
+            "stateful tampered auth path"
+        );
+    }
+
+    function testStatefulSphincs256sAcceptsMaxSignaturesBoundary() public {
+        (ShrincsType.PublicKey memory publicKey, bytes memory message, ShrincsType.StatefulSignature memory signature) =
+            _decodeStatefulVector(".stateful.cases.valid.calldata");
+        _setStatefulMaxSignatures(publicKey, uint32(signature.authPath.length));
+        assertEq(
+            stateful.verifyUnsafeRaw(
+                ShrincsType.ParameterSetId.Sphincs256sKeccak, _compositePublicKeyWord(publicKey), publicKey, message, signature
+            ),
+            true,
+            "stateful max signatures boundary"
+        );
+    }
+
+    function testStatefulSphincs256sRejectsExceededMaxSignatures() public {
+        (ShrincsType.PublicKey memory publicKey, bytes memory message, ShrincsType.StatefulSignature memory signature) =
+            _decodeStatefulVector(".stateful.cases.valid.calldata");
+        _setStatefulMaxSignatures(publicKey, uint32(signature.authPath.length - 1));
+        assertEq(
+            stateful.verifyUnsafeRaw(
+                ShrincsType.ParameterSetId.Sphincs256sKeccak, _compositePublicKeyWord(publicKey), publicKey, message, signature
+            ),
+            false,
+            "stateful exceeds max signatures"
+        );
+    }
+
+    function testStatefulSphincs256sRejectsMalformedMessagePkSeedLength() public {
+        (ShrincsType.PublicKey memory publicKey, bytes memory message, ShrincsType.StatefulSignature memory signature) =
+            _decodeStatefulVector(".stateful.cases.valid.calldata");
+        publicKey.messagePkSeed = hex"1234";
+        assertEq(
+            stateful.verifyUnsafeRaw(
+                ShrincsType.ParameterSetId.Sphincs256sKeccak, _compositePublicKeyWord(publicKey), publicKey, message, signature
+            ),
+            false,
+            "stateful malformed messagePkSeed length"
+        );
+    }
+
+    function testStatefulSphincs256sRejectsWrongWotsChainCount() public {
+        (ShrincsType.PublicKey memory publicKey, bytes memory message, ShrincsType.StatefulSignature memory signature) =
+            _decodeStatefulVector(".stateful.cases.valid.calldata");
+        signature.chains = _dropLastBytes32(signature.chains);
+        assertEq(
+            stateful.verifyUnsafeRaw(
+                ShrincsType.ParameterSetId.Sphincs256sKeccak, _compositePublicKeyWord(publicKey), publicKey, message, signature
+            ),
+            false,
+            "stateful wrong WOTS chain count"
+        );
+    }
+
     function testStatelessSphincs256sValidSignatureVerifies() public {
         (ShrincsType.PublicKey memory publicKey, bytes memory message, ShrincsType.StatelessSignature memory signature) =
             _decodeStatelessVector(".stateless.cases.valid.calldata");
@@ -475,6 +540,45 @@ contract ShrincsSphincs256sVectorsTest is Test {
             ),
             false,
             "stateless malformed hypertreeRoot length"
+        );
+    }
+
+    function testStatelessSphincs256sRejectsHypertreeLeafIndexOutOfRange() public {
+        (ShrincsType.PublicKey memory publicKey, bytes memory message, ShrincsType.StatelessSignature memory signature) =
+            _decodeStatelessVector(".stateless.cases.valid.calldata");
+        signature.hypertree[0].leafIndex = 256;
+        assertEq(
+            stateless.verifyUnsafeRaw(
+                ShrincsType.ParameterSetId.Sphincs256sKeccak, _compositePublicKeyWord(publicKey), publicKey, message, signature
+            ),
+            false,
+            "stateless hypertree leaf index out of range"
+        );
+    }
+
+    function testStatelessSphincs256sRejectsMalformedHypertreeWotsChainLength() public {
+        (ShrincsType.PublicKey memory publicKey, bytes memory message, ShrincsType.StatelessSignature memory signature) =
+            _decodeStatelessVector(".stateless.cases.valid.calldata");
+        signature.hypertree[0].wotsCSignature.chains[0] = hex"1234";
+        assertEq(
+            stateless.verifyUnsafeRaw(
+                ShrincsType.ParameterSetId.Sphincs256sKeccak, _compositePublicKeyWord(publicKey), publicKey, message, signature
+            ),
+            false,
+            "stateless malformed hypertree WOTS chain length"
+        );
+    }
+
+    function testStatelessSphincs256sRejectsWrongHypertreeAuthPathLength() public {
+        (ShrincsType.PublicKey memory publicKey, bytes memory message, ShrincsType.StatelessSignature memory signature) =
+            _decodeStatelessVector(".stateless.cases.valid.calldata");
+        signature.hypertree[0].authPath = _dropLastBytes(signature.hypertree[0].authPath);
+        assertEq(
+            stateless.verifyUnsafeRaw(
+                ShrincsType.ParameterSetId.Sphincs256sKeccak, _compositePublicKeyWord(publicKey), publicKey, message, signature
+            ),
+            false,
+            "stateless wrong hypertree auth path length"
         );
     }
 
@@ -1021,6 +1125,39 @@ contract ShrincsSphincs256sVectorsTest is Test {
         chains = new bytes32[](64);
         for (uint256 i = 0; i < 64; ++i) {
             chains[i] = fixedChains[i];
+        }
+    }
+
+    function _setStatefulMaxSignatures(ShrincsType.PublicKey memory publicKey, uint32 maxSignatures) internal pure {
+        publicKey.statefulPublicKey[64] = bytes1(uint8(maxSignatures >> 24));
+        publicKey.statefulPublicKey[65] = bytes1(uint8(maxSignatures >> 16));
+        publicKey.statefulPublicKey[66] = bytes1(uint8(maxSignatures >> 8));
+        publicKey.statefulPublicKey[67] = bytes1(uint8(maxSignatures));
+        publicKey.compositePublicKey = abi.encodePacked(
+            keccak256(
+                abi.encodePacked(
+                    "shrincs-public-key",
+                    publicKey.statefulPublicKey,
+                    publicKey.messagePkSeed,
+                    publicKey.messageRoot,
+                    publicKey.hypertreePkSeed,
+                    publicKey.hypertreeRoot
+                )
+            )
+        );
+    }
+
+    function _dropLastBytes32(bytes32[] memory input) internal pure returns (bytes32[] memory output) {
+        output = new bytes32[](input.length - 1);
+        for (uint256 i = 0; i < output.length; ++i) {
+            output[i] = input[i];
+        }
+    }
+
+    function _dropLastBytes(bytes[] memory input) internal pure returns (bytes[] memory output) {
+        output = new bytes[](input.length - 1);
+        for (uint256 i = 0; i < output.length; ++i) {
+            output[i] = input[i];
         }
     }
 
