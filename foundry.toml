@@ -1,7 +1,8 @@
 [profile.default]
-src = "src"
+src = "contracts"
 out = "out"
 libs = ["lib"]
+via_ir = true
 optimizer = true
 optimizer_runs = 200
 gas_limit = "18446744073709551615" # u64::MAX
@@ -15,9 +16,7 @@ fs_permissions = [
 via_ir = true
 optimizer = true
 optimizer_runs = 1000000
-contract_size_limit = 24576 # Optional: limits contract size to 24KB
 gas_limit = "18446744073709551615" # u64::MAX
-no_console = true
 
 [fmt]
 line_length = 120
