@@ -48,13 +48,13 @@ library ShrincsTypes {
         ParameterSetId parameterSetId;
         uint32 hashSuiteId;
         uint64 statelessSignatureLimit;
-        uint16 nBytes;
-        uint8 h;
-        uint8 d;
-        uint8 a;
-        uint8 k;
-        uint16 w;
-        uint16 l;
+        uint16 hashLen;
+        uint8 hypertreeHeight;
+        uint8 numHypertreeLayers;
+        uint8 forsTreeHeight;
+        uint8 numForsTrees;
+        uint16 chainLen;
+        uint16 numWotsChains;
         uint32 wotsTargetSum;
     }
 
@@ -163,13 +163,13 @@ library ShrincsTypes {
                 parameterSetId: ParameterSetId.Sphincs256sKeccakQ20,
                 hashSuiteId: HASH_SUITE_KECCAK_256,
                 statelessSignatureLimit: 1_048_576,
-                nBytes: 32,
-                h: 64,
-                d: 8,
-                a: 14,
-                k: 22,
-                w: 16,
-                l: 64,
+                hashLen: 32,
+                hypertreeHeight: 64,
+                numHypertreeLayers: 8,
+                forsTreeHeight: 14,
+                numForsTrees: 22,
+                chainLen: 16,
+                numWotsChains: 64,
                 wotsTargetSum: WOTS_TARGET_SUM_STATEFUL
             });
         }
@@ -179,13 +179,13 @@ library ShrincsTypes {
                 parameterSetId: ParameterSetId.Unsupported,
                 hashSuiteId: HASH_SUITE_UNSUPPORTED,
                 statelessSignatureLimit: 0,
-                nBytes: 32,
-                h: 64,
-                d: 8,
-                a: 14,
-                k: 22,
-                w: 16,
-                l: 64,
+                hashLen: 32,
+                hypertreeHeight: 64,
+                numHypertreeLayers: 8,
+                forsTreeHeight: 14,
+                numForsTrees: 22,
+                chainLen: 16,
+                numWotsChains: 64,
                 wotsTargetSum: WOTS_TARGET_SUM_STATEFUL
             });
         }

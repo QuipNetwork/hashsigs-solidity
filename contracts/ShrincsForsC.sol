@@ -28,13 +28,16 @@ library ShrincsForsC {
         uint64 xmssTree,
         uint32 xmssKeypair
     ) internal pure returns (bytes32 messageRoot, bool ok) {
-        uint256 signedTrees = uint256(params.k) - 1;
+        // FORS-C omits the final FORS tree by forcing its digest-selected leaf index to zero.
+        // Verification therefore expects only k - 1 revealed entries and rejects any digest
+        // whose omitted final tree would require a nonzero leaf.
+        uint256 signedTrees = uint256(params.numForsTrees) - 1;
         if (signature.randomizer.length != 32 || signature.entries.length != signedTrees) return (bytes32(0), false);
 
         ShrincsTypes.ForsDigest memory digest =
             forsDigest(params, publicKey, message, signature.randomizer, signature.counter);
-        uint256 a = uint256(params.a);
-        if (ShrincsUtils.readBits32Fast(digest.digest, signedTrees * a, params.a) != 0) return (bytes32(0), false);
+        uint256 a = uint256(params.forsTreeHeight);
+        if (ShrincsUtils.readBits32Fast(digest.digest, signedTrees * a, params.forsTreeHeight) != 0) return (bytes32(0), false);
         if (digest.xmssTree != xmssTree || digest.xmssKeypair != xmssKeypair) return (bytes32(0), false);
 
         bytes calldata pkSeed = publicKey.messagePkSeed;
@@ -50,7 +53,7 @@ library ShrincsForsC {
         for (uint256 tree = 0; tree < signedTrees;) {
             ShrincsTypes.ForsEntry calldata entry = signature.entries[tree];
             if (entry.sk.length != 32 || entry.auth.length != a) return (bytes32(0), false);
-            uint32 leafIndex = ShrincsUtils.readBits32Fast(digest.digest, tree * a, params.a);
+            uint32 leafIndex = ShrincsUtils.readBits32Fast(digest.digest, tree * a, params.forsTreeHeight);
             bytes32 root = forsEntryRoot32(uint32(a), pkSeed, xmssTree, xmssKeypair, uint32(tree), leafIndex, entry);
             if (root == bytes32(0)) return (bytes32(0), false);
             assembly {
@@ -155,10 +158,10 @@ library ShrincsForsC {
         bytes calldata randomizer,
         uint32 counter
     ) internal pure returns (ShrincsTypes.ForsDigest memory out) {
-        uint32 indexBits = uint32(params.k) * uint32(params.a);
-        uint32 subtreeHeight = uint32(params.h / params.d);
-        uint32 treeBits = uint32(params.h) - subtreeHeight;
-        uint256 digestBytes = (uint256(indexBits) + uint256(params.h) + 7) / 8;
+        uint32 indexBits = uint32(params.numForsTrees) * uint32(params.forsTreeHeight);
+        uint32 subtreeHeight = uint32(params.hypertreeHeight / params.numHypertreeLayers);
+        uint32 treeBits = uint32(params.hypertreeHeight) - subtreeHeight;
+        uint256 digestBytes = (uint256(indexBits) + uint256(params.hypertreeHeight) + 7) / 8;
         bytes memory digest = forsDigestBytes(publicKey.messagePkSeed, publicKey.hypertreeRoot, randomizer, counter, message, digestBytes);
 
         uint256 cursor = indexBits;

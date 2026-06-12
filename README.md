@@ -188,14 +188,22 @@ The current verifier is intentionally pinned to exactly one production profile:
 - `parameterSetId = ShrincsTypes.ParameterSetId.Sphincs256sKeccakQ20`
 - `statelessSignatureLimit = 2^20 = 1,048,576`
 - `hashSuiteId = HASH_SUITE_KECCAK_256`
-- `nBytes = 32`
-- `h = 64`
-- `d = 8`
-- `a = 14`
-- `k = 22`
-- `w = 16`
-- `l = 64`
+- `hashLen = 32`
+- `hypertreeHeight = 64`
+- `numHypertreeLayers = 8`
+- `forsTreeHeight = 14`
+- `numForsTrees = 22`
+- `chainLen = 16`
+- `numWotsChains = 64`
 - `wotsTargetSum = 480`
+
+Two profile-specific verifier rules are worth calling out explicitly:
+
+- `FORS-C` verifies `numForsTrees - 1` revealed entries, not all `numForsTrees`
+  - the final FORS tree is omitted by construction
+  - verification rejects any digest whose omitted final tree would need a nonzero leaf index
+- `WOTS-C` uses `wotsTargetSum` instead of an explicit checksum suffix
+  - the reconstructed base-`chainLen` digits must add up to the fixed target sum for the profile
 
 For the stateful `WOTS-C` / XMSS path in that profile, the code also assumes:
 

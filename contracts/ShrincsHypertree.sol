@@ -26,8 +26,8 @@ library ShrincsHypertree {
         bytes32 messageRoot,
         ShrincsTypes.HypertreeLayerSignature[] calldata layers
     ) internal pure returns (bool) {
-        if (layers.length != params.d) return false;
-        uint32 subtreeHeight = uint32(params.h / params.d);
+        if (layers.length != params.numHypertreeLayers) return false;
+        uint32 subtreeHeight = uint32(params.hypertreeHeight / params.numHypertreeLayers);
         uint32 leafCount = uint32(1) << subtreeHeight;
         bytes32 current = messageRoot;
 
@@ -42,7 +42,7 @@ library ShrincsHypertree {
             // close at the pinned hypertree root. The full fix is signer/vector regeneration and
             // then enforcing the FIPS-style recurrence here.
             if (layerSig.leafIndex >= leafCount) return false;
-            if (layerSig.wotsCPkHash.length != params.nBytes) return false;
+            if (layerSig.wotsCPkHash.length != params.hashLen) return false;
             if (layerSig.authPath.length != subtreeHeight) return false;
             if (
                 !verifyWotsC32(
@@ -91,7 +91,7 @@ library ShrincsHypertree {
         bytes32 message,
         ShrincsTypes.WotsCSignature calldata signature
     ) internal pure returns (bool) {
-        uint256 chainCount = uint256(params.l);
+        uint256 chainCount = uint256(params.numWotsChains);
         if (signature.randomizer.length != 32 || signature.chains.length != chainCount || expectedPkHashBytes.length != 32) return false;
 
         bytes calldata randomizerBytes = signature.randomizer;
@@ -119,9 +119,9 @@ library ShrincsHypertree {
         for (uint256 i = 0; i < chainCount;) {
             bytes calldata chain = signature.chains[i];
             if (chain.length != 32) return false;
-            uint32 digit = ShrincsUtils.baseWDigit(params.w, digest, i);
+            uint32 digit = ShrincsUtils.baseWDigit(params.chainLen, digest, i);
             digitSum += digit;
-            bytes32 segment = wotsChain32NoMaskBase(params.w, pkSeed, addressBase, uint32(i), chain, digit);
+            bytes32 segment = wotsChain32NoMaskBase(params.chainLen, pkSeed, addressBase, uint32(i), chain, digit);
             assembly {
                 mstore(add(add(pkInput, 41), mul(i, 32)), segment)
             }
@@ -129,6 +129,9 @@ library ShrincsHypertree {
                 ++i;
             }
         }
+        // WOTS-C does not carry an explicit checksum chain suffix. Instead the message expansion
+        // is accepted only when the reconstructed base-w digits add up to the fixed target sum for
+        // the selected profile.
         if (digitSum != params.wotsTargetSum) return false;
 
         bytes32 computedPkHash;
@@ -217,8 +220,8 @@ library ShrincsHypertree {
     }
 
     function wotsDigestBytes(ShrincsTypes.ParamsView memory params) internal pure returns (uint256) {
-        uint256 bitsPerDigit = params.w == 256 ? 8 : 4;
-        return (uint256(params.l) * bitsPerDigit + 7) / 8;
+        uint256 bitsPerDigit = params.chainLen == 256 ? 8 : 4;
+        return (uint256(params.numWotsChains) * bitsPerDigit + 7) / 8;
     }
 
     function hypertreeRootFromPath32(

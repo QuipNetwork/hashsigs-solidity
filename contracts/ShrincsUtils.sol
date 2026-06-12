@@ -33,13 +33,13 @@ library ShrincsUtils {
         returns (bool)
     {
         if (params.parameterSetId != ShrincsTypes.ParameterSetId.Sphincs256sKeccakQ20) return false;
-        if (params.nBytes != 32) return false;
+        if (params.hashLen != 32) return false;
         if (params.parameterSetId != publicKey.parameterSetId) return false;
-        if (params.h != 64 || params.d != 8 || params.a != 14) return false;
-        if (params.k != 22 || params.w != 16 || params.l != 64) return false;
+        if (params.hypertreeHeight != 64 || params.numHypertreeLayers != 8 || params.forsTreeHeight != 14) return false;
+        if (params.numForsTrees != 22 || params.chainLen != 16 || params.numWotsChains != 64) return false;
         if (params.wotsTargetSum != ShrincsTypes.WOTS_TARGET_SUM_STATEFUL) return false;
         if (!validStatefulCompositePublicKey(publicKey)) return false;
-        if (uint256(params.k) * (uint256(1) << params.a) > type(uint32).max) return false;
+        if (uint256(params.numForsTrees) * (uint256(1) << params.forsTreeHeight) > type(uint32).max) return false;
         return true;
     }
 
