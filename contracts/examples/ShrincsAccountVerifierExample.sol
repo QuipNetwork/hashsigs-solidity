@@ -37,7 +37,7 @@ contract ShrincsAccountVerifierExample {
     uint32 public nextStatefulLeafIndex;
     bool public recoveryMode;
 
-    mapping(uint256 wordIndex => uint256 usedBits) internal usedLeafBitmap;
+    mapping(uint256 keyVersion => mapping(uint256 wordIndex => uint256 usedBits)) internal usedLeafBitmap;
 
     bytes32 internal constant DOMAIN_SEPARATOR = keccak256("shrincs-account-v1");
 
@@ -210,7 +210,7 @@ contract ShrincsAccountVerifierExample {
     function isLeafUsed(uint32 leafIndex) public view returns (bool) {
         uint256 wordIndex = uint256(leafIndex) >> 8;
         uint256 bitIndex = uint256(leafIndex) & 0xff;
-        return (usedLeafBitmap[wordIndex] & (uint256(1) << bitIndex)) != 0;
+        return (usedLeafBitmap[keyVersion][wordIndex] & (uint256(1) << bitIndex)) != 0;
     }
 
     function setStatefulPolicyNone() external onlyOwner {
@@ -255,7 +255,7 @@ contract ShrincsAccountVerifierExample {
         if (statefulPolicy == StatefulPolicy.LeafBitmap) {
             uint256 wordIndex = uint256(leafIndex) >> 8;
             uint256 bitIndex = uint256(leafIndex) & 0xff;
-            usedLeafBitmap[wordIndex] |= uint256(1) << bitIndex;
+            usedLeafBitmap[keyVersion][wordIndex] |= uint256(1) << bitIndex;
         }
     }
 

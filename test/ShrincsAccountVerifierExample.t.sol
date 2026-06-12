@@ -499,6 +499,25 @@ contract ShrincsAccountVerifierExampleTest is Test {
         assertTrue(account.statelessSignaturesUsed() == 0, "fresh key must reset stateless usage when requested");
     }
 
+    function testExampleFreshKeyInstallResetsLeafBitmapNamespace() public {
+        (ShrincsTypes.PublicKey memory publicKey, bytes memory message, ShrincsTypes.StatefulSignature memory signature) =
+            _decodeStatefulVector(".stateful.cases.valid.calldata");
+        bytes32 expectedCompositePublicKey = _compositePublicKeyWord(publicKey);
+        ShrincsAccountVerifierExampleHarness account = new ShrincsAccountVerifierExampleHarness(expectedCompositePublicKey);
+        uint32 leafIndex = uint32(signature.authPath.length);
+
+        account.setStatefulPolicyLeafBitmap();
+        bool firstUse = account.verifyStatefulRaw(publicKey, message, signature);
+        assertEq(firstUse, true, "first leaf use should verify under bitmap policy");
+        assertEq(account.isLeafUsed(leafIndex), true, "leaf must be marked used in current key version");
+
+        bytes32 nextCompositePublicKey = bytes32(uint256(expectedCompositePublicKey) ^ 1);
+        account.installFreshKeyForTest(nextCompositePublicKey, ShrincsTypes.ParameterSetId.Sphincs256sKeccakQ20, true);
+
+        assertEq(account.keyVersion(), 1, "fresh key install must advance key version");
+        assertEq(account.isLeafUsed(leafIndex), false, "fresh key must start with a clean leaf bitmap namespace");
+    }
+
     function _actionContext(uint256 nonceValue, uint256 keyVersionValue)
         internal
         pure
