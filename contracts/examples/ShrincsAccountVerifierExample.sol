@@ -68,6 +68,9 @@ contract ShrincsAccountVerifierExample {
         bytes calldata message,
         ShrincsTypes.StatefulSignature calldata signature
     ) external returns (bool) {
+        // Low-level wrapper path. This verifies a caller-provided message directly and does not
+        // advance nonce or build a canonical action hash. Callers must handle replay protection,
+        // domain separation, and payload binding themselves. Prefer verifyStatefulAction(...).
         uint32 leafIndex = uint32(signature.authPath.length);
         if (!_precheckStatefulLeafUse(leafIndex)) return false;
 
@@ -118,6 +121,9 @@ contract ShrincsAccountVerifierExample {
         bytes calldata message,
         ShrincsTypes.StatelessSignature calldata signature
     ) external returns (bool) {
+        // Low-level wrapper path. This verifies a caller-provided message directly and does not
+        // advance nonce or build a canonical action hash. Callers must handle replay protection,
+        // domain separation, and payload binding themselves. Prefer verifyStatelessAction(...).
         if (statefulPolicy == StatefulPolicy.RecoveryRotation && !recoveryMode) return false;
         uint64 limit = ShrincsTypes.defaultParamsView(parameterSetId).statelessSignatureLimit;
         if (statelessSignaturesUsed >= limit) return false;

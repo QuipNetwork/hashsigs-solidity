@@ -140,6 +140,9 @@ library SHRINCS {
         bytes memory message,
         ShrincsTypes.StatefulSignature calldata signature
     ) internal pure returns (bool) {
+        // Low-level verifier path. The caller supplies the signed message directly, so replay
+        // protection and domain separation are entirely caller-managed. Account-style integrations
+        // should prefer verifyStateful(...) and bind nonce/domain/keyVersion into ActionContext.
         return ShrincsStateful.verifyStatefulUnsafeRaw(
             parameterSetId, expectedCompositePublicKey, publicKey, message, signature
         );
@@ -152,6 +155,9 @@ library SHRINCS {
         bytes memory message,
         ShrincsTypes.StatelessSignature calldata signature
     ) internal pure returns (bool) {
+        // Low-level verifier path. The caller supplies the signed message directly, so replay
+        // protection and domain separation are entirely caller-managed. Account-style integrations
+        // should prefer verifyStateless(...) and bind nonce/domain/keyVersion into ActionContext.
         ShrincsTypes.ParamsView memory p = ShrincsUtils.paramsView(parameterSetId);
         if (!ShrincsUtils.validParameterSetBinding(p, parameterSetId, publicKey.parameterSetId)) return false;
         if (!ShrincsUtils.matchesExpectedCompositePublicKey(publicKey, expectedCompositePublicKey)) return false;
