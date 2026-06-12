@@ -21,6 +21,27 @@ The high-level idea is:
 - a restored or degraded signer can use the stateless path
 - the verifier only checks signatures and rotation authorizations; it does not track signer state
 
+## Verification Flow
+
+```mermaid
+flowchart LR
+    subgraph "Stateful path (normal case)"
+        A1["action context<br/>(domain, nonce, keyVersion,<br/>actionType, payloadHash)"] --> A2["statefulActionMessageHash"]
+        A2 --> A3["validate composite-key<br/>commitment (Utils)"]
+        A3 --> A4["recompute compact WOTS-C<br/>pk hash from 64 chains<br/>(target-sum 480 check)"]
+        A4 --> A5["fold unbalanced-XMSS<br/>auth path"]
+        A5 --> A6{"== stateful root?"}
+    end
+
+    subgraph "Stateless path (fallback / rotation authorization)"
+        B1["action or rotation<br/>message hash"] --> B2["validate params +<br/>commitment (Utils)"]
+        B2 --> B3["FORS-C: digest, k-th index == 0,<br/>rebuild 21 tree roots → fors-pk root"]
+        B3 --> B4["messageRoot"]
+        B4 --> B5["8 hypertree layers:<br/>WOTS-C verify + Merkle path,<br/>root chains upward"]
+        B5 --> B6{"== hypertree root?"}
+    end
+```
+
 ## Repository Shape
 
 Main contracts:
@@ -41,6 +62,47 @@ Main contracts:
   - legacy `WOTS+` implementation retained alongside the SHRINCS verifier
 - [contracts/examples/ShrincsAccountVerifierExample.sol](./contracts/examples/ShrincsAccountVerifierExample.sol)
   - example account wrapper that owns nonce, rotation, and policy state
+
+Architecture:
+
+```mermaid
+graph TD
+    subgraph "Integrator layer (example)"
+        EX["ShrincsAccountVerifierExample.sol<br/>(contract — owner, policies, nonce,<br/>keyVersion, q_s budget, stateful-use tracking)"]
+    end
+
+    subgraph "Public API layer"
+        FA["SHRINCS.sol (facade)<br/>canonical: verifyStateful / verifyStateless,<br/>statelessRotate, rotateStatefulViaStateless,<br/>4 canonical message hashes<br/>raw: verifyStatefulUnsafeRaw / verifyStatelessUnsafeRaw"]
+    end
+
+    subgraph "Crypto component libraries"
+        ST["ShrincsStateful.sol<br/>compact WOTS-C digits +<br/>unbalanced-XMSS auth path<br/>(cheap normal-case path)"]
+        FO["ShrincsForsC.sol<br/>FORS-C digest, grind checks,<br/>k−1 tree-root rebuild -> forsRoot"]
+        HY["ShrincsHypertree.sol<br/>d=8 XMSS layers, stateless WOTS-C,<br/>Merkle paths -> hypertreeRoot"]
+    end
+
+    subgraph "Foundation"
+        UT["ShrincsUtils.sol<br/>profile validation, composite-key<br/>commitment recompute, bit readers,<br/>address-word packing"]
+        TY["ShrincsTypes.sol<br/>structs, constants,<br/>single supported profile values"]
+    end
+
+    WP["WOTSPlus.sol<br/>(restored standalone library —<br/>no SHRINCS dependency)"]
+
+    EX --> FA
+    FA --> ST
+    FA --> FO
+    FA --> HY
+    FA --> UT
+    ST --> UT
+    FO --> UT
+    HY --> UT
+    UT --> TY
+    ST --> TY
+    FO --> TY
+    HY --> TY
+    FA --> TY
+    EX --> TY
+```
 
 Tests:
 
