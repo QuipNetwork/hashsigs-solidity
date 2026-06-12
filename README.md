@@ -350,6 +350,11 @@ Current tests cover:
 - unsupported requested parameter set is rejected
 - mismatched declared parameter set is rejected
 - corrupted stateful signature is rejected
+- tampered stateful authentication path is rejected
+- signature at `maxSignatures` boundary verifies
+- signature exceeding `maxSignatures` is rejected
+- malformed `messagePkSeed` length is rejected
+- wrong stateful `WOTS-C` chain count is rejected
 - canonical action hash changes when payload changes
 - zeroed account-style action context is rejected
 
@@ -369,6 +374,9 @@ Current tests cover:
 - malformed `messageRoot` length is rejected
 - malformed `hypertreePkSeed` length is rejected
 - malformed `hypertreeRoot` length is rejected
+- hypertree leaf index out of range is rejected
+- malformed hypertree `WOTS-C` chain length is rejected
+- wrong hypertree authentication path length is rejected
 - canonical action hash changes when nonce changes
 - zeroed account-style action context is rejected
 
