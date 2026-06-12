@@ -16,8 +16,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 pragma solidity ^0.8.28;
 
-import { ShrincsTypes } from "./ShrincsTypes.sol";
-import { ShrincsUtils } from "./ShrincsUtils.sol";
+import {ShrincsTypes} from "./ShrincsTypes.sol";
+import {ShrincsUtils} from "./ShrincsUtils.sol";
 
 library ShrincsForsC {
     function verifyForsCAndReturnRoot(
@@ -37,7 +37,9 @@ library ShrincsForsC {
         ShrincsTypes.ForsDigest memory digest =
             forsDigest(params, publicKey, message, signature.randomizer, signature.counter);
         uint256 a = uint256(params.forsTreeHeight);
-        if (ShrincsUtils.readBits32Fast(digest.digest, signedTrees * a, params.forsTreeHeight) != 0) return (bytes32(0), false);
+        if (ShrincsUtils.readBits32Fast(digest.digest, signedTrees * a, params.forsTreeHeight) != 0) {
+            return (bytes32(0), false);
+        }
         if (digest.xmssTree != xmssTree || digest.xmssKeypair != xmssKeypair) return (bytes32(0), false);
 
         bytes calldata pkSeed = publicKey.messagePkSeed;
@@ -54,6 +56,8 @@ library ShrincsForsC {
             ShrincsTypes.ForsEntry calldata entry = signature.entries[tree];
             if (entry.sk.length != 32 || entry.auth.length != a) return (bytes32(0), false);
             uint32 leafIndex = ShrincsUtils.readBits32Fast(digest.digest, tree * a, params.forsTreeHeight);
+            // casting to 'uint32' is safe because the supported FORS tree height is 14 bits
+            // forge-lint: disable-next-line(unsafe-typecast)
             bytes32 root = forsEntryRoot32(uint32(a), pkSeed, xmssTree, xmssKeypair, uint32(tree), leafIndex, entry);
             if (root == bytes32(0)) return (bytes32(0), false);
             assembly {
@@ -101,12 +105,7 @@ library ShrincsForsC {
             uint256 shiftedTree = uint256(tree) << (height - nodeHeight);
             uint256 parentIndex = index >> 1;
             bytes32 addressWord = bytes32(addressBase | shiftedNodeHeight | (shiftedTree + parentIndex));
-            node = hashForsNode32(
-                pkSeed,
-                addressWord,
-                left,
-                right
-            );
+            node = hashForsNode32(pkSeed, addressWord, left, right);
             index >>= 1;
             unchecked {
                 ++level;
@@ -162,7 +161,9 @@ library ShrincsForsC {
         uint32 subtreeHeight = uint32(params.hypertreeHeight / params.numHypertreeLayers);
         uint32 treeBits = uint32(params.hypertreeHeight) - subtreeHeight;
         uint256 digestBytes = (uint256(indexBits) + uint256(params.hypertreeHeight) + 7) / 8;
-        bytes memory digest = forsDigestBytes(publicKey.messagePkSeed, publicKey.hypertreeRoot, randomizer, counter, message, digestBytes);
+        bytes memory digest = forsDigestBytes(
+            publicKey.messagePkSeed, publicKey.hypertreeRoot, randomizer, counter, message, digestBytes
+        );
 
         uint256 cursor = indexBits;
         out.xmssTree = ShrincsUtils.readBits64Fast(digest, cursor, treeBits);
@@ -179,11 +180,12 @@ library ShrincsForsC {
         bytes memory message,
         uint256 digestBytes
     ) internal pure returns (bytes memory out) {
-        out = new bytes(digestBytes);
+        out = new bytes(digestBytes + 32);
         uint256 messageLen = message.length;
         uint256 baseLen = 111 + messageLen;
         uint256 ptr;
         assembly {
+            mstore(out, digestBytes)
             ptr := mload(0x40)
             mstore(ptr, "fors-digest")
             calldatacopy(add(ptr, 11), pkSeed.offset, 32)
@@ -192,7 +194,10 @@ library ShrincsForsC {
             mstore(add(ptr, 107), shl(224, counter))
             let src := add(message, 32)
             let dst := add(ptr, 111)
-            for { let end := add(src, messageLen) } lt(src, end) { src := add(src, 32) dst := add(dst, 32) } {
+            for { let end := add(src, messageLen) } lt(src, end) {
+                src := add(src, 32)
+                dst := add(dst, 32)
+            } {
                 mstore(dst, mload(src))
             }
         }

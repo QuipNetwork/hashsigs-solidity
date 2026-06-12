@@ -16,8 +16,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 pragma solidity ^0.8.28;
 
-import { ShrincsTypes } from "./ShrincsTypes.sol";
-import { ShrincsUtils } from "./ShrincsUtils.sol";
+import {ShrincsTypes} from "./ShrincsTypes.sol";
+import {ShrincsUtils} from "./ShrincsUtils.sol";
 
 library ShrincsStateful {
     function verifyStatefulUnsafeRaw(
@@ -43,7 +43,8 @@ library ShrincsStateful {
             compactStatefulWotsPublicKeyFromSignature(statefulKey.pkSeed, leafIndex, message, signature);
         if (!validWots) return false;
 
-        (bytes32 root, bool validPath) = rootFromUnbalancedPath(statefulKey.pkSeed, leafIndex, pkHash, signature.authPath);
+        (bytes32 root, bool validPath) =
+            rootFromUnbalancedPath(statefulKey.pkSeed, leafIndex, pkHash, signature.authPath);
         return validPath && statefulKey.root == root;
     }
 
@@ -62,13 +63,11 @@ library ShrincsStateful {
         for (uint256 i = 0; i < ShrincsTypes.WOTS_CHAINS_STATEFUL;) {
             uint32 digit = baseW16Digit(digest, i);
             digitSum += digit;
+            // casting to 'uint32' is safe because i ranges over 64 stateful WOTS chains
+            // forge-lint: disable-next-line(unsafe-typecast)
+            uint32 chainIndex = uint32(i);
             bytes32 segment = statefulChainNoMask(
-                pkSeed,
-                leafIndex,
-                uint32(i),
-                signature.chains[i],
-                digit,
-                ShrincsTypes.WOTS_BASE_STATEFUL - 1 - digit
+                pkSeed, leafIndex, chainIndex, signature.chains[i], digit, ShrincsTypes.WOTS_BASE_STATEFUL - 1 - digit
             );
             setSlice32(segments, segment, i * 32);
             unchecked {
@@ -80,15 +79,16 @@ library ShrincsStateful {
         return (keccak256(abi.encodePacked("uxmss-wots-pk", pkSeed, leafIndex, segments)), true);
     }
 
-    function rootFromUnbalancedPath(
-        bytes32 pkSeed,
-        uint32 leafIndex,
-        bytes32 leaf,
-        bytes32[] calldata authPath
-    ) internal pure returns (bytes32 root, bool ok) {
+    function rootFromUnbalancedPath(bytes32 pkSeed, uint32 leafIndex, bytes32 leaf, bytes32[] calldata authPath)
+        internal
+        pure
+        returns (bytes32 root, bool ok)
+    {
         if (authPath.length != leafIndex || authPath.length == 0) return (bytes32(0), false);
         root = statefulParentHash(pkSeed, leafIndex, leaf, authPath[0]);
         for (uint256 offset = 0; offset < authPath.length - 1;) {
+            // casting to 'uint32' is safe because offset is bounded by authPath.length - 1, and authPath.length == leafIndex
+            // forge-lint: disable-next-line(unsafe-typecast)
             root = statefulParentHash(pkSeed, leafIndex - uint32(offset) - 1, authPath[offset + 1], root);
             unchecked {
                 ++offset;

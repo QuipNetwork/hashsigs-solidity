@@ -58,13 +58,6 @@ library ShrincsTypes {
         uint32 wotsTargetSum;
     }
 
-    struct WotsContext {
-        uint16 w;
-        uint32 layer;
-        uint64 tree;
-        uint32 keypair;
-    }
-
     struct ForsDigest {
         uint64 xmssTree;
         uint32 xmssKeypair;
@@ -153,11 +146,7 @@ library ShrincsTypes {
         bytes hypertreeRoot;
     }
 
-    function defaultParamsView(ParameterSetId parameterSetId)
-        internal
-        pure
-        returns (ParamsView memory)
-    {
+    function defaultParamsView(ParameterSetId parameterSetId) internal pure returns (ParamsView memory) {
         if (parameterSetId == ParameterSetId.Sphincs256sKeccakQ20) {
             return ParamsView({
                 parameterSetId: ParameterSetId.Sphincs256sKeccakQ20,
@@ -177,16 +166,16 @@ library ShrincsTypes {
         if (parameterSetId == ParameterSetId.Unsupported) {
             return ParamsView({
                 parameterSetId: ParameterSetId.Unsupported,
-                hashSuiteId: HASH_SUITE_UNSUPPORTED,
+                hashSuiteId: 0,
                 statelessSignatureLimit: 0,
-                hashLen: 32,
-                hypertreeHeight: 64,
-                numHypertreeLayers: 8,
-                forsTreeHeight: 14,
-                numForsTrees: 22,
-                chainLen: 16,
-                numWotsChains: 64,
-                wotsTargetSum: WOTS_TARGET_SUM_STATEFUL
+                hashLen: 0,
+                hypertreeHeight: 0,
+                numHypertreeLayers: 0,
+                forsTreeHeight: 0,
+                numForsTrees: 0,
+                chainLen: 0,
+                numWotsChains: 0,
+                wotsTargetSum: 0
             });
         }
 

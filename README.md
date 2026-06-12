@@ -29,11 +29,29 @@ Main contracts:
   - main verifier library
 - [contracts/ShrincsTypes.sol](./contracts/ShrincsTypes.sol)
   - shared enums, structs, and predefined parameter-set defaults
+- [contracts/ShrincsUtils.sol](./contracts/ShrincsUtils.sol)
+  - shared parameter validation, public-key checks, bit reads, and address packing helpers
+- [contracts/ShrincsStateful.sol](./contracts/ShrincsStateful.sol)
+  - stateful `WOTS-C` reconstruction and unbalanced XMSS-style path verification
+- [contracts/ShrincsForsC.sol](./contracts/ShrincsForsC.sol)
+  - `FORS-C` digest extraction and root reconstruction
+- [contracts/ShrincsHypertree.sol](./contracts/ShrincsHypertree.sol)
+  - stateless `WOTS-C` and hypertree layer verification
+- [contracts/WOTSPlus.sol](./contracts/WOTSPlus.sol)
+  - legacy `WOTS+` implementation retained alongside the SHRINCS verifier
+- [contracts/examples/ShrincsAccountVerifierExample.sol](./contracts/examples/ShrincsAccountVerifierExample.sol)
+  - example account wrapper that owns nonce, rotation, and policy state
 
 Tests:
 
 - [test/ShrincsSphincs256sVectors.t.sol](./test/ShrincsSphincs256sVectors.t.sol)
   - vector-backed verification and rotation-authorization tests
+- [test/ShrincsAccountVerifierExample.t.sol](./test/ShrincsAccountVerifierExample.t.sol)
+  - wrapper integration and state-transition tests
+- [test/ShrincsStatefulPolicyExamples.t.sol](./test/ShrincsStatefulPolicyExamples.t.sol)
+  - stateful-use policy tests
+- [test/WOTSPlus.t.sol](./test/WOTSPlus.t.sol)
+  - restored legacy `WOTS+` tests
 
 Test vectors:
 
@@ -261,9 +279,9 @@ The library is intentionally storage-free. A real on-chain verifier or account c
 
 Reference implementation:
 
-- [contracts/examples/ShrincsAccountVerifierExample.sol](/home/me/o/qp/shrincs/hashsigs-solidity/contracts/examples/ShrincsAccountVerifierExample.sol)
-- [test/ShrincsAccountVerifierExample.t.sol](/home/me/o/qp/shrincs/hashsigs-solidity/test/ShrincsAccountVerifierExample.t.sol)
-- [test/ShrincsStatefulPolicyExamples.t.sol](/home/me/o/qp/shrincs/hashsigs-solidity/test/ShrincsStatefulPolicyExamples.t.sol)
+- [contracts/examples/ShrincsAccountVerifierExample.sol](./contracts/examples/ShrincsAccountVerifierExample.sol)
+- [test/ShrincsAccountVerifierExample.t.sol](./test/ShrincsAccountVerifierExample.t.sol)
+- [test/ShrincsStatefulPolicyExamples.t.sol](./test/ShrincsStatefulPolicyExamples.t.sol)
 
 The example contract is intentionally small. It shows how wrapper-owned state should interact with the library for:
 
@@ -319,6 +337,7 @@ The developer/integrator chooses which policy fits the account design. In the ex
     - `nextStatefulLeafIndex`
     - `recoveryMode`
     - active stateful policy mode
+    - used-leaf bitmap marks from the prior key epoch
   must not be carried into the new key epoch
   - the example wrapper resets this state on fresh-key installation
 
@@ -327,8 +346,9 @@ The developer/integrator chooses which policy fits the account design. In the ex
   - they do not provide the typed account-action binding used by the canonical action-context paths
   - production account flows should prefer the canonical `verifyStateful(...)` / `verifyStateless(...)` style interfaces
 
-- The example `domainSeparator` is intentionally simple.
-  - a production wrapper should bind the signing domain to contract identity and chain context, not just a fixed constant string hash
+- The example wrapper binds its signing domain to both contract identity and chain context.
+  - the domain is derived from a stable tag, `block.chainid`, and `address(this)`
+  - production wrappers should keep that property even if they change the exact domain-tag scheme
 
 What the wrapper must handle:
 
@@ -464,12 +484,12 @@ forge test --via-ir
 
 Current expected result:
 
-- `38 passed, 0 failed`
+- `98 passed, 0 failed`
 
 ## Notes
 
-- `lib/forge-std/src/Test.sol` is provided locally in this repository so tests do not depend on fetching the `forge-std` submodule.
-- `foundry.toml` still contains a legacy `src = "src"` setting and a couple of nonstandard `production` profile keys, so you may still see harmless config warnings from Foundry.
+- `forge-std` is restored as a real dependency in `lib/forge-std`.
+- the default Foundry profile is configured for `via_ir = true`, which this verifier currently relies on for clean builds.
 
 ## License
 

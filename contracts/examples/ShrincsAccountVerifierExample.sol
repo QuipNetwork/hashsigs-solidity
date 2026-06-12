@@ -16,8 +16,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 pragma solidity ^0.8.28;
 
-import { SHRINCS } from "../SHRINCS.sol";
-import { ShrincsTypes } from "../ShrincsTypes.sol";
+import {SHRINCS} from "../SHRINCS.sol";
+import {ShrincsTypes} from "../ShrincsTypes.sol";
 
 contract ShrincsAccountVerifierExample {
     enum StatefulPolicy {
@@ -74,9 +74,8 @@ contract ShrincsAccountVerifierExample {
         uint32 leafIndex = uint32(signature.authPath.length);
         if (!_precheckStatefulLeafUse(leafIndex)) return false;
 
-        bool ok = SHRINCS.verifyStatefulUnsafeRaw(
-            parameterSetId, currentShrincsPublicKey, publicKey, message, signature
-        );
+        bool ok =
+            SHRINCS.verifyStatefulUnsafeRaw(parameterSetId, currentShrincsPublicKey, publicKey, message, signature);
         if (!ok) return false;
 
         _commitStatefulLeafUse(leafIndex);
@@ -101,13 +100,7 @@ contract ShrincsAccountVerifierExample {
             payloadHash: payloadHash
         });
 
-        bool ok = SHRINCS.verifyStateful(
-            parameterSetId,
-            currentShrincsPublicKey,
-            publicKey,
-            context,
-            signature
-        );
+        bool ok = SHRINCS.verifyStateful(parameterSetId, currentShrincsPublicKey, publicKey, context, signature);
         if (!ok) return false;
 
         _commitStatefulLeafUse(leafIndex);
@@ -128,9 +121,8 @@ contract ShrincsAccountVerifierExample {
         uint64 limit = ShrincsTypes.defaultParamsView(parameterSetId).statelessSignatureLimit;
         if (statelessSignaturesUsed >= limit) return false;
 
-        bool ok = SHRINCS.verifyStatelessUnsafeRaw(
-            parameterSetId, currentShrincsPublicKey, publicKey, message, signature
-        );
+        bool ok =
+            SHRINCS.verifyStatelessUnsafeRaw(parameterSetId, currentShrincsPublicKey, publicKey, message, signature);
         if (!ok) return false;
 
         statelessSignaturesUsed += 1;
@@ -156,13 +148,7 @@ contract ShrincsAccountVerifierExample {
             payloadHash: payloadHash
         });
 
-        bool ok = SHRINCS.verifyStateless(
-            parameterSetId,
-            currentShrincsPublicKey,
-            publicKey,
-            context,
-            signature
-        );
+        bool ok = SHRINCS.verifyStateless(parameterSetId, currentShrincsPublicKey, publicKey, context, signature);
         if (!ok) return false;
 
         nonce += 1;
@@ -180,19 +166,11 @@ contract ShrincsAccountVerifierExample {
         uint64 limit = ShrincsTypes.defaultParamsView(parameterSetId).statelessSignatureLimit;
         if (statelessSignaturesUsed >= limit) return false;
 
-        ShrincsTypes.RotationContext memory context = ShrincsTypes.RotationContext({
-            domainSeparator: _domainSeparator(),
-            nonce: nonce,
-            keyVersion: keyVersion
-        });
+        ShrincsTypes.RotationContext memory context =
+            ShrincsTypes.RotationContext({domainSeparator: _domainSeparator(), nonce: nonce, keyVersion: keyVersion});
 
         bytes32 nextCompositePublicKey = SHRINCS.statelessRotate(
-            parameterSetId,
-            currentShrincsPublicKey,
-            currentPublicKey,
-            context,
-            recoverySignature,
-            nextKey
+            parameterSetId, currentShrincsPublicKey, currentPublicKey, context, recoverySignature, nextKey
         );
         if (nextCompositePublicKey == bytes32(0)) return false;
 
@@ -208,19 +186,11 @@ contract ShrincsAccountVerifierExample {
         uint64 limit = ShrincsTypes.defaultParamsView(parameterSetId).statelessSignatureLimit;
         if (statelessSignaturesUsed >= limit) return false;
 
-        ShrincsTypes.RotationContext memory context = ShrincsTypes.RotationContext({
-            domainSeparator: _domainSeparator(),
-            nonce: nonce,
-            keyVersion: keyVersion
-        });
+        ShrincsTypes.RotationContext memory context =
+            ShrincsTypes.RotationContext({domainSeparator: _domainSeparator(), nonce: nonce, keyVersion: keyVersion});
 
         bytes32 nextCompositePublicKey = SHRINCS.statelessRotate(
-            parameterSetId,
-            currentShrincsPublicKey,
-            currentPublicKey,
-            context,
-            recoverySignature,
-            nextKey
+            parameterSetId, currentShrincsPublicKey, currentPublicKey, context, recoverySignature, nextKey
         );
         if (nextCompositePublicKey == bytes32(0)) return false;
 
@@ -289,10 +259,7 @@ contract ShrincsAccountVerifierExample {
         return keccak256(abi.encode(DOMAIN_TAG, block.chainid, address(this)));
     }
 
-    function _installFreshKey(
-        bytes32 nextCompositePublicKey,
-        ShrincsTypes.ParameterSetId nextParameterSetId
-    ) internal {
+    function _installFreshKey(bytes32 nextCompositePublicKey, ShrincsTypes.ParameterSetId nextParameterSetId) internal {
         bytes32 previousShrincsPublicKey = currentShrincsPublicKey;
         currentShrincsPublicKey = nextCompositePublicKey;
         parameterSetId = nextParameterSetId;

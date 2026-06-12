@@ -16,8 +16,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 pragma solidity ^0.8.28;
 
-import { ShrincsTypes } from "./ShrincsTypes.sol";
-import { ShrincsUtils } from "./ShrincsUtils.sol";
+import {ShrincsTypes} from "./ShrincsTypes.sol";
+import {ShrincsUtils} from "./ShrincsUtils.sol";
 
 library ShrincsHypertree {
     function verifyHypertree(
@@ -44,18 +44,18 @@ library ShrincsHypertree {
             if (layerSig.leafIndex >= leafCount) return false;
             if (layerSig.wotsCPkHash.length != params.hashLen) return false;
             if (layerSig.authPath.length != subtreeHeight) return false;
-            if (
-                !verifyWotsC32(
+            if (!verifyWotsC32(
                     params,
                     publicKey.hypertreePkSeed,
+                    // casting to 'uint32' is safe because layer is bounded by params.numHypertreeLayers and the supported profile uses 8 layers
+                    // forge-lint: disable-next-line(unsafe-typecast)
                     uint32(layer),
                     layerSig.treeIndex,
                     layerSig.leafIndex,
                     layerSig.wotsCPkHash,
                     current,
                     layerSig.wotsCSignature
-                )
-            ) return false;
+                )) return false;
 
             bytes calldata wotsPkHash = layerSig.wotsCPkHash;
             bytes32 leaf;
@@ -63,8 +63,17 @@ library ShrincsHypertree {
                 leaf := calldataload(wotsPkHash.offset)
             }
 
+            // casting to 'uint32' is safe because layer is bounded by params.numHypertreeLayers and the supported profile uses 8 layers
+            // forge-lint: disable-next-line(unsafe-typecast)
+            uint32 layerIndex = uint32(layer);
             (bytes32 nextRoot, bool ok) = hypertreeRootFromPath32(
-                subtreeHeight, publicKey.hypertreePkSeed, uint32(layer), layerSig.treeIndex, layerSig.leafIndex, leaf, layerSig.authPath
+                subtreeHeight,
+                publicKey.hypertreePkSeed,
+                layerIndex,
+                layerSig.treeIndex,
+                layerSig.leafIndex,
+                leaf,
+                layerSig.authPath
             );
             if (!ok) return false;
             current = nextRoot;
@@ -92,7 +101,11 @@ library ShrincsHypertree {
         ShrincsTypes.WotsCSignature calldata signature
     ) internal pure returns (bool) {
         uint256 chainCount = uint256(params.numWotsChains);
-        if (signature.randomizer.length != 32 || signature.chains.length != chainCount || expectedPkHashBytes.length != 32) return false;
+        if (
+            signature.randomizer.length != 32 || signature.chains.length != chainCount
+                || expectedPkHashBytes.length != 32
+        ) return false;
+        if (wotsDigestBytes(params) != 32) return false;
 
         bytes calldata randomizerBytes = signature.randomizer;
         bytes32 pkSeed;
@@ -104,7 +117,7 @@ library ShrincsHypertree {
             randomizer := calldataload(randomizerBytes.offset)
         }
 
-        bytes memory digest = wotsDigest32(pkSeed, expectedPkHash, randomizer, signature.counter, message, wotsDigestBytes(params));
+        bytes memory digest = wotsDigest32(pkSeed, expectedPkHash, randomizer, signature.counter, message);
         uint256 pkInputLen = 41 + chainCount * 32;
         uint256 pkInput;
         assembly {
@@ -121,6 +134,8 @@ library ShrincsHypertree {
             if (chain.length != 32) return false;
             uint32 digit = ShrincsUtils.baseWDigit(params.chainLen, digest, i);
             digitSum += digit;
+            // casting to 'uint32' is safe because i ranges over numWotsChains, which is 64 in the supported profile
+            // forge-lint: disable-next-line(unsafe-typecast)
             bytes32 segment = wotsChain32NoMaskBase(params.chainLen, pkSeed, addressBase, uint32(i), chain, digit);
             assembly {
                 mstore(add(add(pkInput, 41), mul(i, 32)), segment)
@@ -141,15 +156,12 @@ library ShrincsHypertree {
         return computedPkHash == expectedPkHash;
     }
 
-    function wotsDigest32(
-        bytes32 pkSeed,
-        bytes32 expectedPkHash,
-        bytes32 randomizer,
-        uint32 counter,
-        bytes32 message,
-        uint256 outLen
-    ) internal pure returns (bytes memory out) {
-        out = new bytes(outLen);
+    function wotsDigest32(bytes32 pkSeed, bytes32 expectedPkHash, bytes32 randomizer, uint32 counter, bytes32 message)
+        internal
+        pure
+        returns (bytes memory out)
+    {
+        out = new bytes(32);
         assembly {
             let ptr := mload(0x40)
             mstore(ptr, "wots-c-msg")
@@ -164,40 +176,22 @@ library ShrincsHypertree {
         }
     }
 
-    function wotsChain32NoMaskBase(uint16 w, bytes32 pkSeed, uint256 addressBase, uint32 chainIdx, bytes calldata value, uint32 digit)
-        internal
-        pure
-        returns (bytes32 out)
-    {
+    function wotsChain32NoMaskBase(
+        uint16 w,
+        bytes32 pkSeed,
+        uint256 addressBase,
+        uint32 chainIdx,
+        bytes calldata value,
+        uint32 digit
+    ) internal pure returns (bytes32 out) {
         assembly {
             out := calldataload(value.offset)
         }
         uint256 steps = uint256(w - 1) - digit;
         for (uint256 j = 0; j < steps;) {
-            out = hashStatelessWotsCChainNoMask32(pkSeed, bytes32(addressBase | (uint256(chainIdx) << 32) | (uint256(digit) + j)), out);
-            unchecked {
-                ++j;
-            }
-        }
-    }
-
-    function wotsChain32NoMask(
-        ShrincsTypes.WotsContext memory ctx,
-        bytes calldata pkSeedBytes,
-        uint32 chainIdx,
-        bytes calldata value,
-        uint32 digit
-    ) internal pure returns (bytes32 out) {
-        bytes32 pkSeed;
-        assembly {
-            pkSeed := calldataload(pkSeedBytes.offset)
-            out := calldataload(value.offset)
-        }
-        uint32 steps = uint32(ctx.w - 1) - digit;
-        for (uint32 j = 0; j < steps;) {
-            bytes32 addressWord =
-                ShrincsUtils.addressWord32(ctx.layer, ctx.tree, ShrincsTypes.WOTS_HASH_TYPE, ctx.keypair, chainIdx, digit + j);
-            out = hashStatelessWotsCChainNoMask32(pkSeed, addressWord, out);
+            out = hashStatelessWotsCChainNoMask32(
+                pkSeed, bytes32(addressBase | (uint256(chainIdx) << 32) | (uint256(digit) + j)), out
+            );
             unchecked {
                 ++j;
             }

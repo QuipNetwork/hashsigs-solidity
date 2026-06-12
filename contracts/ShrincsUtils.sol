@@ -16,7 +16,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 pragma solidity ^0.8.28;
 
-import { ShrincsTypes } from "./ShrincsTypes.sol";
+import {ShrincsTypes} from "./ShrincsTypes.sol";
 
 library ShrincsUtils {
     function paramsView(ShrincsTypes.ParameterSetId parameterSetId)
@@ -35,7 +35,9 @@ library ShrincsUtils {
         if (params.parameterSetId != ShrincsTypes.ParameterSetId.Sphincs256sKeccakQ20) return false;
         if (params.hashLen != 32) return false;
         if (params.parameterSetId != publicKey.parameterSetId) return false;
-        if (params.hypertreeHeight != 64 || params.numHypertreeLayers != 8 || params.forsTreeHeight != 14) return false;
+        if (params.hypertreeHeight != 64 || params.numHypertreeLayers != 8 || params.forsTreeHeight != 14) {
+            return false;
+        }
         if (params.numForsTrees != 22 || params.chainLen != 16 || params.numWotsChains != 64) return false;
         if (params.wotsTargetSum != ShrincsTypes.WOTS_TARGET_SUM_STATEFUL) return false;
         if (!validStatefulCompositePublicKey(publicKey)) return false;
@@ -53,8 +55,9 @@ library ShrincsUtils {
     }
 
     function validActionContext(ShrincsTypes.ActionContext memory context) internal pure returns (bool) {
-        return context.domainSeparator != bytes32(0) && context.actionType != bytes32(0)
-            && context.payloadHash != bytes32(0);
+        return
+            context.domainSeparator != bytes32(0) && context.actionType != bytes32(0)
+                && context.payloadHash != bytes32(0);
     }
 
     function validRotationContext(ShrincsTypes.RotationContext memory context) internal pure returns (bool) {
@@ -149,9 +152,7 @@ library ShrincsUtils {
         uint256 shiftedChain = uint256(chain) << 32;
         uint256 shiftedStep = uint256(step);
 
-        return bytes32(
-            shiftedLayer | shiftedTree | shiftedAddressType | shiftedKeypair | shiftedChain | shiftedStep
-        );
+        return bytes32(shiftedLayer | shiftedTree | shiftedAddressType | shiftedKeypair | shiftedChain | shiftedStep);
     }
 
     function baseWDigit(uint16 w, bytes memory digest, uint256 index) internal pure returns (uint32) {
@@ -178,6 +179,8 @@ library ShrincsUtils {
         }
         uint256 shifted = word >> (256 - bitOffset - bitLen);
         uint256 mask = bitLen == 32 ? type(uint32).max : (uint256(1) << bitLen) - 1;
+        // casting to 'uint32' is safe because the mask bounds the result to at most 32 bits
+        // forge-lint: disable-next-line(unsafe-typecast)
         return uint32(shifted & mask);
     }
 
@@ -190,6 +193,8 @@ library ShrincsUtils {
         }
         uint256 shifted = word >> (256 - bitOffset - bitLen);
         uint256 mask = bitLen == 64 ? type(uint64).max : (uint256(1) << bitLen) - 1;
+        // casting to 'uint64' is safe because the mask bounds the result to at most 64 bits
+        // forge-lint: disable-next-line(unsafe-typecast)
         return uint64(shifted & mask);
     }
 }
