@@ -203,11 +203,11 @@ library ShrincsForsC {
             mstore(add(ptr, 107), shl(224, counter))
             let src := add(message, 32)
             let dst := add(ptr, 111)
-            for { let end := add(src, messageLen) } lt(src, end) {
+            let end := add(src, messageLen)
+            for {} lt(src, end) {} {
+                mstore(dst, mload(src))
                 src := add(src, 32)
                 dst := add(dst, 32)
-            } {
-                mstore(dst, mload(src))
             }
         }
         if (digestBytes <= 32) {
