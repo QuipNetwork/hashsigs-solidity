@@ -69,10 +69,9 @@ contract ShrincsAccountVerifierExampleHarness is ShrincsAccountVerifierExample {
 
     function installFreshKeyForTest(
         bytes32 nextCompositePublicKey,
-        ShrincsTypes.ParameterSetId nextParameterSetId,
-        bool resetStatelessUsage
+        ShrincsTypes.ParameterSetId nextParameterSetId
     ) external {
-        _installFreshKey(nextCompositePublicKey, nextParameterSetId, resetStatelessUsage);
+        _installFreshKey(nextCompositePublicKey, nextParameterSetId);
     }
 }
 
@@ -487,7 +486,7 @@ contract ShrincsAccountVerifierExampleTest is Test {
         account.setStatelessSignaturesUsed(9);
 
         bytes32 nextCompositePublicKey = bytes32(uint256(expectedCompositePublicKey) ^ 1);
-        account.installFreshKeyForTest(nextCompositePublicKey, ShrincsTypes.ParameterSetId.Sphincs256sKeccakQ20, true);
+        account.installFreshKeyForTest(nextCompositePublicKey, ShrincsTypes.ParameterSetId.Sphincs256sKeccakQ20);
 
         assertEq(account.currentShrincsPublicKey(), nextCompositePublicKey);
         assertTrue(account.nextStatefulLeafIndex() == 0, "fresh key must reset next stateful leaf index");
@@ -512,10 +511,24 @@ contract ShrincsAccountVerifierExampleTest is Test {
         assertEq(account.isLeafUsed(leafIndex), true, "leaf must be marked used in current key version");
 
         bytes32 nextCompositePublicKey = bytes32(uint256(expectedCompositePublicKey) ^ 1);
-        account.installFreshKeyForTest(nextCompositePublicKey, ShrincsTypes.ParameterSetId.Sphincs256sKeccakQ20, true);
+        account.installFreshKeyForTest(nextCompositePublicKey, ShrincsTypes.ParameterSetId.Sphincs256sKeccakQ20);
 
         assertEq(account.keyVersion(), 1, "fresh key install must advance key version");
         assertEq(account.isLeafUsed(leafIndex), false, "fresh key must start with a clean leaf bitmap namespace");
+    }
+
+    function testExampleFreshKeyInstallAlwaysResetsStatelessUsage() public {
+        (ShrincsTypes.PublicKey memory publicKey, , ) = _decodeStatelessVector(".stateless.cases.valid.calldata");
+        bytes32 expectedCompositePublicKey = _compositePublicKeyWord(publicKey);
+        ShrincsAccountVerifierExampleHarness account = new ShrincsAccountVerifierExampleHarness(expectedCompositePublicKey);
+
+        account.setStatelessSignaturesUsed(123);
+
+        bytes32 nextCompositePublicKey = bytes32(uint256(expectedCompositePublicKey) ^ 1);
+        account.installFreshKeyForTest(nextCompositePublicKey, ShrincsTypes.ParameterSetId.Sphincs256sKeccakQ20);
+
+        assertEq(account.currentShrincsPublicKey(), nextCompositePublicKey);
+        assertTrue(account.statelessSignaturesUsed() == 0, "fresh key must always reset stateless usage");
     }
 
     function _actionContext(uint256 nonceValue, uint256 keyVersionValue)

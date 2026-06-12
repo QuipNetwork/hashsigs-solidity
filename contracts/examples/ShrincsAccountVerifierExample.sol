@@ -175,7 +175,7 @@ contract ShrincsAccountVerifierExample {
         );
         if (nextCompositePublicKey == bytes32(0)) return false;
 
-        _installFreshKey(nextCompositePublicKey, nextKey.parameterSetId, true);
+        _installFreshKey(nextCompositePublicKey, nextKey.parameterSetId);
         return true;
     }
 
@@ -203,7 +203,7 @@ contract ShrincsAccountVerifierExample {
         );
         if (nextCompositePublicKey == bytes32(0)) return false;
 
-        _installFreshKey(nextCompositePublicKey, nextKey.parameterSetId, false);
+        _installFreshKey(nextCompositePublicKey, nextKey.parameterSetId);
         return true;
     }
 
@@ -261,18 +261,13 @@ contract ShrincsAccountVerifierExample {
 
     function _installFreshKey(
         bytes32 nextCompositePublicKey,
-        ShrincsTypes.ParameterSetId nextParameterSetId,
-        bool resetStatelessUsage
+        ShrincsTypes.ParameterSetId nextParameterSetId
     ) internal {
         currentShrincsPublicKey = nextCompositePublicKey;
         parameterSetId = nextParameterSetId;
         nonce += 1;
         keyVersion += 1;
-        if (resetStatelessUsage) {
-            statelessSignaturesUsed = 0;
-        } else {
-            statelessSignaturesUsed += 1;
-        }
+        statelessSignaturesUsed = 0;
         nextStatefulLeafIndex = 0;
         statefulPolicy = StatefulPolicy.None;
         recoveryMode = false;
