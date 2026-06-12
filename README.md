@@ -243,6 +243,7 @@ Reference implementation:
 
 - [contracts/examples/ShrincsAccountVerifierExample.sol](/home/me/o/qp/shrincs/hashsigs-solidity/contracts/examples/ShrincsAccountVerifierExample.sol)
 - [test/ShrincsAccountVerifierExample.t.sol](/home/me/o/qp/shrincs/hashsigs-solidity/test/ShrincsAccountVerifierExample.t.sol)
+- [test/ShrincsStatefulPolicyExamples.t.sol](/home/me/o/qp/shrincs/hashsigs-solidity/test/ShrincsStatefulPolicyExamples.t.sol)
 
 The example contract is intentionally small. It shows how wrapper-owned state should interact with the library for:
 
@@ -250,6 +251,64 @@ The example contract is intentionally small. It shows how wrapper-owned state sh
 - stateless action verification
 - stateless full-key rotation
 - stateless usage-limit enforcement
+
+### Stateful-use policies
+
+The example wrapper also shows several account-layer policies for handling stateful XMSS leaf use. These are wrapper policies, not part of the `SHRINCS` library itself.
+
+- `StatefulPolicy.None`
+  - no on-chain stateful leaf tracking
+  - simplest model
+  - signer is responsible for XMSS state safety
+  - best fit when this repo is used primarily as a verifier library and signer state is trusted off-chain
+
+- `StatefulPolicy.MonotonicIndex`
+  - stores `nextStatefulLeafIndex`
+  - accepts only the next expected leaf
+  - prevents replay/rollback cleanly
+  - stricter operationally because skipped leaves are not allowed
+  - brittle if signer state and account state drift apart
+  - a mismatch can lock out otherwise valid future leaves until the key is rotated or policy is changed
+
+- `StatefulPolicy.RecoveryRotation`
+  - blocks the stateful path once recovery mode is entered
+  - allows stateless fallback and fresh-key rotation
+  - models the “recover, then rotate to a fresh key” workflow
+  - works best when recovery mode is treated as a bridge to rotation, not as a long-term steady state
+  - if a system enters recovery mode and never rotates out, the stateful path loses most of its practical value
+
+- `StatefulPolicy.LeafBitmap`
+  - stores a bitmap of used stateful leaf indices
+  - rejects reuse of previously used leaves
+  - allows any unused leaf to be used in any order
+  - more flexible than monotonic indexing, but storage grows over time
+  - storage growth is unbounded as more leaves are consumed
+  - repeated bitmap writes can become expensive for long-lived accounts
+  - better fit for small trees or higher-assurance accounts than for very high-throughput accounts
+
+The developer/integrator chooses which policy fits the account design. In the example wrapper, policy-changing functions are owner-gated.
+
+### Policy caveats
+
+- Policy changes are sensitive administrative actions.
+  - even when owner-gated, switching policy mid-lifecycle can change which future stateful signatures are accepted
+  - production wrappers should treat policy changes as explicit governance or account-owner operations
+
+- Fresh-key rotation must reset stateful tracking state.
+  - when a new SHRINCS key is installed, stale state such as:
+    - `nextStatefulLeafIndex`
+    - `recoveryMode`
+    - active stateful policy mode
+  must not be carried into the new key epoch
+  - the example wrapper resets this state on fresh-key installation
+
+- Raw verifier paths are lower-level interfaces.
+  - `verifyStatefulRaw(...)` and `verifyStatelessRaw(...)` are useful for testing and low-level integrations
+  - they do not provide the typed account-action binding used by the canonical action-context paths
+  - production account flows should prefer the canonical `verifyStateful(...)` / `verifyStateless(...)` style interfaces
+
+- The example `domainSeparator` is intentionally simple.
+  - a production wrapper should bind the signing domain to contract identity and chain context, not just a fixed constant string hash
 
 What the wrapper must handle:
 
@@ -270,6 +329,7 @@ What the wrapper should not delegate to users:
 - choosing the stored `keyVersion`
 - choosing an empty `domainSeparator`
 - bypassing the typed `payloadHash` flow for normal account operations
+- changing stateful-use policy unless explicitly authorized
 
 ## Test Coverage
 
@@ -332,6 +392,20 @@ Current tests cover:
   - rejects next stateful keys with `maxSignatures == 0`
   - rejects unsupported next parameter set
   - rejects zero `domainSeparator`
+
+### Example wrapper policies
+
+- owner-gated policy changes are enforced
+- non-owner policy changes are rejected
+- non-owner recovery-mode toggles are rejected
+- no-tracking policy allows repeated valid raw stateful signatures
+- monotonic-index policy accepts the expected leaf once and rejects replay
+- monotonic-index policy rejects unexpected leaf indices
+- recovery-rotation policy blocks stateful use after recovery mode is entered
+- recovery-rotation policy allows stateless raw verification in recovery mode
+- recovery-rotation policy rejects legacy rotation authorization and stays in recovery mode
+- leaf-bitmap policy marks a leaf as used and rejects reuse
+- fresh-key installation clears stale stateful tracking state
 
 ## Development
 

@@ -51,6 +51,26 @@ contract ShrincsAccountVerifierExampleHarness is ShrincsAccountVerifierExample {
     function setStatelessSignaturesUsed(uint64 value) external {
         statelessSignaturesUsed = value;
     }
+
+    function installFreshKeyForTest(
+        bytes32 nextCompositePublicKey,
+        ShrincsType.ParameterSetId nextParameterSetId,
+        bool resetStatelessUsage
+    ) external {
+        _installFreshKey(nextCompositePublicKey, nextParameterSetId, resetStatelessUsage);
+    }
+}
+
+contract ExampleNonOwnerCaller {
+    function trySetStatefulPolicyLeafBitmap(ShrincsAccountVerifierExample target) external returns (bool) {
+        (bool ok,) = address(target).call(abi.encodeCall(target.setStatefulPolicyLeafBitmap, ()));
+        return ok;
+    }
+
+    function tryEnterRecoveryMode(ShrincsAccountVerifierExample target) external returns (bool) {
+        (bool ok,) = address(target).call(abi.encodeCall(target.enterRecoveryMode, ()));
+        return ok;
+    }
 }
 
 contract ShrincsAccountVerifierExampleTest is Test {
@@ -123,12 +143,14 @@ contract ShrincsAccountVerifierExampleTest is Test {
     ExampleStatefulHarness internal stateful;
     ExampleStatelessHarness internal stateless;
     ExampleRotationHarness internal rotation;
+    ExampleNonOwnerCaller internal nonOwnerCaller;
     string internal vectors;
 
     function setUp() public {
         stateful = new ExampleStatefulHarness();
         stateless = new ExampleStatelessHarness();
         rotation = new ExampleRotationHarness();
+        nonOwnerCaller = new ExampleNonOwnerCaller();
         vectors = vm.readFile(VECTOR_PATH);
     }
 
@@ -139,6 +161,7 @@ contract ShrincsAccountVerifierExampleTest is Test {
         ShrincsAccountVerifierExample account = new ShrincsAccountVerifierExample(expectedCompositePublicKey);
 
         assertEq(account.currentShrincsPublicKey(), expectedCompositePublicKey);
+        assertEq(bytes32(uint256(uint160(account.owner()))), bytes32(uint256(uint160(address(this)))));
         assertTrue(
             uint8(account.parameterSetId()) == uint8(ShrincsType.ParameterSetId.Sphincs256sKeccakQ20),
             "parameter set must initialize to Q20 profile"
@@ -262,6 +285,54 @@ contract ShrincsAccountVerifierExampleTest is Test {
         assertTrue(account.nonce() == 0, "nonce must stay unchanged at rotation usage limit");
         assertTrue(account.keyVersion() == 0, "key version must stay unchanged at rotation usage limit");
         assertTrue(account.statelessSignaturesUsed() == limit, "usage must stay unchanged at rotation usage limit");
+    }
+
+    function testExampleRejectsNonOwnerPolicyChange() public {
+        (ShrincsType.PublicKey memory publicKey, , ) = _decodeStatelessVector(".stateless.cases.valid.calldata");
+        bytes32 expectedCompositePublicKey = _compositePublicKeyWord(publicKey);
+        ShrincsAccountVerifierExample account = new ShrincsAccountVerifierExample(expectedCompositePublicKey);
+
+        bool ok = nonOwnerCaller.trySetStatefulPolicyLeafBitmap(account);
+
+        assertEq(ok, false, "non-owner must not be able to change stateful policy");
+        assertTrue(
+            uint8(account.statefulPolicy()) == uint8(ShrincsAccountVerifierExample.StatefulPolicy.None),
+            "failed non-owner policy change must not update policy"
+        );
+    }
+
+    function testExampleRejectsNonOwnerRecoveryModeToggle() public {
+        (ShrincsType.PublicKey memory publicKey, , ) = _decodeStatelessVector(".stateless.cases.valid.calldata");
+        bytes32 expectedCompositePublicKey = _compositePublicKeyWord(publicKey);
+        ShrincsAccountVerifierExample account = new ShrincsAccountVerifierExample(expectedCompositePublicKey);
+        account.setStatefulPolicyRecoveryRotation();
+
+        bool ok = nonOwnerCaller.tryEnterRecoveryMode(account);
+
+        assertEq(ok, false, "non-owner must not be able to enter recovery mode");
+        assertEq(account.recoveryMode(), false, "failed non-owner recovery toggle must not change state");
+    }
+
+    function testExampleFreshKeyInstallResetsStatefulTrackingState() public {
+        (ShrincsType.PublicKey memory publicKey, , ) = _decodeStatelessVector(".stateless.cases.valid.calldata");
+        bytes32 expectedCompositePublicKey = _compositePublicKeyWord(publicKey);
+        ShrincsAccountVerifierExampleHarness account = new ShrincsAccountVerifierExampleHarness(expectedCompositePublicKey);
+
+        account.setStatefulPolicyMonotonicIndex(17);
+        account.enterRecoveryMode();
+        account.setStatelessSignaturesUsed(9);
+
+        bytes32 nextCompositePublicKey = bytes32(uint256(expectedCompositePublicKey) ^ 1);
+        account.installFreshKeyForTest(nextCompositePublicKey, ShrincsType.ParameterSetId.Sphincs256sKeccakQ20, true);
+
+        assertEq(account.currentShrincsPublicKey(), nextCompositePublicKey);
+        assertTrue(account.nextStatefulLeafIndex() == 0, "fresh key must reset next stateful leaf index");
+        assertTrue(
+            uint8(account.statefulPolicy()) == uint8(ShrincsAccountVerifierExample.StatefulPolicy.None),
+            "fresh key must clear stateful policy"
+        );
+        assertEq(account.recoveryMode(), false, "fresh key must exit recovery mode");
+        assertTrue(account.statelessSignaturesUsed() == 0, "fresh key must reset stateless usage when requested");
     }
 
     function _actionContext(uint256 nonceValue, uint256 keyVersionValue)
