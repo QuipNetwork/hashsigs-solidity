@@ -41,6 +41,17 @@ contract ShrincsAccountVerifierExample {
 
     bytes32 internal constant DOMAIN_SEPARATOR = keccak256("shrincs-account-v1");
 
+    event StatefulPolicySet(StatefulPolicy indexed policy, uint32 nextStatefulLeafIndex);
+    event RecoveryModeEntered(uint256 indexed keyVersion);
+    event KeyRotated(
+        bytes32 indexed previousShrincsPublicKey,
+        bytes32 indexed nextShrincsPublicKey,
+        ShrincsTypes.ParameterSetId nextParameterSetId,
+        uint256 nextKeyVersion
+    );
+    event StatefulSignatureVerified(uint32 indexed leafIndex, uint256 indexed nonce, uint256 indexed keyVersion);
+    event StatelessSignatureVerified(uint64 usedCount, uint256 indexed nonce, uint256 indexed keyVersion);
+
     modifier onlyOwner() {
         require(msg.sender == owner, "only owner");
         _;
@@ -66,6 +77,7 @@ contract ShrincsAccountVerifierExample {
         if (!ok) return false;
 
         _commitStatefulLeafUse(leafIndex);
+        emit StatefulSignatureVerified(leafIndex, nonce, keyVersion);
         return true;
     }
 
@@ -96,6 +108,7 @@ contract ShrincsAccountVerifierExample {
         if (!ok) return false;
 
         _commitStatefulLeafUse(leafIndex);
+        emit StatefulSignatureVerified(leafIndex, nonce, keyVersion);
         nonce += 1;
         return true;
     }
@@ -115,6 +128,7 @@ contract ShrincsAccountVerifierExample {
         if (!ok) return false;
 
         statelessSignaturesUsed += 1;
+        emit StatelessSignatureVerified(statelessSignaturesUsed, nonce, keyVersion);
         return true;
     }
 
@@ -147,6 +161,7 @@ contract ShrincsAccountVerifierExample {
 
         nonce += 1;
         statelessSignaturesUsed += 1;
+        emit StatelessSignatureVerified(statelessSignaturesUsed, nonce - 1, keyVersion);
         return true;
     }
 
@@ -216,6 +231,7 @@ contract ShrincsAccountVerifierExample {
     function setStatefulPolicyNone() external onlyOwner {
         statefulPolicy = StatefulPolicy.None;
         recoveryMode = false;
+        emit StatefulPolicySet(statefulPolicy, nextStatefulLeafIndex);
     }
 
     function setStatefulPolicyMonotonicIndex(uint32 initialLeafIndex) external onlyOwner {
@@ -223,21 +239,25 @@ contract ShrincsAccountVerifierExample {
         statefulPolicy = StatefulPolicy.MonotonicIndex;
         nextStatefulLeafIndex = initialLeafIndex;
         recoveryMode = false;
+        emit StatefulPolicySet(statefulPolicy, nextStatefulLeafIndex);
     }
 
     function setStatefulPolicyRecoveryRotation() external onlyOwner {
         statefulPolicy = StatefulPolicy.RecoveryRotation;
         recoveryMode = false;
+        emit StatefulPolicySet(statefulPolicy, nextStatefulLeafIndex);
     }
 
     function setStatefulPolicyLeafBitmap() external onlyOwner {
         statefulPolicy = StatefulPolicy.LeafBitmap;
         recoveryMode = false;
+        emit StatefulPolicySet(statefulPolicy, nextStatefulLeafIndex);
     }
 
     function enterRecoveryMode() external onlyOwner {
         require(statefulPolicy == StatefulPolicy.RecoveryRotation, "recovery policy required");
         recoveryMode = true;
+        emit RecoveryModeEntered(keyVersion);
     }
 
     function _precheckStatefulLeafUse(uint32 leafIndex) internal view returns (bool) {
@@ -263,6 +283,7 @@ contract ShrincsAccountVerifierExample {
         bytes32 nextCompositePublicKey,
         ShrincsTypes.ParameterSetId nextParameterSetId
     ) internal {
+        bytes32 previousShrincsPublicKey = currentShrincsPublicKey;
         currentShrincsPublicKey = nextCompositePublicKey;
         parameterSetId = nextParameterSetId;
         nonce += 1;
@@ -271,5 +292,7 @@ contract ShrincsAccountVerifierExample {
         nextStatefulLeafIndex = 0;
         statefulPolicy = StatefulPolicy.None;
         recoveryMode = false;
+        emit KeyRotated(previousShrincsPublicKey, nextCompositePublicKey, nextParameterSetId, keyVersion);
+        emit StatefulPolicySet(statefulPolicy, nextStatefulLeafIndex);
     }
 }
