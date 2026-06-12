@@ -174,10 +174,10 @@ It:
 The verifier currently accepts only predefined parameter sets selected by enum:
 
 ```solidity
-ShrincsType.ParameterSetId.Sphincs256sKeccakQ20
+ShrincsTypes.ParameterSetId.Sphincs256sKeccakQ20
 ```
 
-There is also a reserved `ShrincsType.ParameterSetId.Unsupported` enum value used only for negative tests. It is not a valid production profile and is rejected by the library.
+There is also a reserved `ShrincsTypes.ParameterSetId.Unsupported` enum value used only for negative tests. It is not a valid production profile and is rejected by the library.
 
 The concrete values are resolved internally in [ShrincsTypes.sol](./contracts/ShrincsTypes.sol). Callers do not supply arbitrary numeric parameter tuples anymore.
 
@@ -185,7 +185,7 @@ The hash suite is currently implied by the parameter set. The canonical account-
 
 The current verifier is intentionally pinned to exactly one production profile:
 
-- `parameterSetId = ShrincsType.ParameterSetId.Sphincs256sKeccakQ20`
+- `parameterSetId = ShrincsTypes.ParameterSetId.Sphincs256sKeccakQ20`
 - `statelessSignatureLimit = 2^20 = 1,048,576`
 - `hashSuiteId = HASH_SUITE_KECCAK_256`
 - `nBytes = 32`

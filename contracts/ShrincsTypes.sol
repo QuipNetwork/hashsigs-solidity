@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.28;
 
-library ShrincsType {
+library ShrincsTypes {
     uint32 internal constant HASH_SUITE_KECCAK_256 = 1;
     uint32 internal constant HASH_SUITE_UNSUPPORTED = 2;
     bytes32 internal constant OP_VERIFY_STATEFUL = keccak256("shrincs-verify-stateful");

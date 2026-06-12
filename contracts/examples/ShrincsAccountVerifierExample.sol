@@ -2,7 +2,7 @@
 pragma solidity ^0.8.28;
 
 import { SHRINCS } from "../SHRINCS.sol";
-import { ShrincsType } from "../ShrincsTypes.sol";
+import { ShrincsTypes } from "../ShrincsTypes.sol";
 
 contract ShrincsAccountVerifierExample {
     enum StatefulPolicy {
@@ -14,7 +14,7 @@ contract ShrincsAccountVerifierExample {
 
     bytes32 public currentShrincsPublicKey;
     address public owner;
-    ShrincsType.ParameterSetId public parameterSetId;
+    ShrincsTypes.ParameterSetId public parameterSetId;
     uint256 public nonce;
     uint256 public keyVersion;
     uint64 public statelessSignaturesUsed;
@@ -34,7 +34,7 @@ contract ShrincsAccountVerifierExample {
     constructor(bytes32 initialShrincsPublicKey) {
         owner = msg.sender;
         currentShrincsPublicKey = initialShrincsPublicKey;
-        parameterSetId = ShrincsType.ParameterSetId.Sphincs256sKeccakQ20;
+        parameterSetId = ShrincsTypes.ParameterSetId.Sphincs256sKeccakQ20;
     }
 
     function setStatefulPolicyNone() external onlyOwner {
@@ -70,9 +70,9 @@ contract ShrincsAccountVerifierExample {
     }
 
     function verifyStatefulRaw(
-        ShrincsType.PublicKey calldata publicKey,
+        ShrincsTypes.PublicKey calldata publicKey,
         bytes calldata message,
-        ShrincsType.StatefulSignature calldata signature
+        ShrincsTypes.StatefulSignature calldata signature
     ) external returns (bool) {
         uint32 leafIndex = uint32(signature.authPath.length);
         if (!_precheckStatefulLeafUse(leafIndex)) return false;
@@ -87,15 +87,15 @@ contract ShrincsAccountVerifierExample {
     }
 
     function verifyStatefulAction(
-        ShrincsType.PublicKey calldata publicKey,
+        ShrincsTypes.PublicKey calldata publicKey,
         bytes32 actionType,
         bytes32 payloadHash,
-        ShrincsType.StatefulSignature calldata signature
+        ShrincsTypes.StatefulSignature calldata signature
     ) external returns (bool) {
         uint32 leafIndex = uint32(signature.authPath.length);
         if (!_precheckStatefulLeafUse(leafIndex)) return false;
 
-        ShrincsType.ActionContext memory context = ShrincsType.ActionContext({
+        ShrincsTypes.ActionContext memory context = ShrincsTypes.ActionContext({
             domainSeparator: DOMAIN_SEPARATOR,
             nonce: nonce,
             keyVersion: keyVersion,
@@ -118,12 +118,12 @@ contract ShrincsAccountVerifierExample {
     }
 
     function verifyStatelessRaw(
-        ShrincsType.PublicKey calldata publicKey,
+        ShrincsTypes.PublicKey calldata publicKey,
         bytes calldata message,
-        ShrincsType.StatelessSignature calldata signature
+        ShrincsTypes.StatelessSignature calldata signature
     ) external returns (bool) {
         if (statefulPolicy == StatefulPolicy.RecoveryRotation && !recoveryMode) return false;
-        uint64 limit = ShrincsType.defaultParamsView(parameterSetId).statelessSignatureLimit;
+        uint64 limit = ShrincsTypes.defaultParamsView(parameterSetId).statelessSignatureLimit;
         if (statelessSignaturesUsed >= limit) return false;
 
         bool ok = SHRINCS.verifyStatelessUnsafeRaw(
@@ -136,16 +136,16 @@ contract ShrincsAccountVerifierExample {
     }
 
     function verifyStatelessAction(
-        ShrincsType.PublicKey calldata publicKey,
+        ShrincsTypes.PublicKey calldata publicKey,
         bytes32 actionType,
         bytes32 payloadHash,
-        ShrincsType.StatelessSignature calldata signature
+        ShrincsTypes.StatelessSignature calldata signature
     ) external returns (bool) {
         if (statefulPolicy == StatefulPolicy.RecoveryRotation && !recoveryMode) return false;
-        uint64 limit = ShrincsType.defaultParamsView(parameterSetId).statelessSignatureLimit;
+        uint64 limit = ShrincsTypes.defaultParamsView(parameterSetId).statelessSignatureLimit;
         if (statelessSignaturesUsed >= limit) return false;
 
-        ShrincsType.ActionContext memory context = ShrincsType.ActionContext({
+        ShrincsTypes.ActionContext memory context = ShrincsTypes.ActionContext({
             domainSeparator: DOMAIN_SEPARATOR,
             nonce: nonce,
             keyVersion: keyVersion,
@@ -168,15 +168,15 @@ contract ShrincsAccountVerifierExample {
     }
 
     function rotateToFreshKey(
-        ShrincsType.PublicKey calldata currentPublicKey,
-        ShrincsType.StatelessSignature calldata recoverySignature,
-        ShrincsType.RotationTarget calldata nextKey
+        ShrincsTypes.PublicKey calldata currentPublicKey,
+        ShrincsTypes.StatelessSignature calldata recoverySignature,
+        ShrincsTypes.RotationTarget calldata nextKey
     ) external returns (bool) {
         if (statefulPolicy != StatefulPolicy.RecoveryRotation || !recoveryMode) return false;
-        uint64 limit = ShrincsType.defaultParamsView(parameterSetId).statelessSignatureLimit;
+        uint64 limit = ShrincsTypes.defaultParamsView(parameterSetId).statelessSignatureLimit;
         if (statelessSignaturesUsed >= limit) return false;
 
-        ShrincsType.RotationContext memory context = ShrincsType.RotationContext({
+        ShrincsTypes.RotationContext memory context = ShrincsTypes.RotationContext({
             domainSeparator: DOMAIN_SEPARATOR,
             nonce: nonce,
             keyVersion: keyVersion
@@ -197,14 +197,14 @@ contract ShrincsAccountVerifierExample {
     }
 
     function rotateFullKey(
-        ShrincsType.PublicKey calldata currentPublicKey,
-        ShrincsType.StatelessSignature calldata recoverySignature,
-        ShrincsType.RotationTarget calldata nextKey
+        ShrincsTypes.PublicKey calldata currentPublicKey,
+        ShrincsTypes.StatelessSignature calldata recoverySignature,
+        ShrincsTypes.RotationTarget calldata nextKey
     ) external returns (bool) {
-        uint64 limit = ShrincsType.defaultParamsView(parameterSetId).statelessSignatureLimit;
+        uint64 limit = ShrincsTypes.defaultParamsView(parameterSetId).statelessSignatureLimit;
         if (statelessSignaturesUsed >= limit) return false;
 
-        ShrincsType.RotationContext memory context = ShrincsType.RotationContext({
+        ShrincsTypes.RotationContext memory context = ShrincsTypes.RotationContext({
             domainSeparator: DOMAIN_SEPARATOR,
             nonce: nonce,
             keyVersion: keyVersion
@@ -245,7 +245,7 @@ contract ShrincsAccountVerifierExample {
 
     function _installFreshKey(
         bytes32 nextCompositePublicKey,
-        ShrincsType.ParameterSetId nextParameterSetId,
+        ShrincsTypes.ParameterSetId nextParameterSetId,
         bool resetStatelessUsage
     ) internal {
         currentShrincsPublicKey = nextCompositePublicKey;

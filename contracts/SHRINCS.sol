@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.28;
 
-import { ShrincsType } from "./ShrincsTypes.sol";
+import { ShrincsTypes } from "./ShrincsTypes.sol";
 
 library SHRINCS {
     // Stateful path:
@@ -9,22 +9,22 @@ library SHRINCS {
     // 2. Recover the compact WOTS-C public key hash from the signature and message.
     // 3. Verify the unbalanced XMSS authentication path to the stateful root.
     function verifyStatefulUnsafeRaw(
-        ShrincsType.ParameterSetId parameterSetId,
+        ShrincsTypes.ParameterSetId parameterSetId,
         bytes32 expectedCompositePublicKey,
-        ShrincsType.PublicKey calldata publicKey,
+        ShrincsTypes.PublicKey calldata publicKey,
         bytes memory message,
-        ShrincsType.StatefulSignature calldata signature
+        ShrincsTypes.StatefulSignature calldata signature
     ) internal pure returns (bool) {
-        ShrincsType.ParamsView memory p = _paramsView(parameterSetId);
+        ShrincsTypes.ParamsView memory p = _paramsView(parameterSetId);
         if (!_validParameterSetBinding(p, parameterSetId, publicKey.parameterSetId)) return false;
         if (!_matchesExpectedCompositePublicKey(publicKey, expectedCompositePublicKey)) return false;
         if (!_validStatefulCompositePublicKey(publicKey)) return false;
-        (ShrincsType.StatefulPublicKey memory statefulKey, bool ok) = _decodeStatefulPublicKey(publicKey.statefulPublicKey);
+        (ShrincsTypes.StatefulPublicKey memory statefulKey, bool ok) = _decodeStatefulPublicKey(publicKey.statefulPublicKey);
         if (!ok) return false;
 
         uint32 leafIndex = uint32(signature.authPath.length);
         if (leafIndex == 0 || leafIndex > statefulKey.maxSignatures) return false;
-        if (signature.chains.length != ShrincsType.WOTS_CHAINS_STATEFUL) return false;
+        if (signature.chains.length != ShrincsTypes.WOTS_CHAINS_STATEFUL) return false;
 
         (bytes32 pkHash, bool validWots) =
             _compactStatefulWotsPublicKeyFromSignature(statefulKey.pkSeed, leafIndex, message, signature);
@@ -35,11 +35,11 @@ library SHRINCS {
     }
 
     function verifyStateful(
-        ShrincsType.ParameterSetId parameterSetId,
+        ShrincsTypes.ParameterSetId parameterSetId,
         bytes32 expectedCompositePublicKey,
-        ShrincsType.PublicKey calldata publicKey,
-        ShrincsType.ActionContext memory context,
-        ShrincsType.StatefulSignature calldata signature
+        ShrincsTypes.PublicKey calldata publicKey,
+        ShrincsTypes.ActionContext memory context,
+        ShrincsTypes.StatefulSignature calldata signature
     ) internal pure returns (bool) {
         if (!_validActionContext(context)) return false;
         bytes memory message = abi.encodePacked(
@@ -49,24 +49,24 @@ library SHRINCS {
     }
 
     function verifyStatelessUnsafeRaw(
-        ShrincsType.ParameterSetId parameterSetId,
+        ShrincsTypes.ParameterSetId parameterSetId,
         bytes32 expectedCompositePublicKey,
-        ShrincsType.PublicKey calldata publicKey,
+        ShrincsTypes.PublicKey calldata publicKey,
         bytes memory message,
-        ShrincsType.StatelessSignature calldata signature
+        ShrincsTypes.StatelessSignature calldata signature
     ) internal pure returns (bool) {
-        ShrincsType.ParamsView memory p = _paramsView(parameterSetId);
+        ShrincsTypes.ParamsView memory p = _paramsView(parameterSetId);
         if (!_validParameterSetBinding(p, parameterSetId, publicKey.parameterSetId)) return false;
         if (!_matchesExpectedCompositePublicKey(publicKey, expectedCompositePublicKey)) return false;
         return _verifyStatelessMemory(parameterSetId, publicKey, message, signature);
     }
 
     function verifyStateless(
-        ShrincsType.ParameterSetId parameterSetId,
+        ShrincsTypes.ParameterSetId parameterSetId,
         bytes32 expectedCompositePublicKey,
-        ShrincsType.PublicKey calldata publicKey,
-        ShrincsType.ActionContext memory context,
-        ShrincsType.StatelessSignature calldata signature
+        ShrincsTypes.PublicKey calldata publicKey,
+        ShrincsTypes.ActionContext memory context,
+        ShrincsTypes.StatelessSignature calldata signature
     ) internal pure returns (bool) {
         if (!_validActionContext(context)) return false;
         bytes memory message = abi.encodePacked(
@@ -78,22 +78,22 @@ library SHRINCS {
     // Placeholder for a future on-chain flow where a stateless signature authorizes
     // replacement of only the stateful SHRINCS component.
     function rotateStatefulViaStateless(
-        ShrincsType.ParameterSetId parameterSetId,
+        ShrincsTypes.ParameterSetId parameterSetId,
         bytes32 expectedCompositePublicKey,
-        ShrincsType.PublicKey calldata currentPublicKey,
-        ShrincsType.RotationContext memory context,
-        ShrincsType.StatelessSignature calldata recoverySignature,
-        ShrincsType.StatefulRotationTarget calldata nextStatefulKey
+        ShrincsTypes.PublicKey calldata currentPublicKey,
+        ShrincsTypes.RotationContext memory context,
+        ShrincsTypes.StatelessSignature calldata recoverySignature,
+        ShrincsTypes.StatefulRotationTarget calldata nextStatefulKey
     ) internal pure returns (bytes32 nextStatefulKeyCommitment) {
-        ShrincsType.ParamsView memory p = _paramsView(parameterSetId);
+        ShrincsTypes.ParamsView memory p = _paramsView(parameterSetId);
         if (!_validParameterSetBinding(p, parameterSetId, currentPublicKey.parameterSetId)) return bytes32(0);
         if (!_matchesExpectedCompositePublicKey(currentPublicKey, expectedCompositePublicKey)) return bytes32(0);
         if (!_validRotationContext(context)) return bytes32(0);
         if (!_validParams(p, currentPublicKey)) return bytes32(0);
         if (!_validParameterSetBinding(p, parameterSetId, nextStatefulKey.parameterSetId)) return bytes32(0);
-        if (nextStatefulKey.statefulPublicKey.length != ShrincsType.STATEFUL_PUBLIC_KEY_BYTES) return bytes32(0);
+        if (nextStatefulKey.statefulPublicKey.length != ShrincsTypes.STATEFUL_PUBLIC_KEY_BYTES) return bytes32(0);
         {
-            (ShrincsType.StatefulPublicKey memory decodedNextStatefulKey, bool ok) =
+            (ShrincsTypes.StatefulPublicKey memory decodedNextStatefulKey, bool ok) =
                 _decodeStatefulPublicKey(nextStatefulKey.statefulPublicKey);
             if (!ok || decodedNextStatefulKey.maxSignatures == 0) return bytes32(0);
         }
@@ -114,21 +114,21 @@ library SHRINCS {
     // Placeholder for a future on-chain flow where a stateless signature authorizes
     // a full SHRINCS key rotation to a fresh composite public key.
     function rotateFullShrincsKey(
-        ShrincsType.ParameterSetId parameterSetId,
+        ShrincsTypes.ParameterSetId parameterSetId,
         bytes32 expectedCompositePublicKey,
-        ShrincsType.PublicKey calldata currentPublicKey,
-        ShrincsType.RotationContext memory context,
-        ShrincsType.StatelessSignature calldata recoverySignature,
-        ShrincsType.RotationTarget calldata nextKey
+        ShrincsTypes.PublicKey calldata currentPublicKey,
+        ShrincsTypes.RotationContext memory context,
+        ShrincsTypes.StatelessSignature calldata recoverySignature,
+        ShrincsTypes.RotationTarget calldata nextKey
     ) internal pure returns (bytes32 nextCompositePublicKey) {
-        ShrincsType.ParamsView memory p = _paramsView(parameterSetId);
+        ShrincsTypes.ParamsView memory p = _paramsView(parameterSetId);
         if (!_validParameterSetBinding(p, parameterSetId, currentPublicKey.parameterSetId)) return bytes32(0);
         if (!_matchesExpectedCompositePublicKey(currentPublicKey, expectedCompositePublicKey)) return bytes32(0);
         if (!_validRotationContext(context)) return bytes32(0);
         if (!_validParams(p, currentPublicKey)) return bytes32(0);
         if (!_validParameterSetBinding(p, parameterSetId, nextKey.parameterSetId)) return bytes32(0);
         if (
-            nextKey.statefulPublicKey.length != ShrincsType.STATEFUL_PUBLIC_KEY_BYTES
+            nextKey.statefulPublicKey.length != ShrincsTypes.STATEFUL_PUBLIC_KEY_BYTES
                 || nextKey.compositePublicKey.length != 32
                 || nextKey.messagePkSeed.length != 32
                 || nextKey.messageRoot.length != 32
@@ -136,7 +136,7 @@ library SHRINCS {
                 || nextKey.hypertreeRoot.length != 32
         ) return bytes32(0);
         {
-            (ShrincsType.StatefulPublicKey memory decodedNextStatefulKey, bool ok) =
+            (ShrincsTypes.StatefulPublicKey memory decodedNextStatefulKey, bool ok) =
                 _decodeStatefulPublicKey(nextKey.statefulPublicKey);
             if (!ok || decodedNextStatefulKey.maxSignatures == 0) return bytes32(0);
         }
@@ -161,21 +161,21 @@ library SHRINCS {
         if (!_verifyStatelessRawMemory(parameterSetId, expectedCompositePublicKey, currentPublicKey, recoveryMessage, recoverySignature)) return bytes32(0);
     }
 
-    // Resolve explicit params or fall back to the defaults registered in ShrincsType
+    // Resolve explicit params or fall back to the defaults registered in ShrincsTypes
     // for the selected parameter set and hash suite.
-    function _paramsView(ShrincsType.ParameterSetId parameterSetId) private pure returns (ShrincsType.ParamsView memory) {
-        return ShrincsType.defaultParamsView(parameterSetId);
+    function _paramsView(ShrincsTypes.ParameterSetId parameterSetId) private pure returns (ShrincsTypes.ParamsView memory) {
+        return ShrincsTypes.defaultParamsView(parameterSetId);
     }
 
     function statefulActionMessageHash(
-        ShrincsType.ParameterSetId parameterSetId,
+        ShrincsTypes.ParameterSetId parameterSetId,
         bytes32 expectedCompositePublicKey,
-        ShrincsType.ActionContext memory context
+        ShrincsTypes.ActionContext memory context
     ) internal pure returns (bytes32) {
-        ShrincsType.ParamsView memory p = _paramsView(parameterSetId);
+        ShrincsTypes.ParamsView memory p = _paramsView(parameterSetId);
         return keccak256(
             abi.encodePacked(
-                ShrincsType.OP_VERIFY_STATEFUL,
+                ShrincsTypes.OP_VERIFY_STATEFUL,
                 uint8(parameterSetId),
                 p.hashSuiteId,
                 expectedCompositePublicKey,
@@ -189,14 +189,14 @@ library SHRINCS {
     }
 
     function statelessActionMessageHash(
-        ShrincsType.ParameterSetId parameterSetId,
+        ShrincsTypes.ParameterSetId parameterSetId,
         bytes32 expectedCompositePublicKey,
-        ShrincsType.ActionContext memory context
+        ShrincsTypes.ActionContext memory context
     ) internal pure returns (bytes32) {
-        ShrincsType.ParamsView memory p = _paramsView(parameterSetId);
+        ShrincsTypes.ParamsView memory p = _paramsView(parameterSetId);
         return keccak256(
             abi.encodePacked(
-                ShrincsType.OP_VERIFY_STATELESS,
+                ShrincsTypes.OP_VERIFY_STATELESS,
                 uint8(parameterSetId),
                 p.hashSuiteId,
                 expectedCompositePublicKey,
@@ -212,16 +212,16 @@ library SHRINCS {
     // Compute the canonical hash that a stateless recovery signature must cover when
     // authorizing replacement of only the stateful SHRINCS component.
     function statefulRotationMessageHash(
-        ShrincsType.ParameterSetId parameterSetId,
+        ShrincsTypes.ParameterSetId parameterSetId,
         bytes32 expectedCompositePublicKey,
-        ShrincsType.PublicKey calldata currentPublicKey,
-        ShrincsType.RotationContext memory context,
-        ShrincsType.StatefulRotationTarget calldata nextStatefulKey
+        ShrincsTypes.PublicKey calldata currentPublicKey,
+        ShrincsTypes.RotationContext memory context,
+        ShrincsTypes.StatefulRotationTarget calldata nextStatefulKey
     ) internal pure returns (bytes32) {
-        ShrincsType.ParamsView memory p = _paramsView(parameterSetId);
+        ShrincsTypes.ParamsView memory p = _paramsView(parameterSetId);
         return keccak256(
             abi.encodePacked(
-                ShrincsType.OP_ROTATE_STATEFUL,
+                ShrincsTypes.OP_ROTATE_STATEFUL,
                 uint8(parameterSetId),
                 p.hashSuiteId,
                 expectedCompositePublicKey,
@@ -237,13 +237,13 @@ library SHRINCS {
     // Compute the canonical hash that a stateless recovery signature must cover when
     // authorizing a full next SHRINCS key bundle.
     function fullRotationMessageHash(
-        ShrincsType.ParameterSetId parameterSetId,
+        ShrincsTypes.ParameterSetId parameterSetId,
         bytes32 expectedCompositePublicKey,
-        ShrincsType.PublicKey calldata currentPublicKey,
-        ShrincsType.RotationContext memory context,
-        ShrincsType.RotationTarget calldata nextKey
+        ShrincsTypes.PublicKey calldata currentPublicKey,
+        ShrincsTypes.RotationContext memory context,
+        ShrincsTypes.RotationTarget calldata nextKey
     ) internal pure returns (bytes32) {
-        ShrincsType.ParamsView memory p = _paramsView(parameterSetId);
+        ShrincsTypes.ParamsView memory p = _paramsView(parameterSetId);
         bytes32 nextKeyBundleHash = keccak256(
             abi.encodePacked(
                 nextKey.compositePublicKey,
@@ -256,7 +256,7 @@ library SHRINCS {
         );
         return keccak256(
             abi.encodePacked(
-                ShrincsType.OP_ROTATE_FULL,
+                ShrincsTypes.OP_ROTATE_FULL,
                 uint8(parameterSetId),
                 p.hashSuiteId,
                 expectedCompositePublicKey,
@@ -271,47 +271,47 @@ library SHRINCS {
 
     // Enforce the parameter/profile invariants expected by this verifier and check
     // that the public key declares the same parameter-set identity.
-    function _validParams(ShrincsType.ParamsView memory params, ShrincsType.PublicKey calldata publicKey)
+    function _validParams(ShrincsTypes.ParamsView memory params, ShrincsTypes.PublicKey calldata publicKey)
         private
         pure
         returns (bool)
     {
-        if (params.parameterSetId != ShrincsType.ParameterSetId.Sphincs256sKeccakQ20) return false;
+        if (params.parameterSetId != ShrincsTypes.ParameterSetId.Sphincs256sKeccakQ20) return false;
         if (params.nBytes != 32) return false;
         if (params.parameterSetId != publicKey.parameterSetId) return false;
         if (params.h != 64 || params.d != 8 || params.a != 14) return false;
         if (params.k != 22 || params.w != 16 || params.l != 64) return false;
-        if (params.wotsTargetSum != ShrincsType.WOTS_TARGET_SUM_STATEFUL) return false;
+        if (params.wotsTargetSum != ShrincsTypes.WOTS_TARGET_SUM_STATEFUL) return false;
         if (!_validStatefulCompositePublicKey(publicKey)) return false;
         if (uint256(params.k) * (uint256(1) << params.a) > type(uint32).max) return false;
         return true;
     }
 
     function _validParameterSetBinding(
-        ShrincsType.ParamsView memory params,
-        ShrincsType.ParameterSetId requestedParameterSetId,
-        ShrincsType.ParameterSetId declaredParameterSetId
+        ShrincsTypes.ParamsView memory params,
+        ShrincsTypes.ParameterSetId requestedParameterSetId,
+        ShrincsTypes.ParameterSetId declaredParameterSetId
     ) private pure returns (bool) {
         return params.parameterSetId == requestedParameterSetId && declaredParameterSetId == requestedParameterSetId
-            && params.hashSuiteId == ShrincsType.HASH_SUITE_KECCAK_256;
+            && params.hashSuiteId == ShrincsTypes.HASH_SUITE_KECCAK_256;
     }
 
-    function _validActionContext(ShrincsType.ActionContext memory context) private pure returns (bool) {
+    function _validActionContext(ShrincsTypes.ActionContext memory context) private pure returns (bool) {
         return context.domainSeparator != bytes32(0) && context.actionType != bytes32(0)
             && context.payloadHash != bytes32(0);
     }
 
-    function _validRotationContext(ShrincsType.RotationContext memory context) private pure returns (bool) {
+    function _validRotationContext(ShrincsTypes.RotationContext memory context) private pure returns (bool) {
         return context.domainSeparator != bytes32(0);
     }
 
     // Shared stateless verification core that accepts either calldata messages from
     // external callers or canonical in-memory rotation messages built by this library.
     function _verifyStatelessMemory(
-        ShrincsType.ParameterSetId parameterSetId,
-        ShrincsType.PublicKey calldata publicKey,
+        ShrincsTypes.ParameterSetId parameterSetId,
+        ShrincsTypes.PublicKey calldata publicKey,
         bytes memory message,
-        ShrincsType.StatelessSignature calldata signature
+        ShrincsTypes.StatelessSignature calldata signature
     ) private pure returns (bool) {
         return _verifyStatelessRawMemory(
             parameterSetId,
@@ -323,14 +323,14 @@ library SHRINCS {
     }
 
     function _verifyStatelessRawMemory(
-        ShrincsType.ParameterSetId parameterSetId,
+        ShrincsTypes.ParameterSetId parameterSetId,
         bytes32 expectedCompositePublicKey,
-        ShrincsType.PublicKey calldata publicKey,
+        ShrincsTypes.PublicKey calldata publicKey,
         bytes memory message,
-        ShrincsType.StatelessSignature calldata signature
+        ShrincsTypes.StatelessSignature calldata signature
     ) private pure returns (bool) {
         if (!_matchesExpectedCompositePublicKey(publicKey, expectedCompositePublicKey)) return false;
-        ShrincsType.ParamsView memory p = _paramsView(parameterSetId);
+        ShrincsTypes.ParamsView memory p = _paramsView(parameterSetId);
         if (!_validParams(p, publicKey)) return false;
         if (signature.hypertree.length == 0) return false;
 
@@ -344,10 +344,10 @@ library SHRINCS {
     // Verify each hypertree XMSS layer in sequence, carrying the reconstructed root
     // from one layer into the next until the public hypertree root is reached.
     function _verifyHypertree(
-        ShrincsType.ParamsView memory params,
-        ShrincsType.PublicKey calldata publicKey,
+        ShrincsTypes.ParamsView memory params,
+        ShrincsTypes.PublicKey calldata publicKey,
         bytes memory messageRoot,
-        ShrincsType.HypertreeLayerSignature[] calldata layers
+        ShrincsTypes.HypertreeLayerSignature[] calldata layers
     ) private pure returns (bool) {
         if (layers.length != params.d) return false;
         uint32 subtreeHeight = uint32(params.h / params.d);
@@ -359,7 +359,7 @@ library SHRINCS {
         }
 
         for (uint256 layer = 0; layer < layers.length;) {
-            ShrincsType.HypertreeLayerSignature calldata layerSig = layers[layer];
+            ShrincsTypes.HypertreeLayerSignature calldata layerSig = layers[layer];
             if (layerSig.leafIndex >= leafCount || layerSig.wotsCPkHash.length != params.nBytes) return false;
             if (layerSig.authPath.length != subtreeHeight) return false;
             if (
@@ -402,14 +402,14 @@ library SHRINCS {
     // Rebuild the WOTS-C public-key hash for one hypertree layer and compare it to
     // the expected leaf commitment carried in the layer signature.
     function _verifyWotsC32(
-        ShrincsType.ParamsView memory params,
+        ShrincsTypes.ParamsView memory params,
         bytes calldata pkSeedBytes,
         uint32 layer,
         uint64 tree,
         uint32 keypair,
         bytes calldata expectedPkHashBytes,
         bytes32 message,
-        ShrincsType.WotsCSignature calldata signature
+        ShrincsTypes.WotsCSignature calldata signature
     ) private pure returns (bool) {
         uint256 chainCount = uint256(params.l);
         if (signature.randomizer.length != 32 || signature.chains.length != chainCount || expectedPkHashBytes.length != 32) return false;
@@ -505,7 +505,7 @@ library SHRINCS {
     // Finish a stateless WOTS-C chain using the structured WOTS context variant.
     // This helper remains available for paths that use full address composition.
     function _wotsChain32NoMask(
-        ShrincsType.WotsContext memory ctx,
+        ShrincsTypes.WotsContext memory ctx,
         bytes calldata pkSeedBytes,
         uint32 chainIdx,
         bytes calldata value,
@@ -519,7 +519,7 @@ library SHRINCS {
         uint32 steps = uint32(ctx.w - 1) - digit;
         for (uint32 j = 0; j < steps;) {
             bytes32 addressWord =
-                _addressWord32(ctx.layer, ctx.tree, ShrincsType.WOTS_HASH_TYPE, ctx.keypair, chainIdx, digit + j);
+                _addressWord32(ctx.layer, ctx.tree, ShrincsTypes.WOTS_HASH_TYPE, ctx.keypair, chainIdx, digit + j);
             out = _hashStatelessWotsCChainNoMask32(pkSeed, addressWord, out);
             unchecked {
                 ++j;
@@ -546,7 +546,7 @@ library SHRINCS {
 
     // Return the number of digest bytes needed to encode all base-W WOTS digits for
     // the current stateless parameter set.
-    function _wotsDigestBytes(ShrincsType.ParamsView memory params) private pure returns (uint256) {
+    function _wotsDigestBytes(ShrincsTypes.ParamsView memory params) private pure returns (uint256) {
         uint256 bitsPerDigit = params.w == 256 ? 8 : 4;
         return (uint256(params.l) * bitsPerDigit + 7) / 8;
     }
@@ -554,17 +554,17 @@ library SHRINCS {
     // Verify the FORS-C portion of the stateless signature and return the message
     // root that seeds the first hypertree layer on success.
     function _verifyForsCAndReturnRoot(
-        ShrincsType.ParamsView memory params,
-        ShrincsType.PublicKey calldata publicKey,
+        ShrincsTypes.ParamsView memory params,
+        ShrincsTypes.PublicKey calldata publicKey,
         bytes memory message,
-        ShrincsType.ForsSignature calldata signature,
+        ShrincsTypes.ForsSignature calldata signature,
         uint64 xmssTree,
         uint32 xmssKeypair
     ) private pure returns (bytes memory) {
         uint256 signedTrees = uint256(params.k) - 1;
         if (signature.randomizer.length != 32 || signature.entries.length != signedTrees) return "";
 
-        ShrincsType.ForsDigest memory digest =
+        ShrincsTypes.ForsDigest memory digest =
             _forsDigest(params, publicKey, message, signature.randomizer, signature.counter);
         uint256 a = uint256(params.a);
         if (_readBits32Fast(digest.digest, signedTrees * a, params.a) != 0) return "";
@@ -581,7 +581,7 @@ library SHRINCS {
         }
 
         for (uint256 tree = 0; tree < signedTrees;) {
-            ShrincsType.ForsEntry calldata entry = signature.entries[tree];
+            ShrincsTypes.ForsEntry calldata entry = signature.entries[tree];
             if (entry.sk.length != 32 || entry.auth.length != a) return "";
             uint32 leafIndex = _readBits32Fast(digest.digest, tree * a, params.a);
             bytes32 root = _forsEntryRoot32(uint32(a), pkSeed, xmssTree, xmssKeypair, uint32(tree), leafIndex, entry);
@@ -615,7 +615,7 @@ library SHRINCS {
         uint32 xmssKeypair,
         uint32 tree,
         uint32 leafIndex,
-        ShrincsType.ForsEntry calldata entry
+        ShrincsTypes.ForsEntry calldata entry
     ) private pure returns (bytes32 node) {
         uint256 addressBase = _forsAddressBase(xmssTree, xmssKeypair);
         node = _hashForsLeaf32(pkSeed, bytes32(addressBase | ((uint256(tree) << height) + uint256(leafIndex))), entry.sk);
@@ -645,7 +645,7 @@ library SHRINCS {
     // Build the common high bits of a FORS address from the XMSS tree and keypair
     // coordinates.
     function _forsAddressBase(uint64 xmssTree, uint32 xmssKeypair) private pure returns (uint256) {
-        return (uint256(xmssTree) << 128) | (uint256(ShrincsType.FORS_TREE_TYPE) << 96) | (uint256(xmssKeypair) << 64);
+        return (uint256(xmssTree) << 128) | (uint256(ShrincsTypes.FORS_TREE_TYPE) << 96) | (uint256(xmssKeypair) << 64);
     }
 
     // Hash one FORS secret value into its leaf under the FORS leaf domain.
@@ -682,12 +682,12 @@ library SHRINCS {
     // Derive the FORS message digest and split out the hypertree coordinates used
     // by the first XMSS layer.
     function _forsDigest(
-        ShrincsType.ParamsView memory params,
-        ShrincsType.PublicKey calldata publicKey,
+        ShrincsTypes.ParamsView memory params,
+        ShrincsTypes.PublicKey calldata publicKey,
         bytes memory message,
         bytes calldata randomizer,
         uint32 counter
-    ) private pure returns (ShrincsType.ForsDigest memory out) {
+    ) private pure returns (ShrincsTypes.ForsDigest memory out) {
         uint32 indexBits = uint32(params.k) * uint32(params.a);
         uint32 subtreeHeight = uint32(params.h / params.d);
         uint32 treeBits = uint32(params.h) - subtreeHeight;
@@ -776,7 +776,7 @@ library SHRINCS {
             pkSeedWord := calldataload(pkSeed.offset)
         }
         uint256 addressBase =
-            (uint256(layer) << 224) | (uint256(treeIndex) << 128) | (uint256(ShrincsType.TREE_TYPE) << 96);
+            (uint256(layer) << 224) | (uint256(treeIndex) << 128) | (uint256(ShrincsTypes.TREE_TYPE) << 96);
         node = leaf;
         uint256 index = leafIndex;
         for (uint256 level = 0; level < height;) {
@@ -861,7 +861,7 @@ library SHRINCS {
         return uint64(shifted & mask);
     }
 
-    function _matchesExpectedCompositePublicKey(ShrincsType.PublicKey calldata publicKey, bytes32 expectedCompositePublicKey)
+    function _matchesExpectedCompositePublicKey(ShrincsTypes.PublicKey calldata publicKey, bytes32 expectedCompositePublicKey)
         private
         pure
         returns (bool)
@@ -879,9 +879,9 @@ library SHRINCS {
 
     // Check the composite public-key layout and recompute its commitment from the
     // embedded stateful and stateless public components.
-    function _validStatefulCompositePublicKey(ShrincsType.PublicKey calldata publicKey) private pure returns (bool) {
+    function _validStatefulCompositePublicKey(ShrincsTypes.PublicKey calldata publicKey) private pure returns (bool) {
         if (publicKey.compositePublicKey.length != 32) return false;
-        if (publicKey.statefulPublicKey.length != ShrincsType.STATEFUL_PUBLIC_KEY_BYTES) return false;
+        if (publicKey.statefulPublicKey.length != ShrincsTypes.STATEFUL_PUBLIC_KEY_BYTES) return false;
         if (publicKey.messagePkSeed.length != 32) return false;
         if (publicKey.messageRoot.length != 32) return false;
         if (publicKey.hypertreePkSeed.length != 32) return false;
@@ -910,7 +910,7 @@ library SHRINCS {
         bytes calldata hypertreePkSeed,
         bytes calldata hypertreeRoot
     ) private pure returns (bytes32 computed) {
-        uint256 statefulPkLen = ShrincsType.STATEFUL_PUBLIC_KEY_BYTES;
+        uint256 statefulPkLen = ShrincsTypes.STATEFUL_PUBLIC_KEY_BYTES;
         uint256 compositeInputLen = 18 + statefulPkLen + 32 + 32 + 32 + 32;
 
         assembly {
@@ -931,9 +931,9 @@ library SHRINCS {
     function _decodeStatefulPublicKey(bytes calldata encoded)
         private
         pure
-        returns (ShrincsType.StatefulPublicKey memory publicKey, bool ok)
+        returns (ShrincsTypes.StatefulPublicKey memory publicKey, bool ok)
     {
-        if (encoded.length != ShrincsType.STATEFUL_PUBLIC_KEY_BYTES) return (publicKey, false);
+        if (encoded.length != ShrincsTypes.STATEFUL_PUBLIC_KEY_BYTES) return (publicKey, false);
         assembly {
             publicKey := mload(0x40)
             mstore(publicKey, calldataload(encoded.offset))
@@ -950,15 +950,15 @@ library SHRINCS {
         bytes32 pkSeed,
         uint32 leafIndex,
         bytes memory message,
-        ShrincsType.StatefulSignature calldata signature
+        ShrincsTypes.StatefulSignature calldata signature
     ) private pure returns (bytes32 pkHash, bool ok) {
         bytes32 digest = keccak256(
             abi.encodePacked("uxmss-wots-digits", pkSeed, leafIndex, signature.randomizer, signature.counter, message)
         );
 
         uint32 digitSum;
-        bytes memory segments = new bytes(ShrincsType.WOTS_CHAINS_STATEFUL * 32);
-        for (uint256 i = 0; i < ShrincsType.WOTS_CHAINS_STATEFUL;) {
+        bytes memory segments = new bytes(ShrincsTypes.WOTS_CHAINS_STATEFUL * 32);
+        for (uint256 i = 0; i < ShrincsTypes.WOTS_CHAINS_STATEFUL;) {
             uint32 digit = _baseW16Digit(digest, i);
             digitSum += digit;
             bytes32 segment = _statefulChainNoMask(
@@ -967,7 +967,7 @@ library SHRINCS {
                 uint32(i),
                 signature.chains[i],
                 digit,
-                ShrincsType.WOTS_BASE_STATEFUL - 1 - digit
+                ShrincsTypes.WOTS_BASE_STATEFUL - 1 - digit
             );
             _setSlice32(segments, segment, i * 32);
             unchecked {
@@ -975,7 +975,7 @@ library SHRINCS {
             }
         }
 
-        if (digitSum != ShrincsType.WOTS_TARGET_SUM_STATEFUL) return (bytes32(0), false);
+        if (digitSum != ShrincsTypes.WOTS_TARGET_SUM_STATEFUL) return (bytes32(0), false);
         return (keccak256(abi.encodePacked("uxmss-wots-pk", pkSeed, leafIndex, segments)), true);
     }
 
@@ -1029,7 +1029,7 @@ library SHRINCS {
         out = value;
         for (uint32 j = 0; j < steps;) {
             bytes32 addressWord =
-                _addressWord32(0, 0, ShrincsType.WOTS_HASH_TYPE, leafIndex, chainIdx, start + j);
+                _addressWord32(0, 0, ShrincsTypes.WOTS_HASH_TYPE, leafIndex, chainIdx, start + j);
             out = _hashStatefulWotsCChainNoMask32(pkSeed, addressWord, out);
             unchecked {
                 ++j;
