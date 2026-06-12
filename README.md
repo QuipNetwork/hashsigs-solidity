@@ -239,120 +239,17 @@ The library uses that context to build the canonical rotation message hash that 
 
 The library is intentionally storage-free. A real on-chain verifier or account contract must own the account state and feed that state into the library on every call.
 
-Example shape:
+Reference implementation:
 
-```solidity
-// SPDX-License-Identifier: MIT
-pragma solidity ^0.8.28;
+- [contracts/examples/ShrincsAccountVerifierExample.sol](/home/me/o/qp/shrincs/hashsigs-solidity/contracts/examples/ShrincsAccountVerifierExample.sol)
+- [test/ShrincsAccountVerifierExample.t.sol](/home/me/o/qp/shrincs/hashsigs-solidity/test/ShrincsAccountVerifierExample.t.sol)
 
-import {SHRINCS} from "./contracts/SHRINCS.sol";
-import {ShrincsType} from "./contracts/ShrincsTypes.sol";
+The example contract is intentionally small. It shows how wrapper-owned state should interact with the library for:
 
-contract ShrincsAccountVerifier {
-    bytes32 public currentShrincsPublicKey;
-    ShrincsType.ParameterSetId public parameterSetId;
-    uint256 public nonce;
-    uint256 public keyVersion;
-    uint64 public statelessSignaturesUsed;
-
-    bytes32 internal constant DOMAIN_SEPARATOR = keccak256("shrincs-account-v1");
-
-    constructor(bytes32 initialShrincsPublicKey) {
-        currentShrincsPublicKey = initialShrincsPublicKey;
-        parameterSetId = ShrincsType.ParameterSetId.Sphincs256sKeccakQ20;
-    }
-
-    function verifyStatefulAction(
-        ShrincsType.PublicKey calldata publicKey,
-        bytes32 actionType,
-        bytes32 payloadHash,
-        ShrincsType.StatefulSignature calldata signature
-    ) external returns (bool) {
-        ShrincsType.ActionContext memory context = ShrincsType.ActionContext({
-            domainSeparator: DOMAIN_SEPARATOR,
-            nonce: nonce,
-            keyVersion: keyVersion,
-            actionType: actionType,
-            payloadHash: payloadHash
-        });
-
-        bool ok = SHRINCS.verifyStateful(
-            parameterSetId,
-            currentShrincsPublicKey,
-            publicKey,
-            context,
-            signature
-        );
-        if (!ok) return false;
-
-        nonce += 1;
-        return true;
-    }
-
-    function verifyStatelessAction(
-        ShrincsType.PublicKey calldata publicKey,
-        bytes32 actionType,
-        bytes32 payloadHash,
-        ShrincsType.StatelessSignature calldata signature
-    ) external returns (bool) {
-        uint64 limit = ShrincsType.defaultParamsView(parameterSetId).statelessSignatureLimit;
-        if (statelessSignaturesUsed >= limit) return false;
-
-        ShrincsType.ActionContext memory context = ShrincsType.ActionContext({
-            domainSeparator: DOMAIN_SEPARATOR,
-            nonce: nonce,
-            keyVersion: keyVersion,
-            actionType: actionType,
-            payloadHash: payloadHash
-        });
-
-        bool ok = SHRINCS.verifyStateless(
-            parameterSetId,
-            currentShrincsPublicKey,
-            publicKey,
-            context,
-            signature
-        );
-        if (!ok) return false;
-
-        nonce += 1;
-        statelessSignaturesUsed += 1;
-        return true;
-    }
-
-    function rotateFullKey(
-        ShrincsType.PublicKey calldata currentPublicKey,
-        ShrincsType.StatelessSignature calldata recoverySignature,
-        ShrincsType.RotationTarget calldata nextKey
-    ) external returns (bool) {
-        uint64 limit = ShrincsType.defaultParamsView(parameterSetId).statelessSignatureLimit;
-        if (statelessSignaturesUsed >= limit) return false;
-
-        ShrincsType.RotationContext memory context = ShrincsType.RotationContext({
-            domainSeparator: DOMAIN_SEPARATOR,
-            nonce: nonce,
-            keyVersion: keyVersion
-        });
-
-        bytes32 nextCompositePublicKey = SHRINCS.rotateFullShrincsKey(
-            parameterSetId,
-            currentShrincsPublicKey,
-            currentPublicKey,
-            context,
-            recoverySignature,
-            nextKey
-        );
-        if (nextCompositePublicKey == bytes32(0)) return false;
-
-        currentShrincsPublicKey = nextCompositePublicKey;
-        parameterSetId = nextKey.parameterSetId;
-        nonce += 1;
-        keyVersion += 1;
-        statelessSignaturesUsed += 1;
-        return true;
-    }
-}
-```
+- stateful action verification
+- stateless action verification
+- stateless full-key rotation
+- stateless usage-limit enforcement
 
 What the wrapper must handle:
 
