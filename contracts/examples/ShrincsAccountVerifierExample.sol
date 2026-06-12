@@ -204,6 +204,7 @@ contract ShrincsAccountVerifierExample {
     }
 
     function setStatefulPolicyMonotonicIndex(uint32 initialLeafIndex) external onlyOwner {
+        require(initialLeafIndex >= nextStatefulLeafIndex, "stateful index rollback");
         statefulPolicy = StatefulPolicy.MonotonicIndex;
         nextStatefulLeafIndex = initialLeafIndex;
         recoveryMode = false;
@@ -220,7 +221,7 @@ contract ShrincsAccountVerifierExample {
     }
 
     function enterRecoveryMode() external onlyOwner {
-        if (statefulPolicy != StatefulPolicy.RecoveryRotation) return;
+        require(statefulPolicy == StatefulPolicy.RecoveryRotation, "recovery policy required");
         recoveryMode = true;
     }
 

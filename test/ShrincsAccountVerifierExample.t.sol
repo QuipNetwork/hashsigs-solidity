@@ -62,9 +62,47 @@ contract ShrincsAccountVerifierExampleHarness is ShrincsAccountVerifierExample {
 }
 
 contract ExampleNonOwnerCaller {
+    function setStatefulPolicyNone(ShrincsAccountVerifierExample target) external {
+        target.setStatefulPolicyNone();
+    }
+
+    function trySetStatefulPolicyNone(ShrincsAccountVerifierExample target) external returns (bool) {
+        (bool ok,) = address(target).call(abi.encodeCall(target.setStatefulPolicyNone, ()));
+        return ok;
+    }
+
+    function setStatefulPolicyMonotonicIndex(ShrincsAccountVerifierExample target, uint32 initialLeafIndex) external {
+        target.setStatefulPolicyMonotonicIndex(initialLeafIndex);
+    }
+
+    function trySetStatefulPolicyMonotonicIndex(ShrincsAccountVerifierExample target, uint32 initialLeafIndex)
+        external
+        returns (bool)
+    {
+        (bool ok,) = address(target).call(abi.encodeCall(target.setStatefulPolicyMonotonicIndex, (initialLeafIndex)));
+        return ok;
+    }
+
+    function setStatefulPolicyRecoveryRotation(ShrincsAccountVerifierExample target) external {
+        target.setStatefulPolicyRecoveryRotation();
+    }
+
+    function trySetStatefulPolicyRecoveryRotation(ShrincsAccountVerifierExample target) external returns (bool) {
+        (bool ok,) = address(target).call(abi.encodeCall(target.setStatefulPolicyRecoveryRotation, ()));
+        return ok;
+    }
+
+    function setStatefulPolicyLeafBitmap(ShrincsAccountVerifierExample target) external {
+        target.setStatefulPolicyLeafBitmap();
+    }
+
     function trySetStatefulPolicyLeafBitmap(ShrincsAccountVerifierExample target) external returns (bool) {
         (bool ok,) = address(target).call(abi.encodeCall(target.setStatefulPolicyLeafBitmap, ()));
         return ok;
+    }
+
+    function enterRecoveryMode(ShrincsAccountVerifierExample target) external {
+        target.enterRecoveryMode();
     }
 
     function tryEnterRecoveryMode(ShrincsAccountVerifierExample target) external returns (bool) {
@@ -301,6 +339,86 @@ contract ShrincsAccountVerifierExampleTest is Test {
         );
     }
 
+    function testExampleNonOwnerSetStatefulPolicyLeafBitmapReverts() public {
+        (ShrincsTypes.PublicKey memory publicKey, , ) = _decodeStatelessVector(".stateless.cases.valid.calldata");
+        bytes32 expectedCompositePublicKey = _compositePublicKeyWord(publicKey);
+        ShrincsAccountVerifierExample account = new ShrincsAccountVerifierExample(expectedCompositePublicKey);
+
+        vm.expectRevert(bytes("only owner"));
+        nonOwnerCaller.setStatefulPolicyLeafBitmap(account);
+    }
+
+    function testExampleRejectsNonOwnerSetStatefulPolicyNone() public {
+        (ShrincsTypes.PublicKey memory publicKey, , ) = _decodeStatelessVector(".stateless.cases.valid.calldata");
+        bytes32 expectedCompositePublicKey = _compositePublicKeyWord(publicKey);
+        ShrincsAccountVerifierExample account = new ShrincsAccountVerifierExample(expectedCompositePublicKey);
+        account.setStatefulPolicyLeafBitmap();
+
+        bool ok = nonOwnerCaller.trySetStatefulPolicyNone(account);
+
+        assertEq(ok, false, "non-owner must not be able to clear stateful policy");
+        assertTrue(
+            uint8(account.statefulPolicy()) == uint8(ShrincsAccountVerifierExample.StatefulPolicy.LeafBitmap),
+            "failed non-owner clear must not update policy"
+        );
+    }
+
+    function testExampleNonOwnerSetStatefulPolicyNoneReverts() public {
+        (ShrincsTypes.PublicKey memory publicKey, , ) = _decodeStatelessVector(".stateless.cases.valid.calldata");
+        bytes32 expectedCompositePublicKey = _compositePublicKeyWord(publicKey);
+        ShrincsAccountVerifierExample account = new ShrincsAccountVerifierExample(expectedCompositePublicKey);
+
+        vm.expectRevert(bytes("only owner"));
+        nonOwnerCaller.setStatefulPolicyNone(account);
+    }
+
+    function testExampleRejectsNonOwnerSetStatefulPolicyMonotonicIndex() public {
+        (ShrincsTypes.PublicKey memory publicKey, , ) = _decodeStatelessVector(".stateless.cases.valid.calldata");
+        bytes32 expectedCompositePublicKey = _compositePublicKeyWord(publicKey);
+        ShrincsAccountVerifierExample account = new ShrincsAccountVerifierExample(expectedCompositePublicKey);
+
+        bool ok = nonOwnerCaller.trySetStatefulPolicyMonotonicIndex(account, 5);
+
+        assertEq(ok, false, "non-owner must not be able to set monotonic policy");
+        assertTrue(
+            uint8(account.statefulPolicy()) == uint8(ShrincsAccountVerifierExample.StatefulPolicy.None),
+            "failed non-owner monotonic set must not update policy"
+        );
+        assertTrue(account.nextStatefulLeafIndex() == 0, "failed non-owner monotonic set must not update index");
+    }
+
+    function testExampleNonOwnerSetStatefulPolicyMonotonicIndexReverts() public {
+        (ShrincsTypes.PublicKey memory publicKey, , ) = _decodeStatelessVector(".stateless.cases.valid.calldata");
+        bytes32 expectedCompositePublicKey = _compositePublicKeyWord(publicKey);
+        ShrincsAccountVerifierExample account = new ShrincsAccountVerifierExample(expectedCompositePublicKey);
+
+        vm.expectRevert(bytes("only owner"));
+        nonOwnerCaller.setStatefulPolicyMonotonicIndex(account, 5);
+    }
+
+    function testExampleRejectsNonOwnerSetStatefulPolicyRecoveryRotation() public {
+        (ShrincsTypes.PublicKey memory publicKey, , ) = _decodeStatelessVector(".stateless.cases.valid.calldata");
+        bytes32 expectedCompositePublicKey = _compositePublicKeyWord(publicKey);
+        ShrincsAccountVerifierExample account = new ShrincsAccountVerifierExample(expectedCompositePublicKey);
+
+        bool ok = nonOwnerCaller.trySetStatefulPolicyRecoveryRotation(account);
+
+        assertEq(ok, false, "non-owner must not be able to set recovery rotation policy");
+        assertTrue(
+            uint8(account.statefulPolicy()) == uint8(ShrincsAccountVerifierExample.StatefulPolicy.None),
+            "failed non-owner recovery rotation set must not update policy"
+        );
+    }
+
+    function testExampleNonOwnerSetStatefulPolicyRecoveryRotationReverts() public {
+        (ShrincsTypes.PublicKey memory publicKey, , ) = _decodeStatelessVector(".stateless.cases.valid.calldata");
+        bytes32 expectedCompositePublicKey = _compositePublicKeyWord(publicKey);
+        ShrincsAccountVerifierExample account = new ShrincsAccountVerifierExample(expectedCompositePublicKey);
+
+        vm.expectRevert(bytes("only owner"));
+        nonOwnerCaller.setStatefulPolicyRecoveryRotation(account);
+    }
+
     function testExampleRejectsNonOwnerRecoveryModeToggle() public {
         (ShrincsTypes.PublicKey memory publicKey, , ) = _decodeStatelessVector(".stateless.cases.valid.calldata");
         bytes32 expectedCompositePublicKey = _compositePublicKeyWord(publicKey);
@@ -313,13 +431,44 @@ contract ShrincsAccountVerifierExampleTest is Test {
         assertEq(account.recoveryMode(), false, "failed non-owner recovery toggle must not change state");
     }
 
+    function testExampleNonOwnerEnterRecoveryModeReverts() public {
+        (ShrincsTypes.PublicKey memory publicKey, , ) = _decodeStatelessVector(".stateless.cases.valid.calldata");
+        bytes32 expectedCompositePublicKey = _compositePublicKeyWord(publicKey);
+        ShrincsAccountVerifierExample account = new ShrincsAccountVerifierExample(expectedCompositePublicKey);
+        account.setStatefulPolicyRecoveryRotation();
+
+        vm.expectRevert(bytes("only owner"));
+        nonOwnerCaller.enterRecoveryMode(account);
+    }
+
+    function testExampleEnterRecoveryModeRevertsOutsideRecoveryRotationPolicy() public {
+        (ShrincsTypes.PublicKey memory publicKey, , ) = _decodeStatelessVector(".stateless.cases.valid.calldata");
+        bytes32 expectedCompositePublicKey = _compositePublicKeyWord(publicKey);
+        ShrincsAccountVerifierExample account = new ShrincsAccountVerifierExample(expectedCompositePublicKey);
+
+        vm.expectRevert(bytes("recovery policy required"));
+        account.enterRecoveryMode();
+    }
+
+    function testExampleSetStatefulPolicyMonotonicIndexRevertsOnRollback() public {
+        (ShrincsTypes.PublicKey memory publicKey, , ) = _decodeStatelessVector(".stateless.cases.valid.calldata");
+        bytes32 expectedCompositePublicKey = _compositePublicKeyWord(publicKey);
+        ShrincsAccountVerifierExample account = new ShrincsAccountVerifierExample(expectedCompositePublicKey);
+
+        account.setStatefulPolicyMonotonicIndex(17);
+
+        vm.expectRevert(bytes("stateful index rollback"));
+        account.setStatefulPolicyMonotonicIndex(16);
+    }
+
     function testExampleFreshKeyInstallResetsStatefulTrackingState() public {
         (ShrincsTypes.PublicKey memory publicKey, , ) = _decodeStatelessVector(".stateless.cases.valid.calldata");
         bytes32 expectedCompositePublicKey = _compositePublicKeyWord(publicKey);
         ShrincsAccountVerifierExampleHarness account = new ShrincsAccountVerifierExampleHarness(expectedCompositePublicKey);
 
-        account.setStatefulPolicyMonotonicIndex(17);
+        account.setStatefulPolicyRecoveryRotation();
         account.enterRecoveryMode();
+        account.setStatefulPolicyMonotonicIndex(17);
         account.setStatelessSignaturesUsed(9);
 
         bytes32 nextCompositePublicKey = bytes32(uint256(expectedCompositePublicKey) ^ 1);
