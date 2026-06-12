@@ -536,6 +536,15 @@ The current verifier path is compiled with IR enabled:
 forge build --contracts contracts --skip test --via-ir
 ```
 
+Hardhat compilation also requires IR:
+
+```bash
+./node_modules/.bin/hardhat compile
+```
+
+- `hardhat.config.ts` enables optimizer + `viaIR: true`
+- this is required for the current SHRINCS verifier layout to avoid stack-too-deep compilation failures
+
 ## Test
 
 Run the full verifier test suite:
@@ -547,6 +556,22 @@ forge test --via-ir
 Current expected result:
 
 - `98 passed, 0 failed`
+
+## Deployment
+
+Hardhat Ignition deployment is intentionally split by target:
+
+- `ignition/modules/WOTSPlus.ts`
+  - deploys only `WOTSPlus`
+- `ignition/modules/ShrincsAccountVerifierExample.ts`
+  - deploys only the SHRINCS example wrapper
+
+Example commands:
+
+```bash
+./node_modules/.bin/hardhat ignition deploy ignition/modules/WOTSPlus.ts
+./node_modules/.bin/hardhat ignition deploy ignition/modules/ShrincsAccountVerifierExample.ts
+```
 
 ## Notes
 
