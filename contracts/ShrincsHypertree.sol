@@ -27,20 +27,20 @@ library ShrincsHypertree {
         ShrincsTypes.HypertreeLayerSignature[] calldata layers
     ) internal pure returns (bool) {
         if (layers.length != params.numHypertreeLayers) return false;
+        if (layers.length == 0) return false;
         uint32 subtreeHeight = uint32(params.hypertreeHeight / params.numHypertreeLayers);
         uint32 leafCount = uint32(1) << subtreeHeight;
+        uint64 leafMask = uint64((uint256(1) << subtreeHeight) - 1);
+        uint64 expectedTreeIndex = layers[0].treeIndex;
+        uint32 expectedLeafIndex = layers[0].leafIndex;
         bytes32 current = forsRoot;
 
         for (uint256 layer = 0; layer < layers.length;) {
             ShrincsTypes.HypertreeLayerSignature calldata layerSig = layers[layer];
-            // NOTE: This verifier currently accepts upper-layer hypertree coordinates directly from
-            // the signature. The Rust signer under code/src/hypertree.rs emits sequential per-layer
-            // tree and leaf indices rather than deriving them from the FORS-pinned layer-0 index.
-            // We keep that compatibility for now because the current vectors were generated against
-            // that signer behavior. This is not directly forgeable: every WOTS-C and hypertree node
-            // hash binds (layer, tree, leaf) into its address word, and the full chain still has to
-            // close at the pinned hypertree root. The full fix is signer/vector regeneration and
-            // then enforcing the FIPS-style recurrence here.
+            // Layer 0 starts from the FORS-derived coordinate. Each upper layer's
+            // coordinate is then derived from the lower layer's tree index, so the
+            // signature cannot freely choose independent upper-layer addresses.
+            if (layerSig.treeIndex != expectedTreeIndex || layerSig.leafIndex != expectedLeafIndex) return false;
             if (layerSig.leafIndex >= leafCount) return false;
             if (layerSig.wotsCPkHash.length != params.hashLen) return false;
             if (layerSig.authPath.length != subtreeHeight) return false;
@@ -77,6 +77,12 @@ library ShrincsHypertree {
             );
             if (!ok) return false;
             current = nextRoot;
+
+            // casting to 'uint32' is safe because leafMask keeps only subtreeHeight bits,
+            // and leafCount above bounds the supported profile's subtree to 256 leaves
+            // forge-lint: disable-next-line(unsafe-typecast)
+            expectedLeafIndex = uint32(expectedTreeIndex & leafMask);
+            expectedTreeIndex >>= subtreeHeight;
             unchecked {
                 ++layer;
             }
@@ -87,7 +93,7 @@ library ShrincsHypertree {
         assembly {
             expectedRoot := calldataload(expectedRootBytes.offset)
         }
-        return current == expectedRoot;
+        return expectedTreeIndex == 0 && current == expectedRoot;
     }
 
     function verifyWotsC32(
