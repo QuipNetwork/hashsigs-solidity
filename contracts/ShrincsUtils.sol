@@ -40,7 +40,7 @@ library ShrincsUtils {
         }
         if (params.numForsTrees != 22 || params.chainLen != 16 || params.numWotsChains != 64) return false;
         if (params.wotsTargetSum != ShrincsTypes.WOTS_TARGET_SUM_STATEFUL) return false;
-        if (!validStatefulCompositePublicKey(publicKey)) return false;
+        if (!validPublicKey(publicKey)) return false;
         if (uint256(params.numForsTrees) * (uint256(1) << params.forsTreeHeight) > type(uint32).max) return false;
         return true;
     }
@@ -64,25 +64,55 @@ library ShrincsUtils {
         return context.domainSeparator != bytes32(0);
     }
 
-    function matchesExpectedCompositePublicKey(
-        ShrincsTypes.PublicKey calldata publicKey,
-        bytes32 expectedCompositePublicKey
-    ) internal pure returns (bool) {
-        if (expectedCompositePublicKey == bytes32(0)) return false;
-        if (publicKey.hypertreeRoot.length != 32) return false;
-        bytes calldata hypertreeRoot = publicKey.hypertreeRoot;
-        bytes32 root;
-        assembly {
-            root := calldataload(hypertreeRoot.offset)
-        }
-        return root == expectedCompositePublicKey;
+    function publicKeyCommitment(ShrincsTypes.PublicKey calldata publicKey) internal pure returns (bytes32) {
+        return keccak256(
+            abi.encodePacked(
+                "shrincs-public-key",
+                uint8(publicKey.parameterSetId),
+                publicKey.statefulPublicKey,
+                publicKey.pkSeed,
+                publicKey.hypertreeRoot
+            )
+        );
     }
 
-    function validStatefulCompositePublicKey(ShrincsTypes.PublicKey calldata publicKey) internal pure returns (bool) {
+    function publicKeyCommitmentFromParts(
+        ShrincsTypes.ParameterSetId parameterSetId,
+        bytes memory statefulPublicKey,
+        bytes memory pkSeed,
+        bytes memory hypertreeRoot
+    ) internal pure returns (bytes32) {
+        return keccak256(
+            abi.encodePacked("shrincs-public-key", uint8(parameterSetId), statefulPublicKey, pkSeed, hypertreeRoot)
+        );
+    }
+
+    function matchesExpectedPublicKeyCommitment(
+        ShrincsTypes.PublicKey calldata publicKey,
+        bytes32 expectedPublicKeyCommitment
+    ) internal pure returns (bool) {
+        if (expectedPublicKeyCommitment == bytes32(0)) return false;
+        if (publicKey.publicKeyCommitment.length != 32) return false;
+        bytes calldata encodedCommitment = publicKey.publicKeyCommitment;
+        bytes32 actualCommitment;
+        assembly {
+            actualCommitment := calldataload(encodedCommitment.offset)
+        }
+        return actualCommitment == expectedPublicKeyCommitment
+            && publicKeyCommitment(publicKey) == expectedPublicKeyCommitment;
+    }
+
+    function validPublicKey(ShrincsTypes.PublicKey calldata publicKey) internal pure returns (bool) {
         if (publicKey.statefulPublicKey.length != ShrincsTypes.STATEFUL_PUBLIC_KEY_BYTES) return false;
+        if (publicKey.publicKeyCommitment.length != 32) return false;
         if (publicKey.pkSeed.length != 32) return false;
         if (publicKey.hypertreeRoot.length != 32) return false;
-        return true;
+        bytes calldata encodedCommitment = publicKey.publicKeyCommitment;
+        bytes32 expectedCommitment;
+        assembly {
+            expectedCommitment := calldataload(encodedCommitment.offset)
+        }
+        return publicKeyCommitment(publicKey) == expectedCommitment;
     }
 
     function decodeStatefulPublicKey(bytes calldata encoded)

@@ -22,15 +22,15 @@ import {ShrincsUtils} from "./ShrincsUtils.sol";
 library ShrincsStateful {
     function verifyStatefulUnsafeRaw(
         ShrincsTypes.ParameterSetId parameterSetId,
-        bytes32 expectedCompositePublicKey,
+        bytes32 expectedPublicKeyCommitment,
         ShrincsTypes.PublicKey calldata publicKey,
         bytes memory message,
         ShrincsTypes.StatefulSignature calldata signature
     ) internal pure returns (bool) {
         ShrincsTypes.ParamsView memory p = ShrincsUtils.paramsView(parameterSetId);
         if (!ShrincsUtils.validParameterSetBinding(p, parameterSetId, publicKey.parameterSetId)) return false;
-        if (!ShrincsUtils.matchesExpectedCompositePublicKey(publicKey, expectedCompositePublicKey)) return false;
-        if (!ShrincsUtils.validStatefulCompositePublicKey(publicKey)) return false;
+        if (!ShrincsUtils.matchesExpectedPublicKeyCommitment(publicKey, expectedPublicKeyCommitment)) return false;
+        if (!ShrincsUtils.validPublicKey(publicKey)) return false;
         (ShrincsTypes.StatefulPublicKey memory statefulKey, bool ok) =
             ShrincsUtils.decodeStatefulPublicKey(publicKey.statefulPublicKey);
         if (!ok) return false;

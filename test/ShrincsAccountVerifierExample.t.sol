@@ -266,12 +266,8 @@ contract ShrincsAccountVerifierExampleTest is Test {
         ShrincsTypes.RotationContext memory context = ShrincsTypes.RotationContext({
             domainSeparator: _domainSeparatorFor(address(account)), nonce: 0, keyVersion: 0
         });
-        ShrincsTypes.RotationTarget memory target = ShrincsTypes.RotationTarget({
-            parameterSetId: publicKey.parameterSetId,
-            statefulPublicKey: publicKey.statefulPublicKey,
-            pkSeed: publicKey.pkSeed,
-            hypertreeRoot: publicKey.hypertreeRoot
-        });
+        ShrincsTypes.RotationTarget memory target =
+            _rotationTarget(publicKey.parameterSetId, publicKey.statefulPublicKey, publicKey.pkSeed, publicKey.hypertreeRoot);
 
         bytes32 expected = rotation.statelessRotate(
             ShrincsTypes.ParameterSetId.Sphincs256sKeccakQ20,
@@ -317,12 +313,8 @@ contract ShrincsAccountVerifierExampleTest is Test {
             new ShrincsAccountVerifierExampleHarness(expectedCompositePublicKey);
         uint64 limit =
             ShrincsTypes.defaultParamsView(ShrincsTypes.ParameterSetId.Sphincs256sKeccakQ20).statelessSignatureLimit;
-        ShrincsTypes.RotationTarget memory target = ShrincsTypes.RotationTarget({
-            parameterSetId: publicKey.parameterSetId,
-            statefulPublicKey: publicKey.statefulPublicKey,
-            pkSeed: publicKey.pkSeed,
-            hypertreeRoot: publicKey.hypertreeRoot
-        });
+        ShrincsTypes.RotationTarget memory target =
+            _rotationTarget(publicKey.parameterSetId, publicKey.statefulPublicKey, publicKey.pkSeed, publicKey.hypertreeRoot);
 
         account.setStatelessSignaturesUsed(limit);
         bool actual = account.rotateFullKey(publicKey, signature, target);
@@ -564,11 +556,15 @@ contract ShrincsAccountVerifierExampleTest is Test {
     }
 
     function _compositePublicKeyWord(ShrincsTypes.PublicKey memory publicKey) internal pure returns (bytes32 word) {
-        require(publicKey.hypertreeRoot.length == 32, "hypertree root length");
-        bytes memory hypertreeRoot = publicKey.hypertreeRoot;
-        assembly {
-            word := mload(add(hypertreeRoot, 32))
-        }
+        return keccak256(
+            abi.encodePacked(
+                "shrincs-public-key",
+                uint8(publicKey.parameterSetId),
+                publicKey.statefulPublicKey,
+                publicKey.pkSeed,
+                publicKey.hypertreeRoot
+            )
+        );
     }
 
     function _decodeStatefulVector(string memory vectorKey)
@@ -591,12 +587,12 @@ contract ShrincsAccountVerifierExampleTest is Test {
         bytes memory encodedStatefulKey =
             abi.encodePacked(legacyKey.pkSeed, legacyKey.root, bytes4(legacyKey.maxSignatures));
 
-        publicKey = ShrincsTypes.PublicKey({
-            parameterSetId: ShrincsTypes.ParameterSetId.Sphincs256sKeccakQ20,
-            statefulPublicKey: encodedStatefulKey,
-            pkSeed: statelessPublicKey.pkSeed,
-            hypertreeRoot: statelessPublicKey.hypertreeRoot
-        });
+        publicKey = _publicKey(
+            ShrincsTypes.ParameterSetId.Sphincs256sKeccakQ20,
+            encodedStatefulKey,
+            statelessPublicKey.pkSeed,
+            statelessPublicKey.hypertreeRoot
+        );
 
         message = legacyMessage;
         signature = ShrincsTypes.StatefulSignature({
@@ -624,12 +620,14 @@ contract ShrincsAccountVerifierExampleTest is Test {
         ) = abi.decode(args, (LegacyParams, LegacyPublicKey, bytes, LegacyStatelessSignature));
         legacyParams;
 
-        publicKey = ShrincsTypes.PublicKey({
-            parameterSetId: legacyPublicKey.parameterSetId,
-            statefulPublicKey: legacyPublicKey.statefulPublicKey,
-            pkSeed: legacyPublicKey.pkSeed,
-            hypertreeRoot: legacyPublicKey.hypertreeRoot
-        });
+        publicKey = _publicKey(
+            legacyPublicKey.parameterSetId,
+            legacyPublicKey.statefulPublicKey,
+            legacyPublicKey.pkSeed,
+            legacyPublicKey.hypertreeRoot
+        );
+        publicKey.publicKeyCommitment =
+            vm.parseJsonBytes(vectors, string.concat(_trimCalldataSuffix(vectorKey), ".publicKey.publicKeyCommitment"));
 
         message = legacyMessage;
         signature = _convertLegacyStatelessSignature(legacySignature);
@@ -671,6 +669,40 @@ contract ShrincsAccountVerifierExampleTest is Test {
         });
     }
 
+    function _publicKey(
+        ShrincsTypes.ParameterSetId parameterSetId,
+        bytes memory statefulPublicKey,
+        bytes memory pkSeed,
+        bytes memory hypertreeRoot
+    ) internal pure returns (ShrincsTypes.PublicKey memory) {
+        bytes32 commitment =
+            keccak256(abi.encodePacked("shrincs-public-key", uint8(parameterSetId), statefulPublicKey, pkSeed, hypertreeRoot));
+        return ShrincsTypes.PublicKey({
+            parameterSetId: parameterSetId,
+            statefulPublicKey: statefulPublicKey,
+            publicKeyCommitment: abi.encodePacked(commitment),
+            pkSeed: pkSeed,
+            hypertreeRoot: hypertreeRoot
+        });
+    }
+
+    function _rotationTarget(
+        ShrincsTypes.ParameterSetId parameterSetId,
+        bytes memory statefulPublicKey,
+        bytes memory pkSeed,
+        bytes memory hypertreeRoot
+    ) internal pure returns (ShrincsTypes.RotationTarget memory) {
+        bytes32 commitment =
+            keccak256(abi.encodePacked("shrincs-public-key", uint8(parameterSetId), statefulPublicKey, pkSeed, hypertreeRoot));
+        return ShrincsTypes.RotationTarget({
+            parameterSetId: parameterSetId,
+            statefulPublicKey: statefulPublicKey,
+            publicKeyCommitment: abi.encodePacked(commitment),
+            pkSeed: pkSeed,
+            hypertreeRoot: hypertreeRoot
+        });
+    }
+
     function _fixedToDynamicChains(bytes32[64] memory fixedChains) internal pure returns (bytes32[] memory chains) {
         chains = new bytes32[](64);
         for (uint256 i = 0; i < 64; ++i) {
@@ -683,6 +715,18 @@ contract ShrincsAccountVerifierExampleTest is Test {
         bytes memory callData = vm.parseJsonBytes(vectors, vectorKey);
         vm.resumeGasMetering();
         return _stripSelector(callData);
+    }
+
+    function _trimCalldataSuffix(string memory path) internal pure returns (string memory trimmed) {
+        bytes memory source = bytes(path);
+        bytes memory suffix = bytes(".calldata");
+        require(source.length >= suffix.length, "path too short");
+        uint256 trimmedLength = source.length - suffix.length;
+        bytes memory out = new bytes(trimmedLength);
+        for (uint256 i = 0; i < trimmedLength; ++i) {
+            out[i] = source[i];
+        }
+        trimmed = string(out);
     }
 
     function _stripSelector(bytes memory input) internal pure returns (bytes memory output) {
