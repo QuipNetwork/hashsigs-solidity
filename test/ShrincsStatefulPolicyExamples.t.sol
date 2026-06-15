@@ -51,7 +51,6 @@ contract ShrincsStatefulPolicyExamplesTest is Test {
         bytes compositePublicKey;
         bytes statefulPublicKey;
         bytes forsPkSeed;
-        bytes forsRoot;
         bytes hypertreePkSeed;
         bytes hypertreeRoot;
     }
@@ -204,7 +203,6 @@ contract ShrincsStatefulPolicyExamplesTest is Test {
             compositePublicKey: publicKey.compositePublicKey,
             statefulPublicKey: publicKey.statefulPublicKey,
             forsPkSeed: publicKey.forsPkSeed,
-            forsRoot: publicKey.forsRoot,
             hypertreePkSeed: publicKey.hypertreePkSeed,
             hypertreeRoot: publicKey.hypertreeRoot
         });
@@ -269,9 +267,9 @@ contract ShrincsStatefulPolicyExamplesTest is Test {
                 keccak256(
                     abi.encodePacked(
                         "shrincs-public-key",
+                        bytes1(uint8(ShrincsTypes.ParameterSetId.Sphincs256sKeccakQ20)),
                         encodedStatefulKey,
                         statelessPublicKey.forsPkSeed,
-                        statelessPublicKey.forsRoot,
                         statelessPublicKey.hypertreePkSeed,
                         statelessPublicKey.hypertreeRoot
                     )
@@ -279,7 +277,6 @@ contract ShrincsStatefulPolicyExamplesTest is Test {
             ),
             statefulPublicKey: encodedStatefulKey,
             forsPkSeed: statelessPublicKey.forsPkSeed,
-            forsRoot: statelessPublicKey.forsRoot,
             hypertreePkSeed: statelessPublicKey.hypertreePkSeed,
             hypertreeRoot: statelessPublicKey.hypertreeRoot
         });
@@ -315,7 +312,6 @@ contract ShrincsStatefulPolicyExamplesTest is Test {
             compositePublicKey: legacyPublicKey.compositePublicKey,
             statefulPublicKey: legacyPublicKey.statefulPublicKey,
             forsPkSeed: legacyPublicKey.forsPkSeed,
-            forsRoot: legacyPublicKey.forsRoot,
             hypertreePkSeed: legacyPublicKey.hypertreePkSeed,
             hypertreeRoot: legacyPublicKey.hypertreeRoot
         });

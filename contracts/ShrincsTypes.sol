@@ -69,7 +69,6 @@ library ShrincsTypes {
         bytes compositePublicKey;
         bytes statefulPublicKey;
         bytes forsPkSeed;
-        bytes forsRoot;
         bytes hypertreePkSeed;
         bytes hypertreeRoot;
     }
@@ -141,7 +140,6 @@ library ShrincsTypes {
         bytes compositePublicKey;
         bytes statefulPublicKey;
         bytes forsPkSeed;
-        bytes forsRoot;
         bytes hypertreePkSeed;
         bytes hypertreeRoot;
     }

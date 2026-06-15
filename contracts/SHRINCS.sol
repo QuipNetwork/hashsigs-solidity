@@ -84,9 +84,9 @@ library SHRINCS {
                 parameterSetId, expectedCompositePublicKey, currentPublicKey, recoveryMessage, recoverySignature
             )) return bytes32(0);
         return ShrincsUtils.compositePublicKeyCommitment(
+            currentPublicKey.parameterSetId,
             nextStatefulKey.statefulPublicKey,
             currentPublicKey.forsPkSeed,
-            currentPublicKey.forsRoot,
             currentPublicKey.hypertreePkSeed,
             currentPublicKey.hypertreeRoot
         );
@@ -113,8 +113,7 @@ library SHRINCS {
         if (
             nextKey.statefulPublicKey.length != ShrincsTypes.STATEFUL_PUBLIC_KEY_BYTES
                 || nextKey.compositePublicKey.length != 32 || nextKey.forsPkSeed.length != 32
-                || nextKey.forsRoot.length != 32 || nextKey.hypertreePkSeed.length != 32
-                || nextKey.hypertreeRoot.length != 32
+                || nextKey.hypertreePkSeed.length != 32 || nextKey.hypertreeRoot.length != 32
         ) return bytes32(0);
         {
             (ShrincsTypes.StatefulPublicKey memory decodedNextStatefulKey, bool ok) =
@@ -123,9 +122,9 @@ library SHRINCS {
         }
 
         nextCompositePublicKey = ShrincsUtils.compositePublicKeyCommitment(
+            nextKey.parameterSetId,
             nextKey.statefulPublicKey,
             nextKey.forsPkSeed,
-            nextKey.forsRoot,
             nextKey.hypertreePkSeed,
             nextKey.hypertreeRoot
         );
@@ -255,7 +254,6 @@ library SHRINCS {
                 nextKey.compositePublicKey,
                 nextKey.statefulPublicKey,
                 nextKey.forsPkSeed,
-                nextKey.forsRoot,
                 nextKey.hypertreePkSeed,
                 nextKey.hypertreeRoot
             )

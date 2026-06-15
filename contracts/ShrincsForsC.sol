@@ -73,16 +73,10 @@ library ShrincsForsC {
             }
         }
 
-        bytes32 computedRoot32;
         assembly {
-            computedRoot32 := keccak256(forsPkInput, forsPkInputLen)
+            forsRoot := keccak256(forsPkInput, forsPkInputLen)
         }
-        bytes calldata expectedRootBytes = publicKey.forsRoot;
-        bytes32 expectedRoot;
-        assembly {
-            expectedRoot := calldataload(expectedRootBytes.offset)
-        }
-        return computedRoot32 == expectedRoot ? (computedRoot32, true) : (bytes32(0), false);
+        return (forsRoot, true);
     }
 
     function forsEntryRoot32(
