@@ -42,7 +42,7 @@ library ShrincsForsC {
         }
         if (digest.treeIndex != treeIndex || digest.leafIndex != leafIndex) return (bytes32(0), false);
 
-        bytes calldata pkSeed = publicKey.forsPkSeed;
+        bytes calldata pkSeed = publicKey.pkSeed;
         uint256 forsPkInputLen = 39 + signedTrees * 32;
         uint256 forsPkInput;
         assembly {
@@ -166,7 +166,7 @@ library ShrincsForsC {
         uint32 treeBits = uint32(params.hypertreeHeight) - subtreeHeight;
         uint256 digestBytes = (uint256(indexBits) + uint256(params.hypertreeHeight) + 7) / 8;
         bytes memory digest =
-            forsDigestBytes(publicKey.forsPkSeed, publicKey.hypertreeRoot, randomizer, counter, message, digestBytes);
+            forsDigestBytes(publicKey.pkSeed, publicKey.hypertreeRoot, randomizer, counter, message, digestBytes);
 
         uint256 cursor = indexBits;
         out.treeIndex = ShrincsUtils.readBits64(digest, cursor, treeBits);

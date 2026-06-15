@@ -69,58 +69,20 @@ library ShrincsUtils {
         bytes32 expectedCompositePublicKey
     ) internal pure returns (bool) {
         if (expectedCompositePublicKey == bytes32(0)) return false;
-        return compositePublicKeyWord(publicKey.compositePublicKey) == expectedCompositePublicKey;
-    }
-
-    function compositePublicKeyWord(bytes calldata compositePublicKey) internal pure returns (bytes32 word) {
-        if (compositePublicKey.length != 32) return bytes32(0);
+        if (publicKey.hypertreeRoot.length != 32) return false;
+        bytes calldata hypertreeRoot = publicKey.hypertreeRoot;
+        bytes32 root;
         assembly {
-            word := calldataload(compositePublicKey.offset)
+            root := calldataload(hypertreeRoot.offset)
         }
+        return root == expectedCompositePublicKey;
     }
 
     function validStatefulCompositePublicKey(ShrincsTypes.PublicKey calldata publicKey) internal pure returns (bool) {
-        if (publicKey.compositePublicKey.length != 32) return false;
         if (publicKey.statefulPublicKey.length != ShrincsTypes.STATEFUL_PUBLIC_KEY_BYTES) return false;
-        if (publicKey.forsPkSeed.length != 32) return false;
-        if (publicKey.hypertreePkSeed.length != 32) return false;
+        if (publicKey.pkSeed.length != 32) return false;
         if (publicKey.hypertreeRoot.length != 32) return false;
-
-        bytes32 expected;
-        bytes calldata compositePublicKey = publicKey.compositePublicKey;
-        assembly {
-            expected := calldataload(compositePublicKey.offset)
-        }
-        return compositePublicKeyCommitment(
-            publicKey.parameterSetId,
-            publicKey.statefulPublicKey,
-            publicKey.forsPkSeed,
-            publicKey.hypertreePkSeed,
-            publicKey.hypertreeRoot
-        ) == expected;
-    }
-
-    function compositePublicKeyCommitment(
-        ShrincsTypes.ParameterSetId parameterSetId,
-        bytes calldata statefulPublicKey,
-        bytes calldata forsPkSeed,
-        bytes calldata hypertreePkSeed,
-        bytes calldata hypertreeRoot
-    ) internal pure returns (bytes32 computed) {
-        uint256 statefulPkLen = ShrincsTypes.STATEFUL_PUBLIC_KEY_BYTES;
-        uint256 compositeInputLen = 18 + 1 + statefulPkLen + 32 + 32 + 32;
-
-        assembly {
-            let ptr := mload(0x40)
-            mstore(ptr, "shrincs-public-key")
-            mstore8(add(ptr, 18), parameterSetId)
-            calldatacopy(add(ptr, 19), statefulPublicKey.offset, statefulPkLen)
-            calldatacopy(add(ptr, add(19, statefulPkLen)), forsPkSeed.offset, 32)
-            calldatacopy(add(ptr, add(51, statefulPkLen)), hypertreePkSeed.offset, 32)
-            calldatacopy(add(ptr, add(83, statefulPkLen)), hypertreeRoot.offset, 32)
-            computed := keccak256(ptr, compositeInputLen)
-            mstore(0x40, add(ptr, 224))
-        }
+        return true;
     }
 
     function decodeStatefulPublicKey(bytes calldata encoded)

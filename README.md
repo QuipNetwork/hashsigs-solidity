@@ -27,14 +27,14 @@ The high-level idea is:
 flowchart LR
     subgraph "Stateful path (normal case)"
         A1["action context<br/>(domain, nonce, keyVersion,<br/>actionType, payloadHash)"] --> A2["statefulActionMessageHash"]
-        A2 --> A3["validate composite-key<br/>commitment (Utils)"]
+        A2 --> A3["validate expected<br/>public root (Utils)"]
         A3 --> A4["recompute compact WOTS-C<br/>pk hash from 64 chains<br/>(target-sum 480 check)"]
         A4 --> A5["fold unbalanced-XMSS<br/>auth path"]
         A5 --> A6{"== stateful root?"}
     end
 
     subgraph "Stateless path (fallback / rotation authorization)"
-        B1["action or rotation<br/>message hash"] --> B2["validate params +<br/>commitment (Utils)"]
+        B1["action or rotation<br/>message hash"] --> B2["validate params +<br/>public root (Utils)"]
         B2 --> B3["FORS-C: digest, k-th index == 0,<br/>rebuild 21 tree roots → fors-pk root"]
         B3 --> B4["messageRoot"]
         B4 --> B5["8 hypertree layers:<br/>WOTS-C verify + Merkle path,<br/>root chains upward"]
@@ -82,7 +82,7 @@ graph TD
     end
 
     subgraph "Foundation"
-        UT["ShrincsUtils.sol<br/>profile validation, composite-key<br/>commitment recompute, bit readers,<br/>address-word packing"]
+        UT["ShrincsUtils.sol<br/>profile validation, public-key<br/>checks, bit readers,<br/>address-word packing"]
         TY["ShrincsTypes.sol<br/>structs, constants,<br/>single supported profile values"]
     end
 
@@ -161,6 +161,12 @@ The vector JSON contains the Rust-generated public keys, messages, signatures,
 and negative/tampered cases. It also includes compatibility calldata fields used
 by the current Foundry vector decoder.
 
+## Public-Key Shape
+
+The SHRINCS public key exposed by this implementation contains `parameterSetId`, `statefulPublicKey`, one stateless `pkSeed`, and `hypertreeRoot`. The stateless side now follows the SPHINCS+/FIPS-style `PK = (PK.seed, PK.root)` abstraction: `pkSeed` is the global public seed used by FORS and the hypertree, and `hypertreeRoot` is the public root. The existing `expectedCompositePublicKey` parameter name is retained for API compatibility, but it is checked against `publicKey.hypertreeRoot`.
+
+There is intentionally no composite commitment binding `statefulPublicKey` to the stateless `pkSeed`/`hypertreeRoot` tuple. Integrations that store only the expected public root must ensure out of band that the supplied `statefulPublicKey` belongs with the stateless public-key components, otherwise a mismatched stateful/stateless bundle can be presented to the verifier.
+
 ## Available Verifier Paths
 
 ### 1. Stateful verification
@@ -192,8 +198,7 @@ The account-style path also rejects invalid contexts:
 
 Both forms verify:
 
-- the provided `expectedCompositePublicKey` matches `publicKey.compositePublicKey`
-- the composite SHRINCS public key commitment
+- the provided `expectedCompositePublicKey` matches `publicKey.hypertreeRoot`
 - the embedded stateful public key
 - compact `WOTS-C` reconstruction
 - the unbalanced XMSS-style authentication path
@@ -221,7 +226,7 @@ The account-style path also rejects invalid contexts:
 
 Both forms verify:
 
-- the provided `expectedCompositePublicKey` matches `publicKey.compositePublicKey`
+- the provided `expectedCompositePublicKey` matches `publicKey.hypertreeRoot`
 - parameter-set compatibility
 - `FORS-C`
 - hypertree layer traversal
@@ -248,7 +253,7 @@ It:
 - computes a canonical rotation message hash from:
   - `parameterSetId`
   - `expectedCompositePublicKey`
-  - `currentPublicKey.compositePublicKey`
+  - `currentPublicKey.hypertreeRoot`
   - `rotationContext`
   - `nextStatefulKey`
 - verifies a stateless recovery signature over that canonical hash under the current key
@@ -256,7 +261,7 @@ It:
 - decodes the next stateful key and rejects `maxSignatures == 0`
 - rejects zero `domainSeparator`
 - rejects mismatched rotation target `parameterSetId`
-- returns the next composite public-key commitment on success
+- returns the current public root on success
 - returns `bytes32(0)` on failure
 
 ### 4. Full SHRINCS-key rotation authorization
@@ -279,7 +284,7 @@ It:
 - computes a canonical full-rotation message hash from:
   - `parameterSetId`
   - `expectedCompositePublicKey`
-  - `currentPublicKey.compositePublicKey`
+  - `currentPublicKey.hypertreeRoot`
   - `rotationContext`
   - the full `nextKey` bundle
 - verifies the current stateless recovery signature over that canonical hash
@@ -287,8 +292,8 @@ It:
 - decodes the next stateful key and rejects `maxSignatures == 0`
 - rejects zero `domainSeparator`
 - rejects mismatched rotation target `parameterSetId`
-- recomputes the next composite public-key commitment
-- checks that it matches `nextKey.compositePublicKey`
+- validates the next key payload
+- returns the next `hypertreeRoot` on success
 - returns `bytes32(0)` on failure
 
 ## Parameter Sets
@@ -484,7 +489,7 @@ Current tests cover:
 - valid stateful signature verifies
 - wrong message is rejected
 - wrong public key is rejected
-- wrong expected composite public key is rejected
+- wrong expected public root is rejected
 - zero expected composite public key is rejected
 - unsupported requested parameter set is rejected
 - mismatched declared parameter set is rejected
@@ -492,7 +497,7 @@ Current tests cover:
 - tampered stateful authentication path is rejected
 - signature at `maxSignatures` boundary verifies
 - signature exceeding `maxSignatures` is rejected
-- malformed `forsPkSeed` length is rejected
+- malformed `pkSeed` length is rejected
 - wrong stateful `WOTS-C` chain count is rejected
 - canonical action hash changes when payload changes
 - zeroed account-style action context is rejected
@@ -504,14 +509,12 @@ Current tests cover:
 - tampered `FORS` data is rejected
 - tampered hypertree `WOTS-C` public-key hash is rejected
 - tampered hypertree authentication path is rejected
-- wrong expected composite public key is rejected
+- wrong expected public root is rejected
 - zero expected composite public key is rejected
 - unsupported requested parameter set is rejected
 - mismatched declared parameter set is rejected
-- malformed `compositePublicKey` length is rejected
-- malformed `forsPkSeed` length is rejected
+- malformed `pkSeed` length is rejected
 - malformed `forsRoot` length is rejected
-- malformed `hypertreePkSeed` length is rejected
 - malformed `hypertreeRoot` length is rejected
 - hypertree leaf index out of range is rejected
 - malformed hypertree `WOTS-C` chain length is rejected
@@ -532,7 +535,7 @@ Current tests cover:
 - `statelessRotate(...)`
   - canonical rotation hash changes when the next key bundle changes
   - rejects legacy stateless signatures that were not signed over the canonical rotation hash
-  - rejects mismatched supplied composite commitment
+  - rejects malformed next key bundles
   - rejects next stateful keys with `maxSignatures == 0`
   - rejects unsupported next parameter set
   - rejects zero `domainSeparator`

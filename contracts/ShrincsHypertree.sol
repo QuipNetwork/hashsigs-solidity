@@ -46,7 +46,7 @@ library ShrincsHypertree {
             if (layerSig.authPath.length != subtreeHeight) return false;
             if (!verifyWotsC32(
                     params,
-                    publicKey.hypertreePkSeed,
+                    publicKey.pkSeed,
                     // casting to 'uint32' is safe because layer is bounded by params.numHypertreeLayers and the supported profile uses 8 layers
                     // forge-lint: disable-next-line(unsafe-typecast)
                     uint32(layer),
@@ -68,7 +68,7 @@ library ShrincsHypertree {
             uint32 layerIndex = uint32(layer);
             (bytes32 nextRoot, bool ok) = hypertreeRootFromPath32(
                 subtreeHeight,
-                publicKey.hypertreePkSeed,
+                publicKey.pkSeed,
                 layerIndex,
                 layerSig.treeIndex,
                 layerSig.leafIndex,

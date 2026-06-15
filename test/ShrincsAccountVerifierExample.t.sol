@@ -153,10 +153,9 @@ contract ShrincsAccountVerifierExampleTest is Test {
     }
 
     struct LegacyPublicKey {
-        bytes compositePublicKey;
+        ShrincsTypes.ParameterSetId parameterSetId;
         bytes statefulPublicKey;
-        bytes forsPkSeed;
-        bytes hypertreePkSeed;
+        bytes pkSeed;
         bytes hypertreeRoot;
     }
 
@@ -269,10 +268,8 @@ contract ShrincsAccountVerifierExampleTest is Test {
         });
         ShrincsTypes.RotationTarget memory target = ShrincsTypes.RotationTarget({
             parameterSetId: publicKey.parameterSetId,
-            compositePublicKey: publicKey.compositePublicKey,
             statefulPublicKey: publicKey.statefulPublicKey,
-            forsPkSeed: publicKey.forsPkSeed,
-            hypertreePkSeed: publicKey.hypertreePkSeed,
+            pkSeed: publicKey.pkSeed,
             hypertreeRoot: publicKey.hypertreeRoot
         });
 
@@ -322,10 +319,8 @@ contract ShrincsAccountVerifierExampleTest is Test {
             ShrincsTypes.defaultParamsView(ShrincsTypes.ParameterSetId.Sphincs256sKeccakQ20).statelessSignatureLimit;
         ShrincsTypes.RotationTarget memory target = ShrincsTypes.RotationTarget({
             parameterSetId: publicKey.parameterSetId,
-            compositePublicKey: publicKey.compositePublicKey,
             statefulPublicKey: publicKey.statefulPublicKey,
-            forsPkSeed: publicKey.forsPkSeed,
-            hypertreePkSeed: publicKey.hypertreePkSeed,
+            pkSeed: publicKey.pkSeed,
             hypertreeRoot: publicKey.hypertreeRoot
         });
 
@@ -569,10 +564,10 @@ contract ShrincsAccountVerifierExampleTest is Test {
     }
 
     function _compositePublicKeyWord(ShrincsTypes.PublicKey memory publicKey) internal pure returns (bytes32 word) {
-        require(publicKey.compositePublicKey.length == 32, "composite key length");
-        bytes memory compositePublicKey = publicKey.compositePublicKey;
+        require(publicKey.hypertreeRoot.length == 32, "hypertree root length");
+        bytes memory hypertreeRoot = publicKey.hypertreeRoot;
         assembly {
-            word := mload(add(compositePublicKey, 32))
+            word := mload(add(hypertreeRoot, 32))
         }
     }
 
@@ -598,21 +593,8 @@ contract ShrincsAccountVerifierExampleTest is Test {
 
         publicKey = ShrincsTypes.PublicKey({
             parameterSetId: ShrincsTypes.ParameterSetId.Sphincs256sKeccakQ20,
-            compositePublicKey: abi.encodePacked(
-                keccak256(
-                    abi.encodePacked(
-                        "shrincs-public-key",
-                        bytes1(uint8(ShrincsTypes.ParameterSetId.Sphincs256sKeccakQ20)),
-                        encodedStatefulKey,
-                        statelessPublicKey.forsPkSeed,
-                        statelessPublicKey.hypertreePkSeed,
-                        statelessPublicKey.hypertreeRoot
-                    )
-                )
-            ),
             statefulPublicKey: encodedStatefulKey,
-            forsPkSeed: statelessPublicKey.forsPkSeed,
-            hypertreePkSeed: statelessPublicKey.hypertreePkSeed,
+            pkSeed: statelessPublicKey.pkSeed,
             hypertreeRoot: statelessPublicKey.hypertreeRoot
         });
 
@@ -643,11 +625,9 @@ contract ShrincsAccountVerifierExampleTest is Test {
         legacyParams;
 
         publicKey = ShrincsTypes.PublicKey({
-            parameterSetId: ShrincsTypes.ParameterSetId.Sphincs256sKeccakQ20,
-            compositePublicKey: legacyPublicKey.compositePublicKey,
+            parameterSetId: legacyPublicKey.parameterSetId,
             statefulPublicKey: legacyPublicKey.statefulPublicKey,
-            forsPkSeed: legacyPublicKey.forsPkSeed,
-            hypertreePkSeed: legacyPublicKey.hypertreePkSeed,
+            pkSeed: legacyPublicKey.pkSeed,
             hypertreeRoot: legacyPublicKey.hypertreeRoot
         });
 

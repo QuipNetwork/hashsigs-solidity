@@ -66,10 +66,8 @@ library ShrincsTypes {
 
     struct PublicKey {
         ParameterSetId parameterSetId;
-        bytes compositePublicKey;
         bytes statefulPublicKey;
-        bytes forsPkSeed;
-        bytes hypertreePkSeed;
+        bytes pkSeed;
         bytes hypertreeRoot;
     }
 
@@ -137,10 +135,8 @@ library ShrincsTypes {
 
     struct RotationTarget {
         ParameterSetId parameterSetId;
-        bytes compositePublicKey;
         bytes statefulPublicKey;
-        bytes forsPkSeed;
-        bytes hypertreePkSeed;
+        bytes pkSeed;
         bytes hypertreeRoot;
     }
 
