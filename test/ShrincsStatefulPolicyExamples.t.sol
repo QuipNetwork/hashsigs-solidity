@@ -20,6 +20,18 @@ import {Test} from "../lib/forge-std/src/Test.sol";
 import {ShrincsTypes} from "../contracts/ShrincsTypes.sol";
 import {ShrincsAccountVerifierExample} from "../contracts/examples/ShrincsAccountVerifierExample.sol";
 
+contract ShrincsStatefulPolicyHarness is ShrincsAccountVerifierExample {
+    constructor(bytes32 initialShrincsPublicKey) ShrincsAccountVerifierExample(initialShrincsPublicKey) {}
+
+    function verifyStatefulUncheckedForTest(
+        ShrincsTypes.PublicKey calldata publicKey,
+        bytes calldata message,
+        ShrincsTypes.StatefulSignature calldata signature
+    ) external returns (bool) {
+        return verifyStatefulUncheckedMessage(publicKey, message, signature);
+    }
+}
+
 contract ShrincsStatefulPolicyExamplesTest is Test {
     string internal constant VECTOR_PATH = "test/test_vectors/shrincs_sphincs_256s_keccak.json";
 
@@ -97,10 +109,10 @@ contract ShrincsStatefulPolicyExamplesTest is Test {
             ShrincsTypes.StatefulSignature memory signature
         ) = decodeStatefulVector(".stateful.cases.valid.calldata");
         bytes32 expectedCompositePublicKey = compositePublicKeyWord(publicKey);
-        ShrincsAccountVerifierExample account = new ShrincsAccountVerifierExample(expectedCompositePublicKey);
+        ShrincsStatefulPolicyHarness account = new ShrincsStatefulPolicyHarness(expectedCompositePublicKey);
 
-        bool first = account.verifyStatefulRaw(publicKey, message, signature);
-        bool second = account.verifyStatefulRaw(publicKey, message, signature);
+        bool first = account.verifyStatefulUncheckedForTest(publicKey, message, signature);
+        bool second = account.verifyStatefulUncheckedForTest(publicKey, message, signature);
 
         assertEq(first, true, "first raw stateful verification should succeed");
         assertEq(second, false, "default monotonic policy must reject repeated raw stateful verification");
@@ -114,11 +126,11 @@ contract ShrincsStatefulPolicyExamplesTest is Test {
         ) = decodeStatefulVector(".stateful.cases.valid.calldata");
         bytes32 expectedCompositePublicKey = compositePublicKeyWord(publicKey);
         uint32 leafIndex = uint32(signature.authPath.length);
-        ShrincsAccountVerifierExample account = new ShrincsAccountVerifierExample(expectedCompositePublicKey);
+        ShrincsStatefulPolicyHarness account = new ShrincsStatefulPolicyHarness(expectedCompositePublicKey);
         account.setStatefulPolicyMonotonicIndex(leafIndex);
 
-        bool first = account.verifyStatefulRaw(publicKey, message, signature);
-        bool second = account.verifyStatefulRaw(publicKey, message, signature);
+        bool first = account.verifyStatefulUncheckedForTest(publicKey, message, signature);
+        bool second = account.verifyStatefulUncheckedForTest(publicKey, message, signature);
 
         assertEq(first, true, "expected leaf index should verify once");
         assertEq(second, false, "same leaf index must be rejected after increment");
@@ -133,10 +145,10 @@ contract ShrincsStatefulPolicyExamplesTest is Test {
         ) = decodeStatefulVector(".stateful.cases.valid.calldata");
         bytes32 expectedCompositePublicKey = compositePublicKeyWord(publicKey);
         uint32 leafIndex = uint32(signature.authPath.length);
-        ShrincsAccountVerifierExample account = new ShrincsAccountVerifierExample(expectedCompositePublicKey);
+        ShrincsStatefulPolicyHarness account = new ShrincsStatefulPolicyHarness(expectedCompositePublicKey);
         account.setStatefulPolicyMonotonicIndex(leafIndex + 1);
 
-        bool ok = account.verifyStatefulRaw(publicKey, message, signature);
+        bool ok = account.verifyStatefulUncheckedForTest(publicKey, message, signature);
 
         assertEq(ok, false, "unexpected leaf index must be rejected");
         assertTrue(account.nextStatefulLeafIndex() == leafIndex + 1, "unexpected leaf must not advance state");
@@ -149,17 +161,17 @@ contract ShrincsStatefulPolicyExamplesTest is Test {
             ShrincsTypes.StatefulSignature memory signature
         ) = decodeStatefulVector(".stateful.cases.valid.calldata");
         bytes32 expectedCompositePublicKey = compositePublicKeyWord(publicKey);
-        ShrincsAccountVerifierExample account = new ShrincsAccountVerifierExample(expectedCompositePublicKey);
+        ShrincsStatefulPolicyHarness account = new ShrincsStatefulPolicyHarness(expectedCompositePublicKey);
         account.setStatefulPolicyRecoveryRotation();
 
         assertEq(
-            account.verifyStatefulRaw(publicKey, message, signature),
+            account.verifyStatefulUncheckedForTest(publicKey, message, signature),
             true,
             "stateful raw path should work before recovery"
         );
         account.enterRecoveryMode();
         assertEq(
-            account.verifyStatefulRaw(publicKey, message, signature),
+            account.verifyStatefulUncheckedForTest(publicKey, message, signature),
             false,
             "stateful raw path must be blocked in recovery mode"
         );
@@ -215,11 +227,11 @@ contract ShrincsStatefulPolicyExamplesTest is Test {
         ) = decodeStatefulVector(".stateful.cases.valid.calldata");
         bytes32 expectedCompositePublicKey = compositePublicKeyWord(publicKey);
         uint32 leafIndex = uint32(signature.authPath.length);
-        ShrincsAccountVerifierExample account = new ShrincsAccountVerifierExample(expectedCompositePublicKey);
+        ShrincsStatefulPolicyHarness account = new ShrincsStatefulPolicyHarness(expectedCompositePublicKey);
         account.setStatefulPolicyLeafBitmap();
 
-        bool first = account.verifyStatefulRaw(publicKey, message, signature);
-        bool second = account.verifyStatefulRaw(publicKey, message, signature);
+        bool first = account.verifyStatefulUncheckedForTest(publicKey, message, signature);
+        bool second = account.verifyStatefulUncheckedForTest(publicKey, message, signature);
 
         assertEq(first, true, "first bitmap-tracked stateful verification should succeed");
         assertEq(second, false, "same leaf must be rejected once marked used");

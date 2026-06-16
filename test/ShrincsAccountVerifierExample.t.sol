@@ -63,6 +63,14 @@ contract ExampleRotationHarness {
 contract ShrincsAccountVerifierExampleHarness is ShrincsAccountVerifierExample {
     constructor(bytes32 initialShrincsPublicKey) ShrincsAccountVerifierExample(initialShrincsPublicKey) {}
 
+    function verifyStatefulUncheckedForTest(
+        ShrincsTypes.PublicKey calldata publicKey,
+        bytes calldata message,
+        ShrincsTypes.StatefulSignature calldata signature
+    ) external returns (bool) {
+        return verifyStatefulUncheckedMessage(publicKey, message, signature);
+    }
+
     function setStatelessSignaturesUsed(uint64 value) external {
         statelessSignaturesUsed = value;
     }
@@ -484,7 +492,7 @@ contract ShrincsAccountVerifierExampleTest is Test {
         uint32 leafIndex = uint32(signature.authPath.length);
 
         account.setStatefulPolicyLeafBitmap();
-        bool firstUse = account.verifyStatefulRaw(publicKey, message, signature);
+        bool firstUse = account.verifyStatefulUncheckedForTest(publicKey, message, signature);
         assertEq(firstUse, true, "first leaf use should verify under bitmap policy");
         assertEq(account.isLeafUsed(leafIndex), true, "leaf must be marked used in current key version");
 

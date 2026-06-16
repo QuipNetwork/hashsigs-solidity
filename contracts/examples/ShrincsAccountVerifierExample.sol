@@ -66,11 +66,11 @@ contract ShrincsAccountVerifierExample {
         nextStatefulLeafIndex = INITIAL_STATEFUL_LEAF_INDEX;
     }
 
-    function verifyStatefulRaw(
+    function verifyStatefulUncheckedMessage(
         ShrincsTypes.PublicKey calldata publicKey,
         bytes calldata message,
         ShrincsTypes.StatefulSignature calldata signature
-    ) external returns (bool) {
+    ) internal returns (bool) {
         // Low-level wrapper path. This verifies a caller-provided message directly and does not
         // advance nonce or build a canonical action hash. Callers must handle replay protection,
         // domain separation, and payload binding themselves. Prefer verifyStatefulAction(...).
