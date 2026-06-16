@@ -163,9 +163,29 @@ by the current Foundry vector decoder.
 
 ## Public-Key Shape
 
-The SHRINCS public key exposed by this implementation contains `parameterSetId`, `statefulPublicKey`, one stateless `pkSeed`, and `hypertreeRoot`. The stateless side now follows the SPHINCS+/FIPS-style `PK = (PK.seed, PK.root)` abstraction: `pkSeed` is the global public seed used by FORS and the hypertree, and `hypertreeRoot` is the public root. The existing `expectedCompositePublicKey` parameter name is retained for API compatibility, but it is checked against `publicKey.hypertreeRoot`.
+The SHRINCS public key exposed by this implementation contains:
 
-There is intentionally no composite commitment binding `statefulPublicKey` to the stateless `pkSeed`/`hypertreeRoot` tuple. Integrations that store only the expected public root must ensure out of band that the supplied `statefulPublicKey` belongs with the stateless public-key components, otherwise a mismatched stateful/stateless bundle can be presented to the verifier.
+- `parameterSetId`
+- `publicKeyCommitment`
+- `statefulPublicKey`
+- stateless `pkSeed`
+- stateless `hypertreeRoot`
+
+The stateless side follows the SPHINCS+/FIPS-style `PK = (PK.seed, PK.root)` abstraction:
+
+- `pkSeed` is the global public seed used by FORS and the hypertree
+- `hypertreeRoot` is the stateless public root
+
+The full hybrid bundle is then bound together by `publicKeyCommitment`. The verifier checks that:
+
+- `publicKey.publicKeyCommitment` matches the commitment recomputed from
+  - `parameterSetId`
+  - `statefulPublicKey`
+  - `pkSeed`
+  - `hypertreeRoot`
+- the expected installed public key commitment matches that declared bundle commitment
+
+This keeps the repo's hybrid stateful/stateless public key coherent while preserving the SPHINCS-style stateless core.
 
 ## Available Verifier Paths
 
@@ -194,7 +214,7 @@ The account-style path also rejects invalid contexts:
 
 Both forms verify:
 
-- the provided `expectedCompositePublicKey` matches `publicKey.hypertreeRoot`
+- the provided `expectedCompositePublicKey` matches `publicKey.publicKeyCommitment`
 - the embedded stateful public key
 - compact `WOTS-C` reconstruction
 - the unbalanced XMSS-style authentication path
@@ -218,7 +238,7 @@ The account-style path also rejects invalid contexts:
 
 Both forms verify:
 
-- the provided `expectedCompositePublicKey` matches `publicKey.hypertreeRoot`
+- the provided `expectedCompositePublicKey` matches `publicKey.publicKeyCommitment`
 - parameter-set compatibility
 - `FORS-C`
 - hypertree layer traversal
@@ -245,7 +265,7 @@ It:
 - computes a canonical rotation message hash from:
   - `parameterSetId`
   - `expectedCompositePublicKey`
-  - `currentPublicKey.hypertreeRoot`
+  - `currentPublicKey.publicKeyCommitment`
   - `rotationContext`
   - `nextStatefulKey`
 - verifies a stateless recovery signature over that canonical hash under the current key
@@ -253,7 +273,7 @@ It:
 - decodes the next stateful key and rejects `maxSignatures == 0`
 - rejects zero `domainSeparator`
 - rejects mismatched rotation target `parameterSetId`
-- returns the current public root on success
+- returns the next public key commitment on success
 - returns `bytes32(0)` on failure
 
 ### 4. Full SHRINCS-key rotation authorization
@@ -276,7 +296,7 @@ It:
 - computes a canonical full-rotation message hash from:
   - `parameterSetId`
   - `expectedCompositePublicKey`
-  - `currentPublicKey.hypertreeRoot`
+  - `currentPublicKey.publicKeyCommitment`
   - `rotationContext`
   - the full `nextKey` bundle
 - verifies the current stateless recovery signature over that canonical hash
@@ -285,7 +305,7 @@ It:
 - rejects zero `domainSeparator`
 - rejects mismatched rotation target `parameterSetId`
 - validates the next key payload
-- returns the next `hypertreeRoot` on success
+- returns the next public key commitment on success
 - returns `bytes32(0)` on failure
 
 ## Parameter Sets
@@ -395,12 +415,6 @@ The example contract is intentionally small. It shows how wrapper-owned state sh
 
 The example wrapper also shows several account-layer policies for handling stateful XMSS leaf use. These are wrapper policies, not part of the `SHRINCS` library itself.
 
-- `StatefulPolicy.None`
-  - no on-chain stateful leaf tracking
-  - simplest model
-  - signer is responsible for XMSS state safety
-  - best fit when this repo is used primarily as a verifier library and signer state is trusted off-chain
-
 - `StatefulPolicy.MonotonicIndex`
   - stores `nextStatefulLeafIndex`
   - accepts only the next expected leaf
@@ -444,7 +458,8 @@ The developer/integrator chooses which policy fits the account design. In the ex
 
 - Raw verifier paths are lower-level interfaces.
   - `verifyStatefulRaw(...)` is useful for testing and low-level integrations
-  - they do not provide the typed account-action binding used by the canonical action-context paths
+  - it does not provide the typed account-action binding used by the canonical action-context paths
+  - the wrapper no longer exposes a raw stateless verification path
   - production account flows should prefer the canonical `verifyStateful(...)` / `verifyStateless(...)` style interfaces
 
 - The example wrapper binds its signing domain to both contract identity and chain context.
