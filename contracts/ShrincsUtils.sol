@@ -35,10 +35,12 @@ library ShrincsUtils {
         if (params.parameterSetId != ShrincsTypes.ParameterSetId.Sphincs256sKeccakQ20) return false;
         if (params.hashLen != 32) return false;
         if (params.parameterSetId != publicKey.parameterSetId) return false;
-        if (params.hypertreeHeight != 64 || params.numHypertreeLayers != 8 || params.forsTreeHeight != 14) {
-            return false;
-        }
-        if (params.numForsTrees != 22 || params.chainLen != 16 || params.numWotsChains != 64) return false;
+        if (params.hypertreeHeight != 64) return false;
+        if (params.numHypertreeLayers != 8) return false;
+        if (params.forsTreeHeight != 14) return false;
+        if (params.numForsTrees != 22) return false;
+        if (params.chainLen != 16) return false;
+        if (params.numWotsChains != 64) return false;
         if (params.wotsTargetSum != ShrincsTypes.WOTS_TARGET_SUM_STATEFUL) return false;
         if (!validPublicKey(publicKey)) return false;
         if (uint256(params.numForsTrees) * (uint256(1) << params.forsTreeHeight) > type(uint32).max) return false;
@@ -50,14 +52,17 @@ library ShrincsUtils {
         ShrincsTypes.ParameterSetId requestedParameterSetId,
         ShrincsTypes.ParameterSetId declaredParameterSetId
     ) internal pure returns (bool) {
-        return params.parameterSetId == requestedParameterSetId && declaredParameterSetId == requestedParameterSetId
-            && params.hashSuiteId == ShrincsTypes.HASH_SUITE_KECCAK_256;
+        if (params.parameterSetId != requestedParameterSetId) {
+            return false;
+        }
+        if (declaredParameterSetId != requestedParameterSetId) return false;
+        return params.hashSuiteId == ShrincsTypes.HASH_SUITE_KECCAK_256;
     }
 
     function validActionContext(ShrincsTypes.ActionContext memory context) internal pure returns (bool) {
-        return
-            context.domainSeparator != bytes32(0) && context.actionType != bytes32(0)
-                && context.payloadHash != bytes32(0);
+        if (context.domainSeparator == bytes32(0)) return false;
+        if (context.actionType == bytes32(0)) return false;
+        return context.payloadHash != bytes32(0);
     }
 
     function validRotationContext(ShrincsTypes.RotationContext memory context) internal pure returns (bool) {
@@ -98,8 +103,8 @@ library ShrincsUtils {
         assembly {
             actualCommitment := calldataload(encodedCommitment.offset)
         }
-        return actualCommitment == expectedPublicKeyCommitment
-            && publicKeyCommitment(publicKey) == expectedPublicKeyCommitment;
+        if (actualCommitment != expectedPublicKeyCommitment) return false;
+        return publicKeyCommitment(publicKey) == expectedPublicKeyCommitment;
     }
 
     function validPublicKey(ShrincsTypes.PublicKey calldata publicKey) internal pure returns (bool) {
@@ -143,7 +148,14 @@ library ShrincsUtils {
         uint256 shiftedChain = uint256(chain) << 32;
         uint256 shiftedStep = uint256(step);
 
-        return bytes32(shiftedLayer | shiftedTree | shiftedAddressType | shiftedKeypair | shiftedChain | shiftedStep);
+        uint256 addressValue = shiftedLayer;
+        addressValue |= shiftedTree;
+        addressValue |= shiftedAddressType;
+        addressValue |= shiftedKeypair;
+        addressValue |= shiftedChain;
+        addressValue |= shiftedStep;
+
+        return bytes32(addressValue);
     }
 
     function baseWDigit(uint16 w, bytes memory digest, uint256 index) internal pure returns (uint32) {

@@ -46,7 +46,7 @@ library SHRINCS {
         if (!ShrincsUtils.validActionContext(context)) return false;
         bytes memory message =
             abi.encodePacked(statelessActionMessageHash(parameterSetId, expectedPublicKeyCommitment, context));
-        return _verifyStatelessRawMemory(parameterSetId, expectedPublicKeyCommitment, publicKey, message, signature);
+        return verifyStatelessRawMemory(parameterSetId, expectedPublicKeyCommitment, publicKey, message, signature);
     }
 
     function rotateStatefulViaStateless(
@@ -73,7 +73,8 @@ library SHRINCS {
         {
             (ShrincsTypes.StatefulPublicKey memory decodedNextStatefulKey, bool ok) =
                 ShrincsUtils.decodeStatefulPublicKey(nextStatefulKey.statefulPublicKey);
-            if (!ok || decodedNextStatefulKey.maxSignatures == 0) return bytes32(0);
+            if (!ok) return bytes32(0);
+            if (decodedNextStatefulKey.maxSignatures == 0) return bytes32(0);
         }
         bytes32 computedNextPublicKeyCommitment = ShrincsUtils.publicKeyCommitmentFromParts(
             nextStatefulKey.parameterSetId,
@@ -93,7 +94,7 @@ library SHRINCS {
                 parameterSetId, expectedPublicKeyCommitment, currentPublicKey, context, nextStatefulKey
             )
         );
-        if (!_verifyStatelessRawMemory(
+        if (!verifyStatelessRawMemory(
                 parameterSetId, expectedPublicKeyCommitment, currentPublicKey, recoveryMessage, recoverySignature
             )) return bytes32(0);
         return computedNextPublicKeyCommitment;
@@ -117,15 +118,15 @@ library SHRINCS {
         if (!ShrincsUtils.validRotationContext(context)) return bytes32(0);
         if (!ShrincsUtils.validParams(p, currentPublicKey)) return bytes32(0);
         if (!ShrincsUtils.validParameterSetBinding(p, parameterSetId, nextKey.parameterSetId)) return bytes32(0);
-        if (
-            nextKey.statefulPublicKey.length != ShrincsTypes.STATEFUL_PUBLIC_KEY_BYTES
-                || nextKey.publicKeyCommitment.length != 32
-                || nextKey.pkSeed.length != 32 || nextKey.hypertreeRoot.length != 32
-        ) return bytes32(0);
+        if (nextKey.statefulPublicKey.length != ShrincsTypes.STATEFUL_PUBLIC_KEY_BYTES) return bytes32(0);
+        if (nextKey.publicKeyCommitment.length != 32) return bytes32(0);
+        if (nextKey.pkSeed.length != 32) return bytes32(0);
+        if (nextKey.hypertreeRoot.length != 32) return bytes32(0);
         {
             (ShrincsTypes.StatefulPublicKey memory decodedNextStatefulKey, bool ok) =
                 ShrincsUtils.decodeStatefulPublicKey(nextKey.statefulPublicKey);
-            if (!ok || decodedNextStatefulKey.maxSignatures == 0) return bytes32(0);
+            if (!ok) return bytes32(0);
+            if (decodedNextStatefulKey.maxSignatures == 0) return bytes32(0);
         }
         bytes32 computedNextPublicKeyCommitment = ShrincsUtils.publicKeyCommitmentFromParts(
             nextKey.parameterSetId, nextKey.statefulPublicKey, nextKey.pkSeed, nextKey.hypertreeRoot
@@ -140,7 +141,7 @@ library SHRINCS {
         bytes memory recoveryMessage = abi.encodePacked(
             fullRotationMessageHash(parameterSetId, expectedPublicKeyCommitment, currentPublicKey, context, nextKey)
         );
-        if (!_verifyStatelessRawMemory(
+        if (!verifyStatelessRawMemory(
                 parameterSetId, expectedPublicKeyCommitment, currentPublicKey, recoveryMessage, recoverySignature
             )) return bytes32(0);
         return computedNextPublicKeyCommitment;
@@ -174,7 +175,7 @@ library SHRINCS {
         ShrincsTypes.ParamsView memory p = ShrincsUtils.paramsView(parameterSetId);
         if (!ShrincsUtils.validParameterSetBinding(p, parameterSetId, publicKey.parameterSetId)) return false;
         if (!ShrincsUtils.matchesExpectedPublicKeyCommitment(publicKey, expectedPublicKeyCommitment)) return false;
-        return _verifyStatelessRawMemory(parameterSetId, expectedPublicKeyCommitment, publicKey, message, signature);
+        return verifyStatelessRawMemory(parameterSetId, expectedPublicKeyCommitment, publicKey, message, signature);
     }
 
     function statefulActionMessageHash(
@@ -265,7 +266,7 @@ library SHRINCS {
         );
     }
 
-    function _verifyStatelessRawMemory(
+    function verifyStatelessRawMemory(
         ShrincsTypes.ParameterSetId parameterSetId,
         bytes32 expectedPublicKeyCommitment,
         ShrincsTypes.PublicKey calldata publicKey,

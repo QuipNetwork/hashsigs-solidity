@@ -40,7 +40,8 @@ library ShrincsHypertree {
             // Layer 0 starts from the FORS-derived coordinate. Each upper layer's
             // coordinate is then derived from the lower layer's tree index, so the
             // signature cannot freely choose independent upper-layer addresses.
-            if (layerSig.treeIndex != expectedTreeIndex || layerSig.leafIndex != expectedLeafIndex) return false;
+            if (layerSig.treeIndex != expectedTreeIndex) return false;
+            if (layerSig.leafIndex != expectedLeafIndex) return false;
             if (layerSig.leafIndex >= leafCount) return false;
             if (layerSig.wotsCPkHash.length != params.hashLen) return false;
             if (layerSig.authPath.length != subtreeHeight) return false;
@@ -93,7 +94,8 @@ library ShrincsHypertree {
         assembly {
             expectedRoot := calldataload(expectedRootBytes.offset)
         }
-        return expectedTreeIndex == 0 && current == expectedRoot;
+        if (expectedTreeIndex != 0) return false;
+        return current == expectedRoot;
     }
 
     function verifyWotsC32(
@@ -107,10 +109,9 @@ library ShrincsHypertree {
         ShrincsTypes.WotsCSignature calldata signature
     ) internal pure returns (bool) {
         uint256 chainCount = uint256(params.numWotsChains);
-        if (
-            signature.randomizer.length != 32 || signature.chains.length != chainCount
-                || expectedPkHashBytes.length != 32
-        ) return false;
+        if (signature.randomizer.length != 32) return false;
+        if (signature.chains.length != chainCount) return false;
+        if (expectedPkHashBytes.length != 32) return false;
         if (wotsDigestBytes(params) != 32) return false;
 
         bytes calldata randomizerBytes = signature.randomizer;
@@ -133,7 +134,12 @@ library ShrincsHypertree {
             mstore(0x40, add(pkInput, and(add(pkInputLen, 31), not(31))))
         }
 
-        uint256 addressBase = (uint256(layer) << 224) | (uint256(tree) << 128) | (uint256(keypair) << 64);
+        uint256 shiftedLayer = uint256(layer) << 224;
+        uint256 shiftedTree = uint256(tree) << 128;
+        uint256 shiftedKeypair = uint256(keypair) << 64;
+        uint256 addressBase = shiftedLayer;
+        addressBase |= shiftedTree;
+        addressBase |= shiftedKeypair;
         uint32 digitSum;
         for (uint256 i = 0; i < chainCount;) {
             bytes calldata chain = signature.chains[i];
@@ -195,9 +201,12 @@ library ShrincsHypertree {
         }
         uint256 steps = uint256(w - 1) - digit;
         for (uint256 j = 0; j < steps;) {
-            out = hashStatelessWotsCChainNoMask32(
-                pkSeed, bytes32(addressBase | (uint256(chainIdx) << 32) | (uint256(digit) + j)), out
-            );
+            uint256 shiftedChain = uint256(chainIdx) << 32;
+            uint256 chainStep = uint256(digit) + j;
+            uint256 addressValue = addressBase;
+            addressValue |= shiftedChain;
+            addressValue |= chainStep;
+            out = hashStatelessWotsCChainNoMask32(pkSeed, bytes32(addressValue), out);
             unchecked {
                 ++j;
             }
@@ -238,8 +247,12 @@ library ShrincsHypertree {
         assembly {
             pkSeedWord := calldataload(pkSeed.offset)
         }
-        uint256 addressBase =
-            (uint256(layer) << 224) | (uint256(treeIndex) << 128) | (uint256(ShrincsTypes.AddressTypeTree) << 96);
+        uint256 shiftedLayer = uint256(layer) << 224;
+        uint256 shiftedTree = uint256(treeIndex) << 128;
+        uint256 shiftedAddressType = uint256(ShrincsTypes.AddressTypeTree) << 96;
+        uint256 addressBase = shiftedLayer;
+        addressBase |= shiftedTree;
+        addressBase |= shiftedAddressType;
         node = leaf;
         uint256 index = leafIndex;
         for (uint256 level = 0; level < height;) {
@@ -253,7 +266,10 @@ library ShrincsHypertree {
             uint256 nodeHeight = level + 1;
             uint256 shiftedNodeHeight = nodeHeight << 32;
             uint256 parentIndex = index >> 1;
-            bytes32 addressWord = bytes32(addressBase | shiftedNodeHeight | parentIndex);
+            uint256 addressValue = addressBase;
+            addressValue |= shiftedNodeHeight;
+            addressValue |= parentIndex;
+            bytes32 addressWord = bytes32(addressValue);
             node = hashHypertreeNode32(pkSeedWord, addressWord, left, right);
             index >>= 1;
             unchecked {

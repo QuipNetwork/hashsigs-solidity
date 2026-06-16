@@ -36,7 +36,8 @@ library ShrincsStateful {
         if (!ok) return false;
 
         uint32 leafIndex = uint32(signature.authPath.length);
-        if (leafIndex == 0 || leafIndex > statefulKey.maxSignatures) return false;
+        if (leafIndex == 0) return false;
+        if (leafIndex > statefulKey.maxSignatures) return false;
         if (signature.chains.length != ShrincsTypes.WOTS_CHAINS_STATEFUL) return false;
 
         (bytes32 pkHash, bool validWots) =
@@ -45,7 +46,8 @@ library ShrincsStateful {
 
         (bytes32 root, bool validPath) =
             rootFromUnbalancedPath(statefulKey.pkSeed, leafIndex, pkHash, signature.authPath);
-        return validPath && statefulKey.root == root;
+        if (!validPath) return false;
+        return statefulKey.root == root;
     }
 
     function compactStatefulWotsPublicKeyFromSignature(
@@ -84,7 +86,8 @@ library ShrincsStateful {
         pure
         returns (bytes32 root, bool ok)
     {
-        if (authPath.length != leafIndex || authPath.length == 0) return (bytes32(0), false);
+        if (authPath.length != leafIndex) return (bytes32(0), false);
+        if (authPath.length == 0) return (bytes32(0), false);
         root = statefulParentHash(pkSeed, leafIndex, leaf, authPath[0]);
         for (uint256 offset = 0; offset < authPath.length - 1;) {
             // casting to 'uint32' is safe because offset is bounded by authPath.length - 1, and authPath.length == leafIndex
