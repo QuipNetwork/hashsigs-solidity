@@ -72,7 +72,7 @@ graph TD
     end
 
     subgraph "Public API layer"
-        FA["SHRINCS.sol (facade)<br/>canonical: verifyStateful / verifyStateless,<br/>statelessRotate, rotateStatefulViaStateless,<br/>4 canonical message hashes<br/>raw: verifyStatefulUnsafeRaw / verifyStatelessUnsafeRaw"]
+        FA["SHRINCS.sol (facade)<br/>canonical: verifyStateful / verifyStateless,<br/>statelessRotate, rotateStatefulViaStateless,<br/>4 canonical message hashes"]
     end
 
     subgraph "Crypto component libraries"
@@ -172,12 +172,8 @@ There is intentionally no composite commitment binding `statefulPublicKey` to th
 ### 1. Stateful verification
 
 ```solidity
-SHRINCS.verifyStatefulUnsafeRaw(parameterSetId, expectedCompositePublicKey, publicKey, message, signature)
 SHRINCS.verifyStateful(parameterSetId, expectedCompositePublicKey, publicKey, actionContext, signature)
 ```
-
-`verifyStatefulUnsafeRaw(...)` verifies an arbitrary caller-provided message.
-It is meant for vectors, compatibility checks, and tightly controlled integrations.
 
 `verifyStateful(...)` is the account-style path. It computes a canonical hash from `ActionContext`:
 
@@ -206,12 +202,8 @@ Both forms verify:
 ### 2. Stateless verification
 
 ```solidity
-SHRINCS.verifyStatelessUnsafeRaw(parameterSetId, expectedCompositePublicKey, publicKey, message, signature)
 SHRINCS.verifyStateless(parameterSetId, expectedCompositePublicKey, publicKey, actionContext, signature)
 ```
-
-`verifyStatelessUnsafeRaw(...)` verifies an arbitrary caller-provided message.
-It is meant for vectors, compatibility checks, and tightly controlled integrations.
 
 `verifyStateless(...)` is the account-style path. It computes a canonical hash from `ActionContext`.
 
@@ -451,7 +443,7 @@ The developer/integrator chooses which policy fits the account design. In the ex
   - the example wrapper resets this state on fresh-key installation
 
 - Raw verifier paths are lower-level interfaces.
-  - `verifyStatefulRaw(...)` and `verifyStatelessRaw(...)` are useful for testing and low-level integrations
+  - `verifyStatefulRaw(...)` is useful for testing and low-level integrations
   - they do not provide the typed account-action binding used by the canonical action-context paths
   - production account flows should prefer the canonical `verifyStateful(...)` / `verifyStateless(...)` style interfaces
 

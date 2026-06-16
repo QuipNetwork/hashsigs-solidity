@@ -20,7 +20,7 @@ import {ShrincsTypes} from "./ShrincsTypes.sol";
 import {ShrincsUtils} from "./ShrincsUtils.sol";
 
 library ShrincsStateful {
-    function verifyStatefulUnsafeRaw(
+    function verifyStatefulUncheckedMessage(
         ShrincsTypes.ParameterSetId parameterSetId,
         bytes32 expectedPublicKeyCommitment,
         ShrincsTypes.PublicKey calldata publicKey,

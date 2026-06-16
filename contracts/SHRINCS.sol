@@ -33,7 +33,9 @@ library SHRINCS {
         if (!ShrincsUtils.validActionContext(context)) return false;
         bytes memory message =
             abi.encodePacked(statefulActionMessageHash(parameterSetId, expectedPublicKeyCommitment, context));
-        return verifyStatefulUnsafeRaw(parameterSetId, expectedPublicKeyCommitment, publicKey, message, signature);
+        return verifyStatefulUncheckedMessage(
+            parameterSetId, expectedPublicKeyCommitment, publicKey, message, signature
+        );
     }
 
     function verifyStateless(
@@ -46,7 +48,9 @@ library SHRINCS {
         if (!ShrincsUtils.validActionContext(context)) return false;
         bytes memory message =
             abi.encodePacked(statelessActionMessageHash(parameterSetId, expectedPublicKeyCommitment, context));
-        return verifyStatelessRawMemory(parameterSetId, expectedPublicKeyCommitment, publicKey, message, signature);
+        return verifyStatelessUncheckedMessage(
+            parameterSetId, expectedPublicKeyCommitment, publicKey, message, signature
+        );
     }
 
     function rotateStatefulViaStateless(
@@ -94,7 +98,7 @@ library SHRINCS {
                 parameterSetId, expectedPublicKeyCommitment, currentPublicKey, context, nextStatefulKey
             )
         );
-        if (!verifyStatelessRawMemory(
+        if (!verifyStatelessUncheckedMessage(
                 parameterSetId, expectedPublicKeyCommitment, currentPublicKey, recoveryMessage, recoverySignature
             )) return bytes32(0);
         return computedNextPublicKeyCommitment;
@@ -141,41 +145,22 @@ library SHRINCS {
         bytes memory recoveryMessage = abi.encodePacked(
             fullRotationMessageHash(parameterSetId, expectedPublicKeyCommitment, currentPublicKey, context, nextKey)
         );
-        if (!verifyStatelessRawMemory(
+        if (!verifyStatelessUncheckedMessage(
                 parameterSetId, expectedPublicKeyCommitment, currentPublicKey, recoveryMessage, recoverySignature
             )) return bytes32(0);
         return computedNextPublicKeyCommitment;
     }
 
-    function verifyStatefulUnsafeRaw(
+    function verifyStatefulUncheckedMessage(
         ShrincsTypes.ParameterSetId parameterSetId,
         bytes32 expectedPublicKeyCommitment,
         ShrincsTypes.PublicKey calldata publicKey,
         bytes memory message,
         ShrincsTypes.StatefulSignature calldata signature
     ) internal pure returns (bool) {
-        // Low-level verifier path. The caller supplies the signed message directly, so replay
-        // protection and domain separation are entirely caller-managed. Account-style integrations
-        // should prefer verifyStateful(...) and bind nonce/domain/keyVersion into ActionContext.
-        return ShrincsStateful.verifyStatefulUnsafeRaw(
+        return ShrincsStateful.verifyStatefulUncheckedMessage(
             parameterSetId, expectedPublicKeyCommitment, publicKey, message, signature
         );
-    }
-
-    function verifyStatelessUnsafeRaw(
-        ShrincsTypes.ParameterSetId parameterSetId,
-        bytes32 expectedPublicKeyCommitment,
-        ShrincsTypes.PublicKey calldata publicKey,
-        bytes memory message,
-        ShrincsTypes.StatelessSignature calldata signature
-    ) internal pure returns (bool) {
-        // Low-level verifier path. The caller supplies the signed message directly, so replay
-        // protection and domain separation are entirely caller-managed. Account-style integrations
-        // should prefer verifyStateless(...) and bind nonce/domain/keyVersion into ActionContext.
-        ShrincsTypes.ParamsView memory p = ShrincsUtils.paramsView(parameterSetId);
-        if (!ShrincsUtils.validParameterSetBinding(p, parameterSetId, publicKey.parameterSetId)) return false;
-        if (!ShrincsUtils.matchesExpectedPublicKeyCommitment(publicKey, expectedPublicKeyCommitment)) return false;
-        return verifyStatelessRawMemory(parameterSetId, expectedPublicKeyCommitment, publicKey, message, signature);
     }
 
     function statefulActionMessageHash(
@@ -266,13 +251,13 @@ library SHRINCS {
         );
     }
 
-    function verifyStatelessRawMemory(
+    function verifyStatelessUncheckedMessage(
         ShrincsTypes.ParameterSetId parameterSetId,
         bytes32 expectedPublicKeyCommitment,
         ShrincsTypes.PublicKey calldata publicKey,
         bytes memory message,
         ShrincsTypes.StatelessSignature calldata signature
-    ) private pure returns (bool) {
+    ) internal pure returns (bool) {
         if (!ShrincsUtils.matchesExpectedPublicKeyCommitment(publicKey, expectedPublicKeyCommitment)) return false;
         ShrincsTypes.ParamsView memory p = ShrincsUtils.paramsView(parameterSetId);
         if (!ShrincsUtils.validParams(p, publicKey)) return false;

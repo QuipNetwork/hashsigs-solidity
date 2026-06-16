@@ -28,7 +28,7 @@ contract StatefulHarness {
         bytes calldata message,
         ShrincsTypes.StatefulSignature calldata signature
     ) external pure returns (bool) {
-        return SHRINCS.verifyStatefulUnsafeRaw(
+        return SHRINCS.verifyStatefulUncheckedMessage(
             parameterSetId, expectedCompositePublicKey, publicKey, message, signature
         );
     }
@@ -60,7 +60,7 @@ contract StatelessHarness {
         bytes calldata message,
         ShrincsTypes.StatelessSignature calldata signature
     ) external pure returns (bool) {
-        return SHRINCS.verifyStatelessUnsafeRaw(
+        return SHRINCS.verifyStatelessUncheckedMessage(
             parameterSetId, expectedCompositePublicKey, publicKey, message, signature
         );
     }

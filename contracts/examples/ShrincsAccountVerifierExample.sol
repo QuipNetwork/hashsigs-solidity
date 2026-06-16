@@ -78,7 +78,7 @@ contract ShrincsAccountVerifierExample {
         if (!precheckStatefulLeafUse(leafIndex)) return false;
 
         bool ok =
-            SHRINCS.verifyStatefulUnsafeRaw(parameterSetId, currentShrincsPublicKey, publicKey, message, signature);
+            SHRINCS.verifyStatefulUncheckedMessage(parameterSetId, currentShrincsPublicKey, publicKey, message, signature);
         if (!ok) return false;
 
         commitStatefulLeafUse(leafIndex);
@@ -109,27 +109,6 @@ contract ShrincsAccountVerifierExample {
         commitStatefulLeafUse(leafIndex);
         emit StatefulSignatureVerified(leafIndex, nonce, keyVersion);
         nonce += 1;
-        return true;
-    }
-
-    function verifyStatelessRaw(
-        ShrincsTypes.PublicKey calldata publicKey,
-        bytes calldata message,
-        ShrincsTypes.StatelessSignature calldata signature
-    ) external returns (bool) {
-        // Low-level wrapper path. This verifies a caller-provided message directly and does not
-        // advance nonce or build a canonical action hash. Callers must handle replay protection,
-        // domain separation, and payload binding themselves. Prefer verifyStatelessAction(...).
-        if (statefulPolicy == StatefulPolicy.RecoveryRotation && !recoveryMode) return false;
-        uint64 limit = ShrincsTypes.defaultParamsView(parameterSetId).statelessSignatureLimit;
-        if (statelessSignaturesUsed >= limit) return false;
-
-        bool ok =
-            SHRINCS.verifyStatelessUnsafeRaw(parameterSetId, currentShrincsPublicKey, publicKey, message, signature);
-        if (!ok) return false;
-
-        statelessSignaturesUsed += 1;
-        emit StatelessSignatureVerified(statelessSignaturesUsed, nonce, keyVersion);
         return true;
     }
 

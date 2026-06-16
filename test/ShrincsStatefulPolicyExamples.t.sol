@@ -165,27 +165,27 @@ contract ShrincsStatefulPolicyExamplesTest is Test {
         );
     }
 
-    function testRecoveryRotationExampleAllowsStatelessPathInRecoveryMode() public {
-        (
-            ShrincsTypes.PublicKey memory publicKey,
-            bytes memory message,
-            ShrincsTypes.StatelessSignature memory signature
-        ) = decodeStatelessVector(".stateless.cases.valid.calldata");
+    function testRecoveryRotationExampleKeepsLegacyRawStatelessVectorOutOfCanonicalWrapper() public {
+        (ShrincsTypes.PublicKey memory publicKey,, ShrincsTypes.StatelessSignature memory signature) =
+            decodeStatelessVector(".stateless.cases.valid.calldata");
         bytes32 expectedCompositePublicKey = compositePublicKeyWord(publicKey);
         ShrincsAccountVerifierExample account = new ShrincsAccountVerifierExample(expectedCompositePublicKey);
         account.setStatefulPolicyRecoveryRotation();
 
+        bytes32 actionType = keccak256("action");
+        bytes32 payloadHash = keccak256("payload");
+
         assertEq(
-            account.verifyStatelessRaw(publicKey, message, signature),
+            account.verifyStatelessAction(publicKey, actionType, payloadHash, signature),
             false,
-            "stateless raw path should be off before recovery mode"
+            "canonical stateless path should be blocked before recovery mode"
         );
         account.enterRecoveryMode();
 
-        bool ok = account.verifyStatelessRaw(publicKey, message, signature);
+        bool ok = account.verifyStatelessAction(publicKey, actionType, payloadHash, signature);
 
-        assertEq(ok, true, "stateless raw path should work in recovery mode");
-        assertTrue(account.statelessSignaturesUsed() == 1, "recovery stateless usage must increment");
+        assertEq(ok, false, "legacy raw vector must not verify through canonical stateless wrapper path");
+        assertTrue(account.statelessSignaturesUsed() == 0, "failed canonical stateless verify must not increment");
     }
 
     function testRecoveryRotationExampleRejectsLegacyRotationAuthorizationAndKeepsRecoveryMode() public {
