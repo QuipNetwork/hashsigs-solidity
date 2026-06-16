@@ -168,6 +168,10 @@ contract ShrincsAccountVerifierExample {
         ShrincsTypes.StatelessSignature calldata recoverySignature,
         ShrincsTypes.RotationTarget calldata nextKey
     ) external returns (bool) {
+        if (statefulPolicy != StatefulPolicy.RecoveryRotation) {
+            return false;
+        }
+        if (!recoveryMode) return false;
         uint64 limit = ShrincsTypes.defaultParamsView(parameterSetId).statelessSignatureLimit;
         if (statelessSignaturesUsed >= limit) return false;
 

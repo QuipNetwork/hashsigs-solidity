@@ -292,6 +292,27 @@ contract ShrincsAccountVerifierExampleTest is Test {
         assertTrue(account.statelessSignaturesUsed() == 0, "stateless usage must not change on failed rotation");
     }
 
+    function testExampleRotateFullKeyRequiresRecoveryMode() public {
+        (ShrincsTypes.PublicKey memory publicKey,, ShrincsTypes.StatelessSignature memory signature) =
+            decodeStatelessVector(".stateless.cases.valid.calldata");
+        bytes32 expectedCompositePublicKey = compositePublicKeyWord(publicKey);
+        ShrincsAccountVerifierExample account = new ShrincsAccountVerifierExample(expectedCompositePublicKey);
+        ShrincsTypes.RotationTarget memory target = rotationTargetFromParts(
+            publicKey.parameterSetId, publicKey.statefulPublicKey, publicKey.pkSeed, publicKey.hypertreeRoot
+        );
+
+        bool withoutPolicy = account.rotateFullKey(publicKey, signature, target);
+        assertEq(withoutPolicy, false, "full-key rotation must be blocked outside recovery policy");
+
+        account.setStatefulPolicyRecoveryRotation();
+
+        bool withoutRecoveryMode = account.rotateFullKey(publicKey, signature, target);
+        assertEq(withoutRecoveryMode, false, "full-key rotation must be blocked before entering recovery mode");
+
+        assertEq(account.currentShrincsPublicKey(), expectedCompositePublicKey);
+        assertEq(account.recoveryMode(), false, "failed full-key rotation must not toggle recovery mode");
+    }
+
     function testExampleVerifyStatelessActionRejectsAtUsageLimit() public {
         (ShrincsTypes.PublicKey memory publicKey,, ShrincsTypes.StatelessSignature memory signature) =
             decodeStatelessVector(".stateless.cases.valid.calldata");
