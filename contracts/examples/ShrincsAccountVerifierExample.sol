@@ -21,11 +21,12 @@ import {ShrincsTypes} from "../ShrincsTypes.sol";
 
 contract ShrincsAccountVerifierExample {
     enum StatefulPolicy {
-        None,
         MonotonicIndex,
         RecoveryRotation,
         LeafBitmap
     }
+
+    uint32 internal constant INITIAL_STATEFUL_LEAF_INDEX = 1;
 
     bytes32 public currentShrincsPublicKey;
     address public owner;
@@ -61,6 +62,8 @@ contract ShrincsAccountVerifierExample {
         owner = msg.sender;
         currentShrincsPublicKey = initialShrincsPublicKey;
         parameterSetId = ShrincsTypes.ParameterSetId.Sphincs256sKeccakQ20;
+        statefulPolicy = StatefulPolicy.MonotonicIndex;
+        nextStatefulLeafIndex = INITIAL_STATEFUL_LEAF_INDEX;
     }
 
     function verifyStatefulRaw(
@@ -204,12 +207,6 @@ contract ShrincsAccountVerifierExample {
         return (usedLeafBitmap[keyVersion][wordIndex] & (uint256(1) << bitIndex)) != 0;
     }
 
-    function setStatefulPolicyNone() external onlyOwner {
-        statefulPolicy = StatefulPolicy.None;
-        recoveryMode = false;
-        emit StatefulPolicySet(statefulPolicy, nextStatefulLeafIndex);
-    }
-
     function setStatefulPolicyMonotonicIndex(uint32 initialLeafIndex) external onlyOwner {
         require(initialLeafIndex >= nextStatefulLeafIndex, "stateful index rollback");
         statefulPolicy = StatefulPolicy.MonotonicIndex;
@@ -220,12 +217,18 @@ contract ShrincsAccountVerifierExample {
 
     function setStatefulPolicyRecoveryRotation() external onlyOwner {
         statefulPolicy = StatefulPolicy.RecoveryRotation;
+        if (nextStatefulLeafIndex == 0) {
+            nextStatefulLeafIndex = INITIAL_STATEFUL_LEAF_INDEX;
+        }
         recoveryMode = false;
         emit StatefulPolicySet(statefulPolicy, nextStatefulLeafIndex);
     }
 
     function setStatefulPolicyLeafBitmap() external onlyOwner {
         statefulPolicy = StatefulPolicy.LeafBitmap;
+        if (nextStatefulLeafIndex == 0) {
+            nextStatefulLeafIndex = INITIAL_STATEFUL_LEAF_INDEX;
+        }
         recoveryMode = false;
         emit StatefulPolicySet(statefulPolicy, nextStatefulLeafIndex);
     }
@@ -252,6 +255,7 @@ contract ShrincsAccountVerifierExample {
             uint256 wordIndex = uint256(leafIndex) >> 8;
             uint256 bitIndex = uint256(leafIndex) & 0xff;
             usedLeafBitmap[keyVersion][wordIndex] |= uint256(1) << bitIndex;
+            return;
         }
     }
 
@@ -266,8 +270,8 @@ contract ShrincsAccountVerifierExample {
         nonce += 1;
         keyVersion += 1;
         statelessSignaturesUsed = 0;
-        nextStatefulLeafIndex = 0;
-        statefulPolicy = StatefulPolicy.None;
+        nextStatefulLeafIndex = INITIAL_STATEFUL_LEAF_INDEX;
+        statefulPolicy = StatefulPolicy.MonotonicIndex;
         recoveryMode = false;
         emit KeyRotated(previousShrincsPublicKey, nextCompositePublicKey, nextParameterSetId, keyVersion);
         emit StatefulPolicySet(statefulPolicy, nextStatefulLeafIndex);

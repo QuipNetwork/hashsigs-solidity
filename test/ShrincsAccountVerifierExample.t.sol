@@ -75,15 +75,6 @@ contract ShrincsAccountVerifierExampleHarness is ShrincsAccountVerifierExample {
 }
 
 contract ExampleNonOwnerCaller {
-    function setStatefulPolicyNone(ShrincsAccountVerifierExample target) external {
-        target.setStatefulPolicyNone();
-    }
-
-    function trySetStatefulPolicyNone(ShrincsAccountVerifierExample target) external returns (bool) {
-        (bool ok,) = address(target).call(abi.encodeCall(target.setStatefulPolicyNone, ()));
-        return ok;
-    }
-
     function setStatefulPolicyMonotonicIndex(ShrincsAccountVerifierExample target, uint32 initialLeafIndex) external {
         target.setStatefulPolicyMonotonicIndex(initialLeafIndex);
     }
@@ -215,6 +206,11 @@ contract ShrincsAccountVerifierExampleTest is Test {
             uint8(account.parameterSetId()) == uint8(ShrincsTypes.ParameterSetId.Sphincs256sKeccakQ20),
             "parameter set must initialize to Q20 profile"
         );
+        assertTrue(
+            uint8(account.statefulPolicy()) == uint8(ShrincsAccountVerifierExample.StatefulPolicy.MonotonicIndex),
+            "stateful policy must initialize to monotonic index"
+        );
+        assertTrue(account.nextStatefulLeafIndex() == 1, "next stateful leaf index must initialize to one");
         assertTrue(account.nonce() == 0, "nonce must initialize to zero");
         assertTrue(account.keyVersion() == 0, "key version must initialize to zero");
         assertTrue(account.statelessSignaturesUsed() == 0, "stateless usage must initialize to zero");
@@ -348,7 +344,7 @@ contract ShrincsAccountVerifierExampleTest is Test {
 
         assertEq(ok, false, "non-owner must not be able to change stateful policy");
         assertTrue(
-            uint8(account.statefulPolicy()) == uint8(ShrincsAccountVerifierExample.StatefulPolicy.None),
+            uint8(account.statefulPolicy()) == uint8(ShrincsAccountVerifierExample.StatefulPolicy.MonotonicIndex),
             "failed non-owner policy change must not update policy"
         );
     }
@@ -362,30 +358,6 @@ contract ShrincsAccountVerifierExampleTest is Test {
         nonOwnerCaller.setStatefulPolicyLeafBitmap(account);
     }
 
-    function testExampleRejectsNonOwnerSetStatefulPolicyNone() public {
-        (ShrincsTypes.PublicKey memory publicKey,,) = _decodeStatelessVector(".stateless.cases.valid.calldata");
-        bytes32 expectedCompositePublicKey = _compositePublicKeyWord(publicKey);
-        ShrincsAccountVerifierExample account = new ShrincsAccountVerifierExample(expectedCompositePublicKey);
-        account.setStatefulPolicyLeafBitmap();
-
-        bool ok = nonOwnerCaller.trySetStatefulPolicyNone(account);
-
-        assertEq(ok, false, "non-owner must not be able to clear stateful policy");
-        assertTrue(
-            uint8(account.statefulPolicy()) == uint8(ShrincsAccountVerifierExample.StatefulPolicy.LeafBitmap),
-            "failed non-owner clear must not update policy"
-        );
-    }
-
-    function testExampleNonOwnerSetStatefulPolicyNoneReverts() public {
-        (ShrincsTypes.PublicKey memory publicKey,,) = _decodeStatelessVector(".stateless.cases.valid.calldata");
-        bytes32 expectedCompositePublicKey = _compositePublicKeyWord(publicKey);
-        ShrincsAccountVerifierExample account = new ShrincsAccountVerifierExample(expectedCompositePublicKey);
-
-        vm.expectRevert(bytes("only owner"));
-        nonOwnerCaller.setStatefulPolicyNone(account);
-    }
-
     function testExampleRejectsNonOwnerSetStatefulPolicyMonotonicIndex() public {
         (ShrincsTypes.PublicKey memory publicKey,,) = _decodeStatelessVector(".stateless.cases.valid.calldata");
         bytes32 expectedCompositePublicKey = _compositePublicKeyWord(publicKey);
@@ -395,10 +367,10 @@ contract ShrincsAccountVerifierExampleTest is Test {
 
         assertEq(ok, false, "non-owner must not be able to set monotonic policy");
         assertTrue(
-            uint8(account.statefulPolicy()) == uint8(ShrincsAccountVerifierExample.StatefulPolicy.None),
+            uint8(account.statefulPolicy()) == uint8(ShrincsAccountVerifierExample.StatefulPolicy.MonotonicIndex),
             "failed non-owner monotonic set must not update policy"
         );
-        assertTrue(account.nextStatefulLeafIndex() == 0, "failed non-owner monotonic set must not update index");
+        assertTrue(account.nextStatefulLeafIndex() == 1, "failed non-owner monotonic set must not update index");
     }
 
     function testExampleNonOwnerSetStatefulPolicyMonotonicIndexReverts() public {
@@ -419,7 +391,7 @@ contract ShrincsAccountVerifierExampleTest is Test {
 
         assertEq(ok, false, "non-owner must not be able to set recovery rotation policy");
         assertTrue(
-            uint8(account.statefulPolicy()) == uint8(ShrincsAccountVerifierExample.StatefulPolicy.None),
+            uint8(account.statefulPolicy()) == uint8(ShrincsAccountVerifierExample.StatefulPolicy.MonotonicIndex),
             "failed non-owner recovery rotation set must not update policy"
         );
     }
@@ -490,10 +462,10 @@ contract ShrincsAccountVerifierExampleTest is Test {
         account.installFreshKeyForTest(nextCompositePublicKey, ShrincsTypes.ParameterSetId.Sphincs256sKeccakQ20);
 
         assertEq(account.currentShrincsPublicKey(), nextCompositePublicKey);
-        assertTrue(account.nextStatefulLeafIndex() == 0, "fresh key must reset next stateful leaf index");
+        assertTrue(account.nextStatefulLeafIndex() == 1, "fresh key must reset next stateful leaf index");
         assertTrue(
-            uint8(account.statefulPolicy()) == uint8(ShrincsAccountVerifierExample.StatefulPolicy.None),
-            "fresh key must clear stateful policy"
+            uint8(account.statefulPolicy()) == uint8(ShrincsAccountVerifierExample.StatefulPolicy.MonotonicIndex),
+            "fresh key must reset stateful policy to monotonic index"
         );
         assertEq(account.recoveryMode(), false, "fresh key must exit recovery mode");
         assertTrue(account.statelessSignaturesUsed() == 0, "fresh key must reset stateless usage when requested");

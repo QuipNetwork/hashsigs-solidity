@@ -90,7 +90,7 @@ contract ShrincsStatefulPolicyExamplesTest is Test {
         vectors = vm.readFile(VECTOR_PATH);
     }
 
-    function testNoStateTrackingExampleAllowsRepeatedValidStatefulUse() public {
+    function testDefaultMonotonicPolicyRejectsRepeatedValidStatefulUse() public {
         (
             ShrincsTypes.PublicKey memory publicKey,
             bytes memory message,
@@ -98,13 +98,12 @@ contract ShrincsStatefulPolicyExamplesTest is Test {
         ) = _decodeStatefulVector(".stateful.cases.valid.calldata");
         bytes32 expectedCompositePublicKey = _compositePublicKeyWord(publicKey);
         ShrincsAccountVerifierExample account = new ShrincsAccountVerifierExample(expectedCompositePublicKey);
-        account.setStatefulPolicyNone();
 
         bool first = account.verifyStatefulRaw(publicKey, message, signature);
         bool second = account.verifyStatefulRaw(publicKey, message, signature);
 
         assertEq(first, true, "first raw stateful verification should succeed");
-        assertEq(second, true, "repeated raw stateful verification should still succeed");
+        assertEq(second, false, "default monotonic policy must reject repeated raw stateful verification");
     }
 
     function testMonotonicIndexExampleAcceptsExpectedLeafAndThenRejectsReplay() public {
