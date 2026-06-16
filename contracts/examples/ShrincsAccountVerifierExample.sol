@@ -75,13 +75,13 @@ contract ShrincsAccountVerifierExample {
         // advance nonce or build a canonical action hash. Callers must handle replay protection,
         // domain separation, and payload binding themselves. Prefer verifyStatefulAction(...).
         uint32 leafIndex = uint32(signature.authPath.length);
-        if (!_precheckStatefulLeafUse(leafIndex)) return false;
+        if (!precheckStatefulLeafUse(leafIndex)) return false;
 
         bool ok =
             SHRINCS.verifyStatefulUnsafeRaw(parameterSetId, currentShrincsPublicKey, publicKey, message, signature);
         if (!ok) return false;
 
-        _commitStatefulLeafUse(leafIndex);
+        commitStatefulLeafUse(leafIndex);
         emit StatefulSignatureVerified(leafIndex, nonce, keyVersion);
         return true;
     }
@@ -93,10 +93,10 @@ contract ShrincsAccountVerifierExample {
         ShrincsTypes.StatefulSignature calldata signature
     ) external returns (bool) {
         uint32 leafIndex = uint32(signature.authPath.length);
-        if (!_precheckStatefulLeafUse(leafIndex)) return false;
+        if (!precheckStatefulLeafUse(leafIndex)) return false;
 
         ShrincsTypes.ActionContext memory context = ShrincsTypes.ActionContext({
-            domainSeparator: _domainSeparator(),
+            domainSeparator: domainSeparator(),
             nonce: nonce,
             keyVersion: keyVersion,
             actionType: actionType,
@@ -106,7 +106,7 @@ contract ShrincsAccountVerifierExample {
         bool ok = SHRINCS.verifyStateful(parameterSetId, currentShrincsPublicKey, publicKey, context, signature);
         if (!ok) return false;
 
-        _commitStatefulLeafUse(leafIndex);
+        commitStatefulLeafUse(leafIndex);
         emit StatefulSignatureVerified(leafIndex, nonce, keyVersion);
         nonce += 1;
         return true;
@@ -144,7 +144,7 @@ contract ShrincsAccountVerifierExample {
         if (statelessSignaturesUsed >= limit) return false;
 
         ShrincsTypes.ActionContext memory context = ShrincsTypes.ActionContext({
-            domainSeparator: _domainSeparator(),
+            domainSeparator: domainSeparator(),
             nonce: nonce,
             keyVersion: keyVersion,
             actionType: actionType,
@@ -165,19 +165,22 @@ contract ShrincsAccountVerifierExample {
         ShrincsTypes.StatelessSignature calldata recoverySignature,
         ShrincsTypes.RotationTarget calldata nextKey
     ) external returns (bool) {
-        if (statefulPolicy != StatefulPolicy.RecoveryRotation || !recoveryMode) return false;
+        if (statefulPolicy != StatefulPolicy.RecoveryRotation) {
+            return false;
+        }
+        if (!recoveryMode) return false;
         uint64 limit = ShrincsTypes.defaultParamsView(parameterSetId).statelessSignatureLimit;
         if (statelessSignaturesUsed >= limit) return false;
 
         ShrincsTypes.RotationContext memory context =
-            ShrincsTypes.RotationContext({domainSeparator: _domainSeparator(), nonce: nonce, keyVersion: keyVersion});
+            ShrincsTypes.RotationContext({domainSeparator: domainSeparator(), nonce: nonce, keyVersion: keyVersion});
 
         bytes32 nextCompositePublicKey = SHRINCS.statelessRotate(
             parameterSetId, currentShrincsPublicKey, currentPublicKey, context, recoverySignature, nextKey
         );
         if (nextCompositePublicKey == bytes32(0)) return false;
 
-        _installFreshKey(nextCompositePublicKey, nextKey.parameterSetId);
+        installFreshKey(nextCompositePublicKey, nextKey.parameterSetId);
         return true;
     }
 
@@ -190,14 +193,14 @@ contract ShrincsAccountVerifierExample {
         if (statelessSignaturesUsed >= limit) return false;
 
         ShrincsTypes.RotationContext memory context =
-            ShrincsTypes.RotationContext({domainSeparator: _domainSeparator(), nonce: nonce, keyVersion: keyVersion});
+            ShrincsTypes.RotationContext({domainSeparator: domainSeparator(), nonce: nonce, keyVersion: keyVersion});
 
         bytes32 nextCompositePublicKey = SHRINCS.statelessRotate(
             parameterSetId, currentShrincsPublicKey, currentPublicKey, context, recoverySignature, nextKey
         );
         if (nextCompositePublicKey == bytes32(0)) return false;
 
-        _installFreshKey(nextCompositePublicKey, nextKey.parameterSetId);
+        installFreshKey(nextCompositePublicKey, nextKey.parameterSetId);
         return true;
     }
 
@@ -239,14 +242,14 @@ contract ShrincsAccountVerifierExample {
         emit RecoveryModeEntered(keyVersion);
     }
 
-    function _precheckStatefulLeafUse(uint32 leafIndex) internal view returns (bool) {
+    function precheckStatefulLeafUse(uint32 leafIndex) internal view returns (bool) {
         if (statefulPolicy == StatefulPolicy.RecoveryRotation && recoveryMode) return false;
         if (statefulPolicy == StatefulPolicy.MonotonicIndex) return leafIndex == nextStatefulLeafIndex;
         if (statefulPolicy == StatefulPolicy.LeafBitmap) return !isLeafUsed(leafIndex);
         return true;
     }
 
-    function _commitStatefulLeafUse(uint32 leafIndex) internal {
+    function commitStatefulLeafUse(uint32 leafIndex) internal {
         if (statefulPolicy == StatefulPolicy.MonotonicIndex) {
             nextStatefulLeafIndex += 1;
             return;
@@ -259,11 +262,11 @@ contract ShrincsAccountVerifierExample {
         }
     }
 
-    function _domainSeparator() internal view returns (bytes32) {
+    function domainSeparator() internal view returns (bytes32) {
         return keccak256(abi.encode(DOMAIN_TAG, block.chainid, address(this)));
     }
 
-    function _installFreshKey(bytes32 nextCompositePublicKey, ShrincsTypes.ParameterSetId nextParameterSetId) internal {
+    function installFreshKey(bytes32 nextCompositePublicKey, ShrincsTypes.ParameterSetId nextParameterSetId) internal {
         bytes32 previousShrincsPublicKey = currentShrincsPublicKey;
         currentShrincsPublicKey = nextCompositePublicKey;
         parameterSetId = nextParameterSetId;

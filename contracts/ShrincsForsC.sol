@@ -32,7 +32,8 @@ library ShrincsForsC {
         // Verification therefore expects only k - 1 revealed entries and rejects any digest
         // whose omitted final tree would require a nonzero leaf.
         uint256 signedTrees = uint256(params.numForsTrees) - 1;
-        if (signature.randomizer.length != 32 || signature.entries.length != signedTrees) return (bytes32(0), false);
+        if (signature.randomizer.length != 32) return (bytes32(0), false);
+        if (signature.entries.length != signedTrees) return (bytes32(0), false);
 
         ShrincsTypes.ForsDigest memory digest =
             forsDigest(params, publicKey, message, signature.randomizer, signature.counter);
@@ -40,7 +41,8 @@ library ShrincsForsC {
         if (ShrincsUtils.readBits32(digest.digest, signedTrees * a, params.forsTreeHeight) != 0) {
             return (bytes32(0), false);
         }
-        if (digest.treeIndex != treeIndex || digest.leafIndex != leafIndex) return (bytes32(0), false);
+        if (digest.treeIndex != treeIndex) return (bytes32(0), false);
+        if (digest.leafIndex != leafIndex) return (bytes32(0), false);
 
         bytes calldata pkSeed = publicKey.pkSeed;
         uint256 forsPkInputLen = 39 + signedTrees * 32;
@@ -54,7 +56,8 @@ library ShrincsForsC {
 
         for (uint256 tree = 0; tree < signedTrees;) {
             ShrincsTypes.ForsEntry calldata entry = signature.entries[tree];
-            if (entry.secretLeaf.length != 32 || entry.authPath.length != a) return (bytes32(0), false);
+            if (entry.secretLeaf.length != 32) return (bytes32(0), false);
+            if (entry.authPath.length != a) return (bytes32(0), false);
             uint32 entryLeafIndex = ShrincsUtils.readBits32(digest.digest, tree * a, params.forsTreeHeight);
             // casting to 'uint32' is safe because the supported FORS tree height is 14 bits
             // forge-lint: disable-next-line(unsafe-typecast)
@@ -89,11 +92,10 @@ library ShrincsForsC {
         ShrincsTypes.ForsEntry calldata entry
     ) internal pure returns (bytes32 node) {
         uint256 addressBase = forsAddressBase(treeIndex, leafIndex);
-        node = hashForsLeaf32(
-            pkSeed,
-            bytes32(addressBase | ((uint256(forsTreeIndex) << height) + uint256(entryLeafIndex))),
-            entry.secretLeaf
-        );
+        uint256 shiftedForsTree = uint256(forsTreeIndex) << height;
+        uint256 leafLowIndex = shiftedForsTree + uint256(entryLeafIndex);
+        uint256 leafAddressValue = addressBase | leafLowIndex;
+        node = hashForsLeaf32(pkSeed, bytes32(leafAddressValue), entry.secretLeaf);
         uint256 index = entryLeafIndex;
         for (uint256 level = 0; level < height;) {
             bytes calldata authNode = entry.authPath[level];
@@ -107,7 +109,11 @@ library ShrincsForsC {
             uint256 shiftedNodeHeight = nodeHeight << 32;
             uint256 shiftedTree = uint256(forsTreeIndex) << (height - nodeHeight);
             uint256 parentIndex = index >> 1;
-            bytes32 addressWord = bytes32(addressBase | shiftedNodeHeight | (shiftedTree + parentIndex));
+            uint256 parentLowIndex = shiftedTree + parentIndex;
+            uint256 addressValue = addressBase;
+            addressValue |= shiftedNodeHeight;
+            addressValue |= parentLowIndex;
+            bytes32 addressWord = bytes32(addressValue);
             node = hashForsNode32(pkSeed, addressWord, left, right);
             index >>= 1;
             unchecked {
@@ -117,8 +123,13 @@ library ShrincsForsC {
     }
 
     function forsAddressBase(uint64 treeIndex, uint32 leafIndex) internal pure returns (uint256) {
-        return
-            (uint256(treeIndex) << 128) | (uint256(ShrincsTypes.AddressTypeForsTree) << 96) | (uint256(leafIndex) << 64);
+        uint256 shiftedTreeIndex = uint256(treeIndex) << 128;
+        uint256 shiftedAddressType = uint256(ShrincsTypes.AddressTypeForsTree) << 96;
+        uint256 shiftedLeafIndex = uint256(leafIndex) << 64;
+        uint256 addressBase = shiftedTreeIndex;
+        addressBase |= shiftedAddressType;
+        addressBase |= shiftedLeafIndex;
+        return addressBase;
     }
 
     function hashForsLeaf32(bytes calldata pkSeed, bytes32 addressWord, bytes calldata sk)
