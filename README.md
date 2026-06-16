@@ -425,7 +425,7 @@ The example wrapper also shows several account-layer policies for handling state
 
 - `StatefulPolicy.RecoveryRotation`
   - blocks the stateful path once recovery mode is entered
-  - allows stateless fallback and fresh-key rotation
+  - allows stateless fallback and both stateless rotation paths only after recovery mode is entered
   - models the “recover, then rotate to a fresh key” workflow
   - works best when recovery mode is treated as a bridge to rotation, not as a long-term steady state
   - if a system enters recovery mode and never rotates out, the stateful path loses most of its practical value
@@ -457,10 +457,14 @@ The developer/integrator chooses which policy fits the account design. In the ex
   - the example wrapper resets this state on fresh-key installation
 
 - Raw verifier paths are lower-level interfaces.
-  - `verifyStatefulRaw(...)` is useful for testing and low-level integrations
-  - it does not provide the typed account-action binding used by the canonical action-context paths
-  - the wrapper no longer exposes a raw stateless verification path
+  - the production-facing example wrapper no longer exposes raw stateful or raw stateless verification entry points
+  - raw verification remains available only through lower-level libraries and test harnesses
   - production account flows should prefer the canonical `verifyStateful(...)` / `verifyStateless(...)` style interfaces
+
+- Stateless rotation is recovery-only in the example wrapper.
+  - `rotateToFreshKey(...)` and `rotateFullKey(...)` both require `StatefulPolicy.RecoveryRotation`
+  - both also require `recoveryMode == true`
+  - this keeps stateless signatures as recovery authority rather than a normal-operation rotation bypass
 
 - The example wrapper binds its signing domain to both contract identity and chain context.
   - the domain is derived from a stable tag, `block.chainid`, and `address(this)`
