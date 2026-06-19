@@ -36,8 +36,6 @@ contract ShrincsAccountVerifierExample {
     bytes32 public currentShrincsPublicKey;
     // Account owner allowed to change wrapper policy and enter recovery mode.
     address public owner;
-    // Active SHRINCS parameter profile for the installed key bundle.
-    ShrincsTypes.ParameterSetId public parameterSetId;
     // Canonical action/rotation nonce consumed on successful wrapper operations.
     uint256 public nonce;
     // Installed-key epoch incremented whenever a fresh key bundle is installed.
@@ -58,10 +56,7 @@ contract ShrincsAccountVerifierExample {
     event StatefulPolicySet(StatefulPolicy indexed policy, uint32 nextStatefulLeafIndex);
     event RecoveryModeEntered(uint256 indexed keyVersion);
     event KeyRotated(
-        bytes32 indexed previousShrincsPublicKey,
-        bytes32 indexed nextShrincsPublicKey,
-        ShrincsTypes.ParameterSetId nextParameterSetId,
-        uint256 nextKeyVersion
+        bytes32 indexed previousShrincsPublicKey, bytes32 indexed nextShrincsPublicKey, uint256 nextKeyVersion
     );
     event StatefulSignatureVerified(uint32 indexed leafIndex, uint256 indexed nonce, uint256 indexed keyVersion);
     event StatelessSignatureVerified(uint64 usedCount, uint256 indexed nonce, uint256 indexed keyVersion);
@@ -74,16 +69,13 @@ contract ShrincsAccountVerifierExample {
     // constructor: Install the initial key commitment and start in the default safe wrapper mode.
     // 1. Record the deployer as the wrapper owner.
     // 2. Install the initial SHRINCS public-key commitment.
-    // 3. Select the default parameter profile for the example wrapper.
-    // 4. Start with monotonic stateful leaf tracking.
-    // 5. Expect the first stateful signature to use leaf 1.
+    // 3. Start with monotonic stateful leaf tracking.
+    // 4. Expect the first stateful signature to use leaf 1.
     constructor(bytes32 initialShrincsPublicKey) {
         // Record the deployer as the wrapper administrator.
         owner = msg.sender;
         // Install the first trusted SHRINCS public-key commitment.
         currentShrincsPublicKey = initialShrincsPublicKey;
-        // Start the example wrapper on its default SHRINCS parameter profile.
-        parameterSetId = ShrincsTypes.ParameterSetId.Sphincs256sKeccakQ20;
         // Default to ordered stateful signing under monotonic leaf tracking.
         statefulPolicy = StatefulPolicy.MonotonicIndex;
         // Fresh keys begin consuming stateful leaves from index 1.
@@ -108,8 +100,7 @@ contract ShrincsAccountVerifierExample {
         if (!precheckStatefulLeafUse(leafIndex)) return false;
 
         // Verify the caller-supplied message directly against the current installed key.
-        bool ok =
-            SHRINCS.verifyStatefulUncheckedMessage(parameterSetId, currentShrincsPublicKey, publicKey, message, signature);
+        bool ok = SHRINCS.verifyStatefulUncheckedMessage(currentShrincsPublicKey, publicKey, message, signature);
         if (!ok) return false;
 
         // Record the leaf only after the signature is known to be valid.
@@ -146,7 +137,7 @@ contract ShrincsAccountVerifierExample {
         });
 
         // Verify the canonical typed action under the installed key commitment.
-        bool ok = SHRINCS.verifyStateful(parameterSetId, currentShrincsPublicKey, publicKey, context, signature);
+        bool ok = SHRINCS.verifyStateful(currentShrincsPublicKey, publicKey, context, signature);
         if (!ok) return false;
 
         // Consume the leaf only after the action signature verifies.
@@ -160,7 +151,7 @@ contract ShrincsAccountVerifierExample {
 
     // verifyStatelessAction: Canonical stateless account-action verification path.
     // 1. Reject stateless actions when recovery mode gating forbids them.
-    // 2. Enforce the profile's stateless usage budget for the current key epoch.
+    // 2. Enforce the fixed stateless usage budget for the current key epoch.
     // 3. Build the canonical typed action context from wrapper-owned freshness state.
     // 4. Verify the stateless signature against that canonical action message.
     // 5. Advance nonce and stateless-usage counters only after success.
@@ -172,8 +163,8 @@ contract ShrincsAccountVerifierExample {
     ) external returns (bool) {
         // Recovery-only policy forbids stateless actions until recovery mode is explicitly entered.
         if (statefulPolicy == StatefulPolicy.RecoveryRotation && !recoveryMode) return false;
-        // Enforce the per-key stateless usage budget from the active parameter profile.
-        uint64 limit = ShrincsTypes.defaultParamsView(parameterSetId).statelessSignatureLimit;
+        // Enforce the per-key stateless usage budget.
+        uint64 limit = ShrincsTypes.STATELESS_SIGNATURE_LIMIT;
         if (statelessSignaturesUsed >= limit) return false;
 
         // Bind the action to this contract instance, nonce, and key epoch.
@@ -186,7 +177,7 @@ contract ShrincsAccountVerifierExample {
         });
 
         // Verify the canonical typed action under the installed key commitment.
-        bool ok = SHRINCS.verifyStateless(parameterSetId, currentShrincsPublicKey, publicKey, context, signature);
+        bool ok = SHRINCS.verifyStateless(currentShrincsPublicKey, publicKey, context, signature);
         if (!ok) return false;
 
         // Advance wrapper freshness and stateless usage state after success.
@@ -215,8 +206,8 @@ contract ShrincsAccountVerifierExample {
         }
         // The owner must explicitly arm recovery mode before stateless recovery is accepted.
         if (!recoveryMode) return false;
-        // Enforce the per-key stateless usage budget from the active parameter profile.
-        uint64 limit = ShrincsTypes.defaultParamsView(parameterSetId).statelessSignatureLimit;
+        // Enforce the per-key stateless usage budget.
+        uint64 limit = ShrincsTypes.STATELESS_SIGNATURE_LIMIT;
         if (statelessSignaturesUsed >= limit) return false;
 
         // Bind the rotation to this contract instance, nonce, and key epoch.
@@ -224,13 +215,12 @@ contract ShrincsAccountVerifierExample {
             ShrincsTypes.RotationContext({domainSeparator: domainSeparator(), nonce: nonce, keyVersion: keyVersion});
 
         // Verify the stateless recovery signature and derive the next installed commitment.
-        bytes32 nextCompositePublicKey = SHRINCS.statelessRotate(
-            parameterSetId, currentShrincsPublicKey, currentPublicKey, context, recoverySignature, nextKey
-        );
+        bytes32 nextCompositePublicKey =
+            SHRINCS.statelessRotate(currentShrincsPublicKey, currentPublicKey, context, recoverySignature, nextKey);
         if (nextCompositePublicKey == bytes32(0)) return false;
 
         // Install the next key bundle and reset wrapper state for the new epoch.
-        installFreshKey(nextCompositePublicKey, nextKey.parameterSetId);
+        installFreshKey(nextCompositePublicKey);
         return true;
     }
 
@@ -252,8 +242,8 @@ contract ShrincsAccountVerifierExample {
         }
         // The owner must explicitly arm recovery mode before stateless recovery is accepted.
         if (!recoveryMode) return false;
-        // Enforce the per-key stateless usage budget from the active parameter profile.
-        uint64 limit = ShrincsTypes.defaultParamsView(parameterSetId).statelessSignatureLimit;
+        // Enforce the per-key stateless usage budget.
+        uint64 limit = ShrincsTypes.STATELESS_SIGNATURE_LIMIT;
         if (statelessSignaturesUsed >= limit) return false;
 
         // Bind the rotation to this contract instance, nonce, and key epoch.
@@ -261,13 +251,12 @@ contract ShrincsAccountVerifierExample {
             ShrincsTypes.RotationContext({domainSeparator: domainSeparator(), nonce: nonce, keyVersion: keyVersion});
 
         // Verify the stateless recovery signature and derive the next installed commitment.
-        bytes32 nextCompositePublicKey = SHRINCS.statelessRotate(
-            parameterSetId, currentShrincsPublicKey, currentPublicKey, context, recoverySignature, nextKey
-        );
+        bytes32 nextCompositePublicKey =
+            SHRINCS.statelessRotate(currentShrincsPublicKey, currentPublicKey, context, recoverySignature, nextKey);
         if (nextCompositePublicKey == bytes32(0)) return false;
 
         // Install the next key bundle and reset wrapper state for the new epoch.
-        installFreshKey(nextCompositePublicKey, nextKey.parameterSetId);
+        installFreshKey(nextCompositePublicKey);
         return true;
     }
 
@@ -396,18 +385,16 @@ contract ShrincsAccountVerifierExample {
 
     // installFreshKey: Install a fresh key bundle and reset wrapper state for the new key epoch.
     // 1. Preserve the previous installed key commitment for the rotation event.
-    // 2. Install the next SHRINCS public-key commitment and parameter profile.
+    // 2. Install the next SHRINCS public-key commitment.
     // 3. Advance nonce and key version to close the old authorization epoch.
     // 4. Reset stateless usage and stateful leaf tracking for the new key.
     // 5. Return the wrapper to the default monotonic non-recovery policy.
     // 6. Emit rotation and policy-reset events for off-chain observers.
-    function installFreshKey(bytes32 nextCompositePublicKey, ShrincsTypes.ParameterSetId nextParameterSetId) internal {
+    function installFreshKey(bytes32 nextCompositePublicKey) internal {
         // Preserve the previous key commitment for the rotation event payload.
         bytes32 previousShrincsPublicKey = currentShrincsPublicKey;
         // Install the next trusted SHRINCS public-key commitment.
         currentShrincsPublicKey = nextCompositePublicKey;
-        // Switch to the next key bundle's parameter profile.
-        parameterSetId = nextParameterSetId;
         // Advance nonce and key epoch so old authorizations cannot be replayed.
         nonce += 1;
         keyVersion += 1;
@@ -419,7 +406,7 @@ contract ShrincsAccountVerifierExample {
         statefulPolicy = StatefulPolicy.MonotonicIndex;
         // Recovery mode ends once the new key has been installed.
         recoveryMode = false;
-        emit KeyRotated(previousShrincsPublicKey, nextCompositePublicKey, nextParameterSetId, keyVersion);
+        emit KeyRotated(previousShrincsPublicKey, nextCompositePublicKey, keyVersion);
         emit StatefulPolicySet(statefulPolicy, nextStatefulLeafIndex);
     }
 }

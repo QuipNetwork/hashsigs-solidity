@@ -19,74 +19,6 @@ pragma solidity ^0.8.28;
 import {ShrincsTypes} from "./ShrincsTypes.sol";
 
 library ShrincsUtils {
-    // paramsView: Resolve the fixed parameter table for the requested profile.
-    // 1. Look up the parameter-set definition from the type library.
-    // 2. Return the fully expanded view used by verifier helpers.
-    function paramsView(ShrincsTypes.ParameterSetId parameterSetId)
-        internal
-        pure
-        returns (ShrincsTypes.ParamsView memory)
-    {
-        return ShrincsTypes.defaultParamsView(parameterSetId);
-    }
-
-    // validParams: Validate that the resolved parameter view matches the supported production profile.
-    // 1. Check the supported parameter-set identifier and hash width.
-    // 2. Check that the public key declares the same parameter profile.
-    // 3. Check the fixed hypertree, FORS, and WOTS numeric parameters.
-    // 4. Check the bundled public-key encoding and commitment.
-    // 5. Reject parameter combinations that would overflow supported bit extraction.
-    function validParams(ShrincsTypes.ParamsView memory params, ShrincsTypes.PublicKey calldata publicKey)
-        internal
-        pure
-        returns (bool)
-    {
-        // Only the supported production profile is accepted here.
-        if (params.parameterSetId != ShrincsTypes.ParameterSetId.Sphincs256sKeccakQ20) return false;
-        // This implementation fixes all hash outputs to 32 bytes.
-        if (params.hashLen != 32) return false;
-        // The public key must declare the same parameter profile as the resolved view.
-        if (params.parameterSetId != publicKey.parameterSetId) return false;
-        // Check the fixed hypertree height for the supported profile.
-        if (params.hypertreeHeight != 64) return false;
-        // Check the fixed number of hypertree layers for the supported profile.
-        if (params.numHypertreeLayers != 8) return false;
-        // Check the fixed FORS tree height for the supported profile.
-        if (params.forsTreeHeight != 14) return false;
-        // Check the fixed number of FORS trees for the supported profile.
-        if (params.numForsTrees != 22) return false;
-        // Check the fixed WOTS chain base for the supported profile.
-        if (params.chainLen != 16) return false;
-        // Check the fixed number of WOTS chains for the supported profile.
-        if (params.numWotsChains != 64) return false;
-        // Check the fixed WOTS target sum used by the compressed variants.
-        if (params.wotsTargetSum != ShrincsTypes.WOTS_TARGET_SUM_STATEFUL) return false;
-        // The public key must be structurally valid and commitment-consistent.
-        if (!validPublicKey(publicKey)) return false;
-        // Guard the supported bit-extraction helpers against oversized FORS domains.
-        if (uint256(params.numForsTrees) * (uint256(1) << params.forsTreeHeight) > type(uint32).max) return false;
-        return true;
-    }
-
-    // validParameterSetBinding: Ensure the request, resolved parameters, and key declaration all agree.
-    // 1. Check that the resolved parameter view matches the requested identifier.
-    // 2. Check that the public key declares the same identifier.
-    // 3. Check that the resolved profile uses the expected hash suite.
-    function validParameterSetBinding(
-        ShrincsTypes.ParamsView memory params,
-        ShrincsTypes.ParameterSetId requestedParameterSetId,
-        ShrincsTypes.ParameterSetId declaredParameterSetId
-    ) internal pure returns (bool) {
-        // The resolved parameter view must correspond to the requested profile.
-        if (params.parameterSetId != requestedParameterSetId) {
-            return false;
-        }
-        // The public key must declare the same profile that the caller requested.
-        if (declaredParameterSetId != requestedParameterSetId) return false;
-        // This verifier currently accepts only the Keccak-based hash suite.
-        return params.hashSuiteId == ShrincsTypes.HASH_SUITE_KECCAK_256;
-    }
-
     // validActionContext: Perform lightweight structural checks for canonical action contexts.
     // 1. Require a nonzero domain separator.
     // 2. Require a nonzero action type.
@@ -108,35 +40,26 @@ library ShrincsUtils {
 
     // publicKeyCommitment: Recompute the bundle commitment from a fully encoded public key.
     // 1. Domain-separate the commitment as a SHRINCS public-key bundle hash.
-    // 2. Bind the parameter-set identifier.
-    // 3. Bind the stateful public key, stateless public seed, and hypertree root.
-    // 4. Return the installed public-key commitment.
+    // 2. Bind the stateful public key, stateless public seed, and hypertree root.
+    // 3. Return the installed public-key commitment.
     function publicKeyCommitment(ShrincsTypes.PublicKey calldata publicKey) internal pure returns (bytes32) {
         return keccak256(
             abi.encodePacked(
-                "shrincs-public-key",
-                uint8(publicKey.parameterSetId),
-                publicKey.statefulPublicKey,
-                publicKey.pkSeed,
-                publicKey.hypertreeRoot
+                "shrincs-public-key", publicKey.statefulPublicKey, publicKey.pkSeed, publicKey.hypertreeRoot
             )
         );
     }
 
     // publicKeyCommitmentFromParts: Recompute the bundle commitment from explicit component fields.
     // 1. Domain-separate the commitment as a SHRINCS public-key bundle hash.
-    // 2. Bind the parameter-set identifier.
-    // 3. Bind the stateful public key, stateless public seed, and hypertree root.
-    // 4. Return the installed public-key commitment.
+    // 2. Bind the stateful public key, stateless public seed, and hypertree root.
+    // 3. Return the installed public-key commitment.
     function publicKeyCommitmentFromParts(
-        ShrincsTypes.ParameterSetId parameterSetId,
         bytes memory statefulPublicKey,
         bytes memory pkSeed,
         bytes memory hypertreeRoot
     ) internal pure returns (bytes32) {
-        return keccak256(
-            abi.encodePacked("shrincs-public-key", uint8(parameterSetId), statefulPublicKey, pkSeed, hypertreeRoot)
-        );
+        return keccak256(abi.encodePacked("shrincs-public-key", statefulPublicKey, pkSeed, hypertreeRoot));
     }
 
     // matchesExpectedPublicKeyCommitment: Check that a bundled public key matches an installed commitment.
