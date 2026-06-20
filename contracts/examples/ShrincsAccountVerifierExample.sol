@@ -207,7 +207,7 @@ contract ShrincsAccountVerifierExample {
     function rotateToFreshKey(
         ShrincsTypes.PublicKey calldata currentPublicKey,
         ShrincsTypes.StatelessSignature calldata recoverySignature,
-        ShrincsTypes.RotationTarget calldata nextKey
+        ShrincsTypes.StatefulRotationTarget calldata nextKey
     ) external returns (bool) {
         // Fresh-key rotation is available only in the dedicated recovery policy.
         if (statefulPolicy != StatefulPolicy.RecoveryRotation) {
@@ -224,7 +224,7 @@ contract ShrincsAccountVerifierExample {
             ShrincsTypes.RotationContext({domainSeparator: domainSeparator(), nonce: nonce, keyVersion: keyVersion});
 
         // Verify the stateless recovery signature and derive the next installed commitment.
-        bytes32 nextCompositePublicKey = SHRINCS.statelessRotate(
+        bytes32 nextCompositePublicKey = SHRINCS.rotateStatefulViaStateless(
             parameterSetId, currentShrincsPublicKey, currentPublicKey, context, recoverySignature, nextKey
         );
         if (nextCompositePublicKey == bytes32(0)) return false;

@@ -46,6 +46,19 @@ contract ExampleStatelessHarness {
 }
 
 contract ExampleRotationHarness {
+    function rotateStatefulViaStateless(
+        ShrincsTypes.ParameterSetId parameterSetId,
+        bytes32 expectedCompositePublicKey,
+        ShrincsTypes.PublicKey calldata currentPublicKey,
+        ShrincsTypes.RotationContext calldata context,
+        ShrincsTypes.StatelessSignature calldata recoverySignature,
+        ShrincsTypes.StatefulRotationTarget calldata nextKey
+    ) external pure returns (bytes32) {
+        return SHRINCS.rotateStatefulViaStateless(
+            parameterSetId, expectedCompositePublicKey, currentPublicKey, context, recoverySignature, nextKey
+        );
+    }
+
     function statelessRotate(
         ShrincsTypes.ParameterSetId parameterSetId,
         bytes32 expectedCompositePublicKey,
@@ -286,6 +299,35 @@ contract ShrincsAccountVerifierExampleTest is Test {
 
         assertEq(actual, expected != bytes32(0), "wrapper must match library rotation result");
         assertEq(actual, false, "legacy raw vector must not authorize canonical rotation");
+        assertEq(account.currentShrincsPublicKey(), expectedCompositePublicKey);
+        assertTrue(account.nonce() == 0, "nonce must not change on failed rotation");
+        assertTrue(account.keyVersion() == 0, "key version must not change on failed rotation");
+        assertTrue(account.statelessSignaturesUsed() == 0, "stateless usage must not change on failed rotation");
+    }
+
+    function testExampleRotateToFreshKeyMatchesLibraryAndPreservesStateOnFailure() public {
+        (ShrincsTypes.PublicKey memory publicKey,, ShrincsTypes.StatelessSignature memory signature) =
+            decodeStatelessVector(".stateless.cases.valid.calldata");
+        bytes32 expectedCompositePublicKey = compositePublicKeyWord(publicKey);
+        ShrincsAccountVerifierExample account = new ShrincsAccountVerifierExample(expectedCompositePublicKey);
+        ShrincsTypes.RotationContext memory context = ShrincsTypes.RotationContext({
+            domainSeparator: domainSeparatorFor(address(account)), nonce: 0, keyVersion: 0
+        });
+        ShrincsTypes.StatefulRotationTarget memory target =
+            statefulRotationTargetFromParts(publicKey, publicKey.parameterSetId, publicKey.statefulPublicKey);
+
+        bytes32 expected = rotation.rotateStatefulViaStateless(
+            ShrincsTypes.ParameterSetId.Sphincs256sKeccakQ20,
+            expectedCompositePublicKey,
+            publicKey,
+            context,
+            signature,
+            target
+        );
+        bool actual = account.rotateToFreshKey(publicKey, signature, target);
+
+        assertEq(actual, expected != bytes32(0), "wrapper must match library stateful-only rotation result");
+        assertEq(actual, false, "legacy raw vector must not authorize canonical stateful-only rotation");
         assertEq(account.currentShrincsPublicKey(), expectedCompositePublicKey);
         assertTrue(account.nonce() == 0, "nonce must not change on failed rotation");
         assertTrue(account.keyVersion() == 0, "key version must not change on failed rotation");
@@ -704,6 +746,27 @@ contract ShrincsAccountVerifierExampleTest is Test {
             publicKeyCommitment: abi.encodePacked(commitment),
             pkSeed: pkSeed,
             hypertreeRoot: hypertreeRoot
+        });
+    }
+
+    function statefulRotationTargetFromParts(
+        ShrincsTypes.PublicKey memory currentPublicKey,
+        ShrincsTypes.ParameterSetId parameterSetId,
+        bytes memory statefulPublicKey
+    ) internal pure returns (ShrincsTypes.StatefulRotationTarget memory) {
+        bytes32 commitment = keccak256(
+            abi.encodePacked(
+                "shrincs-public-key",
+                uint8(parameterSetId),
+                statefulPublicKey,
+                currentPublicKey.pkSeed,
+                currentPublicKey.hypertreeRoot
+            )
+        );
+        return ShrincsTypes.StatefulRotationTarget({
+            parameterSetId: parameterSetId,
+            statefulPublicKey: statefulPublicKey,
+            publicKeyCommitment: abi.encodePacked(commitment)
         });
     }
 
