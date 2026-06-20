@@ -21,7 +21,7 @@ import {ShrincsUtils} from "./ShrincsUtils.sol";
 
 library ShrincsStateful {
     // verifyStatefulUncheckedMessage: Verify a stateful signature against an exact caller-supplied message.
-    // 1. Load the parameter profile and check that the public key matches it.
+    // 1. Check that the public key uses the compiled fixed layout.
     // 2. Check the installed public-key commitment and the public-key encoding.
     // 3. Decode the compact stateful public key embedded inside the SHRINCS public bundle.
     // 4. Recover and validate the consumed stateful leaf index from the auth path length.
@@ -29,20 +29,15 @@ library ShrincsStateful {
     // 6. Rebuild the unbalanced stateful tree root from that leaf and auth path.
     // 7. Accept only if the reconstructed root matches the decoded stateful public root.
     function verifyStatefulUncheckedMessage(
-        ShrincsTypes.ParameterSetId parameterSetId,
         bytes32 expectedPublicKeyCommitment,
         ShrincsTypes.PublicKey calldata publicKey,
         bytes memory message,
         ShrincsTypes.StatefulSignature calldata signature
     ) internal pure returns (bool) {
-        // Load the verification parameters for the requested profile.
-        ShrincsTypes.ParamsView memory p = ShrincsUtils.paramsView(parameterSetId);
-        // The public key must claim the same parameter profile the caller selected.
-        if (!ShrincsUtils.validParameterSetBinding(p, parameterSetId, publicKey.parameterSetId)) return false;
+        // The public key must satisfy the compiled fixed key shape.
+        if (!ShrincsUtils.validPublicKey(publicKey)) return false;
         // The bundled public key must match the installed public-key commitment.
         if (!ShrincsUtils.matchesExpectedPublicKeyCommitment(publicKey, expectedPublicKeyCommitment)) return false;
-        // The bundled public key must be structurally well formed.
-        if (!ShrincsUtils.validPublicKey(publicKey)) return false;
         // Decode the compact stateful public key fields from the public bundle.
         (ShrincsTypes.StatefulPublicKey memory statefulKey, bool ok) =
             ShrincsUtils.decodeStatefulPublicKey(publicKey.statefulPublicKey);
@@ -108,7 +103,7 @@ library ShrincsStateful {
             }
         }
 
-        // Reject messages whose reconstructed digit sum does not hit the profile's fixed target.
+        // Reject messages whose reconstructed digit sum does not hit the fixed target.
         if (digitSum != ShrincsTypes.WOTS_TARGET_SUM_STATEFUL) return (bytes32(0), false);
         // Hash the reconstructed endpoints into the compact stateful WOTS public-key hash.
         return (keccak256(abi.encodePacked("uxmss-wots-pk", pkSeed, leafIndex, segments)), true);

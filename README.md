@@ -34,7 +34,7 @@ flowchart LR
     end
 
     subgraph "Stateless path (fallback / rotation authorization)"
-        B1["action or rotation<br/>message hash"] --> B2["validate params +<br/>public root (Utils)"]
+        B1["action or rotation<br/>message hash"] --> B2["validate public key +<br/>public root (Utils)"]
         B2 --> B3["FORS-C: digest, k-th index == 0,<br/>rebuild 21 tree roots → fors-pk root"]
         B3 --> B4["messageRoot"]
         B4 --> B5["8 hypertree layers:<br/>WOTS-C verify + Merkle path,<br/>root chains upward"]
@@ -49,9 +49,9 @@ Main contracts:
 - [contracts/SHRINCS.sol](./contracts/SHRINCS.sol)
   - main verifier library
 - [contracts/ShrincsTypes.sol](./contracts/ShrincsTypes.sol)
-  - shared enums, structs, and predefined parameter-set defaults
+  - shared structs and compile-time constants
 - [contracts/ShrincsUtils.sol](./contracts/ShrincsUtils.sol)
-  - shared parameter validation, public-key checks, bit reads, and address packing helpers
+  - shared public-key checks, bit reads, and address packing helpers
 - [contracts/ShrincsStateful.sol](./contracts/ShrincsStateful.sol)
   - stateful `WOTS-C` reconstruction and unbalanced XMSS-style path verification
 - [contracts/ShrincsForsC.sol](./contracts/ShrincsForsC.sol)
@@ -82,8 +82,8 @@ graph TD
     end
 
     subgraph "Foundation"
-        UT["ShrincsUtils.sol<br/>profile validation, public-key<br/>checks, bit readers,<br/>address-word packing"]
-        TY["ShrincsTypes.sol<br/>structs, constants,<br/>single supported profile values"]
+        UT["ShrincsUtils.sol<br/>public-key checks,<br/>bit readers,<br/>address-word packing"]
+        TY["ShrincsTypes.sol<br/>structs and<br/>compile-time constants"]
     end
 
     WP["WOTSPlus.sol<br/>(restored standalone library —<br/>no SHRINCS dependency)"]
@@ -165,7 +165,6 @@ by the current Foundry vector decoder.
 
 The SHRINCS public key exposed by this implementation contains:
 
-- `parameterSetId`
 - `publicKeyCommitment`
 - `statefulPublicKey`
 - stateless `pkSeed`
@@ -179,7 +178,6 @@ The stateless side follows the SPHINCS+/FIPS-style `PK = (PK.seed, PK.root)` abs
 The full hybrid bundle is then bound together by `publicKeyCommitment`. The verifier checks that:
 
 - `publicKey.publicKeyCommitment` matches the commitment recomputed from
-  - `parameterSetId`
   - `statefulPublicKey`
   - `pkSeed`
   - `hypertreeRoot`
@@ -192,7 +190,7 @@ This keeps the repo's hybrid stateful/stateless public key coherent while preser
 ### 1. Stateful verification
 
 ```solidity
-SHRINCS.verifyStateful(parameterSetId, expectedCompositePublicKey, publicKey, actionContext, signature)
+SHRINCS.verifyStateful(expectedCompositePublicKey, publicKey, actionContext, signature)
 ```
 
 `verifyStateful(...)` is the account-style path. It computes a canonical hash from `ActionContext`:
@@ -222,7 +220,7 @@ Both forms verify:
 ### 2. Stateless verification
 
 ```solidity
-SHRINCS.verifyStateless(parameterSetId, expectedCompositePublicKey, publicKey, actionContext, signature)
+SHRINCS.verifyStateless(expectedCompositePublicKey, publicKey, actionContext, signature)
 ```
 
 `verifyStateless(...)` is the account-style path. It computes a canonical hash from `ActionContext`.
@@ -239,7 +237,6 @@ The account-style path also rejects invalid contexts:
 Both forms verify:
 
 - the provided `expectedCompositePublicKey` matches `publicKey.publicKeyCommitment`
-- parameter-set compatibility
 - `FORS-C`
 - hypertree layer traversal
 - stateless `WOTS-C`
@@ -249,7 +246,6 @@ Both forms verify:
 
 ```solidity
 SHRINCS.rotateStatefulViaStateless(
-    parameterSetId,
     expectedCompositePublicKey,
     currentPublicKey,
     rotationContext,
@@ -263,7 +259,6 @@ This is a verifier-side authorization helper, not signer recovery logic.
 It:
 
 - computes a canonical rotation message hash from:
-  - `parameterSetId`
   - `expectedCompositePublicKey`
   - `currentPublicKey.publicKeyCommitment`
   - `rotationContext`
@@ -272,7 +267,6 @@ It:
 - validates a proposed next stateful public key
 - decodes the next stateful key and rejects `maxSignatures == 0`
 - rejects zero `domainSeparator`
-- rejects mismatched rotation target `parameterSetId`
 - returns the next public key commitment on success
 - returns `bytes32(0)` on failure
 
@@ -280,7 +274,6 @@ It:
 
 ```solidity
 SHRINCS.statelessRotate(
-    parameterSetId,
     expectedCompositePublicKey,
     currentPublicKey,
     rotationContext,
@@ -294,7 +287,6 @@ This verifies a stateless recovery signature authorizing a full next SHRINCS key
 It:
 
 - computes a canonical full-rotation message hash from:
-  - `parameterSetId`
   - `expectedCompositePublicKey`
   - `currentPublicKey.publicKeyCommitment`
   - `rotationContext`
@@ -303,28 +295,16 @@ It:
 - validates the full next key payload
 - decodes the next stateful key and rejects `maxSignatures == 0`
 - rejects zero `domainSeparator`
-- rejects mismatched rotation target `parameterSetId`
 - validates the next key payload
 - returns the next public key commitment on success
 - returns `bytes32(0)` on failure
 
-## Parameter Sets
+## Compile-Time Constants
 
-The verifier currently accepts only predefined parameter sets selected by enum:
+The verifier is compiled for one SHRINCS configuration. Callers do not supply selectors or arbitrary numeric tuples.
 
-```solidity
-ShrincsTypes.ParameterSetId.Sphincs256sKeccakQ20
-```
+The current verifier is intentionally pinned to these production values:
 
-There is also a reserved `ShrincsTypes.ParameterSetId.Unsupported` enum value used only for negative tests. It is not a valid production profile and is rejected by the library.
-
-The concrete values are resolved internally in [ShrincsTypes.sol](./contracts/ShrincsTypes.sol). Callers do not supply arbitrary numeric parameter tuples anymore.
-
-The hash suite is currently implied by the parameter set. The canonical account-action and rotation hashes also bind the resolved `hashSuiteId`, so the signed message shape stays stable if more parameter sets are added later.
-
-The current verifier is intentionally pinned to exactly one production profile:
-
-- `parameterSetId = ShrincsTypes.ParameterSetId.Sphincs256sKeccakQ20`
 - `statelessSignatureLimit = 2^20 = 1,048,576`
 - `hashSuiteId = HASH_SUITE_KECCAK_256`
 - `hashLen = 32`
@@ -336,15 +316,15 @@ The current verifier is intentionally pinned to exactly one production profile:
 - `numWotsChains = 64`
 - `wotsTargetSum = 480`
 
-Two profile-specific verifier rules are worth calling out explicitly:
+Two verifier rules are worth calling out explicitly:
 
 - `FORS-C` verifies `numForsTrees - 1` revealed entries, not all `numForsTrees`
   - the final FORS tree is omitted by construction
   - verification rejects any digest whose omitted final tree would need a nonzero leaf index
 - `WOTS-C` uses `wotsTargetSum` instead of an explicit checksum suffix
-  - the reconstructed base-`chainLen` digits must add up to the fixed target sum for the profile
+  - the reconstructed base-`chainLen` digits must add up to the fixed target sum
 
-For the stateful `WOTS-C` / XMSS path in that profile, the code also assumes:
+For the stateful `WOTS-C` / XMSS path, the code also assumes:
 
 - `STATEFUL_PUBLIC_KEY_BYTES = 68`
   - encoded as `pkSeed || root || maxSignatures`
@@ -356,7 +336,7 @@ For the stateful `WOTS-C` / XMSS path in that profile, the code also assumes:
 - `WOTS_TARGET_SUM_STATEFUL = 480`
   - the 64 base-16 digits must sum to 480 for the signature to verify
 
-This is deliberate. The library does not currently claim support for arbitrary future parameter tuples even if they are superficially shape-compatible.
+This is deliberate. The library does not currently claim support for arbitrary future numeric tuples even if they are superficially shape-compatible.
 
 ## On-Chain Integration State
 
@@ -365,7 +345,6 @@ The `SHRINCS` library is only responsible for signature verification and rotatio
 It does **not** manage surrounding account or protocol state such as:
 
 - the currently active on-chain SHRINCS public key
-- the selected parameter set for an account
 - nonces / sequence numbers
 - key version / rotation epoch
 - recovery policy flags
@@ -375,7 +354,6 @@ It does **not** manage surrounding account or protocol state such as:
 So a real on-chain verifier or account contract usually needs an initialization step that stores at least:
 
 - `currentShrincsPublicKey`
-- `parameterSetId`
 
 and usually also:
 
@@ -473,7 +451,6 @@ The developer/integrator chooses which policy fits the account design. In the ex
 What the wrapper must handle:
 
 - store `currentShrincsPublicKey`
-- store the active `parameterSetId`
 - store and increment `nonce`
 - store and increment `keyVersion`
 - store and enforce `statelessSignaturesUsed < statelessSignatureLimit`
@@ -502,8 +479,6 @@ Current tests cover:
 - wrong public key is rejected
 - wrong expected public root is rejected
 - zero expected composite public key is rejected
-- unsupported requested parameter set is rejected
-- mismatched declared parameter set is rejected
 - corrupted stateful signature is rejected
 - tampered stateful authentication path is rejected
 - signature at `maxSignatures` boundary verifies
@@ -522,8 +497,6 @@ Current tests cover:
 - tampered hypertree authentication path is rejected
 - wrong expected public root is rejected
 - zero expected composite public key is rejected
-- unsupported requested parameter set is rejected
-- mismatched declared parameter set is rejected
 - malformed `pkSeed` length is rejected
 - malformed `forsRoot` length is rejected
 - malformed `hypertreeRoot` length is rejected
@@ -540,7 +513,6 @@ Current tests cover:
   - rejects legacy stateless signatures that were not signed over the canonical rotation hash
   - rejects malformed next stateful public key
   - rejects next stateful keys with `maxSignatures == 0`
-  - rejects unsupported next parameter set
   - rejects zero `domainSeparator`
 
 - `statelessRotate(...)`
@@ -548,7 +520,6 @@ Current tests cover:
   - rejects legacy stateless signatures that were not signed over the canonical rotation hash
   - rejects malformed next key bundles
   - rejects next stateful keys with `maxSignatures == 0`
-  - rejects unsupported next parameter set
   - rejects zero `domainSeparator`
 
 ### Example wrapper policies
@@ -632,7 +603,7 @@ Example commands:
 ## Notes
 
 - `forge-std` is restored as a real dependency in `lib/forge-std`.
-- the default Foundry profile is configured for `via_ir = true`, which this verifier currently relies on for clean builds.
+- the default Foundry configuration uses `via_ir = true`, which this verifier currently relies on for clean builds.
 
 ## License
 

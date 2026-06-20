@@ -48,19 +48,7 @@ contract ShrincsStatefulPolicyExamplesTest is Test {
         bytes32[] authPath;
     }
 
-    struct LegacyParams {
-        uint16 nBytes;
-        uint8 h;
-        uint8 d;
-        uint8 a;
-        uint8 k;
-        uint16 w;
-        uint16 l;
-        uint32 wotsTargetSum;
-    }
-
     struct LegacyPublicKey {
-        ShrincsTypes.ParameterSetId parameterSetId;
         bytes statefulPublicKey;
         bytes pkSeed;
         bytes hypertreeRoot;
@@ -208,8 +196,13 @@ contract ShrincsStatefulPolicyExamplesTest is Test {
         account.setStatefulPolicyRecoveryRotation();
         account.enterRecoveryMode();
 
+<<<<<<< HEAD
         ShrincsTypes.StatefulRotationTarget memory target =
             statefulRotationTargetFromParts(publicKey, publicKey.parameterSetId, publicKey.statefulPublicKey);
+=======
+        ShrincsTypes.RotationTarget memory target =
+            rotationTargetFromParts(publicKey.statefulPublicKey, publicKey.pkSeed, publicKey.hypertreeRoot);
+>>>>>>> 15f2da2cbcd899384fe8c4f476383f564fc7d6be
 
         bool ok = account.rotateToFreshKey(publicKey, signature, target);
 
@@ -240,11 +233,7 @@ contract ShrincsStatefulPolicyExamplesTest is Test {
     function compositePublicKeyWord(ShrincsTypes.PublicKey memory publicKey) internal pure returns (bytes32 word) {
         return keccak256(
             abi.encodePacked(
-                "shrincs-public-key",
-                uint8(publicKey.parameterSetId),
-                publicKey.statefulPublicKey,
-                publicKey.pkSeed,
-                publicKey.hypertreeRoot
+                "shrincs-public-key", publicKey.statefulPublicKey, publicKey.pkSeed, publicKey.hypertreeRoot
             )
         );
     }
@@ -269,12 +258,7 @@ contract ShrincsStatefulPolicyExamplesTest is Test {
         bytes memory encodedStatefulKey =
             abi.encodePacked(legacyKey.pkSeed, legacyKey.root, bytes4(legacyKey.maxSignatures));
 
-        publicKey = publicKeyFromParts(
-            ShrincsTypes.ParameterSetId.Sphincs256sKeccakQ20,
-            encodedStatefulKey,
-            statelessPublicKey.pkSeed,
-            statelessPublicKey.hypertreeRoot
-        );
+        publicKey = publicKeyFromParts(encodedStatefulKey, statelessPublicKey.pkSeed, statelessPublicKey.hypertreeRoot);
 
         message = legacyMessage;
         signature = ShrincsTypes.StatefulSignature({
@@ -295,18 +279,13 @@ contract ShrincsStatefulPolicyExamplesTest is Test {
     {
         bytes memory args = vectorArgs(vectorKey);
         (
-            LegacyParams memory legacyParams,
             LegacyPublicKey memory legacyPublicKey,
             bytes memory legacyMessage,
             LegacyStatelessSignature memory legacySignature
-        ) = abi.decode(args, (LegacyParams, LegacyPublicKey, bytes, LegacyStatelessSignature));
-        legacyParams;
+        ) = abi.decode(args, (LegacyPublicKey, bytes, LegacyStatelessSignature));
 
         publicKey = publicKeyFromParts(
-            legacyPublicKey.parameterSetId,
-            legacyPublicKey.statefulPublicKey,
-            legacyPublicKey.pkSeed,
-            legacyPublicKey.hypertreeRoot
+            legacyPublicKey.statefulPublicKey, legacyPublicKey.pkSeed, legacyPublicKey.hypertreeRoot
         );
         publicKey.publicKeyCommitment =
             vm.parseJsonBytes(vectors, string.concat(trimCalldataSuffix(vectorKey), ".publicKey.publicKeyCommitment"));
@@ -351,17 +330,13 @@ contract ShrincsStatefulPolicyExamplesTest is Test {
         });
     }
 
-    function publicKeyFromParts(
-        ShrincsTypes.ParameterSetId parameterSetId,
-        bytes memory statefulPublicKey,
-        bytes memory pkSeed,
-        bytes memory hypertreeRoot
-    ) internal pure returns (ShrincsTypes.PublicKey memory) {
-        bytes32 commitment = keccak256(
-            abi.encodePacked("shrincs-public-key", uint8(parameterSetId), statefulPublicKey, pkSeed, hypertreeRoot)
-        );
+    function publicKeyFromParts(bytes memory statefulPublicKey, bytes memory pkSeed, bytes memory hypertreeRoot)
+        internal
+        pure
+        returns (ShrincsTypes.PublicKey memory)
+    {
+        bytes32 commitment = keccak256(abi.encodePacked("shrincs-public-key", statefulPublicKey, pkSeed, hypertreeRoot));
         return ShrincsTypes.PublicKey({
-            parameterSetId: parameterSetId,
             statefulPublicKey: statefulPublicKey,
             publicKeyCommitment: abi.encodePacked(commitment),
             pkSeed: pkSeed,
@@ -369,17 +344,13 @@ contract ShrincsStatefulPolicyExamplesTest is Test {
         });
     }
 
-    function rotationTargetFromParts(
-        ShrincsTypes.ParameterSetId parameterSetId,
-        bytes memory statefulPublicKey,
-        bytes memory pkSeed,
-        bytes memory hypertreeRoot
-    ) internal pure returns (ShrincsTypes.RotationTarget memory) {
-        bytes32 commitment = keccak256(
-            abi.encodePacked("shrincs-public-key", uint8(parameterSetId), statefulPublicKey, pkSeed, hypertreeRoot)
-        );
+    function rotationTargetFromParts(bytes memory statefulPublicKey, bytes memory pkSeed, bytes memory hypertreeRoot)
+        internal
+        pure
+        returns (ShrincsTypes.RotationTarget memory)
+    {
+        bytes32 commitment = keccak256(abi.encodePacked("shrincs-public-key", statefulPublicKey, pkSeed, hypertreeRoot));
         return ShrincsTypes.RotationTarget({
-            parameterSetId: parameterSetId,
             statefulPublicKey: statefulPublicKey,
             publicKeyCommitment: abi.encodePacked(commitment),
             pkSeed: pkSeed,
