@@ -196,13 +196,8 @@ contract ShrincsStatefulPolicyExamplesTest is Test {
         account.setStatefulPolicyRecoveryRotation();
         account.enterRecoveryMode();
 
-<<<<<<< HEAD
         ShrincsTypes.StatefulRotationTarget memory target =
-            statefulRotationTargetFromParts(publicKey, publicKey.parameterSetId, publicKey.statefulPublicKey);
-=======
-        ShrincsTypes.RotationTarget memory target =
-            rotationTargetFromParts(publicKey.statefulPublicKey, publicKey.pkSeed, publicKey.hypertreeRoot);
->>>>>>> 15f2da2cbcd899384fe8c4f476383f564fc7d6be
+            statefulRotationTargetFromParts(publicKey, publicKey.statefulPublicKey);
 
         bool ok = account.rotateToFreshKey(publicKey, signature, target);
 
@@ -360,20 +355,12 @@ contract ShrincsStatefulPolicyExamplesTest is Test {
 
     function statefulRotationTargetFromParts(
         ShrincsTypes.PublicKey memory currentPublicKey,
-        ShrincsTypes.ParameterSetId parameterSetId,
         bytes memory statefulPublicKey
     ) internal pure returns (ShrincsTypes.StatefulRotationTarget memory) {
         bytes32 commitment = keccak256(
-            abi.encodePacked(
-                "shrincs-public-key",
-                uint8(parameterSetId),
-                statefulPublicKey,
-                currentPublicKey.pkSeed,
-                currentPublicKey.hypertreeRoot
-            )
+            abi.encodePacked("shrincs-public-key", statefulPublicKey, currentPublicKey.pkSeed, currentPublicKey.hypertreeRoot)
         );
         return ShrincsTypes.StatefulRotationTarget({
-            parameterSetId: parameterSetId,
             statefulPublicKey: statefulPublicKey,
             publicKeyCommitment: abi.encodePacked(commitment)
         });

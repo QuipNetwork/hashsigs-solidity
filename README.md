@@ -386,8 +386,45 @@ The example contract is intentionally small. It shows how wrapper-owned state sh
 
 - stateful action verification
 - stateless action verification
+- ERC-1271 view-only validation of canonical account-action envelopes
 - stateless full-key rotation
 - stateless usage-limit enforcement
+
+### ERC-1271 adapter
+
+The example wrapper exposes:
+
+```solidity
+isValidSignature(bytes32 hash, bytes signature) external view returns (bytes4)
+```
+
+This adapter is intentionally limited to canonical account-action envelopes only.
+It is not a generic raw SHRINCS verifier.
+
+Supported envelope modes:
+
+- `0x01 || abi.encode(publicKey, actionType, payloadHash, statefulSignature)`
+- `0x02 || abi.encode(publicKey, actionType, payloadHash, statelessSignature)`
+
+The adapter:
+
+- rebuilds the current `ActionContext` from wrapper-owned state
+  - `domainSeparator()`
+  - `nonce`
+  - `keyVersion`
+- checks that `hash` matches the current canonical action hash for that mode
+- enforces current wrapper policy gates
+  - stateful leaf policy
+  - recovery-mode/stateless-budget gating
+- verifies the embedded SHRINCS signature without mutating storage
+
+Important semantics:
+
+- ERC-1271 validity here is snapshot-based.
+  - a signature can be valid now and invalid later after `nonce`, `keyVersion`, policy state, or key state changes
+- malformed known-mode envelopes return `0xffffffff` instead of reverting
+- legacy raw vectors and primitive raw SHRINCS signatures are intentionally rejected on this path
+- stateless/key-rotation authorizations are not part of this ERC-1271 surface
 
 ### Stateful-use policies
 

@@ -45,7 +45,6 @@ contract ExampleStatelessHarness {
 
 contract ExampleRotationHarness {
     function rotateStatefulViaStateless(
-        ShrincsTypes.ParameterSetId parameterSetId,
         bytes32 expectedCompositePublicKey,
         ShrincsTypes.PublicKey calldata currentPublicKey,
         ShrincsTypes.RotationContext calldata context,
@@ -53,7 +52,7 @@ contract ExampleRotationHarness {
         ShrincsTypes.StatefulRotationTarget calldata nextKey
     ) external pure returns (bytes32) {
         return SHRINCS.rotateStatefulViaStateless(
-            parameterSetId, expectedCompositePublicKey, currentPublicKey, context, recoverySignature, nextKey
+            expectedCompositePublicKey, currentPublicKey, context, recoverySignature, nextKey
         );
     }
 
@@ -132,6 +131,11 @@ contract ExampleNonOwnerCaller {
 }
 
 contract ShrincsAccountVerifierExampleTest is Test {
+    bytes4 internal constant MAGIC_VALUE = 0x1626ba7e;
+    bytes4 internal constant INVALID_SIGNATURE = 0xffffffff;
+    uint8 internal constant ERC1271_MODE_STATEFUL_ACTION = 1;
+    uint8 internal constant ERC1271_MODE_STATELESS_ACTION = 2;
+
     string internal constant VECTOR_PATH = "test/test_vectors/shrincs_sphincs_256s_keccak.json";
     bytes32 internal constant DOMAIN_TAG = keccak256("shrincs-account-v1");
 
@@ -250,6 +254,131 @@ contract ShrincsAccountVerifierExampleTest is Test {
         assertTrue(account.statelessSignaturesUsed() == 0, "stateless usage must not change on failed stateless verify");
     }
 
+    function testExampleIsValidSignatureRejectsMalformedEnvelopeAndPreservesState() public {
+        (ShrincsTypes.PublicKey memory publicKey,,) = decodeStatelessVector(".stateless.cases.valid.calldata");
+        bytes32 expectedCompositePublicKey = compositePublicKeyWord(publicKey);
+        ShrincsAccountVerifierExample account = new ShrincsAccountVerifierExample(expectedCompositePublicKey);
+
+        bytes4 actual = account.isValidSignature(bytes32(0), hex"");
+
+        assertEq(actual, INVALID_SIGNATURE, "empty envelope must be rejected");
+        assertEq(account.currentShrincsPublicKey(), expectedCompositePublicKey);
+        assertEq(account.nonce(), 0);
+        assertEq(account.keyVersion(), 0);
+        assertEq(account.statelessSignaturesUsed(), 0);
+    }
+
+    function testExampleIsValidSignatureRejectsUnknownModeAndPreservesState() public {
+        (ShrincsTypes.PublicKey memory publicKey,,) = decodeStatelessVector(".stateless.cases.valid.calldata");
+        bytes32 expectedCompositePublicKey = compositePublicKeyWord(publicKey);
+        ShrincsAccountVerifierExample account = new ShrincsAccountVerifierExample(expectedCompositePublicKey);
+
+        bytes memory envelope = abi.encodePacked(bytes1(uint8(99)), bytes("junk"));
+        bytes4 actual = account.isValidSignature(bytes32(0), envelope);
+
+        assertEq(actual, INVALID_SIGNATURE, "unknown envelope mode must be rejected");
+        assertEq(account.currentShrincsPublicKey(), expectedCompositePublicKey);
+        assertEq(account.nonce(), 0);
+        assertEq(account.keyVersion(), 0);
+        assertEq(account.statelessSignaturesUsed(), 0);
+    }
+
+    function testExampleIsValidSignatureRejectsMalformedStatefulEnvelopeWithoutReverting() public {
+        (ShrincsTypes.PublicKey memory publicKey,,) = decodeStatelessVector(".stateless.cases.valid.calldata");
+        bytes32 expectedCompositePublicKey = compositePublicKeyWord(publicKey);
+        ShrincsAccountVerifierExample account = new ShrincsAccountVerifierExample(expectedCompositePublicKey);
+
+        bytes memory envelope = abi.encodePacked(bytes1(ERC1271_MODE_STATEFUL_ACTION), hex"01020304");
+        bytes4 actual = account.isValidSignature(bytes32(0), envelope);
+
+        assertEq(actual, INVALID_SIGNATURE, "malformed stateful envelope must return invalid");
+        assertEq(account.currentShrincsPublicKey(), expectedCompositePublicKey);
+        assertEq(account.nonce(), 0);
+        assertEq(account.keyVersion(), 0);
+        assertEq(account.statelessSignaturesUsed(), 0);
+    }
+
+    function testExampleIsValidSignatureRejectsMalformedStatelessEnvelopeWithoutReverting() public {
+        (ShrincsTypes.PublicKey memory publicKey,,) = decodeStatelessVector(".stateless.cases.valid.calldata");
+        bytes32 expectedCompositePublicKey = compositePublicKeyWord(publicKey);
+        ShrincsAccountVerifierExample account = new ShrincsAccountVerifierExample(expectedCompositePublicKey);
+
+        bytes memory envelope = abi.encodePacked(bytes1(ERC1271_MODE_STATELESS_ACTION), hex"deadbeef");
+        bytes4 actual = account.isValidSignature(bytes32(0), envelope);
+
+        assertEq(actual, INVALID_SIGNATURE, "malformed stateless envelope must return invalid");
+        assertEq(account.currentShrincsPublicKey(), expectedCompositePublicKey);
+        assertEq(account.nonce(), 0);
+        assertEq(account.keyVersion(), 0);
+        assertEq(account.statelessSignaturesUsed(), 0);
+    }
+
+    function testExampleIsValidSignatureRejectsLegacyStatefulVectorThroughCanonicalEnvelope() public {
+        (ShrincsTypes.PublicKey memory publicKey,, ShrincsTypes.StatefulSignature memory signature) =
+            decodeStatefulVector(".stateful.cases.valid.calldata");
+        bytes32 expectedCompositePublicKey = compositePublicKeyWord(publicKey);
+        ShrincsAccountVerifierExample account = new ShrincsAccountVerifierExample(expectedCompositePublicKey);
+        ShrincsTypes.ActionContext memory context = actionContext(address(account), 0, 0);
+        bytes32 hash =
+            keccak256(
+                abi.encodePacked(
+                    ShrincsTypes.OP_VERIFY_STATEFUL,
+                    ShrincsTypes.HASH_SUITE_KECCAK_256,
+                    expectedCompositePublicKey,
+                    context.domainSeparator,
+                    context.nonce,
+                    context.keyVersion,
+                    context.actionType,
+                    context.payloadHash
+                )
+            );
+        bytes memory envelope = abi.encodePacked(
+            bytes1(ERC1271_MODE_STATEFUL_ACTION),
+            abi.encode(publicKey, context.actionType, context.payloadHash, signature)
+        );
+
+        bytes4 actual = account.isValidSignature(hash, envelope);
+
+        assertEq(actual, INVALID_SIGNATURE, "legacy raw stateful vector must not validate through canonical 1271 path");
+        assertEq(account.currentShrincsPublicKey(), expectedCompositePublicKey);
+        assertEq(account.nonce(), 0);
+        assertEq(account.keyVersion(), 0);
+        assertEq(account.statelessSignaturesUsed(), 0);
+    }
+
+    function testExampleIsValidSignatureRejectsLegacyStatelessVectorThroughCanonicalEnvelope() public {
+        (ShrincsTypes.PublicKey memory publicKey,, ShrincsTypes.StatelessSignature memory signature) =
+            decodeStatelessVector(".stateless.cases.valid.calldata");
+        bytes32 expectedCompositePublicKey = compositePublicKeyWord(publicKey);
+        ShrincsAccountVerifierExample account = new ShrincsAccountVerifierExample(expectedCompositePublicKey);
+        ShrincsTypes.ActionContext memory context = actionContext(address(account), 0, 0);
+        bytes32 hash =
+            keccak256(
+                abi.encodePacked(
+                    ShrincsTypes.OP_VERIFY_STATELESS,
+                    ShrincsTypes.HASH_SUITE_KECCAK_256,
+                    expectedCompositePublicKey,
+                    context.domainSeparator,
+                    context.nonce,
+                    context.keyVersion,
+                    context.actionType,
+                    context.payloadHash
+                )
+            );
+        bytes memory envelope = abi.encodePacked(
+            bytes1(ERC1271_MODE_STATELESS_ACTION),
+            abi.encode(publicKey, context.actionType, context.payloadHash, signature)
+        );
+
+        bytes4 actual = account.isValidSignature(hash, envelope);
+
+        assertEq(actual, INVALID_SIGNATURE, "legacy raw stateless vector must not validate through canonical 1271 path");
+        assertEq(account.currentShrincsPublicKey(), expectedCompositePublicKey);
+        assertEq(account.nonce(), 0);
+        assertEq(account.keyVersion(), 0);
+        assertEq(account.statelessSignaturesUsed(), 0);
+    }
+
     function testExampleRotateFullKeyMatchesLibraryAndPreservesStateOnFailure() public {
         (ShrincsTypes.PublicKey memory publicKey,, ShrincsTypes.StatelessSignature memory signature) =
             decodeStatelessVector(".stateless.cases.valid.calldata");
@@ -281,16 +410,10 @@ contract ShrincsAccountVerifierExampleTest is Test {
             domainSeparator: domainSeparatorFor(address(account)), nonce: 0, keyVersion: 0
         });
         ShrincsTypes.StatefulRotationTarget memory target =
-            statefulRotationTargetFromParts(publicKey, publicKey.parameterSetId, publicKey.statefulPublicKey);
+            statefulRotationTargetFromParts(publicKey, publicKey.statefulPublicKey);
 
-        bytes32 expected = rotation.rotateStatefulViaStateless(
-            ShrincsTypes.ParameterSetId.Sphincs256sKeccakQ20,
-            expectedCompositePublicKey,
-            publicKey,
-            context,
-            signature,
-            target
-        );
+        bytes32 expected =
+            rotation.rotateStatefulViaStateless(expectedCompositePublicKey, publicKey, context, signature, target);
         bool actual = account.rotateToFreshKey(publicKey, signature, target);
 
         assertEq(actual, expected != bytes32(0), "wrapper must match library stateful-only rotation result");
@@ -693,20 +816,14 @@ contract ShrincsAccountVerifierExampleTest is Test {
 
     function statefulRotationTargetFromParts(
         ShrincsTypes.PublicKey memory currentPublicKey,
-        ShrincsTypes.ParameterSetId parameterSetId,
         bytes memory statefulPublicKey
     ) internal pure returns (ShrincsTypes.StatefulRotationTarget memory) {
         bytes32 commitment = keccak256(
             abi.encodePacked(
-                "shrincs-public-key",
-                uint8(parameterSetId),
-                statefulPublicKey,
-                currentPublicKey.pkSeed,
-                currentPublicKey.hypertreeRoot
+                "shrincs-public-key", statefulPublicKey, currentPublicKey.pkSeed, currentPublicKey.hypertreeRoot
             )
         );
         return ShrincsTypes.StatefulRotationTarget({
-            parameterSetId: parameterSetId,
             statefulPublicKey: statefulPublicKey,
             publicKeyCommitment: abi.encodePacked(commitment)
         });

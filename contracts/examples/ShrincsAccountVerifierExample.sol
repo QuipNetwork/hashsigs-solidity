@@ -20,6 +20,15 @@ import {SHRINCS} from "../SHRINCS.sol";
 import {ShrincsTypes} from "../ShrincsTypes.sol";
 
 contract ShrincsAccountVerifierExample {
+    // ERC-1271 success return value.
+    bytes4 internal constant MAGIC_VALUE = 0x1626ba7e;
+    // Any non-magic value denotes signature failure.
+    bytes4 internal constant INVALID_SIGNATURE = 0xffffffff;
+    // Envelope mode selecting canonical stateful account-action validation.
+    uint8 internal constant ERC1271_MODE_STATEFUL_ACTION = 1;
+    // Envelope mode selecting canonical stateless account-action validation.
+    uint8 internal constant ERC1271_MODE_STATELESS_ACTION = 2;
+
     enum StatefulPolicy {
         // Accept only the next expected stateful leaf index.
         MonotonicIndex,
@@ -64,6 +73,87 @@ contract ShrincsAccountVerifierExample {
     modifier onlyOwner() {
         require(msg.sender == owner, "only owner");
         _;
+    }
+
+    modifier onlySelf() {
+        require(msg.sender == address(this), "only self");
+        _;
+    }
+
+    // isValidSignature: ERC-1271 compatibility view for canonical SHRINCS account-action signatures.
+    // 1. Decode the leading envelope mode byte.
+    // 2. Decode the remaining bytes as either a canonical stateful or stateless action envelope.
+    // 3. Rebuild the current account action context from wrapper-owned state.
+    // 4. Verify that the supplied hash matches the current canonical action hash.
+    // 5. Verify the embedded SHRINCS signature without mutating wrapper state.
+    // 6. Return 0xffffffff instead of reverting on malformed envelopes.
+    // 7. Return the ERC-1271 magic value on success or 0xffffffff on failure.
+    function isValidSignature(bytes32 hash, bytes calldata signature) external view returns (bytes4) {
+        // A one-byte mode prefix is required before any envelope payload.
+        if (signature.length < 1) return INVALID_SIGNATURE;
+
+        uint8 mode = uint8(signature[0]);
+        bytes calldata payload = signature[1:];
+
+        if (mode == ERC1271_MODE_STATEFUL_ACTION) {
+            try this.decodeAndCheckStateful1271Envelope(hash, payload) returns (bool ok) {
+                if (ok) return MAGIC_VALUE;
+            } catch {
+                return INVALID_SIGNATURE;
+            }
+            return INVALID_SIGNATURE;
+        }
+
+        if (mode == ERC1271_MODE_STATELESS_ACTION) {
+            try this.decodeAndCheckStateless1271Envelope(hash, payload) returns (bool ok) {
+                if (ok) return MAGIC_VALUE;
+            } catch {
+                return INVALID_SIGNATURE;
+            }
+            return INVALID_SIGNATURE;
+        }
+
+        return INVALID_SIGNATURE;
+    }
+
+    // decodeAndCheckStateful1271Envelope: Self-call decoder for stateful ERC-1271 envelopes.
+    // 1. Decode the canonical stateful envelope layout from bytes.
+    // 2. Delegate the read-only cryptographic and policy checks.
+    // 3. Allow isValidSignature(...) to catch malformed payloads and return INVALID_SIGNATURE.
+    function decodeAndCheckStateful1271Envelope(bytes32 hash, bytes calldata payload)
+        external
+        view
+        onlySelf
+        returns (bool)
+    {
+        (
+            ShrincsTypes.PublicKey memory publicKey,
+            bytes32 actionType,
+            bytes32 payloadHash,
+            ShrincsTypes.StatefulSignature memory shrincsSignature
+        ) = abi.decode(payload, (ShrincsTypes.PublicKey, bytes32, bytes32, ShrincsTypes.StatefulSignature));
+
+        return this.isValidStatefulActionSignatureNow(hash, publicKey, actionType, payloadHash, shrincsSignature);
+    }
+
+    // decodeAndCheckStateless1271Envelope: Self-call decoder for stateless ERC-1271 envelopes.
+    // 1. Decode the canonical stateless envelope layout from bytes.
+    // 2. Delegate the read-only cryptographic and policy checks.
+    // 3. Allow isValidSignature(...) to catch malformed payloads and return INVALID_SIGNATURE.
+    function decodeAndCheckStateless1271Envelope(bytes32 hash, bytes calldata payload)
+        external
+        view
+        onlySelf
+        returns (bool)
+    {
+        (
+            ShrincsTypes.PublicKey memory publicKey,
+            bytes32 actionType,
+            bytes32 payloadHash,
+            ShrincsTypes.StatelessSignature memory shrincsSignature
+        ) = abi.decode(payload, (ShrincsTypes.PublicKey, bytes32, bytes32, ShrincsTypes.StatelessSignature));
+
+        return this.isValidStatelessActionSignatureNow(hash, publicKey, actionType, payloadHash, shrincsSignature);
     }
 
     // constructor: Install the initial key commitment and start in the default safe wrapper mode.
@@ -351,6 +441,60 @@ contract ShrincsAccountVerifierExample {
         // Bitmap tracking accepts any leaf that has not already been marked used.
         if (statefulPolicy == StatefulPolicy.LeafBitmap) return !isLeafUsed(leafIndex);
         return true;
+    }
+
+    // isValidStatefulActionSignatureNow: Read-only self-call helper for canonical stateful action verification.
+    // 1. Enforce the current stateful leaf policy without consuming the leaf.
+    // 2. Rebuild the canonical action context from wrapper-owned state.
+    // 3. Require the caller-supplied hash to match the current canonical stateful action hash.
+    // 4. Verify the SHRINCS stateful action signature under the installed key commitment.
+    function isValidStatefulActionSignatureNow(
+        bytes32 hash,
+        ShrincsTypes.PublicKey calldata publicKey,
+        bytes32 actionType,
+        bytes32 payloadHash,
+        ShrincsTypes.StatefulSignature calldata signature
+    ) external view onlySelf returns (bool) {
+        uint32 leafIndex = uint32(signature.authPath.length);
+        if (!precheckStatefulLeafUse(leafIndex)) return false;
+
+        ShrincsTypes.ActionContext memory context = ShrincsTypes.ActionContext({
+            domainSeparator: domainSeparator(),
+            nonce: nonce,
+            keyVersion: keyVersion,
+            actionType: actionType,
+            payloadHash: payloadHash
+        });
+
+        if (SHRINCS.statefulActionMessageHash(currentShrincsPublicKey, context) != hash) return false;
+        return SHRINCS.verifyStateful(currentShrincsPublicKey, publicKey, context, signature);
+    }
+
+    // isValidStatelessActionSignatureNow: Read-only self-call helper for canonical stateless action verification.
+    // 1. Enforce current recovery-mode gating and stateless usage budget without consuming either.
+    // 2. Rebuild the canonical action context from wrapper-owned state.
+    // 3. Require the caller-supplied hash to match the current canonical stateless action hash.
+    // 4. Verify the SHRINCS stateless action signature under the installed key commitment.
+    function isValidStatelessActionSignatureNow(
+        bytes32 hash,
+        ShrincsTypes.PublicKey calldata publicKey,
+        bytes32 actionType,
+        bytes32 payloadHash,
+        ShrincsTypes.StatelessSignature calldata signature
+    ) external view onlySelf returns (bool) {
+        if (statefulPolicy == StatefulPolicy.RecoveryRotation && !recoveryMode) return false;
+        if (statelessSignaturesUsed >= ShrincsTypes.STATELESS_SIGNATURE_LIMIT) return false;
+
+        ShrincsTypes.ActionContext memory context = ShrincsTypes.ActionContext({
+            domainSeparator: domainSeparator(),
+            nonce: nonce,
+            keyVersion: keyVersion,
+            actionType: actionType,
+            payloadHash: payloadHash
+        });
+
+        if (SHRINCS.statelessActionMessageHash(currentShrincsPublicKey, context) != hash) return false;
+        return SHRINCS.verifyStateless(currentShrincsPublicKey, publicKey, context, signature);
     }
 
     // commitStatefulLeafUse: Record a successfully verified stateful leaf under the active policy.
