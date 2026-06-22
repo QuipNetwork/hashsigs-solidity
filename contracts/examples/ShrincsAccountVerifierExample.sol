@@ -453,13 +453,14 @@ contract ShrincsAccountVerifierExample {
     }
 
     // precheckStatefulLeafUse: Check whether the active policy allows a stateful leaf before verification.
-    // 1. Reject stateful signatures while recovery mode is actively using stateless authority.
+    // 1. Reject all stateful signatures while the wrapper is configured for recovery-only stateless authority.
     // 2. Under monotonic tracking, accept only the next expected leaf.
     // 3. Under bitmap tracking, accept only leaves that have not yet been marked used.
     // 4. Return true for any remaining policy branch.
     function precheckStatefulLeafUse(uint32 leafIndex) internal view returns (bool) {
-        // While recovery mode is active, block all stateful signatures.
-        if (statefulPolicy == StatefulPolicy.RecoveryRotation && recoveryMode) return false;
+        // Recovery-rotation policy disables the stateful path entirely, whether or not recovery
+        // mode has been explicitly armed yet.
+        if (statefulPolicy == StatefulPolicy.RecoveryRotation) return false;
         // Ordered tracking accepts exactly one next leaf.
         if (statefulPolicy == StatefulPolicy.MonotonicIndex) return leafIndex == nextStatefulLeafIndex;
         // Bitmap tracking accepts any leaf that has not already been marked used.

@@ -142,7 +142,7 @@ contract ShrincsStatefulPolicyExamplesTest is Test {
         assertTrue(account.nextStatefulLeafIndex() == leafIndex + 1, "unexpected leaf must not advance state");
     }
 
-    function testRecoveryRotationExampleBlocksStatefulPathInRecoveryMode() public {
+    function testRecoveryRotationExampleBlocksStatefulPathBeforeAndDuringRecoveryMode() public {
         (
             ShrincsTypes.PublicKey memory publicKey,
             bytes memory message,
@@ -154,8 +154,8 @@ contract ShrincsStatefulPolicyExamplesTest is Test {
 
         assertEq(
             account.verifyStatefulUncheckedForTest(publicKey, message, signature),
-            true,
-            "stateful raw path should work before recovery"
+            false,
+            "stateful raw path must be blocked as soon as recovery-rotation policy is selected"
         );
         account.enterRecoveryMode();
         assertEq(
