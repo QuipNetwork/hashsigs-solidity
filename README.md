@@ -449,11 +449,11 @@ The example wrapper also shows several account-layer policies for handling state
   - a mismatch can lock out otherwise valid future leaves until the key is rotated or policy is changed
 
 - `StatefulPolicy.RecoveryRotation`
-  - blocks the stateful path once recovery mode is entered
-  - allows stateless fallback and both stateless rotation paths only after recovery mode is entered
+  - blocks the stateful path for the entire recovery-rotation policy epoch
+  - requires an explicit `enterRecoveryMode()` call before stateless recovery rotations are accepted
   - models the “recover, then rotate to a fresh key” workflow
   - works best when recovery mode is treated as a bridge to rotation, not as a long-term steady state
-  - if a system enters recovery mode and never rotates out, the stateful path loses most of its practical value
+  - if a system enters recovery-rotation policy and never rotates out, the stateful path loses most of its practical value
 
 - `StatefulPolicy.LeafBitmap`
   - stores a bitmap of used stateful leaf indices
@@ -471,6 +471,8 @@ The developer/integrator chooses which policy fits the account design. In the ex
 - Policy changes are sensitive administrative actions.
   - even when owner-gated, switching policy mid-lifecycle can change which future stateful signatures are accepted
   - production wrappers should treat policy changes as explicit governance or account-owner operations
+  - the example wrapper now freezes policy changes after the first successful stateful signature in a key epoch
+  - changing policy after stateful use therefore requires rotating to a fresh key first
 
 - Fresh-key rotation must reset stateful tracking state.
   - when a new SHRINCS key is installed, stale state such as:
@@ -490,6 +492,10 @@ The developer/integrator chooses which policy fits the account design. In the ex
   - `rotateToFreshKey(...)` and `rotateFullKey(...)` both require `StatefulPolicy.RecoveryRotation`
   - both also require `recoveryMode == true`
   - this keeps stateless signatures as recovery authority rather than a normal-operation rotation bypass
+
+- `RecoveryRotation` disables the stateful path immediately.
+  - selecting `StatefulPolicy.RecoveryRotation` blocks stateful verification even before `enterRecoveryMode()`
+  - `enterRecoveryMode()` only arms stateless recovery rotation; it does not change stateful-path availability
 
 - Stateless usage accounting follows the stateless key, not only the bundle epoch.
   - `rotateToFreshKey(...)` replaces only the stateful subkey
