@@ -53,6 +53,8 @@ contract ShrincsAccountVerifierExample {
     uint64 public statelessSignaturesUsed;
     // Current stateful leaf-tracking / recovery policy enforced by the wrapper.
     StatefulPolicy public statefulPolicy;
+    // Whether stateful leaf consumption has frozen policy changes for the current key epoch.
+    bool public statefulPolicyFrozen;
     // Next expected stateful leaf when monotonic tracking is active.
     uint32 public nextStatefulLeafIndex;
     // Whether the wrapper is currently in recovery mode for stateless rotation.
@@ -378,11 +380,14 @@ contract ShrincsAccountVerifierExample {
 
     // setStatefulPolicyMonotonicIndex: Switch to monotonic stateful leaf tracking.
     // 1. Only the owner may change the wrapper policy.
-    // 2. Prevent rollback to an earlier expected leaf index.
-    // 3. Install monotonic tracking with the supplied next expected leaf.
-    // 4. Exit recovery mode because the wrapper is returning to normal operation.
-    // 5. Emit the policy update for off-chain observers.
+    // 2. Reject policy changes after any successful stateful leaf use in this key epoch.
+    // 3. Prevent rollback to an earlier expected leaf index.
+    // 4. Install monotonic tracking with the supplied next expected leaf.
+    // 5. Exit recovery mode because the wrapper is returning to normal operation.
+    // 6. Emit the policy update for off-chain observers.
     function setStatefulPolicyMonotonicIndex(uint32 initialLeafIndex) external onlyOwner {
+        // Freeze the stateful tracking model once any stateful leaf has been consumed in this epoch.
+        require(!statefulPolicyFrozen, "stateful policy frozen");
         // Never allow policy changes to roll back the expected monotonic leaf cursor.
         require(initialLeafIndex >= nextStatefulLeafIndex, "stateful index rollback");
         // Switch into ordered stateful leaf tracking.
@@ -396,10 +401,13 @@ contract ShrincsAccountVerifierExample {
 
     // setStatefulPolicyRecoveryRotation: Switch to recovery-only stateless rotation mode.
     // 1. Only the owner may change the wrapper policy.
-    // 2. Preserve or initialize the stateful leaf cursor for later normal operation.
-    // 3. Require an explicit enterRecoveryMode() call before stateless recovery is accepted.
-    // 4. Emit the policy update for off-chain observers.
+    // 2. Reject policy changes after any successful stateful leaf use in this key epoch.
+    // 3. Preserve or initialize the stateful leaf cursor for later normal operation.
+    // 4. Require an explicit enterRecoveryMode() call before stateless recovery is accepted.
+    // 5. Emit the policy update for off-chain observers.
     function setStatefulPolicyRecoveryRotation() external onlyOwner {
+        // Freeze the stateful tracking model once any stateful leaf has been consumed in this epoch.
+        require(!statefulPolicyFrozen, "stateful policy frozen");
         // Switch into the policy where stateless signatures serve as recovery authority.
         statefulPolicy = StatefulPolicy.RecoveryRotation;
         // Ensure the stateful cursor stays initialized for later normal operation.
@@ -413,10 +421,13 @@ contract ShrincsAccountVerifierExample {
 
     // setStatefulPolicyLeafBitmap: Switch to bitmap-based stateful leaf tracking.
     // 1. Only the owner may change the wrapper policy.
-    // 2. Preserve or initialize the stateful leaf cursor for future monotonic use.
-    // 3. Exit recovery mode because the wrapper is returning to normal operation.
-    // 4. Emit the policy update for off-chain observers.
+    // 2. Reject policy changes after any successful stateful leaf use in this key epoch.
+    // 3. Preserve or initialize the stateful leaf cursor for future monotonic use.
+    // 4. Exit recovery mode because the wrapper is returning to normal operation.
+    // 5. Emit the policy update for off-chain observers.
     function setStatefulPolicyLeafBitmap() external onlyOwner {
+        // Freeze the stateful tracking model once any stateful leaf has been consumed in this epoch.
+        require(!statefulPolicyFrozen, "stateful policy frozen");
         // Switch into out-of-order bitmap tracking for stateful leaf use.
         statefulPolicy = StatefulPolicy.LeafBitmap;
         // Ensure the stateful cursor stays initialized for future monotonic use.
@@ -513,22 +524,22 @@ contract ShrincsAccountVerifierExample {
     // commitStatefulLeafUse: Record a successfully verified stateful leaf under the active policy.
     // 1. Under monotonic tracking, advance the next expected leaf by one.
     // 2. Under bitmap tracking, mark the corresponding bit for this leaf as used.
-    // 3. Leave recovery-only mode unchanged because stateful signatures are blocked there.
+    // 3. Freeze stateful policy changes for the remainder of the key epoch.
+    // 4. Leave recovery-only mode unchanged because stateful signatures are blocked there.
     function commitStatefulLeafUse(uint32 leafIndex) internal {
         if (statefulPolicy == StatefulPolicy.MonotonicIndex) {
             // Move the expected cursor forward after one successful monotonic use.
             nextStatefulLeafIndex += 1;
-            return;
-        }
-        if (statefulPolicy == StatefulPolicy.LeafBitmap) {
+        } else if (statefulPolicy == StatefulPolicy.LeafBitmap) {
             // Group leaves into 256-bit words for compact bitmap storage.
             uint256 wordIndex = uint256(leafIndex) >> 8;
             // Select the bit inside that word corresponding to this leaf.
             uint256 bitIndex = uint256(leafIndex) & 0xff;
             // Mark this leaf as consumed for the current key epoch.
             usedLeafBitmap[keyVersion][wordIndex] |= uint256(1) << bitIndex;
-            return;
         }
+        // Any successful stateful verification fixes the tracking model for this key epoch.
+        statefulPolicyFrozen = true;
     }
 
     // consumeStatelessRotationUse: Record one successful stateless recovery signature used for rotation.
@@ -555,7 +566,7 @@ contract ShrincsAccountVerifierExample {
     // 2. Install the next SHRINCS public-key commitment.
     // 3. Advance nonce and key version to close the old authorization epoch.
     // 4. Reset or preserve stateless usage accounting according to the caller's intent.
-    // 5. Reset stateful leaf tracking for the new key.
+    // 5. Reset stateful leaf tracking and policy-freeze state for the new key.
     // 6. Return the wrapper to the default monotonic non-recovery policy.
     // 7. Emit rotation and policy-reset events for off-chain observers.
     function installRotatedKey(bytes32 nextCompositePublicKey, bool resetStatelessUsage) internal {
@@ -572,6 +583,8 @@ contract ShrincsAccountVerifierExample {
         }
         // Reset stateful signing to the first leaf of the new key epoch.
         nextStatefulLeafIndex = INITIAL_STATEFUL_LEAF_INDEX;
+        // Fresh key epochs allow policy selection again until the first stateful leaf is consumed.
+        statefulPolicyFrozen = false;
         // Fresh installs return to the default safe wrapper policy.
         statefulPolicy = StatefulPolicy.MonotonicIndex;
         // Recovery mode ends once the new key has been installed.

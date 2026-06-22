@@ -654,6 +654,50 @@ contract ShrincsAccountVerifierExampleTest is Test {
         account.setStatefulPolicyMonotonicIndex(16);
     }
 
+    function testExamplePolicyChangesFreezeAfterSuccessfulStatefulUse() public {
+        (
+            ShrincsTypes.PublicKey memory publicKey,
+            bytes memory message,
+            ShrincsTypes.StatefulSignature memory signature
+        ) = decodeStatefulVector(".stateful.cases.valid.calldata");
+        bytes32 expectedCompositePublicKey = compositePublicKeyWord(publicKey);
+        ShrincsAccountVerifierExampleHarness account =
+            new ShrincsAccountVerifierExampleHarness(expectedCompositePublicKey);
+
+        bool ok = account.verifyStatefulUncheckedForTest(publicKey, message, signature);
+        assertEq(ok, true, "stateful signature must verify before freeze checks");
+        assertEq(account.statefulPolicyFrozen(), true, "successful stateful use must freeze policy changes");
+
+        vm.expectRevert(bytes("stateful policy frozen"));
+        account.setStatefulPolicyLeafBitmap();
+    }
+
+    function testExampleFreshKeyInstallUnfreezesPolicyChanges() public {
+        (
+            ShrincsTypes.PublicKey memory publicKey,
+            bytes memory message,
+            ShrincsTypes.StatefulSignature memory signature
+        ) = decodeStatefulVector(".stateful.cases.valid.calldata");
+        bytes32 expectedCompositePublicKey = compositePublicKeyWord(publicKey);
+        ShrincsAccountVerifierExampleHarness account =
+            new ShrincsAccountVerifierExampleHarness(expectedCompositePublicKey);
+
+        bool ok = account.verifyStatefulUncheckedForTest(publicKey, message, signature);
+        assertEq(ok, true, "stateful signature must verify before freeze checks");
+        assertEq(account.statefulPolicyFrozen(), true, "successful stateful use must freeze policy changes");
+
+        bytes32 nextCompositePublicKey = bytes32(uint256(expectedCompositePublicKey) ^ 1);
+        account.installFreshKeyForTest(nextCompositePublicKey);
+
+        assertEq(account.statefulPolicyFrozen(), false, "fresh key install must clear policy freeze");
+        account.setStatefulPolicyLeafBitmap();
+        assertEq(
+            uint8(account.statefulPolicy()),
+            uint8(ShrincsAccountVerifierExample.StatefulPolicy.LeafBitmap),
+            "policy changes must be allowed again after fresh key install"
+        );
+    }
+
     function testExampleFreshKeyInstallResetsStatefulTrackingState() public {
         (ShrincsTypes.PublicKey memory publicKey,,) = decodeStatelessVector(".stateless.cases.valid.calldata");
         bytes32 expectedCompositePublicKey = compositePublicKeyWord(publicKey);
