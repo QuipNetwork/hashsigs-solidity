@@ -69,6 +69,13 @@ contract ShrincsAccountVerifierExample {
     );
     event StatefulSignatureVerified(uint32 indexed leafIndex, uint256 indexed nonce, uint256 indexed keyVersion);
     event StatelessSignatureVerified(uint64 usedCount, uint256 indexed nonce, uint256 indexed keyVersion);
+    event StatelessRotationConsumed(
+        uint64 usedCount,
+        uint256 indexed nonce,
+        uint256 indexed keyVersion,
+        bytes32 indexed nextShrincsPublicKey,
+        bool fullRotation
+    );
 
     modifier onlyOwner() {
         require(msg.sender == owner, "only owner");
@@ -309,8 +316,12 @@ contract ShrincsAccountVerifierExample {
             SHRINCS.rotateStatefulViaStateless(currentShrincsPublicKey, currentPublicKey, context, recoverySignature, nextKey);
         if (nextCompositePublicKey == bytes32(0)) return false;
 
-        // Install the next key bundle and reset wrapper state for the new epoch.
-        installFreshKey(nextCompositePublicKey);
+        // Count and announce the consumed recovery signature before preserving the stateless budget
+        // into the next stateful-only epoch.
+        consumeStatelessRotationUse(nextCompositePublicKey, false);
+        // Install the next stateful subkey while preserving stateless usage accounting because
+        // the stateless key material is unchanged.
+        installFreshStatefulKey(nextCompositePublicKey);
         return true;
     }
 
@@ -345,8 +356,10 @@ contract ShrincsAccountVerifierExample {
             SHRINCS.statelessRotate(currentShrincsPublicKey, currentPublicKey, context, recoverySignature, nextKey);
         if (nextCompositePublicKey == bytes32(0)) return false;
 
-        // Install the next key bundle and reset wrapper state for the new epoch.
-        installFreshKey(nextCompositePublicKey);
+        // Count and announce the consumed recovery signature as the final stateless use under the old key.
+        consumeStatelessRotationUse(nextCompositePublicKey, true);
+        // Install the next full key bundle and reset wrapper state for the new stateless epoch.
+        installFreshFullKey(nextCompositePublicKey);
         return true;
     }
 
@@ -518,6 +531,16 @@ contract ShrincsAccountVerifierExample {
         }
     }
 
+    // consumeStatelessRotationUse: Record one successful stateless recovery signature used for rotation.
+    // 1. Increment the current stateless usage count under the old key epoch.
+    // 2. Emit a dedicated rotation-usage event before any key install resets wrapper state.
+    function consumeStatelessRotationUse(bytes32 nextCompositePublicKey, bool fullRotation) internal {
+        statelessSignaturesUsed += 1;
+        emit StatelessRotationConsumed(
+            statelessSignaturesUsed, nonce, keyVersion, nextCompositePublicKey, fullRotation
+        );
+    }
+
     // domainSeparator: Derive the wrapper's canonical signing domain.
     // 1. Start from a stable domain tag for this wrapper family.
     // 2. Bind the separator to the current chain id.
@@ -527,14 +550,15 @@ contract ShrincsAccountVerifierExample {
         return keccak256(abi.encode(DOMAIN_TAG, block.chainid, address(this)));
     }
 
-    // installFreshKey: Install a fresh key bundle and reset wrapper state for the new key epoch.
+    // installRotatedKey: Install a rotated key bundle and reset wrapper state for the next epoch.
     // 1. Preserve the previous installed key commitment for the rotation event.
     // 2. Install the next SHRINCS public-key commitment.
     // 3. Advance nonce and key version to close the old authorization epoch.
-    // 4. Reset stateless usage and stateful leaf tracking for the new key.
-    // 5. Return the wrapper to the default monotonic non-recovery policy.
-    // 6. Emit rotation and policy-reset events for off-chain observers.
-    function installFreshKey(bytes32 nextCompositePublicKey) internal {
+    // 4. Reset or preserve stateless usage accounting according to the caller's intent.
+    // 5. Reset stateful leaf tracking for the new key.
+    // 6. Return the wrapper to the default monotonic non-recovery policy.
+    // 7. Emit rotation and policy-reset events for off-chain observers.
+    function installRotatedKey(bytes32 nextCompositePublicKey, bool resetStatelessUsage) internal {
         // Preserve the previous key commitment for the rotation event payload.
         bytes32 previousShrincsPublicKey = currentShrincsPublicKey;
         // Install the next trusted SHRINCS public-key commitment.
@@ -542,8 +566,10 @@ contract ShrincsAccountVerifierExample {
         // Advance nonce and key epoch so old authorizations cannot be replayed.
         nonce += 1;
         keyVersion += 1;
-        // Reset per-key stateless usage accounting.
-        statelessSignaturesUsed = 0;
+        // Reset per-key stateless usage accounting only when the caller rotates the stateless key too.
+        if (resetStatelessUsage) {
+            statelessSignaturesUsed = 0;
+        }
         // Reset stateful signing to the first leaf of the new key epoch.
         nextStatefulLeafIndex = INITIAL_STATEFUL_LEAF_INDEX;
         // Fresh installs return to the default safe wrapper policy.
@@ -552,5 +578,28 @@ contract ShrincsAccountVerifierExample {
         recoveryMode = false;
         emit KeyRotated(previousShrincsPublicKey, nextCompositePublicKey, keyVersion);
         emit StatefulPolicySet(statefulPolicy, nextStatefulLeafIndex);
+    }
+
+    // installFreshStatefulKey: Install a fresh stateful subkey while preserving the stateless side.
+    // 1. Install the next SHRINCS public-key commitment.
+    // 2. Preserve stateless usage accounting because the stateless key material is unchanged.
+    // 3. Reset stateful tracking and wrapper policy state for the next epoch.
+    function installFreshStatefulKey(bytes32 nextCompositePublicKey) internal {
+        installRotatedKey(nextCompositePublicKey, false);
+    }
+
+    // installFreshFullKey: Install a fully fresh SHRINCS bundle for the next key epoch.
+    // 1. Install the next SHRINCS public-key commitment.
+    // 2. Reset stateless usage accounting because the stateless key material changes too.
+    // 3. Reset stateful tracking and wrapper policy state for the next epoch.
+    function installFreshFullKey(bytes32 nextCompositePublicKey) internal {
+        installRotatedKey(nextCompositePublicKey, true);
+    }
+
+    // installFreshKey: Backward-compatible alias for the full fresh-key install path.
+    // 1. Preserve existing helper-call behavior in tests and support harnesses.
+    // 2. Route to the semantic full-key install helper.
+    function installFreshKey(bytes32 nextCompositePublicKey) internal {
+        installFreshFullKey(nextCompositePublicKey);
     }
 }

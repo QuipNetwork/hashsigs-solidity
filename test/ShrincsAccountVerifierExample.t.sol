@@ -87,6 +87,24 @@ contract ShrincsAccountVerifierExampleHarness is ShrincsAccountVerifierExample {
     function installFreshKeyForTest(bytes32 nextCompositePublicKey) external {
         installFreshKey(nextCompositePublicKey);
     }
+
+    function installFreshStatefulKeyForTest(bytes32 nextCompositePublicKey) external {
+        installFreshStatefulKey(nextCompositePublicKey);
+    }
+
+    function installFreshFullKeyForTest(bytes32 nextCompositePublicKey) external {
+        installFreshFullKey(nextCompositePublicKey);
+    }
+
+    function applySuccessfulStatefulRotationForTest(bytes32 nextCompositePublicKey) external {
+        consumeStatelessRotationUse(nextCompositePublicKey, false);
+        installFreshStatefulKey(nextCompositePublicKey);
+    }
+
+    function applySuccessfulFullRotationForTest(bytes32 nextCompositePublicKey) external {
+        consumeStatelessRotationUse(nextCompositePublicKey, true);
+        installFreshFullKey(nextCompositePublicKey);
+    }
 }
 
 contract ExampleNonOwnerCaller {
@@ -138,6 +156,14 @@ contract ShrincsAccountVerifierExampleTest is Test {
 
     string internal constant VECTOR_PATH = "test/test_vectors/shrincs_sphincs_256s_keccak.json";
     bytes32 internal constant DOMAIN_TAG = keccak256("shrincs-account-v1");
+
+    event StatelessRotationConsumed(
+        uint64 usedCount,
+        uint256 indexed nonce,
+        uint256 indexed keyVersion,
+        bytes32 indexed nextShrincsPublicKey,
+        bool fullRotation
+    );
 
     struct LegacyStatefulPublicKey {
         bytes32 pkSeed;
@@ -481,6 +507,28 @@ contract ShrincsAccountVerifierExampleTest is Test {
         assertTrue(account.statelessSignaturesUsed() == limit, "usage must stay unchanged at rotation usage limit");
     }
 
+    function testExampleRotateToFreshKeyRejectsAtUsageLimit() public {
+        (ShrincsTypes.PublicKey memory publicKey,, ShrincsTypes.StatelessSignature memory signature) =
+            decodeStatelessVector(".stateless.cases.valid.calldata");
+        bytes32 expectedCompositePublicKey = compositePublicKeyWord(publicKey);
+        ShrincsAccountVerifierExampleHarness account =
+            new ShrincsAccountVerifierExampleHarness(expectedCompositePublicKey);
+        uint64 limit = ShrincsTypes.STATELESS_SIGNATURE_LIMIT;
+        ShrincsTypes.StatefulRotationTarget memory target =
+            statefulRotationTargetFromParts(publicKey, publicKey.statefulPublicKey);
+
+        account.setStatefulPolicyRecoveryRotation();
+        account.enterRecoveryMode();
+        account.setStatelessSignaturesUsed(limit);
+        bool actual = account.rotateToFreshKey(publicKey, signature, target);
+
+        assertEq(actual, false, "stateful-only rotation must stop at usage limit");
+        assertEq(account.currentShrincsPublicKey(), expectedCompositePublicKey);
+        assertTrue(account.nonce() == 0, "nonce must stay unchanged at stateful-only rotation usage limit");
+        assertTrue(account.keyVersion() == 0, "key version must stay unchanged at stateful-only rotation usage limit");
+        assertTrue(account.statelessSignaturesUsed() == limit, "usage must stay unchanged at stateful-only rotation usage limit");
+    }
+
     function testExampleDomainSeparatorDiffersAcrossContractInstances() public {
         (ShrincsTypes.PublicKey memory publicKey,,) = decodeStatelessVector(".stateless.cases.valid.calldata");
         bytes32 expectedCompositePublicKey = compositePublicKeyWord(publicKey);
@@ -666,6 +714,118 @@ contract ShrincsAccountVerifierExampleTest is Test {
 
         assertEq(account.currentShrincsPublicKey(), nextCompositePublicKey);
         assertTrue(account.statelessSignaturesUsed() == 0, "fresh key must always reset stateless usage");
+    }
+
+    function testExampleSuccessfulStatefulOnlyRotationPreservesAndIncrementsStatelessUsage() public {
+        (ShrincsTypes.PublicKey memory publicKey,,) = decodeStatelessVector(".stateless.cases.valid.calldata");
+        bytes32 expectedCompositePublicKey = compositePublicKeyWord(publicKey);
+        ShrincsAccountVerifierExampleHarness account =
+            new ShrincsAccountVerifierExampleHarness(expectedCompositePublicKey);
+
+        account.setStatelessSignaturesUsed(123);
+
+        bytes32 nextCompositePublicKey = bytes32(uint256(expectedCompositePublicKey) ^ 1);
+        account.applySuccessfulStatefulRotationForTest(nextCompositePublicKey);
+
+        assertEq(account.currentShrincsPublicKey(), nextCompositePublicKey);
+        assertEq(account.statelessSignaturesUsed(), 124, "stateful-only rotation must carry forward prior usage plus the recovery signature");
+        assertEq(account.nonce(), 1, "stateful-only rotation must advance nonce");
+        assertEq(account.keyVersion(), 1, "stateful-only rotation must advance key version");
+        assertEq(account.nextStatefulLeafIndex(), 1, "stateful-only rotation must reset stateful tracking");
+        assertEq(uint8(account.statefulPolicy()), uint8(ShrincsAccountVerifierExample.StatefulPolicy.MonotonicIndex));
+        assertEq(account.recoveryMode(), false, "stateful-only rotation must exit recovery mode");
+    }
+
+    function testExampleSuccessfulStatefulOnlyRotationEmitsDedicatedStatelessUsageEvent() public {
+        (ShrincsTypes.PublicKey memory publicKey,,) = decodeStatelessVector(".stateless.cases.valid.calldata");
+        bytes32 expectedCompositePublicKey = compositePublicKeyWord(publicKey);
+        ShrincsAccountVerifierExampleHarness account =
+            new ShrincsAccountVerifierExampleHarness(expectedCompositePublicKey);
+
+        account.setStatelessSignaturesUsed(123);
+
+        bytes32 nextCompositePublicKey = bytes32(uint256(expectedCompositePublicKey) ^ 1);
+        vm.expectEmit(true, true, true, true, address(account));
+        emit StatelessRotationConsumed(124, 0, 0, nextCompositePublicKey, false);
+        account.applySuccessfulStatefulRotationForTest(nextCompositePublicKey);
+    }
+
+    function testExampleRepeatedStatefulOnlyRotationDoesNotMintFreshStatelessBudget() public {
+        (ShrincsTypes.PublicKey memory publicKey,,) = decodeStatelessVector(".stateless.cases.valid.calldata");
+        bytes32 expectedCompositePublicKey = compositePublicKeyWord(publicKey);
+        ShrincsAccountVerifierExampleHarness account =
+            new ShrincsAccountVerifierExampleHarness(expectedCompositePublicKey);
+
+        account.setStatelessSignaturesUsed(7);
+
+        bytes32 nextCompositePublicKeyA = bytes32(uint256(expectedCompositePublicKey) ^ 1);
+        bytes32 nextCompositePublicKeyB = bytes32(uint256(expectedCompositePublicKey) ^ 2);
+        account.applySuccessfulStatefulRotationForTest(nextCompositePublicKeyA);
+        account.applySuccessfulStatefulRotationForTest(nextCompositePublicKeyB);
+
+        assertEq(account.currentShrincsPublicKey(), nextCompositePublicKeyB);
+        assertEq(account.statelessSignaturesUsed(), 9, "repeated stateful-only rotation must continue consuming one stateless use each time");
+        assertEq(account.nonce(), 2, "each stateful-only rotation must advance nonce");
+        assertEq(account.keyVersion(), 2, "each stateful-only rotation must advance key version");
+    }
+
+    function testExampleStatefulOnlyRotationAtLimitMinusOneConsumesFinalStatelessUse() public {
+        (ShrincsTypes.PublicKey memory publicKey,, ShrincsTypes.StatelessSignature memory signature) =
+            decodeStatelessVector(".stateless.cases.valid.calldata");
+        bytes32 expectedCompositePublicKey = compositePublicKeyWord(publicKey);
+        ShrincsAccountVerifierExampleHarness account =
+            new ShrincsAccountVerifierExampleHarness(expectedCompositePublicKey);
+        uint64 limit = ShrincsTypes.STATELESS_SIGNATURE_LIMIT;
+        ShrincsTypes.ActionContext memory context = actionContext(address(account), 1, 1);
+
+        account.setStatelessSignaturesUsed(limit - 1);
+
+        bytes32 nextCompositePublicKey = bytes32(uint256(expectedCompositePublicKey) ^ 1);
+        account.applySuccessfulStatefulRotationForTest(nextCompositePublicKey);
+
+        assertEq(account.currentShrincsPublicKey(), nextCompositePublicKey);
+        assertEq(account.statelessSignaturesUsed(), limit, "stateful-only rotation must consume the final available stateless use");
+        assertEq(account.nonce(), 1, "stateful-only rotation must advance nonce");
+        assertEq(account.keyVersion(), 1, "stateful-only rotation must advance key version");
+
+        bool statelessActionOk = account.verifyStatelessAction(publicKey, context.actionType, context.payloadHash, signature);
+
+        assertEq(statelessActionOk, false, "the next stateless use must be rejected once the limit is reached");
+        assertEq(account.statelessSignaturesUsed(), limit, "rejected post-limit stateless use must not change accounting");
+    }
+
+    function testExampleSuccessfulFullRotationResetsStatelessUsageForNewKey() public {
+        (ShrincsTypes.PublicKey memory publicKey,,) = decodeStatelessVector(".stateless.cases.valid.calldata");
+        bytes32 expectedCompositePublicKey = compositePublicKeyWord(publicKey);
+        ShrincsAccountVerifierExampleHarness account =
+            new ShrincsAccountVerifierExampleHarness(expectedCompositePublicKey);
+
+        account.setStatelessSignaturesUsed(123);
+
+        bytes32 nextCompositePublicKey = bytes32(uint256(expectedCompositePublicKey) ^ 1);
+        account.applySuccessfulFullRotationForTest(nextCompositePublicKey);
+
+        assertEq(account.currentShrincsPublicKey(), nextCompositePublicKey);
+        assertEq(account.statelessSignaturesUsed(), 0, "full rotation must reset stateless usage for the new stateless key");
+        assertEq(account.nonce(), 1, "full rotation must advance nonce");
+        assertEq(account.keyVersion(), 1, "full rotation must advance key version");
+        assertEq(account.nextStatefulLeafIndex(), 1, "full rotation must reset stateful tracking");
+        assertEq(uint8(account.statefulPolicy()), uint8(ShrincsAccountVerifierExample.StatefulPolicy.MonotonicIndex));
+        assertEq(account.recoveryMode(), false, "full rotation must exit recovery mode");
+    }
+
+    function testExampleSuccessfulFullRotationEmitsDedicatedStatelessUsageEvent() public {
+        (ShrincsTypes.PublicKey memory publicKey,,) = decodeStatelessVector(".stateless.cases.valid.calldata");
+        bytes32 expectedCompositePublicKey = compositePublicKeyWord(publicKey);
+        ShrincsAccountVerifierExampleHarness account =
+            new ShrincsAccountVerifierExampleHarness(expectedCompositePublicKey);
+
+        account.setStatelessSignaturesUsed(123);
+
+        bytes32 nextCompositePublicKey = bytes32(uint256(expectedCompositePublicKey) ^ 1);
+        vm.expectEmit(true, true, true, true, address(account));
+        emit StatelessRotationConsumed(124, 0, 0, nextCompositePublicKey, true);
+        account.applySuccessfulFullRotationForTest(nextCompositePublicKey);
     }
 
     function actionContext(address account, uint256 nonceValue, uint256 keyVersionValue)

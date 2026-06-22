@@ -316,6 +316,16 @@ The current verifier is intentionally pinned to these production values:
 - `numWotsChains = 64`
 - `wotsTargetSum = 480`
 
+Important distinction:
+
+- the stateless primitive currently still uses the `256s`-style compile-time structure
+  - `hypertreeHeight = 64`
+  - `numHypertreeLayers = 8`
+  - `forsTreeHeight = 14`
+  - `numForsTrees = 22`
+- `statelessSignatureLimit = 2^20` is enforced by the wrapper/account layer as the maximum accepted number of stateless signatures under one installed stateless key
+- the current code therefore uses a `256s`-style stateless primitive together with a stricter operational cap of `2^20`
+
 Two verifier rules are worth calling out explicitly:
 
 - `FORS-C` verifies `numForsTrees - 1` revealed entries, not all `numForsTrees`
@@ -480,6 +490,13 @@ The developer/integrator chooses which policy fits the account design. In the ex
   - `rotateToFreshKey(...)` and `rotateFullKey(...)` both require `StatefulPolicy.RecoveryRotation`
   - both also require `recoveryMode == true`
   - this keeps stateless signatures as recovery authority rather than a normal-operation rotation bypass
+
+- Stateless usage accounting follows the stateless key, not only the bundle epoch.
+  - `rotateToFreshKey(...)` replaces only the stateful subkey
+  - it preserves the current stateless key material
+  - it therefore preserves `statelessSignaturesUsed` and first consumes one stateless use for the recovery signature itself
+  - `rotateFullKey(...)` replaces the full bundle including the stateless key material
+  - it therefore resets `statelessSignaturesUsed` for the newly installed stateless key after consuming the recovery signature under the old key
 
 - The example wrapper binds its signing domain to both contract identity and chain context.
   - the domain is derived from a stable tag, `block.chainid`, and `address(this)`
