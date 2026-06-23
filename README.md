@@ -232,6 +232,21 @@ The default output artifact is:
 hashsigs-solidity/test/test_vectors/shrincs_account_wrapper_vectors.json
 ```
 
+To cross-check these Solidity-exported account vectors against the Rust
+verifier, copy that JSON into the Rust repository manually. The repositories
+are separate, so this handoff is intentionally not automated:
+
+```bash
+cp /path/to/hashsigs-solidity/test/test_vectors/shrincs_account_wrapper_vectors.json \
+  /path/to/hashsigs-rs/tests/test_vectors/shrincs_account_wrapper_vectors.json
+```
+
+Then run the Rust-side cross-check from `hashsigs-rs`:
+
+```bash
+cargo test --test solidity_account_vectors
+```
+
 The export tests emit four wrapper-feedable bundle categories:
 
 - `testExportStatefulActionBundle`
