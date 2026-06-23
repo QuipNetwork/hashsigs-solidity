@@ -22,6 +22,7 @@ import {ShrincsUtils} from "./ShrincsUtils.sol";
 library ShrincsSigner {
     uint32 internal constant INITIAL_STATEFUL_LEAF_INDEX = 1;
     uint32 internal constant MAX_STATEFUL_SIGNATURES_LIMIT = 4096;
+    uint32 internal constant WOTS_C_MAX_GRIND_COUNTER = 1 << 24;
     uint8 internal constant NUM_HYPERTREE_LAYERS = 8;
 
     // keygen: Deterministically derive the Solidity signing key and public key exactly like the Rust signer.
@@ -73,8 +74,49 @@ library ShrincsSigner {
         return (signingKey, publicKey, true);
     }
 
+    // signStatefulRaw: Sign caller-supplied bytes with the next unused stateful leaf and return advanced key state.
+    // 1. Read the next monotonic stateful leaf index from the supplied signing key.
+    // 2. Reject leaf 0 and any leaf beyond the configured stateful budget.
+    // 3. Build the stateful WOTS-C signature body and the matching auth path.
+    // 4. Advance the returned signing key to the next leaf.
+    // 5. Return the signature and success flag.
+    function signStatefulRaw(ShrincsTypes.SigningKey memory signingKey, bytes memory message)
+        internal
+        pure
+        returns (ShrincsTypes.SigningKey memory nextSigningKey, ShrincsTypes.StatefulSignature memory signature, bool ok)
+    {
+        uint32 leafIndex = signingKey.nextStatefulLeafIndex;
+        if (leafIndex == 0) return (nextSigningKey, signature, false);
+        if (leafIndex > signingKey.maxStatefulSignatures) return (nextSigningKey, signature, false);
+
+        (signature, ok) = signStatefulRawAtLeaf(signingKey, leafIndex, message);
+        if (!ok) return (nextSigningKey, signature, false);
+
+        nextSigningKey = signingKey;
+        nextSigningKey.nextStatefulLeafIndex = leafIndex + 1;
+        return (nextSigningKey, signature, true);
+    }
+
     function derive32(bytes memory domain, bytes memory seed, bytes memory data) internal pure returns (bytes32) {
         return keccak256(abi.encodePacked(domain, seed, data));
+    }
+
+    function signStatefulRawAtLeaf(ShrincsTypes.SigningKey memory signingKey, uint32 leafIndex, bytes memory message)
+        internal
+        pure
+        returns (ShrincsTypes.StatefulSignature memory signature, bool ok)
+    {
+        if (leafIndex == 0) return (signature, false);
+        if (leafIndex > signingKey.maxStatefulSignatures) return (signature, false);
+
+        (signature, ok) = signStatefulWotsC(
+            signingKey.statefulSkSeed, signingKey.statefulPrfSeed, signingKey.statefulPkSeed, leafIndex, message
+        );
+        if (!ok) return (signature, false);
+        signature.authPath = statefulAuthPath(
+            signingKey.statefulSkSeed, signingKey.statefulPkSeed, leafIndex, signingKey.maxStatefulSignatures
+        );
+        return (signature, true);
     }
 
     function encodeStatefulPublicKey(bytes32 pkSeed, bytes32 root, uint32 maxSignatures)
@@ -115,6 +157,43 @@ library ShrincsSigner {
         return keccak256(abi.encodePacked("uxmss-wots-pk", pkSeed, leafIndex, endpoints));
     }
 
+    function signStatefulWotsC(bytes32 skSeed, bytes32 prfSeed, bytes32 pkSeed, uint32 leafIndex, bytes memory message)
+        internal
+        pure
+        returns (ShrincsTypes.StatefulSignature memory signature, bool ok)
+    {
+        bytes32 randomizer = keccak256(abi.encodePacked("uxmss-wots-randomizer", prfSeed, leafIndex, message));
+
+        for (uint32 counter = 0; counter < WOTS_C_MAX_GRIND_COUNTER;) {
+            bytes32 digest =
+                keccak256(abi.encodePacked("uxmss-wots-digits", pkSeed, leafIndex, randomizer, counter, message));
+            uint32 digitSum;
+            bytes32[] memory chains = new bytes32[](ShrincsTypes.WOTS_CHAINS_STATEFUL);
+            for (uint32 chainIndex = 0; chainIndex < ShrincsTypes.WOTS_CHAINS_STATEFUL;) {
+                uint32 digit = baseW16Digit(digest, chainIndex);
+                digitSum += digit;
+                bytes32 secret = statefulChainSecret(skSeed, pkSeed, leafIndex, chainIndex);
+                chains[chainIndex] = statefulChainNoMask(pkSeed, leafIndex, chainIndex, secret, 0, digit);
+                unchecked {
+                    ++chainIndex;
+                }
+            }
+            if (digitSum == ShrincsTypes.WOTS_TARGET_SUM_STATEFUL) {
+                signature = ShrincsTypes.StatefulSignature({
+                    randomizer: randomizer,
+                    counter: counter,
+                    chains: chains,
+                    authPath: new bytes32[](0)
+                });
+                return (signature, true);
+            }
+            unchecked {
+                ++counter;
+            }
+        }
+        return (signature, false);
+    }
+
     function statefulChainSecret(bytes32 skSeed, bytes32 pkSeed, uint32 leafIndex, uint32 chainIndex)
         internal
         pure
@@ -152,6 +231,30 @@ library ShrincsSigner {
 
     function statefulEmptyTail(bytes32 pkSeed, uint32 leafIndex) internal pure returns (bytes32) {
         return keccak256(abi.encodePacked("uxmss-empty-tail", pkSeed, leafIndex));
+    }
+
+    function statefulAuthPath(bytes32 skSeed, bytes32 pkSeed, uint32 leafIndex, uint32 maxSignatures)
+        internal
+        pure
+        returns (bytes32[] memory path)
+    {
+        path = new bytes32[](leafIndex);
+        if (leafIndex < maxSignatures) {
+            path[0] = statefulSubtreeRoot(skSeed, pkSeed, leafIndex + 1, maxSignatures);
+        } else {
+            path[0] = statefulEmptyTail(pkSeed, leafIndex);
+        }
+        uint256 offset = 1;
+        for (uint32 previousLeaf = leafIndex - 1; previousLeaf >= 1;) {
+            path[offset] = statefulWotsPkHash(skSeed, pkSeed, previousLeaf);
+            unchecked {
+                ++offset;
+            }
+            if (previousLeaf == 1) break;
+            unchecked {
+                --previousLeaf;
+            }
+        }
     }
 
     function hypertreePublicRoot(bytes32 statelessSkSeed, bytes32 pkSeed) internal pure returns (bytes32) {
@@ -260,5 +363,10 @@ library ShrincsSigner {
         assembly {
             mstore(add(add(dst, 32), offset), src)
         }
+    }
+
+    function baseW16Digit(bytes32 digest, uint256 index) internal pure returns (uint32 digit) {
+        uint8 b = uint8(digest[index >> 1]);
+        return index & 1 == 0 ? uint32(b >> 4) : uint32(b & 0x0f);
     }
 }
