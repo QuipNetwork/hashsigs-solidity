@@ -16,22 +16,19 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 pragma solidity ^0.8.28;
 
-import {SHRINCS} from "./SHRINCS.sol";
-import {ShrincsTypes} from "./ShrincsTypes.sol";
-import {ShrincsUtils} from "./ShrincsUtils.sol";
+import {SHRINCS} from "../../contracts/SHRINCS.sol";
+import {ShrincsTypes} from "../../contracts/ShrincsTypes.sol";
+import {ShrincsUtils} from "../../contracts/ShrincsUtils.sol";
 
-library ShrincsSigner {
+/// @notice TEST-ONLY Solidity signer helpers that mirror the Rust signer for stateful flows.
+/// @dev This library is kept under `test/helpers` so it does not become part of the
+/// production Solidity surface. It is used for deterministic keygen and stateful-signing tests.
+library ShrincsTestSigner {
     uint32 internal constant INITIAL_STATEFUL_LEAF_INDEX = 1;
     uint32 internal constant MAX_STATEFUL_SIGNATURES_LIMIT = 4096;
     uint32 internal constant WOTS_C_MAX_GRIND_COUNTER = 1 << 24;
     uint8 internal constant NUM_HYPERTREE_LAYERS = 8;
 
-    // keygen: Deterministically derive the Solidity signing key and public key exactly like the Rust signer.
-    // 1. Reject zero or excessive stateful budgets.
-    // 2. Derive all signer-owned secret and public seeds from the same input seed material.
-    // 3. Build the stateful unbalanced-tree root and stateless hypertree public root.
-    // 4. Encode the fixed-width stateful public key and public-key commitment bundle.
-    // 5. Return the signer key, bundled public key, and a success flag.
     function keygen(bytes memory seedMaterial, uint32 maxStatefulSignatures)
         internal
         pure
@@ -75,12 +72,6 @@ library ShrincsSigner {
         return (signingKey, publicKey, true);
     }
 
-    // signStatefulRaw: Sign caller-supplied bytes with the next unused stateful leaf and return advanced key state.
-    // 1. Read the next monotonic stateful leaf index from the supplied signing key.
-    // 2. Reject leaf 0 and any leaf beyond the configured stateful budget.
-    // 3. Build the stateful WOTS-C signature body and the matching auth path.
-    // 4. Advance the returned signing key to the next leaf.
-    // 5. Return the signature and success flag.
     function signStatefulRaw(ShrincsTypes.SigningKey memory signingKey, bytes memory message)
         internal
         pure
@@ -98,11 +89,6 @@ library ShrincsSigner {
         return (nextSigningKey, signature, true);
     }
 
-    // signStatefulAction: Sign the canonical stateful action hash derived from the supplied public key and action context.
-    // 1. Require a 32-byte public-key commitment field.
-    // 2. Load the expected installed key commitment from the supplied public key.
-    // 3. Build the canonical stateful action message hash exactly like the verifier.
-    // 4. Reuse raw stateful signing so leaf advancement and auth-path construction stay identical.
     function signStatefulAction(
         ShrincsTypes.SigningKey memory signingKey,
         ShrincsTypes.PublicKey memory publicKey,

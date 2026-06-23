@@ -17,7 +17,7 @@
 pragma solidity ^0.8.28;
 
 import {Test} from "../lib/forge-std/src/Test.sol";
-import {ShrincsSigner} from "../contracts/ShrincsSigner.sol";
+import {ShrincsTestSigner} from "./helpers/ShrincsTestSigner.sol";
 import {ShrincsTypes} from "../contracts/ShrincsTypes.sol";
 import {ShrincsUtils} from "../contracts/ShrincsUtils.sol";
 
@@ -27,7 +27,7 @@ contract ShrincsSignerHarness {
         pure
         returns (ShrincsTypes.SigningKey memory, ShrincsTypes.PublicKey memory, bool)
     {
-        return ShrincsSigner.keygen(seedMaterial, maxStatefulSignatures);
+        return ShrincsTestSigner.keygen(seedMaterial, maxStatefulSignatures);
     }
 
     function decodeStatefulPublicKey(bytes calldata encoded)

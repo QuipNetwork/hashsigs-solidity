@@ -18,7 +18,7 @@ pragma solidity ^0.8.28;
 
 import {Test} from "../lib/forge-std/src/Test.sol";
 import {SHRINCS} from "../contracts/SHRINCS.sol";
-import {ShrincsSigner} from "../contracts/ShrincsSigner.sol";
+import {ShrincsTestSigner} from "./helpers/ShrincsTestSigner.sol";
 import {ShrincsTypes} from "../contracts/ShrincsTypes.sol";
 
 contract ShrincsStatefulActionSignerHarness {
@@ -27,7 +27,7 @@ contract ShrincsStatefulActionSignerHarness {
         pure
         returns (ShrincsTypes.SigningKey memory, ShrincsTypes.PublicKey memory, bool)
     {
-        return ShrincsSigner.keygen(seedMaterial, maxStatefulSignatures);
+        return ShrincsTestSigner.keygen(seedMaterial, maxStatefulSignatures);
     }
 
     function signStatefulAction(
@@ -35,7 +35,7 @@ contract ShrincsStatefulActionSignerHarness {
         ShrincsTypes.PublicKey memory publicKey,
         ShrincsTypes.ActionContext memory context
     ) external pure returns (ShrincsTypes.SigningKey memory, ShrincsTypes.StatefulSignature memory, bool) {
-        return ShrincsSigner.signStatefulAction(signingKey, publicKey, context);
+        return ShrincsTestSigner.signStatefulAction(signingKey, publicKey, context);
     }
 
     function verify(
