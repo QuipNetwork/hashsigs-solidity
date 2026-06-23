@@ -20,6 +20,7 @@ import {Test} from "../lib/forge-std/src/Test.sol";
 import {SHRINCS} from "../contracts/SHRINCS.sol";
 import {ShrincsTypes} from "../contracts/ShrincsTypes.sol";
 import {ShrincsStatelessVectorSigner} from "./helpers/ShrincsStatelessVectorSigner.sol";
+import {ShrincsStatelessVectorSigningFacade} from "./helpers/ShrincsStatelessVectorSigningFacade.sol";
 
 contract ShrincsStatelessVectorSignerHarness is ShrincsStatelessVectorSigner {
     function verifyUnsafeRaw(
@@ -33,6 +34,8 @@ contract ShrincsStatelessVectorSignerHarness is ShrincsStatelessVectorSigner {
 }
 
 contract ShrincsStatelessVectorSignerTest is Test {
+    using ShrincsStatelessVectorSigningFacade for ShrincsStatelessVectorSignerHarness;
+
     ShrincsStatelessVectorSignerHarness internal signer;
 
     function setUp() public {
@@ -94,6 +97,30 @@ contract ShrincsStatelessVectorSignerTest is Test {
         assertTrue(
             signer.verifyUnsafeRaw(expectedPublicKeyCommitment, publicKey, signedMessage, signature),
             "staged stateless signer output must verify"
+        );
+    }
+
+    function testHighLevelStatelessFacadeProducesVerifyingSignature() public {
+        bytes memory message = abi.encodePacked(keccak256("high level stateless vector message"));
+        (
+            ShrincsTypes.PublicKey memory publicKey,
+            ShrincsTypes.StatelessSignature memory signature,
+            bool ok
+        ) = signer.signFromSeed(bytes("high level stateless vector seed"), 4, message);
+
+        assertTrue(ok, "high-level signing must succeed");
+        assertEq(signature.fors.entries.length, ShrincsTypes.NUM_FORS_TREES - 1, "FORS-C entry count");
+        assertEq(signature.hypertree.length, ShrincsTypes.NUM_HYPERTREE_LAYERS, "hypertree layer count");
+
+        bytes memory commitmentBytes = publicKey.publicKeyCommitment;
+        bytes32 expectedPublicKeyCommitment;
+        assembly {
+            expectedPublicKeyCommitment := mload(add(commitmentBytes, 32))
+        }
+
+        assertTrue(
+            signer.verifyUnsafeRaw(expectedPublicKeyCommitment, publicKey, message, signature),
+            "high-level stateless signer output must verify"
         );
     }
 }
