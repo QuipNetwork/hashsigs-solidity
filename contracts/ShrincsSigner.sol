@@ -16,6 +16,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 pragma solidity ^0.8.28;
 
+import {SHRINCS} from "./SHRINCS.sol";
 import {ShrincsTypes} from "./ShrincsTypes.sol";
 import {ShrincsUtils} from "./ShrincsUtils.sol";
 
@@ -95,6 +96,30 @@ library ShrincsSigner {
         nextSigningKey = signingKey;
         nextSigningKey.nextStatefulLeafIndex = leafIndex + 1;
         return (nextSigningKey, signature, true);
+    }
+
+    // signStatefulAction: Sign the canonical stateful action hash derived from the supplied public key and action context.
+    // 1. Require a 32-byte public-key commitment field.
+    // 2. Load the expected installed key commitment from the supplied public key.
+    // 3. Build the canonical stateful action message hash exactly like the verifier.
+    // 4. Reuse raw stateful signing so leaf advancement and auth-path construction stay identical.
+    function signStatefulAction(
+        ShrincsTypes.SigningKey memory signingKey,
+        ShrincsTypes.PublicKey memory publicKey,
+        ShrincsTypes.ActionContext memory context
+    )
+        internal
+        pure
+        returns (ShrincsTypes.SigningKey memory nextSigningKey, ShrincsTypes.StatefulSignature memory signature, bool ok)
+    {
+        if (publicKey.publicKeyCommitment.length != 32) return (nextSigningKey, signature, false);
+        bytes32 expectedPublicKeyCommitment;
+        bytes memory commitmentBytes = publicKey.publicKeyCommitment;
+        assembly {
+            expectedPublicKeyCommitment := mload(add(commitmentBytes, 32))
+        }
+        bytes memory message = abi.encodePacked(SHRINCS.statefulActionMessageHash(expectedPublicKeyCommitment, context));
+        return signStatefulRaw(signingKey, message);
     }
 
     function derive32(bytes memory domain, bytes memory seed, bytes memory data) internal pure returns (bytes32) {
