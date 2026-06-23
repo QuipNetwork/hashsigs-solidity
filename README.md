@@ -176,9 +176,91 @@ verifier surface in [`contracts/`](./contracts/).
 - [`test/helpers/ShrincsStatelessVectorSigningFacade.sol`](./test/helpers/ShrincsStatelessVectorSigningFacade.sol)
   - thin test facade that drives the staged stateless signer through a simpler
     `signFromSeed(...)` / `completeSession(...)` API
+- [`test/helpers/ShrincsAccountSigningFacade.sol`](./test/helpers/ShrincsAccountSigningFacade.sol)
+  - test-only account-aware signer facade for canonical wrapper flows
+  - rebuilds the live wrapper-owned `domainSeparator`, `nonce`, and `keyVersion`
+    before signing stateful actions, stateless actions, and both rotation messages
+- [`test/helpers/ShrincsAccountVectorExport.sol`](./test/helpers/ShrincsAccountVectorExport.sol)
+  - packages account-aware signatures into wrapper-feedable bundles
+  - exports canonical message bytes, `abi.encodeCall(...)` payloads, and ERC-1271 envelopes
 
 Use these helpers for tests, debugging, and local vector generation only. They
 should not be treated as deployable wallet or signer contracts.
+
+## Account-Aware Signer And Export Flow
+
+The account wrapper signs canonical, wrapper-owned messages. That means test
+signing must bind:
+
+- `domainSeparator`
+- `nonce`
+- `keyVersion`
+- `actionType`
+- `payloadHash`
+
+for action flows, and the wrapper-owned rotation context for recovery flows.
+
+The test-only account-aware path is:
+
+- [`test/helpers/ShrincsAccountSigningFacade.sol`](./test/helpers/ShrincsAccountSigningFacade.sol)
+  - creates wrapper-bound stateful action signatures
+  - creates wrapper-bound stateless action signatures
+  - creates wrapper-bound stateless recovery signatures for
+    `rotateToFreshKey(...)` and `rotateFullKey(...)`
+- [`test/helpers/ShrincsAccountVectorExport.sol`](./test/helpers/ShrincsAccountVectorExport.sol)
+  - converts those signatures into exportable bundles that can be fed directly
+    into the live wrapper
+- [`test/ShrincsAccountVectorExport.t.sol`](./test/ShrincsAccountVectorExport.t.sol)
+  - emits the bundle bytes and immediately proves the wrapper accepts them
+
+Run the export suite directly:
+
+```bash
+forge test --match-path test/ShrincsAccountVectorExport.t.sol -vv
+```
+
+Or generate a JSON artifact from the emitted bundle bytes:
+
+```bash
+cd hashsigs-solidity
+bash dev/export-account-vectors.sh
+```
+
+The default output artifact is:
+
+```text
+hashsigs-solidity/test/test_vectors/shrincs_account_wrapper_vectors.json
+```
+
+The export tests emit four wrapper-feedable bundle categories:
+
+- `testExportStatefulActionBundle`
+  - `stateful_vector_abi`:
+    ABI encoding of the full exported stateful-action bundle
+  - `stateful_verify_calldata`:
+    calldata for `verifyStatefulAction(...)`
+  - `stateful_1271_envelope`:
+    ERC-1271 payload for canonical stateful-action validation
+- `testExportStatelessActionBundle`
+  - `stateless_vector_abi`:
+    ABI encoding of the full exported stateless-action bundle
+  - `stateless_verify_calldata`:
+    calldata for `verifyStatelessAction(...)`
+  - `stateless_1271_envelope`:
+    ERC-1271 payload for canonical stateless-action validation
+- `testExportStatefulOnlyRotationBundle`
+  - `stateful_rotation_vector_abi`:
+    ABI encoding of the full exported stateful-only rotation bundle
+  - `stateful_rotation_calldata`:
+    calldata for `rotateToFreshKey(...)`
+- `testExportFullRotationBundle`
+  - `full_rotation_vector_abi`:
+    ABI encoding of the full exported full-rotation bundle
+  - `full_rotation_calldata`:
+    calldata for `rotateFullKey(...)`
+
+These exports are intended for local tooling, debugging, and cross-repo vector
+work. They are not a production signer interface.
 
 ## Public-Key Shape
 
