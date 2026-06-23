@@ -33,6 +33,9 @@ contract ShrincsStatelessVectorSigner {
         bool forsPrepared;
         bool forsFinalized;
         bool signatureFinalized;
+        bool hypertreeLayerStarted;
+        bool hypertreeWotsDone;
+        bool hypertreeAuthPathDone;
         ShrincsTypes.SigningKey signingKey;
         ShrincsTypes.PublicKey publicKey;
         bytes message;
@@ -45,6 +48,12 @@ contract ShrincsStatelessVectorSigner {
         uint64 currentHypertreeTreeIndex;
         uint32 currentHypertreeLeafIndex;
         uint32 nextHypertreeLayer;
+        uint32 currentAuthPathLevel;
+        uint32 currentWotsCounter;
+        bytes32 currentLayerSeed;
+        bytes32 currentLayerSkSeed;
+        bytes32 currentLayerPkHash;
+        bytes32 currentLayerRandomizer;
         ShrincsTypes.StatelessSignature signature;
     }
 
@@ -179,67 +188,178 @@ contract ShrincsStatelessVectorSigner {
         require(session.forsFinalized, "fors not finalized");
         require(!session.signatureFinalized, "signature finalized");
 
-        uint32 subtreeHeight = uint32(ShrincsTypes.HYPERTREE_HEIGHT / ShrincsTypes.NUM_HYPERTREE_LAYERS);
-        uint64 leafMask = uint64((uint256(1) << subtreeHeight) - 1);
-        bytes32[NUM_HYPERTREE_LAYERS] memory layerSeeds = hypertreeLayerSeeds(session.signingKey.statelessSkSeed);
-
         while (processed < maxLayers && session.nextHypertreeLayer < NUM_HYPERTREE_LAYERS) {
-            uint32 layer = session.nextHypertreeLayer;
-            uint64 tree = session.currentHypertreeTreeIndex;
-            uint32 leaf = session.currentHypertreeLeafIndex;
-            bytes32 leafSeed = keccak256(abi.encodePacked("hypertree-leaf-seed", layerSeeds[layer], tree, leaf));
-            bytes32 skSeed = keccak256(abi.encodePacked("hypertree-wots-sk-seed", leafSeed));
-            bytes32 pkHash = statelessWotsCPublicKey(session.signingKey.pkSeed, skSeed, layer, tree, leaf);
-            bytes32 randomizer;
-            uint32 counter;
-            bytes32[] memory chains;
-            bool ok;
-            (randomizer, counter, chains, ok) = signStatelessWotsC(
-                session.signingKey.pkSeed,
-                skSeed,
-                session.signingKey.statelessPrfSeed,
-                pkHash,
-                layer,
-                tree,
-                leaf,
-                session.currentHypertreeRoot
-            );
-            require(ok, "wots signing failed");
-
-            bytes32[] memory authPath =
-                hypertreeAuthPath(session.signingKey.pkSeed, layerSeeds[layer], layer, tree, leaf);
-            bytes32 nextRoot =
-                hypertreeVirtualNode(session.signingKey.pkSeed, layerSeeds[layer], layer, tree, subtreeHeight, 0);
-
-            ShrincsTypes.HypertreeLayerSignature storage layerSig = session.signature.hypertree.push();
-            layerSig.treeIndex = tree;
-            layerSig.leafIndex = leaf;
-            layerSig.wotsCPkHash = abi.encodePacked(pkHash);
-            layerSig.wotsCSignature.randomizer = abi.encodePacked(randomizer);
-            layerSig.wotsCSignature.counter = counter;
-            for (uint256 i = 0; i < chains.length;) {
-                layerSig.wotsCSignature.chains.push(abi.encodePacked(chains[i]));
-                unchecked {
-                    ++i;
-                }
+            if (!session.hypertreeLayerStarted) {
+                this.startHypertreeLayer(sessionId);
             }
-            for (uint256 i = 0; i < authPath.length;) {
-                layerSig.authPath.push(abi.encodePacked(authPath[i]));
-                unchecked {
-                    ++i;
-                }
+            if (!session.hypertreeWotsDone) {
+                bool wotsDone = this.stepHypertreeWots(sessionId, MAX_GRIND_COUNTER);
+                require(wotsDone, "wots incomplete");
             }
-
-            session.currentHypertreeRoot = nextRoot;
-            session.currentHypertreeLeafIndex = uint32(tree & leafMask);
-            session.currentHypertreeTreeIndex = tree >> subtreeHeight;
+            if (!session.hypertreeAuthPathDone) {
+                uint32 subtreeHeight = uint32(ShrincsTypes.HYPERTREE_HEIGHT / ShrincsTypes.NUM_HYPERTREE_LAYERS);
+                (, bool authDone) = this.stepHypertreeAuthPath(sessionId, subtreeHeight);
+                require(authDone, "auth incomplete");
+            }
+            this.finalizeHypertreeLayer(sessionId);
             unchecked {
                 ++processed;
-                ++session.nextHypertreeLayer;
             }
         }
 
         done = session.nextHypertreeLayer == NUM_HYPERTREE_LAYERS;
+    }
+
+    function startHypertreeLayer(bytes32 sessionId) external returns (bool started) {
+        Session storage session = sessions[sessionId];
+        require(session.active, "unknown session");
+        require(session.forsFinalized, "fors not finalized");
+        require(!session.signatureFinalized, "signature finalized");
+        require(session.nextHypertreeLayer < NUM_HYPERTREE_LAYERS, "hypertree complete");
+        require(!session.hypertreeLayerStarted, "layer started");
+
+        uint32 layer = session.nextHypertreeLayer;
+        uint64 tree = session.currentHypertreeTreeIndex;
+        uint32 leaf = session.currentHypertreeLeafIndex;
+        bytes32 layerSeed = hypertreeLayerSeed(session.signingKey.statelessSkSeed, uint8(layer));
+        bytes32 leafSeed = keccak256(abi.encodePacked("hypertree-leaf-seed", layerSeed, tree, leaf));
+        bytes32 skSeed = keccak256(abi.encodePacked("hypertree-wots-sk-seed", leafSeed));
+        bytes32 pkHash = statelessWotsCPublicKey(session.signingKey.pkSeed, skSeed, layer, tree, leaf);
+
+        session.currentLayerSeed = layerSeed;
+        session.currentLayerSkSeed = skSeed;
+        session.currentLayerPkHash = pkHash;
+        session.currentLayerRandomizer = keccak256(
+            abi.encodePacked("wots-c-randomizer", session.signingKey.statelessPrfSeed, session.currentHypertreeRoot)
+        );
+        session.currentWotsCounter = 0;
+        session.currentAuthPathLevel = 0;
+        session.hypertreeLayerStarted = true;
+        session.hypertreeWotsDone = false;
+        session.hypertreeAuthPathDone = false;
+
+        ShrincsTypes.HypertreeLayerSignature storage layerSig = session.signature.hypertree.push();
+        layerSig.treeIndex = tree;
+        layerSig.leafIndex = leaf;
+        layerSig.wotsCPkHash = abi.encodePacked(pkHash);
+
+        return true;
+    }
+
+    function stepHypertreeWots(bytes32 sessionId, uint32 maxCounters) external returns (bool done) {
+        Session storage session = sessions[sessionId];
+        require(session.active, "unknown session");
+        require(session.hypertreeLayerStarted, "layer not started");
+        require(!session.hypertreeWotsDone, "wots finalized");
+
+        uint32 layer = session.nextHypertreeLayer;
+        uint64 tree = session.currentHypertreeTreeIndex;
+        uint32 leaf = session.currentHypertreeLeafIndex;
+        uint32 limit = session.currentWotsCounter + maxCounters;
+        if (limit < session.currentWotsCounter || limit > MAX_GRIND_COUNTER) {
+            limit = MAX_GRIND_COUNTER;
+        }
+
+        for (uint32 counter = session.currentWotsCounter; counter < limit;) {
+            bytes32 fullDigest = keccak256(
+                abi.encodePacked(
+                    "wots-c-msg",
+                    session.signingKey.pkSeed,
+                    session.currentLayerPkHash,
+                    session.currentLayerRandomizer,
+                    counter,
+                    session.currentHypertreeRoot
+                )
+            );
+            (bytes32[] memory chains, uint32 digitSum) = buildStatelessWotsChains(
+                session.signingKey.pkSeed, session.currentLayerSkSeed, layer, tree, leaf, fullDigest
+            );
+            if (digitSum == ShrincsTypes.WOTS_TARGET_SUM_STATEFUL) {
+                ShrincsTypes.HypertreeLayerSignature storage layerSig =
+                    session.signature.hypertree[session.nextHypertreeLayer];
+                layerSig.wotsCSignature.randomizer = abi.encodePacked(session.currentLayerRandomizer);
+                layerSig.wotsCSignature.counter = counter;
+                for (uint256 i = 0; i < chains.length;) {
+                    layerSig.wotsCSignature.chains.push(abi.encodePacked(chains[i]));
+                    unchecked {
+                        ++i;
+                    }
+                }
+                session.currentWotsCounter = counter;
+                session.hypertreeWotsDone = true;
+                return true;
+            }
+            unchecked {
+                ++counter;
+            }
+        }
+
+        session.currentWotsCounter = limit;
+        return false;
+    }
+
+    function stepHypertreeAuthPath(bytes32 sessionId, uint32 maxLevels)
+        external
+        returns (uint32 processed, bool done)
+    {
+        Session storage session = sessions[sessionId];
+        require(session.active, "unknown session");
+        require(session.hypertreeLayerStarted, "layer not started");
+        require(session.hypertreeWotsDone, "wots incomplete");
+        require(!session.hypertreeAuthPathDone, "auth finalized");
+
+        uint32 subtreeHeight = uint32(ShrincsTypes.HYPERTREE_HEIGHT / ShrincsTypes.NUM_HYPERTREE_LAYERS);
+        uint32 layer = session.nextHypertreeLayer;
+        uint64 tree = session.currentHypertreeTreeIndex;
+        uint32 leaf = session.currentHypertreeLeafIndex;
+        ShrincsTypes.HypertreeLayerSignature storage layerSig = session.signature.hypertree[session.nextHypertreeLayer];
+
+        while (processed < maxLevels && session.currentAuthPathLevel < subtreeHeight) {
+            uint32 level = session.currentAuthPathLevel;
+            uint32 sibling = (leaf >> level) ^ 1;
+            bytes32 node = hypertreeVirtualNode(session.signingKey.pkSeed, session.currentLayerSeed, layer, tree, level, sibling);
+            layerSig.authPath.push(abi.encodePacked(node));
+            unchecked {
+                ++processed;
+                ++session.currentAuthPathLevel;
+            }
+        }
+
+        if (session.currentAuthPathLevel == subtreeHeight) {
+            session.hypertreeAuthPathDone = true;
+            return (processed, true);
+        }
+        return (processed, false);
+    }
+
+    function finalizeHypertreeLayer(bytes32 sessionId) external returns (bool moreLayers) {
+        Session storage session = sessions[sessionId];
+        require(session.active, "unknown session");
+        require(session.hypertreeLayerStarted, "layer not started");
+        require(session.hypertreeWotsDone, "wots incomplete");
+        require(session.hypertreeAuthPathDone, "auth incomplete");
+
+        uint32 subtreeHeight = uint32(ShrincsTypes.HYPERTREE_HEIGHT / ShrincsTypes.NUM_HYPERTREE_LAYERS);
+        uint64 tree = session.currentHypertreeTreeIndex;
+        uint32 nextLayer = session.nextHypertreeLayer + 1;
+        uint64 leafMask = uint64((uint256(1) << subtreeHeight) - 1);
+        bytes32 nextRoot =
+            hypertreeVirtualNode(session.signingKey.pkSeed, session.currentLayerSeed, session.nextHypertreeLayer, tree, subtreeHeight, 0);
+
+        session.currentHypertreeRoot = nextRoot;
+        session.currentHypertreeLeafIndex = uint32(tree & leafMask);
+        session.currentHypertreeTreeIndex = tree >> subtreeHeight;
+        session.nextHypertreeLayer = nextLayer;
+        session.hypertreeLayerStarted = false;
+        session.hypertreeWotsDone = false;
+        session.hypertreeAuthPathDone = false;
+        session.currentAuthPathLevel = 0;
+        session.currentWotsCounter = 0;
+        session.currentLayerSeed = bytes32(0);
+        session.currentLayerSkSeed = bytes32(0);
+        session.currentLayerPkHash = bytes32(0);
+        session.currentLayerRandomizer = bytes32(0);
+        return nextLayer < NUM_HYPERTREE_LAYERS;
     }
 
     function finalizeSignature(bytes32 sessionId) external returns (bytes memory encodedSignature) {
@@ -521,12 +641,15 @@ contract ShrincsStatelessVectorSigner {
         returns (bytes32[NUM_HYPERTREE_LAYERS] memory layerSeeds)
     {
         for (uint8 layer = 0; layer < NUM_HYPERTREE_LAYERS;) {
-            layerSeeds[layer] =
-                keccak256(abi.encodePacked("hypertree-layer-seed", statelessSkSeed, bytes1(layer)));
+            layerSeeds[layer] = hypertreeLayerSeed(statelessSkSeed, layer);
             unchecked {
                 ++layer;
             }
         }
+    }
+
+    function hypertreeLayerSeed(bytes32 statelessSkSeed, uint8 layer) internal pure returns (bytes32) {
+        return keccak256(abi.encodePacked("hypertree-layer-seed", statelessSkSeed, bytes1(layer)));
     }
 
     function hypertreeVirtualNode(bytes32 pkSeed, bytes32 layerSeed, uint32 layer, uint64 tree, uint32 height, uint32 index)

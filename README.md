@@ -161,6 +161,25 @@ The vector JSON contains the Rust-generated public keys, messages, signatures,
 and negative/tampered cases. It also includes compatibility calldata fields used
 by the current Foundry vector decoder.
 
+## Test-Only Signer Helpers
+
+This repository now also contains test-only Solidity signer helpers under
+[`test/helpers/`](./test/helpers/). These are not part of the production
+verifier surface in [`contracts/`](./contracts/).
+
+- [`test/helpers/ShrincsTestSigner.sol`](./test/helpers/ShrincsTestSigner.sol)
+  - deterministic Solidity keygen plus stateful signing helpers
+  - used to mirror Rust signer behavior in tests
+- [`test/helpers/ShrincsStatelessVectorSigner.sol`](./test/helpers/ShrincsStatelessVectorSigner.sol)
+  - staged storage-backed stateless signer for exact production-profile vector generation
+  - splits FORS and hypertree work across multiple calls to avoid EVM memory blowups
+- [`test/helpers/ShrincsStatelessVectorSigningFacade.sol`](./test/helpers/ShrincsStatelessVectorSigningFacade.sol)
+  - thin test facade that drives the staged stateless signer through a simpler
+    `signFromSeed(...)` / `completeSession(...)` API
+
+Use these helpers for tests, debugging, and local vector generation only. They
+should not be treated as deployable wallet or signer contracts.
+
 ## Public-Key Shape
 
 The SHRINCS public key exposed by this implementation contains:
