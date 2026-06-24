@@ -21,3 +21,5 @@ node_modules
 ignition/deployments/chain-31337
 
 test/test_vectors/tmp.json
+gasUsed/shrincs-gas-vector/target/
+gasUsed/.shrincs-tree-cache/

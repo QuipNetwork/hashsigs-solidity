@@ -38,8 +38,8 @@ library ShrincsForsC {
         // Verification therefore expects only k - 1 revealed entries and rejects any digest
         // whose omitted final tree would require a nonzero leaf.
         uint256 signedTrees = uint256(ShrincsTypes.NUM_FORS_TREES) - 1;
-        // The randomizer is always one hash output wide.
-        if (signature.randomizer.length != 32) return (bytes32(0), false);
+        // The randomizer is always one SHRINCS hash output wide.
+        if (signature.randomizer.length != ShrincsTypes.HASH_LEN) return (bytes32(0), false);
         // FORS-C reveals only the signedTrees entries, never the omitted final tree.
         if (signature.entries.length != signedTrees) return (bytes32(0), false);
 
@@ -55,16 +55,17 @@ library ShrincsForsC {
         if (digest.leafIndex != leafIndex) return (bytes32(0), false);
 
         bytes calldata pkSeed = publicKey.pkSeed;
+        uint256 n = ShrincsTypes.HASH_LEN;
         // "fors-pk" || pkSeed || root_0 || ... || root_{k-2}
-        uint256 forsPkInputLen = 39 + signedTrees * 32;
+        uint256 forsPkInputLen = 7 + n + signedTrees * n;
         uint256 forsPkInput;
         assembly {
             // Allocate a scratch buffer starting at the free-memory pointer.
             forsPkInput := mload(0x40)
             // Write the domain tag prefix at the start of the buffer.
             mstore(forsPkInput, "fors-pk")
-            // Copy the 32-byte public seed immediately after the 7-byte tag.
-            calldatacopy(add(forsPkInput, 7), pkSeed.offset, 32)
+            // Copy the hash-width public seed immediately after the 7-byte tag.
+            calldatacopy(add(forsPkInput, 7), pkSeed.offset, n)
             // Bump the free-memory pointer to the next 32-byte aligned slot after this buffer.
             mstore(0x40, add(forsPkInput, and(add(forsPkInputLen, 31), not(31))))
         }
@@ -72,8 +73,8 @@ library ShrincsForsC {
         for (uint256 tree = 0; tree < signedTrees;) {
             // Read one revealed FORS entry for this tree.
             ShrincsTypes.ForsEntry calldata entry = signature.entries[tree];
-            // Every revealed secret leaf is a single 32-byte hash input.
-            if (entry.secretLeaf.length != 32) return (bytes32(0), false);
+            // Every revealed secret leaf is a single hash-width input.
+            if (entry.secretLeaf.length != n) return (bytes32(0), false);
             // Every revealed auth path must have exactly one node per FORS tree level.
             if (entry.authPath.length != a) return (bytes32(0), false);
             // Read the digest-selected leaf for this FORS tree.
@@ -91,7 +92,7 @@ library ShrincsForsC {
             // Append each reconstructed root into the final FORS public-key hash input.
             assembly {
                 // Write this 32-byte root at slot `tree` after the fixed tag-and-seed prefix.
-                mstore(add(add(forsPkInput, 39), mul(tree, 32)), root)
+                mstore(add(add(forsPkInput, add(7, n)), mul(tree, n)), root)
             }
             unchecked {
                 ++tree;
@@ -102,6 +103,7 @@ library ShrincsForsC {
             // Hash the per-tree roots into the reconstructed FORS public value.
             forsRoot := keccak256(forsPkInput, forsPkInputLen)
         }
+        forsRoot = ShrincsUtils.truncateHash(forsRoot);
         return (forsRoot, true);
     }
 
@@ -135,12 +137,8 @@ library ShrincsForsC {
         for (uint256 level = 0; level < height;) {
             // Read the sibling node supplied for this level.
             bytes calldata authNode = entry.authPath[level];
-            if (authNode.length != 32) return bytes32(0);
-            bytes32 sibling;
-            assembly {
-                // Load the 32-byte sibling node directly from calldata.
-                sibling := calldataload(authNode.offset)
-            }
+            if (authNode.length != ShrincsTypes.HASH_LEN) return bytes32(0);
+            bytes32 sibling = ShrincsUtils.loadHash(authNode);
             // Place the current node and sibling in canonical left/right order for this level.
             (bytes32 left, bytes32 right) = index & 1 == 0 ? (node, sibling) : (sibling, node);
             // Parent nodes live one level higher than their children.
@@ -193,22 +191,24 @@ library ShrincsForsC {
         pure
         returns (bytes32 out)
     {
+        uint256 n = ShrincsTypes.HASH_LEN;
         assembly {
             // Allocate a scratch buffer starting at the free-memory pointer.
             let ptr := mload(0x40)
             // Write the domain tag prefix for FORS leaf hashing.
             mstore(ptr, "fors-leaf")
-            // Copy the 32-byte public seed after the 9-byte tag.
-            calldatacopy(add(ptr, 9), pkSeed.offset, 32)
+            // Copy the hash-width public seed after the 9-byte tag.
+            calldatacopy(add(ptr, 9), pkSeed.offset, n)
             // Write the 32-byte address word after the seed.
-            mstore(add(ptr, 41), addressWord)
+            mstore(add(add(ptr, 9), n), addressWord)
             // Copy the 32-byte secret leaf after the address.
-            calldatacopy(add(ptr, 73), sk.offset, 32)
+            calldatacopy(add(add(ptr, 41), n), sk.offset, n)
             // Hash the complete FORS leaf preimage.
-            out := keccak256(ptr, 105)
+            out := keccak256(ptr, add(41, mul(n, 2)))
             // Bump the free-memory pointer to the next 32-byte aligned slot.
             mstore(0x40, add(ptr, 128))
         }
+        out = ShrincsUtils.truncateHash(out);
     }
 
     // hashForsNode32: Hash one internal FORS node from its left and right children.
@@ -221,24 +221,26 @@ library ShrincsForsC {
         pure
         returns (bytes32 out)
     {
+        uint256 n = ShrincsTypes.HASH_LEN;
         assembly {
             // Allocate a scratch buffer starting at the free-memory pointer.
             let ptr := mload(0x40)
             // Write the domain tag prefix for FORS internal-node hashing.
             mstore(ptr, "fors-node")
-            // Copy the 32-byte public seed after the 9-byte tag.
-            calldatacopy(add(ptr, 9), pkSeed.offset, 32)
+            // Copy the hash-width public seed after the 9-byte tag.
+            calldatacopy(add(ptr, 9), pkSeed.offset, n)
             // Write the 32-byte parent-node address after the seed.
-            mstore(add(ptr, 41), addressWord)
+            mstore(add(add(ptr, 9), n), addressWord)
             // Write the left child after the address.
-            mstore(add(ptr, 73), left)
+            mstore(add(add(ptr, 41), n), left)
             // Write the right child after the left child.
-            mstore(add(ptr, 105), right)
+            mstore(add(add(add(ptr, 41), n), n), right)
             // Hash the complete FORS internal-node preimage.
-            out := keccak256(ptr, 137)
+            out := keccak256(ptr, add(41, mul(n, 3)))
             // Bump the free-memory pointer to the next 32-byte aligned slot.
             mstore(0x40, add(ptr, 160))
         }
+        out = ShrincsUtils.truncateHash(out);
     }
 
     // forsDigest: Derive the FORS digest bits and selected hypertree coordinates.
@@ -292,8 +294,9 @@ library ShrincsForsC {
         // Allocate output plus one spare block so partial chunk writes stay simple.
         out = new bytes(digestBytes + 32);
         uint256 messageLen = message.length;
+        uint256 n = ShrincsTypes.HASH_LEN;
         // "fors-digest" || pkSeed || hypertreeRoot || randomizer || counter || message
-        uint256 baseLen = 111 + messageLen;
+        uint256 baseLen = 15 + 3 * n + messageLen;
         uint256 ptr;
         assembly {
             // Set the visible bytes length of the output buffer.
@@ -302,16 +305,16 @@ library ShrincsForsC {
             ptr := mload(0x40)
             // Write the digest domain tag prefix.
             mstore(ptr, "fors-digest")
-            // Copy the 32-byte public seed after the 11-byte tag.
-            calldatacopy(add(ptr, 11), pkSeed.offset, 32)
-            // Copy the 32-byte hypertree root after the seed.
-            calldatacopy(add(ptr, 43), hypertreeRoot.offset, 32)
-            // Copy the 32-byte per-signature randomizer after the root.
-            calldatacopy(add(ptr, 75), randomizer.offset, 32)
+            // Copy the hash-width public seed after the 11-byte tag.
+            calldatacopy(add(ptr, 11), pkSeed.offset, n)
+            // Copy the hash-width hypertree root after the seed.
+            calldatacopy(add(add(ptr, 11), n), hypertreeRoot.offset, n)
+            // Copy the hash-width per-signature randomizer after the root.
+            calldatacopy(add(add(ptr, 11), mul(2, n)), randomizer.offset, n)
             // Write the 4-byte grind counter after the randomizer.
-            mstore(add(ptr, 107), shl(224, counter))
+            mstore(add(add(ptr, 11), mul(3, n)), shl(224, counter))
             let src := add(message, 32)
-            let dst := add(ptr, 111)
+            let dst := add(add(ptr, 15), mul(3, n))
             let end := add(src, messageLen)
             // Copy the variable-length message body into the digest preimage.
             for {} lt(src, end) {} {
@@ -323,7 +326,7 @@ library ShrincsForsC {
                 dst := add(dst, 32)
             }
         }
-        if (digestBytes <= 32) {
+        if (digestBytes <= n) {
             bytes32 digestWord;
             assembly {
                 // One digest block is enough for the whole FORS and hypertree coordinate stream.
@@ -341,9 +344,9 @@ library ShrincsForsC {
         uint32 blockCounter;
         while (offset < digestBytes) {
             bytes32 digestWord;
-            // Emit only as many bytes as remain needed from this block.
+            // Emit only as many bytes as remain needed from this hash-width block.
             uint256 chunk = digestBytes - offset;
-            if (chunk > 32) chunk = 32;
+            if (chunk > n) chunk = n;
             assembly {
                 // Append a block counter when more than one digest block is needed.
                 mstore(add(ptr, baseLen), shl(224, blockCounter))

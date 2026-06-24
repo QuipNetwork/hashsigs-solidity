@@ -98,10 +98,10 @@ library ShrincsUtils {
         if (publicKey.statefulPublicKey.length != ShrincsTypes.STATEFUL_PUBLIC_KEY_BYTES) return false;
         // The embedded commitment field is always one hash output wide.
         if (publicKey.publicKeyCommitment.length != 32) return false;
-        // The stateless public seed is always one hash output wide.
-        if (publicKey.pkSeed.length != 32) return false;
-        // The hypertree root is always one hash output wide.
-        if (publicKey.hypertreeRoot.length != 32) return false;
+        // The stateless public seed is always one SHRINCS hash output wide.
+        if (publicKey.pkSeed.length != ShrincsTypes.HASH_LEN) return false;
+        // The hypertree root is always one SHRINCS hash output wide.
+        if (publicKey.hypertreeRoot.length != ShrincsTypes.HASH_LEN) return false;
         bytes calldata encodedCommitment = publicKey.publicKeyCommitment;
         bytes32 expectedCommitment;
         assembly {
@@ -122,17 +122,12 @@ library ShrincsUtils {
         returns (ShrincsTypes.StatefulPublicKey memory publicKey, bool ok)
     {
         if (encoded.length != ShrincsTypes.STATEFUL_PUBLIC_KEY_BYTES) return (publicKey, false);
+        uint256 n = ShrincsTypes.HASH_LEN;
+        publicKey.pkSeed = encoded[:n];
+        publicKey.root = encoded[n:2 * n];
         assembly {
-            // Allocate the decoded struct starting at the free-memory pointer.
-            publicKey := mload(0x40)
-            // Copy the first 32 bytes as the stateful public seed.
-            mstore(publicKey, calldataload(encoded.offset))
-            // Copy the next 32 bytes as the stateful root.
-            mstore(add(publicKey, 0x20), calldataload(add(encoded.offset, 32)))
-            // Copy the high 4 bytes of the final word as maxSignatures.
-            mstore(add(publicKey, 0x40), shr(224, calldataload(add(encoded.offset, 64))))
-            // Bump the free-memory pointer past the decoded struct.
-            mstore(0x40, add(publicKey, 0x60))
+            // Copy the high 4 bytes after the two hash-width fields as maxSignatures.
+            mstore(add(publicKey, 0x40), shr(224, calldataload(add(encoded.offset, mul(2, n)))))
         }
         return (publicKey, true);
     }
@@ -193,6 +188,35 @@ library ShrincsUtils {
                 ++i;
             }
         }
+    }
+
+    function setHashSlice(bytes memory out, bytes32 blockHash, uint256 offset) internal pure {
+        uint256 n = ShrincsTypes.HASH_LEN;
+        for (uint256 i = 0; i < n;) {
+            out[offset + i] = blockHash[i];
+            unchecked {
+                ++i;
+            }
+        }
+    }
+
+    function loadHash(bytes calldata data) internal pure returns (bytes32 word) {
+        assembly {
+            word := calldataload(data.offset)
+        }
+        return truncateHash(word);
+    }
+
+    function loadHashMemory(bytes memory data) internal pure returns (bytes32 word) {
+        assembly {
+            word := mload(add(data, 32))
+        }
+        return truncateHash(word);
+    }
+
+    function truncateHash(bytes32 word) internal pure returns (bytes32) {
+        uint256 shift = (32 - uint256(ShrincsTypes.HASH_LEN)) * 8;
+        return bytes32((uint256(word) >> shift) << shift);
     }
 
     // readBits32: Extract up to 32 bits starting at an arbitrary bit offset.

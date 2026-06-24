@@ -61,7 +61,7 @@ library ShrincsStateful {
         (bytes32 root, bool validPath) =
             rootFromUnbalancedPath(statefulKey.pkSeed, leafIndex, pkHash, signature.authPath);
         if (!validPath) return false;
-        return statefulKey.root == root;
+        return loadHashMemory(statefulKey.root) == root;
     }
 
     // compactStatefulWotsPublicKeyFromSignature: Reconstruct the compact stateful WOTS-C public-key hash.
@@ -71,20 +71,23 @@ library ShrincsStateful {
     // 4. Enforce the fixed target-sum constraint used instead of an explicit checksum suffix.
     // 5. Hash the reconstructed chain endpoints into the compact WOTS-C public-key hash.
     function compactStatefulWotsPublicKeyFromSignature(
-        bytes32 pkSeed,
+        bytes memory pkSeed,
         uint32 leafIndex,
         bytes memory message,
         ShrincsTypes.StatefulSignature calldata signature
     ) internal pure returns (bytes32 pkHash, bool ok) {
         // Bind the stateful WOTS-C digest to the seed, leaf, randomizer, counter, and signed message.
-        bytes32 digest = keccak256(
+        if (pkSeed.length != ShrincsTypes.HASH_LEN) return (bytes32(0), false);
+        if (signature.randomizer.length != ShrincsTypes.HASH_LEN) return (bytes32(0), false);
+        bytes32 digest = truncateHash(keccak256(
             abi.encodePacked("uxmss-wots-digits", pkSeed, leafIndex, signature.randomizer, signature.counter, message)
-        );
+        ));
 
         uint32 digitSum;
-        // Reserve one 32-byte slot per reconstructed WOTS chain endpoint.
-        bytes memory segments = new bytes(ShrincsTypes.WOTS_CHAINS_STATEFUL * 32);
+        // Reserve one hash-width slot per reconstructed WOTS chain endpoint.
+        bytes memory segments = new bytes(ShrincsTypes.WOTS_CHAINS_STATEFUL * ShrincsTypes.HASH_LEN);
         for (uint256 i = 0; i < ShrincsTypes.WOTS_CHAINS_STATEFUL;) {
+            if (signature.chains[i].length != ShrincsTypes.HASH_LEN) return (bytes32(0), false);
             // Read the base-16 digit that chooses where this chain stopped during signing.
             uint32 digit = baseW16Digit(digest, i);
             // Accumulate the fixed target-sum check used by this compact WOTS-C variant.
@@ -94,10 +97,15 @@ library ShrincsStateful {
             uint32 chainIndex = uint32(i);
             // Complete the revealed chain from its signing position to the chain endpoint.
             bytes32 segment = statefulChainNoMask(
-                pkSeed, leafIndex, chainIndex, signature.chains[i], digit, ShrincsTypes.WOTS_BASE_STATEFUL - 1 - digit
+                pkSeed,
+                leafIndex,
+                chainIndex,
+                loadHash(signature.chains[i]),
+                digit,
+                ShrincsTypes.WOTS_BASE_STATEFUL - 1 - digit
             );
             // Store the reconstructed endpoint into the packed segment buffer.
-            setSlice32(segments, segment, i * 32);
+            setSliceHash(segments, segment, i * ShrincsTypes.HASH_LEN);
             unchecked {
                 ++i;
             }
@@ -106,7 +114,7 @@ library ShrincsStateful {
         // Reject messages whose reconstructed digit sum does not hit the fixed target.
         if (digitSum != ShrincsTypes.WOTS_TARGET_SUM_STATEFUL) return (bytes32(0), false);
         // Hash the reconstructed endpoints into the compact stateful WOTS public-key hash.
-        return (keccak256(abi.encodePacked("uxmss-wots-pk", pkSeed, leafIndex, segments)), true);
+        return (truncateHash(keccak256(abi.encodePacked("uxmss-wots-pk", pkSeed, leafIndex, segments))), true);
     }
 
     // rootFromUnbalancedPath: Rebuild the root of the custom unbalanced stateful tree from one leaf and path.
@@ -114,7 +122,7 @@ library ShrincsStateful {
     // 2. Hash the leaf together with the first auth node to form the first parent.
     // 3. Walk upward through the remaining auth path nodes in the tree's unbalanced order.
     // 4. Return the reconstructed root and success flag.
-    function rootFromUnbalancedPath(bytes32 pkSeed, uint32 leafIndex, bytes32 leaf, bytes32[] calldata authPath)
+    function rootFromUnbalancedPath(bytes memory pkSeed, uint32 leafIndex, bytes32 leaf, bytes[] calldata authPath)
         internal
         pure
         returns (bytes32 root, bool ok)
@@ -124,12 +132,15 @@ library ShrincsStateful {
         // Leaf 0 is invalid, so a valid auth path is never empty.
         if (authPath.length == 0) return (bytes32(0), false);
         // The first parent hashes the leaf with the first auth-path node on its right.
-        root = statefulParentHash(pkSeed, leafIndex, leaf, authPath[0]);
+        if (pkSeed.length != ShrincsTypes.HASH_LEN) return (bytes32(0), false);
+        if (authPath[0].length != ShrincsTypes.HASH_LEN) return (bytes32(0), false);
+        root = statefulParentHash(pkSeed, leafIndex, leaf, loadHash(authPath[0]));
         for (uint256 offset = 0; offset < authPath.length - 1;) {
             // casting to 'uint32' is safe because offset is bounded by authPath.length - 1, and authPath.length == leafIndex
             // forge-lint: disable-next-line(unsafe-typecast)
             // Higher parents hash the next auth node on the left with the running root on the right.
-            root = statefulParentHash(pkSeed, leafIndex - uint32(offset) - 1, authPath[offset + 1], root);
+            if (authPath[offset + 1].length != ShrincsTypes.HASH_LEN) return (bytes32(0), false);
+            root = statefulParentHash(pkSeed, leafIndex - uint32(offset) - 1, loadHash(authPath[offset + 1]), root);
             unchecked {
                 ++offset;
             }
@@ -142,7 +153,7 @@ library ShrincsStateful {
     // 2. Bind the public seed and left-leaf index that identify this parent location.
     // 3. Mix in the left and right child values in tree order.
     // 4. Return the parent node value.
-    function statefulParentHash(bytes32 pkSeed, uint32 leftLeafIndex, bytes32 left, bytes32 right)
+    function statefulParentHash(bytes memory pkSeed, uint32 leftLeafIndex, bytes32 left, bytes32 right)
         internal
         pure
         returns (bytes32 out)
@@ -152,17 +163,19 @@ library ShrincsStateful {
             let ptr := mload(0x40)
             // Write the domain tag prefix for unbalanced stateful parent hashing.
             mstore(ptr, "uxmss-node")
-            // Write the 32-byte public seed after the 10-byte tag.
-            mstore(add(ptr, 10), pkSeed)
+            let n := mload(pkSeed)
+            // Write the hash-width public seed after the 10-byte tag.
+            mstore(add(ptr, 10), mload(add(pkSeed, 32)))
             // Write the 4-byte left-leaf index after the seed.
-            mstore(add(ptr, 42), shl(224, leftLeafIndex))
+            mstore(add(add(ptr, 10), n), shl(224, leftLeafIndex))
             // Write the left child after the leaf index.
-            mstore(add(ptr, 46), left)
+            mstore(add(add(ptr, 14), n), left)
             // Write the right child after the left child.
-            mstore(add(ptr, 78), right)
+            mstore(add(add(add(ptr, 14), n), n), right)
             // Hash the complete parent-node preimage.
-            out := keccak256(ptr, 110)
+            out := keccak256(ptr, add(14, mul(n, 3)))
         }
+        out = truncateHash(out);
     }
 
     // statefulChainNoMask: Advance one stateful WOTS-C chain for a chosen number of steps.
@@ -171,7 +184,7 @@ library ShrincsStateful {
     // 3. Apply one unmasked WOTS-C chain hash per remaining step.
     // 4. Return the reconstructed chain endpoint.
     function statefulChainNoMask(
-        bytes32 pkSeed,
+        bytes memory pkSeed,
         uint32 leafIndex,
         uint32 chainIdx,
         bytes32 value,
@@ -197,7 +210,7 @@ library ShrincsStateful {
     // 2. Bind the public seed and chain-step address.
     // 3. Mix in the current chain segment value.
     // 4. Return the next chain value.
-    function hashStatefulWotsCChainNoMask32(bytes32 pkSeed, bytes32 addressWord, bytes32 segment)
+    function hashStatefulWotsCChainNoMask32(bytes memory pkSeed, bytes32 addressWord, bytes32 segment)
         internal
         pure
         returns (bytes32 out)
@@ -207,15 +220,17 @@ library ShrincsStateful {
             let ptr := mload(0x40)
             // Write the domain tag prefix for WOTS-C chain hashing.
             mstore(ptr, "wots-c-chain")
-            // Write the 32-byte public seed after the 12-byte tag.
-            mstore(add(ptr, 12), pkSeed)
+            let n := mload(pkSeed)
+            // Write the hash-width public seed after the 12-byte tag.
+            mstore(add(ptr, 12), mload(add(pkSeed, 32)))
             // Write the 32-byte address word after the seed.
-            mstore(add(ptr, 44), addressWord)
+            mstore(add(add(ptr, 12), n), addressWord)
             // Write the current chain segment after the address.
-            mstore(add(ptr, 76), segment)
+            mstore(add(add(ptr, 44), n), segment)
             // Hash the complete WOTS-C chain-step preimage.
-            out := keccak256(ptr, 108)
+            out := keccak256(ptr, add(44, mul(n, 2)))
         }
+        out = truncateHash(out);
     }
 
     // baseW16Digit: Read one base-16 digit from a 32-byte digest.
@@ -228,11 +243,11 @@ library ShrincsStateful {
         return index & 1 == 0 ? uint32(b >> 4) : uint32(b & 0x0f);
     }
 
-    // setSlice32: Write one 32-byte segment into a packed byte buffer.
+    // setSliceHash: Write one hash-width segment into a packed byte buffer.
     // 1. Skip the bytes-array length prefix.
     // 2. Advance to the requested byte offset.
     // 3. Store the 32-byte segment in place.
-    function setSlice32(bytes memory dst, bytes32 src, uint256 offset) internal pure {
+    function setSliceHash(bytes memory dst, bytes32 src, uint256 offset) internal pure {
         assembly {
             // Skip the bytes length word to reach the payload start.
             let dataPtr := add(dst, 32)
@@ -241,5 +256,24 @@ library ShrincsStateful {
             // Store the 32-byte segment at that payload location.
             mstore(writePtr, src)
         }
+    }
+
+    function loadHash(bytes calldata data) internal pure returns (bytes32 word) {
+        assembly {
+            word := calldataload(data.offset)
+        }
+        return truncateHash(word);
+    }
+
+    function loadHashMemory(bytes memory data) internal pure returns (bytes32 word) {
+        assembly {
+            word := mload(add(data, 32))
+        }
+        return truncateHash(word);
+    }
+
+    function truncateHash(bytes32 word) internal pure returns (bytes32) {
+        uint256 shift = (32 - uint256(ShrincsTypes.HASH_LEN)) * 8;
+        return bytes32((uint256(word) >> shift) << shift);
     }
 }

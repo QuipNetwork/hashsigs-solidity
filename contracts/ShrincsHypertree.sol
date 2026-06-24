@@ -76,11 +76,7 @@ library ShrincsHypertree {
                 )) return false;
 
             bytes calldata wotsPkHash = layerSig.wotsCPkHash;
-            bytes32 leaf;
-            assembly {
-                // Load the 32-byte WOTS-C public-key hash that becomes the subtree leaf value.
-                leaf := calldataload(wotsPkHash.offset)
-            }
+            bytes32 leaf = ShrincsUtils.loadHash(wotsPkHash);
 
             // casting to 'uint32' is safe because layer is bounded by the fixed 8-layer hypertree
             // forge-lint: disable-next-line(unsafe-typecast)
@@ -112,11 +108,7 @@ library ShrincsHypertree {
         }
 
         bytes calldata expectedRootBytes = publicKey.hypertreeRoot;
-        bytes32 expectedRoot;
-        assembly {
-            // Load the installed 32-byte hypertree root from calldata.
-            expectedRoot := calldataload(expectedRootBytes.offset)
-        }
+        bytes32 expectedRoot = ShrincsUtils.loadHash(expectedRootBytes);
         // All tree-index bits must be consumed exactly by the time the top layer is reached.
         if (expectedTreeIndex != 0) return false;
         return current == expectedRoot;
@@ -139,32 +131,23 @@ library ShrincsHypertree {
         ShrincsTypes.WotsCSignature calldata signature
     ) internal pure returns (bool) {
         uint256 chainCount = uint256(ShrincsTypes.NUM_WOTS_CHAINS);
+        uint256 n = ShrincsTypes.HASH_LEN;
         // The WOTS-C randomizer is always one hash output wide.
-        if (signature.randomizer.length != 32) return false;
+        if (signature.randomizer.length != n) return false;
         // One revealed chain value is required per WOTS-C chain.
         if (signature.chains.length != chainCount) return false;
         // The compressed WOTS-C public-key hash is always one hash output.
-        if (expectedPkHashBytes.length != 32) return false;
-        // This implementation supports only 32-byte WOTS digest expansion.
-        if (wotsDigestBytes() != 32) return false;
+        if (expectedPkHashBytes.length != n) return false;
 
         bytes calldata randomizerBytes = signature.randomizer;
-        bytes32 pkSeed;
-        bytes32 expectedPkHash;
-        bytes32 randomizer;
-        assembly {
-            // Load the 32-byte public seed from calldata.
-            pkSeed := calldataload(pkSeedBytes.offset)
-            // Load the expected compressed WOTS-C public-key hash from calldata.
-            expectedPkHash := calldataload(expectedPkHashBytes.offset)
-            // Load the 32-byte per-signature randomizer from calldata.
-            randomizer := calldataload(randomizerBytes.offset)
-        }
+        bytes32 pkSeed = ShrincsUtils.loadHash(pkSeedBytes);
+        bytes32 expectedPkHash = ShrincsUtils.loadHash(expectedPkHashBytes);
+        bytes32 randomizer = ShrincsUtils.loadHash(randomizerBytes);
 
         // Recompute the digest whose base-w digits determine chain stopping points.
         bytes memory digest = wotsDigest32(pkSeed, expectedPkHash, randomizer, signature.counter, message);
         // "wots-c-pk" || pkSeed || segment_0 || ... || segment_{len-1}
-        uint256 pkInputLen = 41 + chainCount * 32;
+        uint256 pkInputLen = 9 + n + chainCount * n;
         uint256 pkInput;
         assembly {
             // Allocate a scratch buffer starting at the free-memory pointer.
@@ -188,7 +171,7 @@ library ShrincsHypertree {
         for (uint256 i = 0; i < chainCount;) {
             // Read the revealed starting value for this chain.
             bytes calldata chain = signature.chains[i];
-            if (chain.length != 32) return false;
+            if (chain.length != n) return false;
             // Read the digest-selected base-w digit for this chain.
             uint32 digit = ShrincsUtils.baseWDigit(ShrincsTypes.WOTS_CHAIN_LEN, digest, i);
             // Accumulate the fixed WOTS-C target-sum check.
@@ -200,7 +183,7 @@ library ShrincsHypertree {
                 wotsChain32NoMaskBase(ShrincsTypes.WOTS_CHAIN_LEN, pkSeed, addressBase, uint32(i), chain, digit);
             assembly {
                 // Write this reconstructed chain endpoint after the fixed tag-and-seed prefix.
-                mstore(add(add(pkInput, 41), mul(i, 32)), segment)
+                mstore(add(add(pkInput, add(9, n)), mul(i, n)), segment)
             }
             unchecked {
                 ++i;
@@ -215,6 +198,7 @@ library ShrincsHypertree {
             // Hash the reconstructed chain endpoints into the compressed WOTS-C public-key hash.
             computedPkHash := keccak256(pkInput, pkInputLen)
         }
+        computedPkHash = ShrincsUtils.truncateHash(computedPkHash);
         return computedPkHash == expectedPkHash;
     }
 
@@ -228,24 +212,25 @@ library ShrincsHypertree {
         pure
         returns (bytes memory out)
     {
-        out = new bytes(32);
+        out = new bytes(wotsDigestBytes());
+        uint256 n = ShrincsTypes.HASH_LEN;
         assembly {
             // Allocate a scratch buffer starting at the free-memory pointer.
             let ptr := mload(0x40)
             // Write the digest domain tag prefix.
             mstore(ptr, "wots-c-msg")
-            // Write the 32-byte public seed after the 10-byte tag.
+            // Write the hash-width public seed after the 10-byte tag.
             mstore(add(ptr, 10), pkSeed)
             // Write the expected compressed public-key hash after the seed.
-            mstore(add(ptr, 42), expectedPkHash)
-            // Write the 32-byte randomizer after the expected public-key hash.
-            mstore(add(ptr, 74), randomizer)
+            mstore(add(add(ptr, 10), n), expectedPkHash)
+            // Write the hash-width randomizer after the expected public-key hash.
+            mstore(add(add(ptr, 10), mul(2, n)), randomizer)
             // Write the 4-byte grind counter after the randomizer.
-            mstore(add(ptr, 106), shl(224, counter))
-            // Write the 32-byte message after the counter.
-            mstore(add(ptr, 110), message)
+            mstore(add(add(ptr, 10), mul(3, n)), shl(224, counter))
+            // Write the hash-width message after the counter.
+            mstore(add(add(ptr, 14), mul(3, n)), message)
             // Hash the full WOTS-C message preimage.
-            let digestWord := keccak256(ptr, 142)
+            let digestWord := keccak256(ptr, add(14, mul(4, n)))
             // Store the digest into the output bytes payload.
             mstore(add(out, 32), digestWord)
             // Bump the free-memory pointer to the next 32-byte aligned slot.
@@ -271,6 +256,7 @@ library ShrincsHypertree {
             // Load the revealed 32-byte chain value directly from calldata.
             out := calldataload(value.offset)
         }
+        out = ShrincsUtils.truncateHash(out);
         // The chain must continue from the revealed digit position up to w - 1.
         uint256 steps = uint256(w - 1) - digit;
         for (uint256 j = 0; j < steps;) {
@@ -299,20 +285,22 @@ library ShrincsHypertree {
         pure
         returns (bytes32 out)
     {
+        uint256 n = ShrincsTypes.HASH_LEN;
         assembly {
             // Allocate a scratch buffer starting at the free-memory pointer.
             let ptr := mload(0x40)
             // Write the domain tag prefix for WOTS-C chain hashing.
             mstore(ptr, "wots-c-chain")
-            // Write the 32-byte public seed after the 12-byte tag.
+            // Write the hash-width public seed after the 12-byte tag.
             mstore(add(ptr, 12), pkSeed)
             // Write the 32-byte address word after the seed.
-            mstore(add(ptr, 44), addressWord)
+            mstore(add(add(ptr, 12), n), addressWord)
             // Write the current chain segment after the address.
-            mstore(add(ptr, 76), segment)
+            mstore(add(add(ptr, 44), n), segment)
             // Hash the complete WOTS-C chain-step preimage.
-            out := keccak256(ptr, 108)
+            out := keccak256(ptr, add(44, mul(n, 2)))
         }
+        out = ShrincsUtils.truncateHash(out);
     }
 
     // wotsDigestBytes: Return the number of bytes needed to encode all WOTS-C digits.
@@ -341,11 +329,7 @@ library ShrincsHypertree {
     ) internal pure returns (bytes32 node, bool ok) {
         // Every subtree auth path must contain one node per subtree level.
         if (authPath.length != height) return (bytes32(0), false);
-        bytes32 pkSeedWord;
-        assembly {
-            // Load the 32-byte public seed from calldata once for repeated subtree hashing.
-            pkSeedWord := calldataload(pkSeed.offset)
-        }
+        bytes32 pkSeedWord = ShrincsUtils.loadHash(pkSeed);
         // Encode the hypertree layer in the shared address prefix.
         uint256 shiftedLayer = uint256(layer) << 224;
         // Encode the hypertree tree index in the shared address prefix.
@@ -361,12 +345,8 @@ library ShrincsHypertree {
         for (uint256 level = 0; level < height;) {
             // Read the sibling node supplied for this subtree level.
             bytes calldata authNode = authPath[level];
-            if (authNode.length != 32) return (bytes32(0), false);
-            bytes32 sibling;
-            assembly {
-                // Load the 32-byte sibling node directly from calldata.
-                sibling := calldataload(authNode.offset)
-            }
+            if (authNode.length != ShrincsTypes.HASH_LEN) return (bytes32(0), false);
+            bytes32 sibling = ShrincsUtils.loadHash(authNode);
             // Place the current node and sibling in canonical left/right order for this level.
             (bytes32 left, bytes32 right) = index & 1 == 0 ? (node, sibling) : (sibling, node);
             // Parent nodes live one level higher than their children.
@@ -399,21 +379,23 @@ library ShrincsHypertree {
         pure
         returns (bytes32 out)
     {
+        uint256 n = ShrincsTypes.HASH_LEN;
         assembly {
             // Allocate a scratch buffer starting at the free-memory pointer.
             let ptr := mload(0x40)
             // Write the domain tag prefix for hypertree internal-node hashing.
             mstore(ptr, "hypertree-node")
-            // Write the 32-byte public seed after the 14-byte tag.
+            // Write the hash-width public seed after the 14-byte tag.
             mstore(add(ptr, 14), pkSeed)
             // Write the 32-byte address word after the seed.
-            mstore(add(ptr, 46), addressWord)
+            mstore(add(add(ptr, 14), n), addressWord)
             // Write the left child after the address.
-            mstore(add(ptr, 78), left)
+            mstore(add(add(ptr, 46), n), left)
             // Write the right child after the left child.
-            mstore(add(ptr, 110), right)
+            mstore(add(add(add(ptr, 46), n), n), right)
             // Hash the complete hypertree internal-node preimage.
-            out := keccak256(ptr, 142)
+            out := keccak256(ptr, add(46, mul(n, 3)))
         }
+        out = ShrincsUtils.truncateHash(out);
     }
 }

@@ -1,0 +1,9 @@
+[package]
+name = "shrincs-gas-vector"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+hashsigs-rs = { path = "../../../hashsigs-rs" }
+sha3 = "0.10.9"

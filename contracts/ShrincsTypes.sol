@@ -32,24 +32,24 @@ library ShrincsTypes {
     uint32 internal constant AddressTypeForsTree = 3;
 
     // Encoded stateful public key layout:
-    // 32-byte pkSeed || 32-byte root || 4-byte maxSignatures.
-    uint16 internal constant STATEFUL_PUBLIC_KEY_BYTES = 68;
-    // Stateful WOTS-C uses 64 chains.
-    uint16 internal constant WOTS_CHAINS_STATEFUL = 64;
+    // 16-byte pkSeed || 16-byte root || 4-byte maxSignatures.
+    uint16 internal constant STATEFUL_PUBLIC_KEY_BYTES = 36;
+    // Stateful WOTS-C uses 32 chains for 128-bit hashes with base-16 digits.
+    uint16 internal constant WOTS_CHAINS_STATEFUL = 32;
     // Stateful WOTS-C uses base-16 digits for message expansion.
     uint16 internal constant WOTS_BASE_STATEFUL = 16;
-    // The 64 base-16 digits reconstructed from the stateful message digest must
-    // sum to 480.
-    uint32 internal constant WOTS_TARGET_SUM_STATEFUL = 480;
-    // Compile-time SHRINCS/SPHINCS constants.
-    uint64 internal constant STATELESS_SIGNATURE_LIMIT = 1_048_576;
-    uint16 internal constant HASH_LEN = 32;
-    uint8 internal constant HYPERTREE_HEIGHT = 64;
-    uint8 internal constant NUM_HYPERTREE_LAYERS = 8;
-    uint8 internal constant FORS_TREE_HEIGHT = 14;
-    uint8 internal constant NUM_FORS_TREES = 22;
+    // The 32 base-16 digits reconstructed from the stateful message digest must
+    // sum to 240.
+    uint32 internal constant WOTS_TARGET_SUM_STATEFUL = 240;
+    // SPHINCS+-128s-q20-style stateless topology.
+    uint64 internal constant STATELESS_SIGNATURE_LIMIT = 262_144;
+    uint16 internal constant HASH_LEN = 16;
+    uint8 internal constant HYPERTREE_HEIGHT = 18;
+    uint8 internal constant NUM_HYPERTREE_LAYERS = 1;
+    uint8 internal constant FORS_TREE_HEIGHT = 24;
+    uint8 internal constant NUM_FORS_TREES = 6;
     uint16 internal constant WOTS_CHAIN_LEN = 16;
-    uint16 internal constant NUM_WOTS_CHAINS = 64;
+    uint16 internal constant NUM_WOTS_CHAINS = 32;
 
     struct ForsDigest {
         // Hypertree subtree selected for this stateless signature.
@@ -73,45 +73,22 @@ library ShrincsTypes {
 
     struct StatefulPublicKey {
         // Public seed for stateful WOTS-C and tree hashing.
-        bytes32 pkSeed;
+        bytes pkSeed;
         // Root of the custom stateful tree.
-        bytes32 root;
+        bytes root;
         // Maximum number of stateful leaves/signatures under this key.
         uint32 maxSignatures;
     }
 
-    struct SigningKey {
-        // Secret seed used to derive stateful WOTS-C chain secrets.
-        bytes32 statefulSkSeed;
-        // Secret PRF seed used to derive stateful WOTS-C message randomizers.
-        bytes32 statefulPrfSeed;
-        // Public seed used in stateful WOTS-C and stateful tree hashing.
-        bytes32 statefulPkSeed;
-        // Root of the stateful unbalanced tree committed in the public key.
-        bytes32 statefulRoot;
-        // Highest stateful leaf index this key may sign with.
-        uint32 maxStatefulSignatures;
-        // Next monotonic stateful leaf index to consume.
-        uint32 nextStatefulLeafIndex;
-        // Stateless SK.seed-style material used to derive FORS-C and hypertree WOTS-C secrets.
-        bytes32 statelessSkSeed;
-        // Stateless SK.prf-style material used to derive stateless message randomizers.
-        bytes32 statelessPrfSeed;
-        // Global public seed used in FORS-C, hypertree WOTS-C, and Merkle node hashing.
-        bytes32 pkSeed;
-        // Top hypertree root committed in the public key.
-        bytes32 hypertreeRoot;
-    }
-
     struct StatefulSignature {
         // Per-signature randomizer committed into the stateful message digest.
-        bytes32 randomizer;
+        bytes randomizer;
         // Grinding counter used to satisfy the WOTS-C target-sum rule.
         uint32 counter;
         // Revealed WOTS-C chain values.
-        bytes32[] chains;
+        bytes[] chains;
         // Unbalanced authentication path proving the selected stateful leaf.
-        bytes32[] authPath;
+        bytes[] authPath;
     }
 
     struct ForsEntry {
