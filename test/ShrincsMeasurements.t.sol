@@ -19,6 +19,9 @@ pragma solidity ^0.8.28;
 import {Test} from "../lib/forge-std/src/Test.sol";
 import {SHRINCS} from "../contracts/SHRINCS.sol";
 import {ShrincsTypes} from "../contracts/ShrincsTypes.sol";
+import {ShrincsAccountVerifierExample} from "../contracts/examples/ShrincsAccountVerifierExample.sol";
+import {ShrincsAccountSigningFacade} from "./helpers/ShrincsAccountSigningFacade.sol";
+import {ShrincsStatelessVectorSigner} from "./helpers/ShrincsStatelessVectorSigner.sol";
 import {ShrincsTestSigner} from "./helpers/ShrincsTestSigner.sol";
 
 contract MeasurementStatefulVerifierHarness {
@@ -29,6 +32,17 @@ contract MeasurementStatefulVerifierHarness {
         ShrincsTypes.StatefulSignature calldata signature
     ) external pure returns (bool) {
         return SHRINCS.verifyStatefulUncheckedMessage(expectedPublicKeyCommitment, publicKey, message, signature);
+    }
+
+    function measureVerifyUnsafeRaw(
+        bytes32 expectedPublicKeyCommitment,
+        ShrincsTypes.PublicKey calldata publicKey,
+        bytes calldata message,
+        ShrincsTypes.StatefulSignature calldata signature
+    ) external view returns (bool ok, uint256 gasUsed) {
+        uint256 beforeGas = gasleft();
+        ok = SHRINCS.verifyStatefulUncheckedMessage(expectedPublicKeyCommitment, publicKey, message, signature);
+        gasUsed = beforeGas - gasleft();
     }
 }
 
@@ -41,10 +55,25 @@ contract MeasurementStatelessVerifierHarness {
     ) external pure returns (bool) {
         return SHRINCS.verifyStatelessUncheckedMessage(expectedPublicKeyCommitment, publicKey, message, signature);
     }
+
+    function measureVerifyUnsafeRaw(
+        bytes32 expectedPublicKeyCommitment,
+        ShrincsTypes.PublicKey calldata publicKey,
+        bytes calldata message,
+        ShrincsTypes.StatelessSignature calldata signature
+    ) external view returns (bool ok, uint256 gasUsed) {
+        uint256 beforeGas = gasleft();
+        ok = SHRINCS.verifyStatelessUncheckedMessage(expectedPublicKeyCommitment, publicKey, message, signature);
+        gasUsed = beforeGas - gasleft();
+    }
 }
+
+contract MeasurementAccountSigningHarness is ShrincsStatelessVectorSigner {}
 
 contract ShrincsMeasurementsTest is Test {
     string internal constant VECTOR_PATH = "test/test_vectors/shrincs_sphincs_256s_keccak.json";
+    bytes32 internal constant ACTION_TYPE = keccak256("measure");
+    bytes32 internal constant PAYLOAD_HASH = keccak256("measurement payload");
 
     struct LegacyPublicKey {
         bytes statefulPublicKey;
@@ -84,15 +113,17 @@ contract ShrincsMeasurementsTest is Test {
 
     MeasurementStatefulVerifierHarness internal statefulVerifier;
     MeasurementStatelessVerifierHarness internal statelessVerifier;
+    MeasurementAccountSigningHarness internal accountSigner;
     string internal vectors;
 
     function setUp() public {
         statefulVerifier = new MeasurementStatefulVerifierHarness();
         statelessVerifier = new MeasurementStatelessVerifierHarness();
+        accountSigner = new MeasurementAccountSigningHarness();
         vectors = vm.readFile(VECTOR_PATH);
     }
 
-    function testMeasureCurrentShrincsStatefulAndStateless() public {
+    function testMeasureCurrentShrincsStateful() public {
         (
             ShrincsTypes.SigningKey memory statefulSigningKey,
             ShrincsTypes.PublicKey memory statefulPublicKey,
@@ -111,12 +142,20 @@ contract ShrincsMeasurementsTest is Test {
         uint256 statefulSignerHashes =
             countStatefulSigningHashes(statefulSignature, statefulSigningKey.maxStatefulSignatures);
         uint256 statefulSignatureSize = rawStatefulSignatureSize(statefulSignature);
-        uint256 statefulVerifyGas = gasUsedForStatefulVerify(statefulPublicKey, statefulMessage, statefulSignature);
+        uint256 statefulVerifierBodyGas =
+            gasUsedForStatefulVerifyBody(statefulPublicKey, statefulMessage, statefulSignature);
+        uint256 statefulFullExternalCallGas =
+            gasUsedForStatefulVerifyExternal(statefulPublicKey, statefulMessage, statefulSignature);
+        uint256 statefulCanonicalWrapperGas = gasUsedForStatefulCanonicalWrapper();
 
         emit log_named_uint("stateful.signer_hashes_excluding_keygen", statefulSignerHashes);
         emit log_named_uint("stateful.signature_size_bytes", statefulSignatureSize);
-        emit log_named_uint("stateful.verifier_gas_used_raw", statefulVerifyGas);
+        emit log_named_uint("stateful.verifier_body_gas", statefulVerifierBodyGas);
+        emit log_named_uint("stateful.full_external_call_gas", statefulFullExternalCallGas);
+        emit log_named_uint("stateful.canonical_wrapper_gas", statefulCanonicalWrapperGas);
+    }
 
+    function testMeasureCurrentShrincsStateless() public {
         (
             ShrincsTypes.PublicKey memory statelessPublicKey,
             bytes memory statelessMessage,
@@ -125,15 +164,32 @@ contract ShrincsMeasurementsTest is Test {
 
         uint256 statelessSignerHashes = countStatelessSigningHashes(statelessSignature);
         uint256 statelessSignatureSize = rawStatelessSignatureSize(statelessSignature);
-        uint256 statelessVerifyGas =
-            gasUsedForStatelessVerify(statelessPublicKey, statelessMessage, statelessSignature);
+        uint256 statelessVerifierBodyGas =
+            gasUsedForStatelessVerifyBody(statelessPublicKey, statelessMessage, statelessSignature);
+        uint256 statelessFullExternalCallGas =
+            gasUsedForStatelessVerifyExternal(statelessPublicKey, statelessMessage, statelessSignature);
+        uint256 statelessCanonicalWrapperGas = gasUsedForStatelessCanonicalWrapper();
 
         emit log_named_uint("stateless.signer_hashes_excluding_keygen", statelessSignerHashes);
         emit log_named_uint("stateless.signature_size_bytes", statelessSignatureSize);
-        emit log_named_uint("stateless.verifier_gas_used_raw", statelessVerifyGas);
+        emit log_named_uint("stateless.verifier_body_gas", statelessVerifierBodyGas);
+        emit log_named_uint("stateless.full_external_call_gas", statelessFullExternalCallGas);
+        emit log_named_uint("stateless.canonical_wrapper_gas", statelessCanonicalWrapperGas);
     }
 
-    function gasUsedForStatefulVerify(
+    function gasUsedForStatefulVerifyBody(
+        ShrincsTypes.PublicKey memory publicKey,
+        bytes memory message,
+        ShrincsTypes.StatefulSignature memory signature
+    ) internal returns (uint256 used) {
+        bytes32 expectedPublicKeyCommitment = publicKeyCommitmentWord(publicKey);
+        (bool ok, uint256 measured) =
+            statefulVerifier.measureVerifyUnsafeRaw(expectedPublicKeyCommitment, publicKey, message, signature);
+        assertTrue(ok, "stateful verifier measurement input must verify");
+        used = measured;
+    }
+
+    function gasUsedForStatefulVerifyExternal(
         ShrincsTypes.PublicKey memory publicKey,
         bytes memory message,
         ShrincsTypes.StatefulSignature memory signature
@@ -142,10 +198,22 @@ contract ShrincsMeasurementsTest is Test {
         uint256 beforeGas = gasleft();
         bool ok = statefulVerifier.verifyUnsafeRaw(expectedPublicKeyCommitment, publicKey, message, signature);
         used = beforeGas - gasleft();
-        assertTrue(ok, "stateful verifier measurement input must verify");
+        assertTrue(ok, "stateful external verifier measurement input must verify");
     }
 
-    function gasUsedForStatelessVerify(
+    function gasUsedForStatelessVerifyBody(
+        ShrincsTypes.PublicKey memory publicKey,
+        bytes memory message,
+        ShrincsTypes.StatelessSignature memory signature
+    ) internal returns (uint256 used) {
+        bytes32 expectedPublicKeyCommitment = publicKeyCommitmentWord(publicKey);
+        (bool ok, uint256 measured) =
+            statelessVerifier.measureVerifyUnsafeRaw(expectedPublicKeyCommitment, publicKey, message, signature);
+        assertTrue(ok, "stateless verifier measurement input must verify");
+        used = measured;
+    }
+
+    function gasUsedForStatelessVerifyExternal(
         ShrincsTypes.PublicKey memory publicKey,
         bytes memory message,
         ShrincsTypes.StatelessSignature memory signature
@@ -154,7 +222,54 @@ contract ShrincsMeasurementsTest is Test {
         uint256 beforeGas = gasleft();
         bool ok = statelessVerifier.verifyUnsafeRaw(expectedPublicKeyCommitment, publicKey, message, signature);
         used = beforeGas - gasleft();
-        assertTrue(ok, "stateless verifier measurement input must verify");
+        assertTrue(ok, "stateless external verifier measurement input must verify");
+    }
+
+    function gasUsedForStatefulCanonicalWrapper() internal returns (uint256 used) {
+        (ShrincsTypes.SigningKey memory signingKey, ShrincsTypes.PublicKey memory publicKey, bool keygenOk) =
+            ShrincsAccountSigningFacade.keygen(bytes("measurement canonical stateful seed"), 4);
+        assertTrue(keygenOk, "canonical stateful keygen must succeed");
+
+        ShrincsAccountVerifierExample account =
+            new ShrincsAccountVerifierExample(ShrincsAccountSigningFacade.publicKeyCommitmentWord(publicKey));
+
+        (
+            ,
+            ,
+            ShrincsTypes.StatefulSignature memory signature,
+            bool signOk
+        ) = ShrincsAccountSigningFacade.signStatefulActionNow(account, signingKey, ACTION_TYPE, PAYLOAD_HASH);
+        assertTrue(signOk, "canonical stateful signing must succeed");
+
+        uint256 beforeGas = gasleft();
+        bool ok = account.verifyStatefulAction(publicKey, ACTION_TYPE, PAYLOAD_HASH, signature);
+        uint256 measured = beforeGas - gasleft();
+        assertTrue(ok, "canonical stateful wrapper measurement must verify");
+        used = measured;
+    }
+
+    function gasUsedForStatelessCanonicalWrapper() internal returns (uint256 used) {
+        (ShrincsTypes.SigningKey memory signingKey, ShrincsTypes.PublicKey memory publicKey, bool keygenOk) =
+            ShrincsAccountSigningFacade.keygen(bytes("measurement canonical stateless seed"), 4);
+        assertTrue(keygenOk, "canonical stateless keygen must succeed");
+
+        ShrincsAccountVerifierExample account =
+            new ShrincsAccountVerifierExample(ShrincsAccountSigningFacade.publicKeyCommitmentWord(publicKey));
+
+        (, bytes32 sessionId, bool beginOk) = ShrincsAccountSigningFacade.beginStatelessActionSessionNow(
+            accountSigner, account, signingKey, publicKey, ACTION_TYPE, PAYLOAD_HASH
+        );
+        assertTrue(beginOk, "canonical stateless signing must begin");
+
+        (ShrincsTypes.StatelessSignature memory signature, bool completeOk) =
+            ShrincsAccountSigningFacade.completeStatelessSession(accountSigner, sessionId);
+        assertTrue(completeOk, "canonical stateless signing must complete");
+
+        uint256 beforeGas = gasleft();
+        bool ok = account.verifyStatelessAction(publicKey, ACTION_TYPE, PAYLOAD_HASH, signature);
+        uint256 measured = beforeGas - gasleft();
+        assertTrue(ok, "canonical stateless wrapper measurement must verify");
+        used = measured;
     }
 
     function publicKeyCommitmentWord(ShrincsTypes.PublicKey memory publicKey) internal pure returns (bytes32 out) {
