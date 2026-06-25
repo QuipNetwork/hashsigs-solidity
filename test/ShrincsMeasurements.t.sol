@@ -24,6 +24,23 @@ import {ShrincsAccountSigningFacade} from "./helpers/ShrincsAccountSigningFacade
 import {ShrincsStatelessVectorSigner} from "./helpers/ShrincsStatelessVectorSigner.sol";
 import {ShrincsTestSigner} from "./helpers/ShrincsTestSigner.sol";
 
+//measure no-op with packed signature rather than nested struct
+contract MeasurementNoopPackedStatelessCallShape {
+
+    function acceptStatelessPackedWithAccountArgs(
+        ShrincsTypes.PublicKey calldata publicKey,
+        bytes32 actionType,
+        bytes32 payloadHash,
+        bytes calldata signature
+    ) external pure returns (bool) {
+        publicKey;
+        actionType;
+        payloadHash;
+        signature;
+        return true;
+    }
+}
+
 // Measure gas cost of verifystateful which validates action context and
 // does abi.encodepacked() on statefulactionmessagehash and then calls verifyStatefulUncheckedMessage
 contract MeasurementStatefulCanonicalHarness {
@@ -232,8 +249,10 @@ contract ShrincsMeasurementsTest is Test {
     MeasurementStatefulCanonicalHarness internal statefulCanonicalVerifier;
     MeasurementNoopAccountCallShape internal noopAccountCallShape;
     MeasurementNoopCanonicalCallShape internal noopCanonicalCallShape;
-    //added for measuring canonical SHRINCS verifyStateful
+    //added for measuring canonical SHRINCS verifyStateless
     MeasurementStatelessCanonicalHarness internal statelessCanonicalVerifier;
+    //added for measuring no-op cost for replacing nested struct with flatten byte
+    MeasurementNoopPackedStatelessCallShape internal noopPackedStatelessCallShape;
     string internal vectors;
 
     function setUp() public {
@@ -244,6 +263,8 @@ contract ShrincsMeasurementsTest is Test {
         noopAccountCallShape = new MeasurementNoopAccountCallShape();
         noopCanonicalCallShape = new MeasurementNoopCanonicalCallShape();
         statelessCanonicalVerifier = new MeasurementStatelessCanonicalHarness();
+        //added to replace nested struct with flatten byte for measuring no-op cost
+        noopPackedStatelessCallShape = new MeasurementNoopPackedStatelessCallShape();
         vectors = vm.readFile(VECTOR_PATH);
     }
 
@@ -283,6 +304,43 @@ contract ShrincsMeasurementsTest is Test {
         // emit log_named_uint("stateful.canonical_library_gas", statefulCanonicalLibraryGas);
     }
 
+    //add as a separate test to measure no-op cost of flattening the nested struct into a single bytes calldata for stateless signature
+    function gasUsedForStatelessNoopPackedAccountCallShape() internal returns (uint256 used) {
+        (ShrincsTypes.SigningKey memory signingKey, ShrincsTypes.PublicKey memory publicKey, bool keygenOk) =
+            ShrincsAccountSigningFacade.keygen(bytes("measurement canonical stateless seed"), 4);
+        assertTrue(keygenOk, "canonical stateless keygen must succeed");
+
+        ShrincsAccountVerifierExample account =
+            new ShrincsAccountVerifierExample(ShrincsAccountSigningFacade.publicKeyCommitmentWord(publicKey));
+
+        (, bytes32 sessionId, bool beginOk) = ShrincsAccountSigningFacade.beginStatelessActionSessionNow(
+            accountSigner, account, signingKey, publicKey, ACTION_TYPE, PAYLOAD_HASH
+        );
+        assertTrue(beginOk, "canonical stateless signing must begin");
+
+        (ShrincsTypes.StatelessSignature memory signature, bool completeOk) =
+            ShrincsAccountSigningFacade.completeStatelessSession(accountSigner, sessionId);
+        assertTrue(completeOk, "canonical stateless signing must complete");
+
+        // bytes memory packedSignature = abi.encode(signature);
+        bytes memory packedSignature = new bytes(rawStatelessSignatureSize(signature));
+        uint256 beforeGas = gasleft();
+        bool ok = noopPackedStatelessCallShape.acceptStatelessPackedWithAccountArgs(
+            publicKey,
+            ACTION_TYPE,
+            PAYLOAD_HASH,
+            packedSignature
+        );
+        used = beforeGas - gasleft();
+
+        assertTrue(ok, "noop packed stateless account call-shape measurement must succeed");
+    }
+    
+    //add as a separate test to measure no-op cost of flattening the nested struct into a single bytes calldata for stateless signature
+    function testMeasureStatelessNoopPackedAccountCallShape() public {
+        uint256 gasUsed = gasUsedForStatelessNoopPackedAccountCallShape();
+        emit log_named_uint("stateless.noop_packed_account_args_gas", gasUsed);
+    }
     //add as a separate test to measure the external gas cost of verifystateless, which validates action context and
     // does abi.encodepacked() on statelessactionmessagehash and then calls verifyStateless
     function testMeasureStatefulCanonicalExternal() public {
