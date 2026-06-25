@@ -1,0 +1,14 @@
+/Users/mw/Desktop/hashsigs/hashsigs-solidity/gasUsed/shrincs-gas-vector/target/release/deps/serde-bfb1c6ae1cff5e91.d: /Users/mw/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/lib.rs /Users/mw/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/integer128.rs /Users/mw/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/mod.rs /Users/mw/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/de.rs /Users/mw/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/ser.rs /Users/mw/Desktop/hashsigs/hashsigs-solidity/gasUsed/shrincs-gas-vector/target/release/build/serde-f474d4e75769aa60/out/private.rs
+
+/Users/mw/Desktop/hashsigs/hashsigs-solidity/gasUsed/shrincs-gas-vector/target/release/deps/libserde-bfb1c6ae1cff5e91.rlib: /Users/mw/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/lib.rs /Users/mw/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/integer128.rs /Users/mw/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/mod.rs /Users/mw/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/de.rs /Users/mw/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/ser.rs /Users/mw/Desktop/hashsigs/hashsigs-solidity/gasUsed/shrincs-gas-vector/target/release/build/serde-f474d4e75769aa60/out/private.rs
+
+/Users/mw/Desktop/hashsigs/hashsigs-solidity/gasUsed/shrincs-gas-vector/target/release/deps/libserde-bfb1c6ae1cff5e91.rmeta: /Users/mw/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/lib.rs /Users/mw/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/integer128.rs /Users/mw/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/mod.rs /Users/mw/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/de.rs /Users/mw/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/ser.rs /Users/mw/Desktop/hashsigs/hashsigs-solidity/gasUsed/shrincs-gas-vector/target/release/build/serde-f474d4e75769aa60/out/private.rs
+
+/Users/mw/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/lib.rs:
+/Users/mw/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/integer128.rs:
+/Users/mw/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/mod.rs:
+/Users/mw/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/de.rs:
+/Users/mw/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/ser.rs:
+/Users/mw/Desktop/hashsigs/hashsigs-solidity/gasUsed/shrincs-gas-vector/target/release/build/serde-f474d4e75769aa60/out/private.rs:
+
+# env-dep:OUT_DIR=/Users/mw/Desktop/hashsigs/hashsigs-solidity/gasUsed/shrincs-gas-vector/target/release/build/serde-f474d4e75769aa60/out

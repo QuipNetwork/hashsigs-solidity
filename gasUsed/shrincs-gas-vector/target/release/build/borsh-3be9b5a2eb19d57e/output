@@ -1,0 +1,2 @@
+cargo:rustc-check-cfg=cfg(hash_collections)
+cargo:rustc-cfg=hash_collections

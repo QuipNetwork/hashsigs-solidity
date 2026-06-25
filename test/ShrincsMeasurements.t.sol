@@ -24,6 +24,72 @@ import {ShrincsAccountSigningFacade} from "./helpers/ShrincsAccountSigningFacade
 import {ShrincsStatelessVectorSigner} from "./helpers/ShrincsStatelessVectorSigner.sol";
 import {ShrincsTestSigner} from "./helpers/ShrincsTestSigner.sol";
 
+// Measure gas cost of verifystateful which validates action context and
+// does abi.encodepacked() on statefulactionmessagehash and then calls verifyStatefulUncheckedMessage
+contract MeasurementStatefulCanonicalHarness {
+    function verifyStateful(
+        bytes32 expectedPublicKeyCommitment,
+        ShrincsTypes.PublicKey calldata publicKey,
+        ShrincsTypes.ActionContext calldata context,
+        ShrincsTypes.StatefulSignature calldata signature
+    ) external pure returns (bool) {
+        return SHRINCS.verifyStateful(
+            expectedPublicKeyCommitment,
+            publicKey,
+            context,
+            signature
+        );
+    }
+
+    function measureVerifyStateful(
+        bytes32 expectedPublicKeyCommitment,
+        ShrincsTypes.PublicKey calldata publicKey,
+        ShrincsTypes.ActionContext calldata context,
+        ShrincsTypes.StatefulSignature calldata signature
+    ) external view returns (bool ok, uint256 gasUsed) {
+        uint256 beforeGas = gasleft();
+
+        ok = SHRINCS.verifyStateful(
+            expectedPublicKeyCommitment,
+            publicKey,
+            context,
+            signature
+        );
+
+        gasUsed = beforeGas - gasleft();
+    }
+}
+
+contract MeasurementNoopAccountCallShape {
+    function acceptStatefulActionShape(
+        ShrincsTypes.PublicKey calldata publicKey,
+        bytes32 actionType,
+        bytes32 payloadHash,
+        ShrincsTypes.StatefulSignature calldata signature
+    ) external pure returns (bool) {
+        publicKey;
+        actionType;
+        payloadHash;
+        signature;
+        return true;
+    }
+}
+
+contract MeasurementNoopCanonicalCallShape {
+    function acceptStatefulCanonicalShape(
+        bytes32 expectedPublicKeyCommitment,
+        ShrincsTypes.PublicKey calldata publicKey,
+        ShrincsTypes.ActionContext calldata context,
+        ShrincsTypes.StatefulSignature calldata signature
+    ) external pure returns (bool) {
+        expectedPublicKeyCommitment;
+        publicKey;
+        context;
+        signature;
+        return true;
+    }
+}
+
 contract MeasurementStatefulVerifierHarness {
     function verifyUnsafeRaw(
         bytes32 expectedPublicKeyCommitment,
@@ -114,12 +180,18 @@ contract ShrincsMeasurementsTest is Test {
     MeasurementStatefulVerifierHarness internal statefulVerifier;
     MeasurementStatelessVerifierHarness internal statelessVerifier;
     MeasurementAccountSigningHarness internal accountSigner;
+    MeasurementStatefulCanonicalHarness internal statefulCanonicalVerifier;
+    MeasurementNoopAccountCallShape internal noopAccountCallShape;
+    MeasurementNoopCanonicalCallShape internal noopCanonicalCallShape;
     string internal vectors;
 
     function setUp() public {
         statefulVerifier = new MeasurementStatefulVerifierHarness();
         statelessVerifier = new MeasurementStatelessVerifierHarness();
         accountSigner = new MeasurementAccountSigningHarness();
+        statefulCanonicalVerifier = new MeasurementStatefulCanonicalHarness();
+        noopAccountCallShape = new MeasurementNoopAccountCallShape();
+        noopCanonicalCallShape = new MeasurementNoopCanonicalCallShape();
         vectors = vm.readFile(VECTOR_PATH);
     }
 
@@ -147,12 +219,39 @@ contract ShrincsMeasurementsTest is Test {
         uint256 statefulFullExternalCallGas =
             gasUsedForStatefulVerifyExternal(statefulPublicKey, statefulMessage, statefulSignature);
         uint256 statefulCanonicalWrapperGas = gasUsedForStatefulCanonicalWrapper();
+        //add canonical library gas measurement for measuring verifystateful
+        // uint256 statefulCanonicalLibraryGas = gasUsedForStatefulCanonicalLibrary();
 
         emit log_named_uint("stateful.signer_hashes_excluding_keygen", statefulSignerHashes);
         emit log_named_uint("stateful.signature_size_bytes", statefulSignatureSize);
         emit log_named_uint("stateful.verifier_body_gas", statefulVerifierBodyGas);
         emit log_named_uint("stateful.full_external_call_gas", statefulFullExternalCallGas);
         emit log_named_uint("stateful.canonical_wrapper_gas", statefulCanonicalWrapperGas);
+        //add canonical library gas measurement for measuring verifystateful
+        // emit log_named_uint("stateful.canonical_library_gas", statefulCanonicalLibraryGas);
+    }
+
+    //add as a separate test to measure the external gas cost of verifystateless, which validates action context and
+    // does abi.encodepacked() on statelessactionmessagehash and then calls verifyStateless
+    function testMeasureStatefulCanonicalExternal() public {
+        uint256 statefulCanonicalExternalGas = gasUsedForStatefulCanonicalExternal();
+        emit log_named_uint("stateful.canonical_external_gas", statefulCanonicalExternalGas);
+    }
+    //add as a separate test to measure the gas cost of verifystateless, which validates action context and
+    // does abi.encodepacked() on statelessactionmessagehash and then calls verifyStateless
+    function testMeasureStatefulCanonicalLibrary() public {
+        uint256 statefulCanonicalLibraryGas = gasUsedForStatefulCanonicalLibrary();
+        emit log_named_uint("stateful.canonical_library_gas", statefulCanonicalLibraryGas);
+    }
+
+    function testMeasureStatefulNoopAccountCallShape() public {
+        uint256 statefulNoopAccountCallShapeGas = gasUsedForStatefulNoopAccountCallShape();
+        emit log_named_uint("stateful.noop_same_args_gas", statefulNoopAccountCallShapeGas);
+    }
+
+    function testMeasureStatefulNoopCanonicalCallShape() public {
+        uint256 statefulNoopCanonicalCallShapeGas = gasUsedForStatefulNoopCanonicalCallShape();
+        emit log_named_uint("stateful.noop_canonical_args_gas", statefulNoopCanonicalCallShapeGas);
     }
 
     function testMeasureCurrentShrincsStateless() public {
@@ -176,6 +275,8 @@ contract ShrincsMeasurementsTest is Test {
         emit log_named_uint("stateless.full_external_call_gas", statelessFullExternalCallGas);
         emit log_named_uint("stateless.canonical_wrapper_gas", statelessCanonicalWrapperGas);
     }
+
+    
 
     function gasUsedForStatefulVerifyBody(
         ShrincsTypes.PublicKey memory publicKey,
@@ -223,6 +324,117 @@ contract ShrincsMeasurementsTest is Test {
         bool ok = statelessVerifier.verifyUnsafeRaw(expectedPublicKeyCommitment, publicKey, message, signature);
         used = beforeGas - gasleft();
         assertTrue(ok, "stateless external verifier measurement input must verify");
+    }
+
+    // Measure the gas cost of the canonical wrapper for stateful verification, which includes
+    // with validActionContext(context)) and abi.encodePacked(statefulActionMessageHash(expectedPublicKeyCommitment, context));
+
+    function gasUsedForStatefulCanonicalLibrary() internal returns (uint256 used) {
+        (ShrincsTypes.SigningKey memory signingKey, ShrincsTypes.PublicKey memory publicKey, bool keygenOk) =
+            ShrincsAccountSigningFacade.keygen(bytes("measurement canonical stateful seed"), 4);
+        assertTrue(keygenOk, "canonical stateful keygen must succeed");
+
+        ShrincsAccountVerifierExample account =
+            new ShrincsAccountVerifierExample(ShrincsAccountSigningFacade.publicKeyCommitmentWord(publicKey));
+
+        (
+            ,
+            ShrincsTypes.ActionContext memory context,
+            ShrincsTypes.StatefulSignature memory signature,
+            bool signOk
+        ) = ShrincsAccountSigningFacade.signStatefulActionNow(account, signingKey, ACTION_TYPE, PAYLOAD_HASH);
+        assertTrue(signOk, "canonical stateful signing must succeed");
+
+        (bool ok, uint256 measured) =
+            statefulCanonicalVerifier.measureVerifyStateful(
+                ShrincsAccountSigningFacade.publicKeyCommitmentWord(publicKey),
+                publicKey,
+                context,
+                signature
+            );
+
+        assertTrue(ok, "canonical SHRINCS verifier measurement must verify");
+        used = measured;
+    }
+    // Measure the external gas cost of the canonical wrapper for stateful verification, which includes
+    // with validActionContext(context)) and abi.encodePacked(statefulActionMessageHash(expectedPublicKeyCommitment, context));
+
+    function gasUsedForStatefulCanonicalExternal() internal returns (uint256 used) {
+        (ShrincsTypes.SigningKey memory signingKey, ShrincsTypes.PublicKey memory publicKey, bool keygenOk) =
+            ShrincsAccountSigningFacade.keygen(bytes("measurement canonical stateful seed"), 4);
+        assertTrue(keygenOk, "canonical stateful keygen must succeed");
+
+        ShrincsAccountVerifierExample account =
+            new ShrincsAccountVerifierExample(ShrincsAccountSigningFacade.publicKeyCommitmentWord(publicKey));
+
+        (
+            ,
+            ShrincsTypes.ActionContext memory context,
+            ShrincsTypes.StatefulSignature memory signature,
+            bool signOk
+        ) = ShrincsAccountSigningFacade.signStatefulActionNow(account, signingKey, ACTION_TYPE, PAYLOAD_HASH);
+        assertTrue(signOk, "canonical stateful signing must succeed");
+
+        uint256 beforeGas = gasleft();
+        bool ok =
+            statefulCanonicalVerifier.verifyStateful(
+                ShrincsAccountSigningFacade.publicKeyCommitmentWord(publicKey),
+                publicKey,
+                context,
+                signature
+            );
+        used = beforeGas - gasleft();
+        assertTrue(ok, "canonical SHRINCS verifier measurement must verify");
+        
+    }
+
+    // Measure the gas cost of a noop account call-shape for account.verifyStatefulAction
+    function gasUsedForStatefulNoopAccountCallShape() internal returns (uint256 used) {
+        (ShrincsTypes.SigningKey memory signingKey, ShrincsTypes.PublicKey memory publicKey, bool keygenOk) =
+            ShrincsAccountSigningFacade.keygen(bytes("measurement canonical stateful seed"), 4);
+        assertTrue(keygenOk, "canonical stateful keygen must succeed");
+
+        ShrincsAccountVerifierExample account =
+            new ShrincsAccountVerifierExample(ShrincsAccountSigningFacade.publicKeyCommitmentWord(publicKey));
+
+        (
+            ,
+            ,
+            ShrincsTypes.StatefulSignature memory signature,
+            bool signOk
+        ) = ShrincsAccountSigningFacade.signStatefulActionNow(account, signingKey, ACTION_TYPE, PAYLOAD_HASH);
+        assertTrue(signOk, "canonical stateful signing must succeed");
+
+        uint256 beforeGas = gasleft();
+        bool ok = noopAccountCallShape.acceptStatefulActionShape(publicKey, ACTION_TYPE, PAYLOAD_HASH, signature);
+        used = beforeGas - gasleft();
+        assertTrue(ok, "noop account call-shape measurement must succeed");
+    }
+
+    // Measure the gas cost of a noop canonical call-shape for SHRINCS.verifyStateful, which includes
+    // with validActionContext(context)) and abi.encodePacked(statefulActionMessageHash(expectedPublicKey
+    function gasUsedForStatefulNoopCanonicalCallShape() internal returns (uint256 used) {
+        (ShrincsTypes.SigningKey memory signingKey, ShrincsTypes.PublicKey memory publicKey, bool keygenOk) =
+            ShrincsAccountSigningFacade.keygen(bytes("measurement canonical stateful seed"), 4);
+        assertTrue(keygenOk, "canonical stateful keygen must succeed");
+
+        ShrincsAccountVerifierExample account =
+            new ShrincsAccountVerifierExample(ShrincsAccountSigningFacade.publicKeyCommitmentWord(publicKey));
+
+        (
+            ,
+            ShrincsTypes.ActionContext memory context,
+            ShrincsTypes.StatefulSignature memory signature,
+            bool signOk
+        ) = ShrincsAccountSigningFacade.signStatefulActionNow(account, signingKey, ACTION_TYPE, PAYLOAD_HASH);
+        assertTrue(signOk, "canonical stateful signing must succeed");
+
+        uint256 beforeGas = gasleft();
+        bool ok = noopCanonicalCallShape.acceptStatefulCanonicalShape(
+            ShrincsAccountSigningFacade.publicKeyCommitmentWord(publicKey), publicKey, context, signature
+        );
+        used = beforeGas - gasleft();
+        assertTrue(ok, "noop canonical call-shape measurement must succeed");
     }
 
     function gasUsedForStatefulCanonicalWrapper() internal returns (uint256 used) {
