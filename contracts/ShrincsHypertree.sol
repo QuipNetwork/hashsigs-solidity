@@ -162,7 +162,7 @@ library ShrincsHypertree {
         }
 
         // Recompute the digest whose base-w digits determine chain stopping points.
-        bytes memory digest = wotsDigest32(pkSeed, expectedPkHash, randomizer, signature.counter, message);
+        bytes32 digest = wotsDigest32(pkSeed, expectedPkHash, randomizer, signature.counter, message);
         // "wots-c-pk" || pkSeed || segment_0 || ... || segment_{len-1}
         uint256 pkInputLen = 41 + chainCount * 32;
         uint256 pkInput;
@@ -190,7 +190,7 @@ library ShrincsHypertree {
             bytes calldata chain = signature.chains[i];
             if (chain.length != 32) return false;
             // Read the digest-selected base-w digit for this chain.
-            uint32 digit = ShrincsUtils.baseWDigit(ShrincsTypes.WOTS_CHAIN_LEN, digest, i);
+            uint32 digit = baseW16Digit32(digest, i);
             // Accumulate the fixed WOTS-C target-sum check.
             digitSum += digit;
             // casting to 'uint32' is safe because i ranges over the fixed 64 WOTS chains
@@ -226,9 +226,8 @@ library ShrincsHypertree {
     function wotsDigest32(bytes32 pkSeed, bytes32 expectedPkHash, bytes32 randomizer, uint32 counter, bytes32 message)
         internal
         pure
-        returns (bytes memory out)
+        returns (bytes32 out)
     {
-        out = new bytes(32);
         assembly {
             // Allocate a scratch buffer starting at the free-memory pointer.
             let ptr := mload(0x40)
@@ -245,12 +244,16 @@ library ShrincsHypertree {
             // Write the 32-byte message after the counter.
             mstore(add(ptr, 110), message)
             // Hash the full WOTS-C message preimage.
-            let digestWord := keccak256(ptr, 142)
-            // Store the digest into the output bytes payload.
-            mstore(add(out, 32), digestWord)
+            out := keccak256(ptr, 142)
             // Bump the free-memory pointer to the next 32-byte aligned slot.
             mstore(0x40, add(ptr, 160))
         }
+    }
+
+    // baseW16Digit32: Read one base-16 digit from a fixed 32-byte WOTS digest.
+    function baseW16Digit32(bytes32 digest, uint256 index) internal pure returns (uint32) {
+        uint256 shift = 252 - ((index & 63) << 2);
+        return uint32((uint256(digest) >> shift) & 0x0f);
     }
 
     // wotsChain32NoMaskBase: Advance one stateless WOTS-C chain from the revealed value to its endpoint.
