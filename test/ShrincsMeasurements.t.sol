@@ -17,999 +17,173 @@
 pragma solidity ^0.8.28;
 
 import {Test} from "../lib/forge-std/src/Test.sol";
+import {Vm} from "../lib/forge-std/src/Vm.sol";
 import {SHRINCS} from "../contracts/SHRINCS.sol";
 import {ShrincsTypes} from "../contracts/ShrincsTypes.sol";
 import {ShrincsAccountVerifierExample} from "../contracts/examples/ShrincsAccountVerifierExample.sol";
 import {ShrincsAccountSigningFacade} from "./helpers/ShrincsAccountSigningFacade.sol";
 import {ShrincsStatelessVectorSigner} from "./helpers/ShrincsStatelessVectorSigner.sol";
-import {ShrincsTestSigner} from "./helpers/ShrincsTestSigner.sol";
-
-//measure no-op with packed signature rather than nested struct
-contract MeasurementNoopPackedStatelessCallShape {
-
-    function acceptStatelessPackedWithAccountArgs(
-        ShrincsTypes.PublicKey calldata publicKey,
-        bytes32 actionType,
-        bytes32 payloadHash,
-        bytes calldata signature
-    ) external pure returns (bool) {
-        publicKey;
-        actionType;
-        payloadHash;
-        signature;
-        return true;
-    }
-}
-
-// Measure gas cost of verifystateful which validates action context and
-// does abi.encodepacked() on statefulactionmessagehash and then calls verifyStatefulUncheckedMessage
-contract MeasurementStatefulCanonicalHarness {
-    function verifyStateful(
-        bytes32 expectedPublicKeyCommitment,
-        ShrincsTypes.PublicKey calldata publicKey,
-        ShrincsTypes.ActionContext calldata context,
-        ShrincsTypes.StatefulSignature calldata signature
-    ) external pure returns (bool) {
-        return SHRINCS.verifyStateful(
-            expectedPublicKeyCommitment,
-            publicKey,
-            context,
-            signature
-        );
-    }
-
-    function measureVerifyStateful(
-        bytes32 expectedPublicKeyCommitment,
-        ShrincsTypes.PublicKey calldata publicKey,
-        ShrincsTypes.ActionContext calldata context,
-        ShrincsTypes.StatefulSignature calldata signature
-    ) external view returns (bool ok, uint256 gasUsed) {
-        uint256 beforeGas = gasleft();
-
-        ok = SHRINCS.verifyStateful(
-            expectedPublicKeyCommitment,
-            publicKey,
-            context,
-            signature
-        );
-
-        gasUsed = beforeGas - gasleft();
-    }
-}
-
-// Measure gas cost of SHRINCS.verifystateless which validates action context and
-// does abi.encodepacked() on statefulactionmessagehash and then calls verifyStatefulUncheckedMessage
-
-contract MeasurementStatelessCanonicalHarness {
-    function measureVerifyStateless(
-        bytes32 expectedPublicKeyCommitment,
-        ShrincsTypes.PublicKey calldata publicKey,
-        ShrincsTypes.ActionContext calldata context,
-        ShrincsTypes.StatelessSignature calldata signature
-    ) external view returns (bool ok, uint256 gasUsed) {
-        uint256 beforeGas = gasleft();
-        ok = SHRINCS.verifyStateless(expectedPublicKeyCommitment, publicKey, context, signature);
-        gasUsed = beforeGas - gasleft();
-    }
-
-    function verifyStateless(
-        bytes32 expectedPublicKeyCommitment,
-        ShrincsTypes.PublicKey calldata publicKey,
-        ShrincsTypes.ActionContext calldata context,
-        ShrincsTypes.StatelessSignature calldata signature
-    ) external pure returns (bool) {
-        return SHRINCS.verifyStateless(expectedPublicKeyCommitment, publicKey, context, signature);
-    }
-}
-
-contract MeasurementNoopAccountCallShape {
-    function acceptStatefulActionShape(
-        ShrincsTypes.PublicKey calldata publicKey,
-        bytes32 actionType,
-        bytes32 payloadHash,
-        ShrincsTypes.StatefulSignature calldata signature
-    ) external pure returns (bool) {
-        publicKey;
-        actionType;
-        payloadHash;
-        signature;
-        return true;
-    }
-    function acceptStatelessActionShape(
-        ShrincsTypes.PublicKey calldata publicKey,
-        bytes32 actionType,
-        bytes32 payloadHash,
-        ShrincsTypes.StatelessSignature calldata signature
-    ) external pure returns (bool) {
-        publicKey;
-        actionType;
-        payloadHash;
-        signature;
-        return true;
-    }
-}
-
-contract MeasurementNoopCanonicalCallShape {
-    function acceptStatefulCanonicalShape(
-        bytes32 expectedPublicKeyCommitment,
-        ShrincsTypes.PublicKey calldata publicKey,
-        ShrincsTypes.ActionContext calldata context,
-        ShrincsTypes.StatefulSignature calldata signature
-    ) external pure returns (bool) {
-        expectedPublicKeyCommitment;
-        publicKey;
-        context;
-        signature;
-        return true;
-    }
-    function acceptStatelessCanonicalShape(
-        bytes32 expectedPublicKeyCommitment,
-        ShrincsTypes.PublicKey calldata publicKey,
-        ShrincsTypes.ActionContext calldata context,
-        ShrincsTypes.StatelessSignature calldata signature
-    ) external pure returns (bool) {
-        expectedPublicKeyCommitment;
-        publicKey;
-        context;
-        signature;
-        return true;
-    }
-}
-
-contract MeasurementStatefulVerifierHarness {
-    function verifyUnsafeRaw(
-        bytes32 expectedPublicKeyCommitment,
-        ShrincsTypes.PublicKey calldata publicKey,
-        bytes calldata message,
-        ShrincsTypes.StatefulSignature calldata signature
-    ) external pure returns (bool) {
-        return SHRINCS.verifyStatefulUncheckedMessage(expectedPublicKeyCommitment, publicKey, message, signature);
-    }
-
-    function measureVerifyUnsafeRaw(
-        bytes32 expectedPublicKeyCommitment,
-        ShrincsTypes.PublicKey calldata publicKey,
-        bytes calldata message,
-        ShrincsTypes.StatefulSignature calldata signature
-    ) external view returns (bool ok, uint256 gasUsed) {
-        uint256 beforeGas = gasleft();
-        ok = SHRINCS.verifyStatefulUncheckedMessage(expectedPublicKeyCommitment, publicKey, message, signature);
-        gasUsed = beforeGas - gasleft();
-    }
-}
-
-contract MeasurementStatelessVerifierHarness {
-    function verifyUnsafeRaw(
-        bytes32 expectedPublicKeyCommitment,
-        ShrincsTypes.PublicKey calldata publicKey,
-        bytes calldata message,
-        ShrincsTypes.StatelessSignature calldata signature
-    ) external pure returns (bool) {
-        return SHRINCS.verifyStatelessUncheckedMessage(expectedPublicKeyCommitment, publicKey, message, signature);
-    }
-
-    function measureVerifyUnsafeRaw(
-        bytes32 expectedPublicKeyCommitment,
-        ShrincsTypes.PublicKey calldata publicKey,
-        bytes calldata message,
-        ShrincsTypes.StatelessSignature calldata signature
-    ) external view returns (bool ok, uint256 gasUsed) {
-        uint256 beforeGas = gasleft();
-        ok = SHRINCS.verifyStatelessUncheckedMessage(expectedPublicKeyCommitment, publicKey, message, signature);
-        gasUsed = beforeGas - gasleft();
-    }
-}
 
 contract MeasurementAccountSigningHarness is ShrincsStatelessVectorSigner {}
 
 contract ShrincsMeasurementsTest is Test {
-    string internal constant VECTOR_PATH = "test/test_vectors/shrincs_sphincs_256s_keccak.json";
+    bytes4 internal constant ERC1271_MAGIC_VALUE = 0x1626ba7e;
     bytes32 internal constant ACTION_TYPE = keccak256("measure");
     bytes32 internal constant PAYLOAD_HASH = keccak256("measurement payload");
 
-    struct LegacyPublicKey {
-        bytes statefulPublicKey;
-        bytes pkSeed;
-        bytes hypertreeRoot;
+    struct StatefulCase {
+        ShrincsTypes.PublicKey publicKey;
+        ShrincsTypes.ActionContext context;
+        ShrincsTypes.StatefulSignature signature;
+        ShrincsAccountVerifierExample account;
+        bytes message;
+        bytes32 hash;
+        bytes envelope;
     }
 
-    struct LegacyForsEntry {
-        bytes secretLeaf;
-        bytes[] authPath;
+    struct StatelessCase {
+        ShrincsTypes.PublicKey publicKey;
+        ShrincsTypes.ActionContext context;
+        ShrincsTypes.StatelessSignature signature;
+        ShrincsAccountVerifierExample account;
+        bytes message;
+        bytes32 hash;
+        bytes envelope;
     }
 
-    struct LegacyForsSignature {
-        bytes randomizer;
-        uint32 counter;
-        LegacyForsEntry[] entries;
-    }
-
-    struct LegacyWotsCSignature {
-        bytes randomizer;
-        uint32 counter;
-        bytes[] chains;
-    }
-
-    struct LegacyHypertreeLayerSignature {
-        uint64 treeIndex;
-        uint32 leafIndex;
-        bytes wotsCPkHash;
-        LegacyWotsCSignature wotsCSignature;
-        bytes[] authPath;
-    }
-
-    struct LegacyStatelessSignature {
-        LegacyForsSignature fors;
-        LegacyHypertreeLayerSignature[] hypertree;
-    }
-
-    MeasurementStatefulVerifierHarness internal statefulVerifier;
-    MeasurementStatelessVerifierHarness internal statelessVerifier;
     MeasurementAccountSigningHarness internal accountSigner;
-    MeasurementStatefulCanonicalHarness internal statefulCanonicalVerifier;
-    MeasurementNoopAccountCallShape internal noopAccountCallShape;
-    MeasurementNoopCanonicalCallShape internal noopCanonicalCallShape;
-    //added for measuring canonical SHRINCS verifyStateless
-    MeasurementStatelessCanonicalHarness internal statelessCanonicalVerifier;
-    //added for measuring no-op cost for replacing nested struct with flatten byte
-    MeasurementNoopPackedStatelessCallShape internal noopPackedStatelessCallShape;
-    string internal vectors;
 
     function setUp() public {
-        statefulVerifier = new MeasurementStatefulVerifierHarness();
-        statelessVerifier = new MeasurementStatelessVerifierHarness();
+        vm.pauseGasMetering();
         accountSigner = new MeasurementAccountSigningHarness();
-        statefulCanonicalVerifier = new MeasurementStatefulCanonicalHarness();
-        noopAccountCallShape = new MeasurementNoopAccountCallShape();
-        noopCanonicalCallShape = new MeasurementNoopCanonicalCallShape();
-        statelessCanonicalVerifier = new MeasurementStatelessCanonicalHarness();
-        //added to replace nested struct with flatten byte for measuring no-op cost
-        noopPackedStatelessCallShape = new MeasurementNoopPackedStatelessCallShape();
-        vectors = vm.readFile(VECTOR_PATH);
+        vm.resumeGasMetering();
     }
 
-    function testMeasureCurrentShrincsStateful() public {
-        (
-            ShrincsTypes.SigningKey memory statefulSigningKey,
-            ShrincsTypes.PublicKey memory statefulPublicKey,
-            bool statefulKeygenOk
-        ) = ShrincsTestSigner.keygen(bytes("measurement stateful seed"), 4);
-        assertTrue(statefulKeygenOk, "stateful keygen must succeed");
+    function testMeasureStatefulCanonicalWrapperCallGas() public {
+        vm.pauseGasMetering();
+        StatefulCase memory c = prepareStatefulCase(bytes("measure stateful wrapper seed"));
+        bytes memory callData =
+            abi.encodeCall(c.account.verifyStatefulAction, (c.publicKey, ACTION_TYPE, PAYLOAD_HASH, c.signature));
+        vm.resumeGasMetering();
 
-        bytes memory statefulMessage = abi.encodePacked(keccak256("measurement stateful message"));
-        (
-            ,
-            ShrincsTypes.StatefulSignature memory statefulSignature,
-            bool statefulSignOk
-        ) = ShrincsTestSigner.signStatefulRaw(statefulSigningKey, statefulMessage);
-        assertTrue(statefulSignOk, "stateful signing must succeed");
+        (bool success, bytes memory returnData) = address(c.account).call(callData);
+        Vm.Gas memory gas = vm.lastCallGas();
 
-        uint256 statefulSignerHashes =
-            countStatefulSigningHashes(statefulSignature, statefulSigningKey.maxStatefulSignatures);
-        uint256 statefulSignatureSize = rawStatefulSignatureSize(statefulSignature);
-        uint256 statefulVerifierBodyGas =
-            gasUsedForStatefulVerifyBody(statefulPublicKey, statefulMessage, statefulSignature);
-        uint256 statefulFullExternalCallGas =
-            gasUsedForStatefulVerifyExternal(statefulPublicKey, statefulMessage, statefulSignature);
-        uint256 statefulCanonicalWrapperGas = gasUsedForStatefulCanonicalWrapper();
-        //add canonical library gas measurement for measuring verifystateful
-        // uint256 statefulCanonicalLibraryGas = gasUsedForStatefulCanonicalLibrary();
-
-        emit log_named_uint("stateful.signer_hashes_excluding_keygen", statefulSignerHashes);
-        emit log_named_uint("stateful.signature_size_bytes", statefulSignatureSize);
-        emit log_named_uint("stateful.verifier_body_gas", statefulVerifierBodyGas);
-        emit log_named_uint("stateful.full_external_call_gas", statefulFullExternalCallGas);
-        emit log_named_uint("stateful.canonical_wrapper_gas", statefulCanonicalWrapperGas);
-        //add canonical library gas measurement for measuring verifystateful
-        // emit log_named_uint("stateful.canonical_library_gas", statefulCanonicalLibraryGas);
+        vm.pauseGasMetering();
+        assertTrue(success, "stateful wrapper call must not revert");
+        assertTrue(abi.decode(returnData, (bool)), "stateful wrapper call must verify");
+        emit log_named_uint("stateful.canonical_wrapper_call_gas", gas.gasTotalUsed);
     }
 
-    //add as a separate test to measure no-op cost of flattening the nested struct into a single bytes calldata for stateless signature
-    function gasUsedForStatelessNoopPackedAccountCallShape() internal returns (uint256 used) {
-        (ShrincsTypes.SigningKey memory signingKey, ShrincsTypes.PublicKey memory publicKey, bool keygenOk) =
-            ShrincsAccountSigningFacade.keygen(bytes("measurement canonical stateless seed"), 4);
-        assertTrue(keygenOk, "canonical stateless keygen must succeed");
+    function testMeasureStatefulERC1271CallGas() public {
+        vm.pauseGasMetering();
+        StatefulCase memory c = prepareStatefulCase(bytes("measure stateful 1271 seed"));
+        bytes memory callData = abi.encodeCall(c.account.isValidSignature, (c.hash, c.envelope));
+        vm.resumeGasMetering();
 
-        ShrincsAccountVerifierExample account =
-            new ShrincsAccountVerifierExample(ShrincsAccountSigningFacade.publicKeyCommitmentWord(publicKey));
+        (bool success, bytes memory returnData) = address(c.account).call(callData);
+        Vm.Gas memory gas = vm.lastCallGas();
 
-        (, bytes32 sessionId, bool beginOk) = ShrincsAccountSigningFacade.beginStatelessActionSessionNow(
+        vm.pauseGasMetering();
+        assertTrue(success, "stateful 1271 call must not revert");
+        assertEq(abi.decode(returnData, (bytes4)), ERC1271_MAGIC_VALUE, "stateful 1271 must verify");
+        emit log_named_uint("stateful.erc1271_call_gas", gas.gasTotalUsed);
+    }
+
+    function testMeasureStatelessCanonicalWrapperCallGas() public {
+        vm.pauseGasMetering();
+        StatelessCase memory c = prepareStatelessCase(bytes("measure stateless wrapper seed"));
+        bytes memory callData =
+            abi.encodeCall(c.account.verifyStatelessAction, (c.publicKey, ACTION_TYPE, PAYLOAD_HASH, c.signature));
+        vm.resumeGasMetering();
+
+        (bool success, bytes memory returnData) = address(c.account).call(callData);
+        Vm.Gas memory gas = vm.lastCallGas();
+
+        vm.pauseGasMetering();
+        assertTrue(success, "stateless wrapper call must not revert");
+        assertTrue(abi.decode(returnData, (bool)), "stateless wrapper call must verify");
+        emit log_named_uint("stateless.canonical_wrapper_call_gas", gas.gasTotalUsed);
+    }
+
+    function testMeasureStatelessERC1271CallGas() public {
+        vm.pauseGasMetering();
+        StatelessCase memory c = prepareStatelessCase(bytes("measure stateless 1271 seed"));
+        bytes memory callData = abi.encodeCall(c.account.isValidSignature, (c.hash, c.envelope));
+        vm.resumeGasMetering();
+
+        (bool success, bytes memory returnData) = address(c.account).call(callData);
+        Vm.Gas memory gas = vm.lastCallGas();
+
+        vm.pauseGasMetering();
+        assertTrue(success, "stateless 1271 call must not revert");
+        assertEq(abi.decode(returnData, (bytes4)), ERC1271_MAGIC_VALUE, "stateless 1271 must verify");
+        emit log_named_uint("stateless.erc1271_call_gas", gas.gasTotalUsed);
+    }
+
+    function prepareStatefulCase(bytes memory seedMaterial) internal returns (StatefulCase memory c) {
+        (ShrincsTypes.SigningKey memory signingKey, ShrincsTypes.PublicKey memory publicKey, bool ok) =
+            ShrincsAccountSigningFacade.keygen(seedMaterial, 4);
+        assertTrue(ok, "stateful keygen must succeed");
+
+        ShrincsAccountVerifierExample account = new ShrincsAccountVerifierExample(publicKeyCommitmentWord(publicKey));
+        ShrincsTypes.StatefulSignature memory signature;
+        (, , signature, ok) =
+            ShrincsAccountSigningFacade.signStatefulActionNow(account, signingKey, ACTION_TYPE, PAYLOAD_HASH);
+        assertTrue(ok, "stateful signing must succeed");
+
+        ShrincsTypes.ActionContext memory context =
+            ShrincsAccountSigningFacade.actionContext(account, ACTION_TYPE, PAYLOAD_HASH);
+        bytes32 hash = SHRINCS.statefulActionMessageHash(account.currentShrincsPublicKey(), context);
+        bytes memory message = abi.encodePacked(hash);
+
+        c.publicKey = publicKey;
+        c.context = context;
+        c.signature = signature;
+        c.account = account;
+        c.message = message;
+        c.hash = hash;
+        c.envelope = ShrincsAccountSigningFacade.encodeStateful1271Envelope(
+            publicKey, ACTION_TYPE, PAYLOAD_HASH, signature
+        );
+    }
+
+    function prepareStatelessCase(bytes memory seedMaterial) internal returns (StatelessCase memory c) {
+        (ShrincsTypes.SigningKey memory signingKey, ShrincsTypes.PublicKey memory publicKey, bool ok) =
+            ShrincsAccountSigningFacade.keygen(seedMaterial, 4);
+        assertTrue(ok, "stateless keygen must succeed");
+
+        ShrincsAccountVerifierExample account = new ShrincsAccountVerifierExample(publicKeyCommitmentWord(publicKey));
+        bytes32 sessionId;
+        (, sessionId, ok) = ShrincsAccountSigningFacade.beginStatelessActionSessionNow(
             accountSigner, account, signingKey, publicKey, ACTION_TYPE, PAYLOAD_HASH
         );
-        assertTrue(beginOk, "canonical stateless signing must begin");
+        assertTrue(ok, "stateless session must begin");
 
         (ShrincsTypes.StatelessSignature memory signature, bool completeOk) =
             ShrincsAccountSigningFacade.completeStatelessSession(accountSigner, sessionId);
-        assertTrue(completeOk, "canonical stateless signing must complete");
+        assertTrue(completeOk, "stateless signing must complete");
 
-        // bytes memory packedSignature = abi.encode(signature);
-        bytes memory packedSignature = new bytes(rawStatelessSignatureSize(signature));
-        uint256 beforeGas = gasleft();
-        bool ok = noopPackedStatelessCallShape.acceptStatelessPackedWithAccountArgs(
-            publicKey,
-            ACTION_TYPE,
-            PAYLOAD_HASH,
-            packedSignature
+        ShrincsTypes.ActionContext memory context =
+            ShrincsAccountSigningFacade.actionContext(account, ACTION_TYPE, PAYLOAD_HASH);
+        bytes32 hash = SHRINCS.statelessActionMessageHash(account.currentShrincsPublicKey(), context);
+        bytes memory message = abi.encodePacked(hash);
+
+        c.publicKey = publicKey;
+        c.context = context;
+        c.signature = signature;
+        c.account = account;
+        c.message = message;
+        c.hash = hash;
+        c.envelope = ShrincsAccountSigningFacade.encodeStateless1271Envelope(
+            publicKey, ACTION_TYPE, PAYLOAD_HASH, signature
         );
-        used = beforeGas - gasleft();
-
-        assertTrue(ok, "noop packed stateless account call-shape measurement must succeed");
-    }
-    
-    //add as a separate test to measure no-op cost of flattening the nested struct into a single bytes calldata for stateless signature
-    function testMeasureStatelessNoopPackedAccountCallShape() public {
-        uint256 gasUsed = gasUsedForStatelessNoopPackedAccountCallShape();
-        emit log_named_uint("stateless.noop_packed_account_args_gas", gasUsed);
-    }
-    //add as a separate test to measure the external gas cost of verifystateless, which validates action context and
-    // does abi.encodepacked() on statelessactionmessagehash and then calls verifyStateless
-    function testMeasureStatefulCanonicalExternal() public {
-        uint256 statefulCanonicalExternalGas = gasUsedForStatefulCanonicalExternal();
-        emit log_named_uint("stateful.canonical_external_gas", statefulCanonicalExternalGas);
-    }
-    //add as a separate test to measure the gas cost of verifystateless, which validates action context and
-    // does abi.encodepacked() on statelessactionmessagehash and then calls verifyStateless
-    function testMeasureStatefulCanonicalLibrary() public {
-        uint256 statefulCanonicalLibraryGas = gasUsedForStatefulCanonicalLibrary();
-        emit log_named_uint("stateful.canonical_library_gas", statefulCanonicalLibraryGas);
-    }
-    //add as a separate test to measure the gas cost of a noop account call-shape for account.verifyStatefulAction
-    function testMeasureStatefulNoopAccountCallShape() public {
-        uint256 statefulNoopAccountCallShapeGas = gasUsedForStatefulNoopAccountCallShape();
-        emit log_named_uint("stateful.noop_same_args_gas", statefulNoopAccountCallShapeGas);
-    }
-
-    //add as a separate test to measure the gas cost of a noop canonical call-shape for SHRINCS.verifyStateful
-    function testMeasureStatefulNoopCanonicalCallShape() public {
-        uint256 statefulNoopCanonicalCallShapeGas = gasUsedForStatefulNoopCanonicalCallShape();
-        emit log_named_uint("stateful.noop_canonical_args_gas", statefulNoopCanonicalCallShapeGas);
-    }
-
-    //add as a separate test to measure the gas cost of a noop account call-shape for account.verifyStatelessAction
-    function testMeasureStatelessNoopAccountCallShape() public {
-        uint256 statelessNoopAccountCallShapeGas = gasUsedForStatelessNoopAccountCallShape();
-        emit log_named_uint("stateless.noop_same_args_gas", statelessNoopAccountCallShapeGas);
-    }
-
-    //add as a separate test to measure the gas cost of a noop canonical call-shape for SHRINCS.verifyStateless
-    function testMeasureStatelessNoopCanonicalCallShape() public {
-        uint256 statelessNoopCanonicalCallShapeGas = gasUsedForStatelessNoopCanonicalCallShape();
-        emit log_named_uint("stateless.noop_canonical_args_gas", statelessNoopCanonicalCallShapeGas);
-    }
-    //add as a separate test to measure the gas cost of SHRINCS.verifystateless
-    function testMeasureStatelessCanonicalLibrary() public {
-        uint256 statelessCanonicalLibraryGas = gasUsedForStatelessCanonicalLibrary();
-        emit log_named_uint("stateless.canonical_library_gas", statelessCanonicalLibraryGas);
-    }
-
-    //add as a separate test to measure the external gas cost of SHRINCS.verifystateless
-    function testMeasureStatelessCanonicalExternal() public {
-        uint256 statelessCanonicalExternalGas = gasUsedForStatelessCanonicalExternal();
-        emit log_named_uint("stateless.canonical_external_gas", statelessCanonicalExternalGas);
-    }
-
-    //add as a separate test to measure gasUsed for SHRINCS.verifyStateless internally
-    function gasUsedForStatelessCanonicalLibrary() internal returns (uint256 used) {
-        (ShrincsTypes.SigningKey memory signingKey, ShrincsTypes.PublicKey memory publicKey, bool keygenOk) =
-            ShrincsAccountSigningFacade.keygen(bytes("measurement canonical stateless seed"), 4);
-        assertTrue(keygenOk, "canonical stateless keygen must succeed");
-
-        ShrincsAccountVerifierExample account =
-            new ShrincsAccountVerifierExample(ShrincsAccountSigningFacade.publicKeyCommitmentWord(publicKey));
-
-        (
-            ShrincsTypes.ActionContext memory context,
-            bytes32 sessionId,
-            bool beginOk
-        ) = ShrincsAccountSigningFacade.beginStatelessActionSessionNow(
-            accountSigner,
-            account,
-            signingKey,
-            publicKey,
-            ACTION_TYPE,
-            PAYLOAD_HASH
-        );
-        assertTrue(beginOk, "canonical stateless signing must begin");
-
-        (ShrincsTypes.StatelessSignature memory signature, bool completeOk) =
-            ShrincsAccountSigningFacade.completeStatelessSession(accountSigner, sessionId);
-        assertTrue(completeOk, "canonical stateless signing must complete");
-
-        (bool ok, uint256 measured) =
-            statelessCanonicalVerifier.measureVerifyStateless(
-                ShrincsAccountSigningFacade.publicKeyCommitmentWord(publicKey),
-                publicKey,
-                context,
-                signature
-            );
-
-        assertTrue(ok, "canonical stateless SHRINCS verifier measurement must verify");
-        used = measured;
-    }
-    //add as a separate test to measure the external gas cost of SHRINCS.verifyStateless
-    function gasUsedForStatelessCanonicalExternal() internal returns (uint256 used) {
-        (ShrincsTypes.SigningKey memory signingKey, ShrincsTypes.PublicKey memory publicKey, bool keygenOk) =
-            ShrincsAccountSigningFacade.keygen(bytes("measurement canonical stateless seed"), 4);
-        assertTrue(keygenOk, "canonical stateless keygen must succeed");
-
-        ShrincsAccountVerifierExample account =
-            new ShrincsAccountVerifierExample(ShrincsAccountSigningFacade.publicKeyCommitmentWord(publicKey));
-
-        (
-            ShrincsTypes.ActionContext memory context,
-            bytes32 sessionId,
-            bool beginOk
-        ) = ShrincsAccountSigningFacade.beginStatelessActionSessionNow(
-            accountSigner,
-            account,
-            signingKey,
-            publicKey,
-            ACTION_TYPE,
-            PAYLOAD_HASH
-        );
-        assertTrue(beginOk, "canonical stateless signing must begin");
-
-        (ShrincsTypes.StatelessSignature memory signature, bool completeOk) =
-            ShrincsAccountSigningFacade.completeStatelessSession(accountSigner, sessionId);
-        assertTrue(completeOk, "canonical stateless signing must complete");
-
-        uint256 beforeGas = gasleft();
-        bool ok = statelessCanonicalVerifier.verifyStateless(
-            ShrincsAccountSigningFacade.publicKeyCommitmentWord(publicKey),
-            publicKey,
-            context,
-            signature
-        );
-        used = beforeGas - gasleft();
-
-        assertTrue(ok, "canonical stateless SHRINCS verifier external measurement must verify");
-    }
-    
-
-    function testMeasureCurrentShrincsStateless() public {
-        (
-            ShrincsTypes.PublicKey memory statelessPublicKey,
-            bytes memory statelessMessage,
-            ShrincsTypes.StatelessSignature memory statelessSignature
-        ) = decodeStatelessVector(".stateless.cases.valid.calldata");
-
-        uint256 statelessSignerHashes = countStatelessSigningHashes(statelessSignature);
-        uint256 statelessSignatureSize = rawStatelessSignatureSize(statelessSignature);
-        uint256 statelessVerifierBodyGas =
-            gasUsedForStatelessVerifyBody(statelessPublicKey, statelessMessage, statelessSignature);
-        uint256 statelessFullExternalCallGas =
-            gasUsedForStatelessVerifyExternal(statelessPublicKey, statelessMessage, statelessSignature);
-        uint256 statelessCanonicalWrapperGas = gasUsedForStatelessCanonicalWrapper();
-
-        emit log_named_uint("stateless.signer_hashes_excluding_keygen", statelessSignerHashes);
-        emit log_named_uint("stateless.signature_size_bytes", statelessSignatureSize);
-        emit log_named_uint("stateless.verifier_body_gas", statelessVerifierBodyGas);
-        emit log_named_uint("stateless.full_external_call_gas", statelessFullExternalCallGas);
-        emit log_named_uint("stateless.canonical_wrapper_gas", statelessCanonicalWrapperGas);
-    }
-
-    
-
-    function gasUsedForStatefulVerifyBody(
-        ShrincsTypes.PublicKey memory publicKey,
-        bytes memory message,
-        ShrincsTypes.StatefulSignature memory signature
-    ) internal returns (uint256 used) {
-        bytes32 expectedPublicKeyCommitment = publicKeyCommitmentWord(publicKey);
-        (bool ok, uint256 measured) =
-            statefulVerifier.measureVerifyUnsafeRaw(expectedPublicKeyCommitment, publicKey, message, signature);
-        assertTrue(ok, "stateful verifier measurement input must verify");
-        used = measured;
-    }
-
-    function gasUsedForStatefulVerifyExternal(
-        ShrincsTypes.PublicKey memory publicKey,
-        bytes memory message,
-        ShrincsTypes.StatefulSignature memory signature
-    ) internal returns (uint256 used) {
-        bytes32 expectedPublicKeyCommitment = publicKeyCommitmentWord(publicKey);
-        uint256 beforeGas = gasleft();
-        bool ok = statefulVerifier.verifyUnsafeRaw(expectedPublicKeyCommitment, publicKey, message, signature);
-        used = beforeGas - gasleft();
-        assertTrue(ok, "stateful external verifier measurement input must verify");
-    }
-
-    function gasUsedForStatelessVerifyBody(
-        ShrincsTypes.PublicKey memory publicKey,
-        bytes memory message,
-        ShrincsTypes.StatelessSignature memory signature
-    ) internal returns (uint256 used) {
-        bytes32 expectedPublicKeyCommitment = publicKeyCommitmentWord(publicKey);
-        (bool ok, uint256 measured) =
-            statelessVerifier.measureVerifyUnsafeRaw(expectedPublicKeyCommitment, publicKey, message, signature);
-        assertTrue(ok, "stateless verifier measurement input must verify");
-        used = measured;
-    }
-
-    function gasUsedForStatelessVerifyExternal(
-        ShrincsTypes.PublicKey memory publicKey,
-        bytes memory message,
-        ShrincsTypes.StatelessSignature memory signature
-    ) internal returns (uint256 used) {
-        bytes32 expectedPublicKeyCommitment = publicKeyCommitmentWord(publicKey);
-        uint256 beforeGas = gasleft();
-        bool ok = statelessVerifier.verifyUnsafeRaw(expectedPublicKeyCommitment, publicKey, message, signature);
-        used = beforeGas - gasleft();
-        assertTrue(ok, "stateless external verifier measurement input must verify");
-    }
-
-    // Measure the gas cost of the canonical wrapper for stateful verification, which includes
-    // with validActionContext(context)) and abi.encodePacked(statefulActionMessageHash(expectedPublicKeyCommitment, context));
-
-    function gasUsedForStatefulCanonicalLibrary() internal returns (uint256 used) {
-        (ShrincsTypes.SigningKey memory signingKey, ShrincsTypes.PublicKey memory publicKey, bool keygenOk) =
-            ShrincsAccountSigningFacade.keygen(bytes("measurement canonical stateful seed"), 4);
-        assertTrue(keygenOk, "canonical stateful keygen must succeed");
-
-        ShrincsAccountVerifierExample account =
-            new ShrincsAccountVerifierExample(ShrincsAccountSigningFacade.publicKeyCommitmentWord(publicKey));
-
-        (
-            ,
-            ShrincsTypes.ActionContext memory context,
-            ShrincsTypes.StatefulSignature memory signature,
-            bool signOk
-        ) = ShrincsAccountSigningFacade.signStatefulActionNow(account, signingKey, ACTION_TYPE, PAYLOAD_HASH);
-        assertTrue(signOk, "canonical stateful signing must succeed");
-
-        (bool ok, uint256 measured) =
-            statefulCanonicalVerifier.measureVerifyStateful(
-                ShrincsAccountSigningFacade.publicKeyCommitmentWord(publicKey),
-                publicKey,
-                context,
-                signature
-            );
-
-        assertTrue(ok, "canonical SHRINCS verifier measurement must verify");
-        used = measured;
-    }
-    // Measure the external gas cost of the canonical wrapper for stateful verification, which includes
-    // with validActionContext(context)) and abi.encodePacked(statefulActionMessageHash(expectedPublicKeyCommitment, context));
-
-    function gasUsedForStatefulCanonicalExternal() internal returns (uint256 used) {
-        (ShrincsTypes.SigningKey memory signingKey, ShrincsTypes.PublicKey memory publicKey, bool keygenOk) =
-            ShrincsAccountSigningFacade.keygen(bytes("measurement canonical stateful seed"), 4);
-        assertTrue(keygenOk, "canonical stateful keygen must succeed");
-
-        ShrincsAccountVerifierExample account =
-            new ShrincsAccountVerifierExample(ShrincsAccountSigningFacade.publicKeyCommitmentWord(publicKey));
-
-        (
-            ,
-            ShrincsTypes.ActionContext memory context,
-            ShrincsTypes.StatefulSignature memory signature,
-            bool signOk
-        ) = ShrincsAccountSigningFacade.signStatefulActionNow(account, signingKey, ACTION_TYPE, PAYLOAD_HASH);
-        assertTrue(signOk, "canonical stateful signing must succeed");
-
-        uint256 beforeGas = gasleft();
-        bool ok =
-            statefulCanonicalVerifier.verifyStateful(
-                ShrincsAccountSigningFacade.publicKeyCommitmentWord(publicKey),
-                publicKey,
-                context,
-                signature
-            );
-        used = beforeGas - gasleft();
-        assertTrue(ok, "canonical SHRINCS verifier measurement must verify");
-        
-    }
-
-    // Measure the gas cost of a noop account call-shape for account.verifyStatefulAction
-    function gasUsedForStatefulNoopAccountCallShape() internal returns (uint256 used) {
-        (ShrincsTypes.SigningKey memory signingKey, ShrincsTypes.PublicKey memory publicKey, bool keygenOk) =
-            ShrincsAccountSigningFacade.keygen(bytes("measurement canonical stateful seed"), 4);
-        assertTrue(keygenOk, "canonical stateful keygen must succeed");
-
-        ShrincsAccountVerifierExample account =
-            new ShrincsAccountVerifierExample(ShrincsAccountSigningFacade.publicKeyCommitmentWord(publicKey));
-
-        (
-            ,
-            ,
-            ShrincsTypes.StatefulSignature memory signature,
-            bool signOk
-        ) = ShrincsAccountSigningFacade.signStatefulActionNow(account, signingKey, ACTION_TYPE, PAYLOAD_HASH);
-        assertTrue(signOk, "canonical stateful signing must succeed");
-
-        uint256 beforeGas = gasleft();
-        bool ok = noopAccountCallShape.acceptStatefulActionShape(publicKey, ACTION_TYPE, PAYLOAD_HASH, signature);
-        used = beforeGas - gasleft();
-        assertTrue(ok, "noop account call-shape measurement must succeed");
-    }
-
-    // Measure the gas cost of a noop canonical call-shape for SHRINCS.verifyStateful, which includes
-    // with validActionContext(context)) and abi.encodePacked(statefulActionMessageHash(expectedPublicKey
-    function gasUsedForStatefulNoopCanonicalCallShape() internal returns (uint256 used) {
-        (ShrincsTypes.SigningKey memory signingKey, ShrincsTypes.PublicKey memory publicKey, bool keygenOk) =
-            ShrincsAccountSigningFacade.keygen(bytes("measurement canonical stateful seed"), 4);
-        assertTrue(keygenOk, "canonical stateful keygen must succeed");
-
-        ShrincsAccountVerifierExample account =
-            new ShrincsAccountVerifierExample(ShrincsAccountSigningFacade.publicKeyCommitmentWord(publicKey));
-
-        (
-            ,
-            ShrincsTypes.ActionContext memory context,
-            ShrincsTypes.StatefulSignature memory signature,
-            bool signOk
-        ) = ShrincsAccountSigningFacade.signStatefulActionNow(account, signingKey, ACTION_TYPE, PAYLOAD_HASH);
-        assertTrue(signOk, "canonical stateful signing must succeed");
-
-        uint256 beforeGas = gasleft();
-        bool ok = noopCanonicalCallShape.acceptStatefulCanonicalShape(
-            ShrincsAccountSigningFacade.publicKeyCommitmentWord(publicKey), publicKey, context, signature
-        );
-        used = beforeGas - gasleft();
-        assertTrue(ok, "noop canonical call-shape measurement must succeed");
-    }
-    // Measure the gas cost of a noop account call-shape for account.verifyStatelessAction
-
-    function gasUsedForStatelessNoopAccountCallShape() internal returns (uint256 used) {
-        (ShrincsTypes.SigningKey memory signingKey, ShrincsTypes.PublicKey memory publicKey, bool keygenOk) =
-            ShrincsAccountSigningFacade.keygen(bytes("measurement canonical stateless seed"), 4);
-        assertTrue(keygenOk, "canonical stateless keygen must succeed");
-
-        ShrincsAccountVerifierExample account =
-            new ShrincsAccountVerifierExample(ShrincsAccountSigningFacade.publicKeyCommitmentWord(publicKey));
-
-        (, bytes32 sessionId, bool beginOk) = ShrincsAccountSigningFacade.beginStatelessActionSessionNow(
-            accountSigner, account, signingKey, publicKey, ACTION_TYPE, PAYLOAD_HASH
-        );
-        assertTrue(beginOk, "canonical stateless signing must begin");
-
-        (ShrincsTypes.StatelessSignature memory signature, bool completeOk) =
-            ShrincsAccountSigningFacade.completeStatelessSession(accountSigner, sessionId);
-        assertTrue(completeOk, "canonical stateless signing must complete");
-
-        uint256 beforeGas = gasleft();
-        bool ok = noopAccountCallShape.acceptStatelessActionShape(publicKey, ACTION_TYPE, PAYLOAD_HASH, signature);
-        used = beforeGas - gasleft();
-
-        assertTrue(ok, "noop stateless account call-shape measurement must succeed");
-    }
-    // Measure the gas cost of a noop canonical call-shape for SHRINCS.verifyStateless, which includes
-    // with validActionContext(context)) and abi.encodePacked(statefulActionMessageHash(expectedPublicKey
-
-    function gasUsedForStatelessNoopCanonicalCallShape() internal returns (uint256 used) {
-        (ShrincsTypes.SigningKey memory signingKey, ShrincsTypes.PublicKey memory publicKey, bool keygenOk) =
-            ShrincsAccountSigningFacade.keygen(bytes("measurement canonical stateless seed"), 4);
-        assertTrue(keygenOk, "canonical stateless keygen must succeed");
-
-        ShrincsAccountVerifierExample account =
-            new ShrincsAccountVerifierExample(ShrincsAccountSigningFacade.publicKeyCommitmentWord(publicKey));
-
-        (
-            ShrincsTypes.ActionContext memory context,
-            bytes32 sessionId,
-            bool beginOk
-        ) = ShrincsAccountSigningFacade.beginStatelessActionSessionNow(
-            accountSigner,
-            account,
-            signingKey,
-            publicKey,
-            ACTION_TYPE,
-            PAYLOAD_HASH
-        );
-        assertTrue(beginOk, "canonical stateless signing must begin");
-
-        (ShrincsTypes.StatelessSignature memory signature, bool completeOk) =
-            ShrincsAccountSigningFacade.completeStatelessSession(accountSigner, sessionId);
-        assertTrue(completeOk, "canonical stateless signing must complete");
-
-        uint256 beforeGas = gasleft();
-        bool ok = noopCanonicalCallShape.acceptStatelessCanonicalShape(
-            ShrincsAccountSigningFacade.publicKeyCommitmentWord(publicKey),
-            publicKey,
-            context,
-            signature
-        );
-        used = beforeGas - gasleft();
-
-        assertTrue(ok, "noop stateless canonical call-shape measurement must succeed");
-    }
-    function gasUsedForStatefulCanonicalWrapper() internal returns (uint256 used) {
-        (ShrincsTypes.SigningKey memory signingKey, ShrincsTypes.PublicKey memory publicKey, bool keygenOk) =
-            ShrincsAccountSigningFacade.keygen(bytes("measurement canonical stateful seed"), 4);
-        assertTrue(keygenOk, "canonical stateful keygen must succeed");
-
-        ShrincsAccountVerifierExample account =
-            new ShrincsAccountVerifierExample(ShrincsAccountSigningFacade.publicKeyCommitmentWord(publicKey));
-
-        (
-            ,
-            ,
-            ShrincsTypes.StatefulSignature memory signature,
-            bool signOk
-        ) = ShrincsAccountSigningFacade.signStatefulActionNow(account, signingKey, ACTION_TYPE, PAYLOAD_HASH);
-        assertTrue(signOk, "canonical stateful signing must succeed");
-
-        uint256 beforeGas = gasleft();
-        bool ok = account.verifyStatefulAction(publicKey, ACTION_TYPE, PAYLOAD_HASH, signature);
-        uint256 measured = beforeGas - gasleft();
-        assertTrue(ok, "canonical stateful wrapper measurement must verify");
-        used = measured;
-    }
-
-    function gasUsedForStatelessCanonicalWrapper() internal returns (uint256 used) {
-        (ShrincsTypes.SigningKey memory signingKey, ShrincsTypes.PublicKey memory publicKey, bool keygenOk) =
-            ShrincsAccountSigningFacade.keygen(bytes("measurement canonical stateless seed"), 4);
-        assertTrue(keygenOk, "canonical stateless keygen must succeed");
-
-        ShrincsAccountVerifierExample account =
-            new ShrincsAccountVerifierExample(ShrincsAccountSigningFacade.publicKeyCommitmentWord(publicKey));
-
-        (, bytes32 sessionId, bool beginOk) = ShrincsAccountSigningFacade.beginStatelessActionSessionNow(
-            accountSigner, account, signingKey, publicKey, ACTION_TYPE, PAYLOAD_HASH
-        );
-        assertTrue(beginOk, "canonical stateless signing must begin");
-
-        (ShrincsTypes.StatelessSignature memory signature, bool completeOk) =
-            ShrincsAccountSigningFacade.completeStatelessSession(accountSigner, sessionId);
-        assertTrue(completeOk, "canonical stateless signing must complete");
-
-        uint256 beforeGas = gasleft();
-        bool ok = account.verifyStatelessAction(publicKey, ACTION_TYPE, PAYLOAD_HASH, signature);
-        uint256 measured = beforeGas - gasleft();
-        assertTrue(ok, "canonical stateless wrapper measurement must verify");
-        used = measured;
     }
 
     function publicKeyCommitmentWord(ShrincsTypes.PublicKey memory publicKey) internal pure returns (bytes32 out) {
         bytes memory commitmentBytes = publicKey.publicKeyCommitment;
         assembly {
             out := mload(add(commitmentBytes, 32))
-        }
-    }
-
-    function rawStatefulSignatureSize(ShrincsTypes.StatefulSignature memory signature)
-        internal
-        pure
-        returns (uint256 size)
-    {
-        size = 32 + 4;
-        size += 32 * signature.chains.length;
-        size += 32 * signature.authPath.length;
-    }
-
-    function rawStatelessSignatureSize(ShrincsTypes.StatelessSignature memory signature)
-        internal
-        pure
-        returns (uint256 size)
-    {
-        size += signature.fors.randomizer.length + 4;
-        for (uint256 i = 0; i < signature.fors.entries.length; ++i) {
-            size += signature.fors.entries[i].secretLeaf.length;
-            for (uint256 j = 0; j < signature.fors.entries[i].authPath.length; ++j) {
-                size += signature.fors.entries[i].authPath[j].length;
-            }
-        }
-
-        for (uint256 i = 0; i < signature.hypertree.length; ++i) {
-            size += 8 + 4;
-            size += signature.hypertree[i].wotsCPkHash.length;
-            size += signature.hypertree[i].wotsCSignature.randomizer.length + 4;
-            for (uint256 j = 0; j < signature.hypertree[i].wotsCSignature.chains.length; ++j) {
-                size += signature.hypertree[i].wotsCSignature.chains[j].length;
-            }
-            for (uint256 j = 0; j < signature.hypertree[i].authPath.length; ++j) {
-                size += signature.hypertree[i].authPath[j].length;
-            }
-        }
-    }
-
-    function countStatefulSigningHashes(ShrincsTypes.StatefulSignature memory signature, uint32 maxStatefulSignatures)
-        internal
-        pure
-        returns (uint256 count)
-    {
-        uint256 leafIndex = signature.authPath.length;
-        uint256 attempts = uint256(signature.counter) + 1;
-        count = 1; // stateful randomizer
-        count += attempts; // one digest per grind attempt
-        count += statefulWotsSigningHashes(); // successful WOTS-C chain revelation
-        count += statefulAuthPathHashes(uint32(leafIndex), maxStatefulSignatures);
-    }
-
-    function statefulWotsSigningHashes() internal pure returns (uint256 count) {
-        count = ShrincsTypes.WOTS_CHAINS_STATEFUL; // one chain secret per chain
-        count += ShrincsTypes.WOTS_TARGET_SUM_STATEFUL; // total revealed chain steps at success
-    }
-
-    function statefulAuthPathHashes(uint32 leafIndex, uint32 maxStatefulSignatures)
-        internal
-        pure
-        returns (uint256 count)
-    {
-        if (leafIndex < maxStatefulSignatures) {
-            count += statefulSubtreeRootHashes(leafIndex + 1, maxStatefulSignatures);
-        } else {
-            count += 1; // empty tail marker
-        }
-        count += uint256(leafIndex - 1) * statefulWotsPublicKeyHashes();
-    }
-
-    function statefulSubtreeRootHashes(uint32 leafIndex, uint32 maxStatefulSignatures)
-        internal
-        pure
-        returns (uint256 count)
-    {
-        count = 1; // statefulEmptyTail
-        uint256 liveLeaves = uint256(maxStatefulSignatures) - uint256(leafIndex) + 1;
-        count += liveLeaves * (statefulWotsPublicKeyHashes() + 1); // WOTS pk hash + parent hash per leaf
-    }
-
-    function statefulWotsPublicKeyHashes() internal pure returns (uint256 count) {
-        count = uint256(ShrincsTypes.WOTS_CHAINS_STATEFUL) * uint256(ShrincsTypes.WOTS_BASE_STATEFUL);
-        count += 1; // final compressed pk hash
-    }
-
-    function countStatelessSigningHashes(ShrincsTypes.StatelessSignature memory signature)
-        internal
-        pure
-        returns (uint256 count)
-    {
-        uint256 forsAttempts = uint256(signature.fors.counter) + 1;
-        uint256 forsDigestBytes = (
-            uint256(ShrincsTypes.NUM_FORS_TREES) * uint256(ShrincsTypes.FORS_TREE_HEIGHT)
-                + uint256(ShrincsTypes.HYPERTREE_HEIGHT) + 7
-        ) / 8;
-        uint256 forsDigestBlocks = (forsDigestBytes + 31) / 32;
-
-        count = 1; // FORS randomizer
-        count += forsDigestBlocks * forsAttempts; // FORS digest expansion hashes
-        count += statelessForsTreeHashes() * signature.fors.entries.length;
-        count += 1; // final "fors-pk" compression
-
-        uint32 subtreeHeight = uint32(ShrincsTypes.HYPERTREE_HEIGHT / ShrincsTypes.NUM_HYPERTREE_LAYERS);
-        uint256 authVirtualNodes = hypertreeAuthVirtualNodeHashes(subtreeHeight);
-        uint256 rootVirtualNode = hypertreeVirtualNodeHashes(subtreeHeight);
-
-        for (uint256 i = 0; i < signature.hypertree.length; ++i) {
-            count += 1; // hypertree layer seed
-            count += 1; // hypertree leaf seed
-            count += 1; // hypertree wots sk seed
-            count += statelessWotsPublicKeyHashes(); // current layer pk hash
-            count += 1; // WOTS randomizer
-            count += uint256(signature.hypertree[i].wotsCSignature.counter) + 1; // WOTS digest attempts
-            count += statelessWotsSigningHashes(); // successful WOTS chain revelation
-            count += authVirtualNodes; // auth-path sibling reconstruction
-            count += rootVirtualNode; // next layer root reconstruction
-        }
-    }
-
-    function statelessForsTreeHashes() internal pure returns (uint256 count) {
-        uint256 leafCount = uint256(1) << ShrincsTypes.FORS_TREE_HEIGHT;
-        count = 3 * leafCount - 1; // leaf secret + leaf hash per leaf, plus all internal nodes
-    }
-
-    function statelessWotsPublicKeyHashes() internal pure returns (uint256 count) {
-        count = uint256(ShrincsTypes.NUM_WOTS_CHAINS) * uint256(ShrincsTypes.WOTS_CHAIN_LEN);
-        count += 1; // final compressed pk hash
-    }
-
-    function statelessWotsSigningHashes() internal pure returns (uint256 count) {
-        count = ShrincsTypes.NUM_WOTS_CHAINS; // one secret per chain
-        count += ShrincsTypes.WOTS_TARGET_SUM_STATEFUL; // total revealed chain steps at success
-    }
-
-    function hypertreeAuthVirtualNodeHashes(uint32 subtreeHeight) internal pure returns (uint256 count) {
-        for (uint32 level = 0; level < subtreeHeight; ++level) {
-            count += hypertreeVirtualNodeHashes(level);
-        }
-    }
-
-    function hypertreeVirtualNodeHashes(uint32 height) internal pure returns (uint256 count) {
-        count = 2 + statelessWotsPublicKeyHashes(); // leafSeed + wotsSkSeed + leaf WOTS pk
-        for (uint32 level = 0; level < height; ++level) {
-            count = 2 * count + 1; // left subtree + right subtree + node hash
-        }
-    }
-
-    function decodeStatelessVector(string memory vectorKey)
-        internal
-        returns (
-            ShrincsTypes.PublicKey memory publicKey,
-            bytes memory message,
-            ShrincsTypes.StatelessSignature memory signature
-        )
-    {
-        bytes memory args = vectorArgs(vectorKey);
-        (
-            LegacyPublicKey memory legacyPublicKey,
-            bytes memory legacyMessage,
-            LegacyStatelessSignature memory legacySignature
-        ) = abi.decode(args, (LegacyPublicKey, bytes, LegacyStatelessSignature));
-
-        publicKey = publicKeyFromParts(
-            legacyPublicKey.statefulPublicKey, legacyPublicKey.pkSeed, legacyPublicKey.hypertreeRoot
-        );
-        bytes memory encodedCommitment =
-            vm.parseJsonBytes(vectors, string.concat(trimCalldataSuffix(vectorKey), ".publicKey.publicKeyCommitment"));
-        publicKey.publicKeyCommitment = encodedCommitment;
-
-        message = legacyMessage;
-        signature = convertLegacyStatelessSignature(legacySignature);
-    }
-
-    function convertLegacyStatelessSignature(LegacyStatelessSignature memory legacy)
-        internal
-        pure
-        returns (ShrincsTypes.StatelessSignature memory signature)
-    {
-        ShrincsTypes.ForsEntry[] memory entries = new ShrincsTypes.ForsEntry[](legacy.fors.entries.length);
-        for (uint256 i = 0; i < entries.length; ++i) {
-            entries[i] = ShrincsTypes.ForsEntry({
-                secretLeaf: legacy.fors.entries[i].secretLeaf, authPath: legacy.fors.entries[i].authPath
-            });
-        }
-
-        ShrincsTypes.HypertreeLayerSignature[] memory layers =
-            new ShrincsTypes.HypertreeLayerSignature[](legacy.hypertree.length);
-        for (uint256 i = 0; i < layers.length; ++i) {
-            layers[i] = ShrincsTypes.HypertreeLayerSignature({
-                treeIndex: legacy.hypertree[i].treeIndex,
-                leafIndex: legacy.hypertree[i].leafIndex,
-                wotsCPkHash: legacy.hypertree[i].wotsCPkHash,
-                wotsCSignature: ShrincsTypes.WotsCSignature({
-                    randomizer: legacy.hypertree[i].wotsCSignature.randomizer,
-                    counter: legacy.hypertree[i].wotsCSignature.counter,
-                    chains: legacy.hypertree[i].wotsCSignature.chains
-                }),
-                authPath: legacy.hypertree[i].authPath
-            });
-        }
-
-        signature = ShrincsTypes.StatelessSignature({
-            fors: ShrincsTypes.ForsSignature({
-                randomizer: legacy.fors.randomizer, counter: legacy.fors.counter, entries: entries
-            }),
-            hypertree: layers
-        });
-    }
-
-    function publicKeyFromParts(bytes memory statefulPublicKey, bytes memory pkSeed, bytes memory hypertreeRoot)
-        internal
-        pure
-        returns (ShrincsTypes.PublicKey memory)
-    {
-        bytes32 commitment = keccak256(abi.encodePacked("shrincs-public-key", statefulPublicKey, pkSeed, hypertreeRoot));
-        return ShrincsTypes.PublicKey({
-            statefulPublicKey: statefulPublicKey,
-            publicKeyCommitment: abi.encodePacked(commitment),
-            pkSeed: pkSeed,
-            hypertreeRoot: hypertreeRoot
-        });
-    }
-
-    function vectorArgs(string memory vectorKey) internal returns (bytes memory) {
-        vm.pauseGasMetering();
-        bytes memory callData = vm.parseJsonBytes(vectors, vectorKey);
-        vm.resumeGasMetering();
-        return stripSelector(callData);
-    }
-
-    function trimCalldataSuffix(string memory path) internal pure returns (string memory trimmed) {
-        bytes memory source = bytes(path);
-        bytes memory suffix = bytes(".calldata");
-        require(source.length >= suffix.length, "path too short");
-        uint256 trimmedLength = source.length - suffix.length;
-        bytes memory out = new bytes(trimmedLength);
-        for (uint256 i = 0; i < trimmedLength; ++i) {
-            out[i] = source[i];
-        }
-        trimmed = string(out);
-    }
-
-    function stripSelector(bytes memory input) internal pure returns (bytes memory output) {
-        output = new bytes(input.length - 4);
-        for (uint256 i = 4; i < input.length; ++i) {
-            output[i - 4] = input[i];
         }
     }
 }
