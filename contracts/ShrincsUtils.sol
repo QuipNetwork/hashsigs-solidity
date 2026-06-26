@@ -169,19 +169,6 @@ library ShrincsUtils {
         return bytes32(addressValue);
     }
 
-    // baseWDigit: Read one base-w digit from a digest, supporting both byte-wide and base-16 forms.
-    // 1. Return one whole byte when w = 256.
-    // 2. Otherwise select the byte that contains the requested base-16 digit.
-    // 3. Return the high nibble for even indices.
-    // 4. Return the low nibble for odd indices.
-    function baseWDigit(uint16 w, bytes memory digest, uint256 index) internal pure returns (uint32) {
-        // Byte-wide base-w uses one full digest byte per digit.
-        if (w == 256) return uint8(digest[index]);
-        // Base-16 uses two digits per digest byte.
-        uint8 b = uint8(digest[index >> 1]);
-        return index & 1 == 0 ? b >> 4 : b & 0x0f;
-    }
-
     // setHashChunk: Copy up to one 32-byte hash chunk into a mutable output buffer.
     // 1. Walk over the requested chunk length one byte at a time.
     // 2. Copy each byte from the hash block into the requested output offset.
