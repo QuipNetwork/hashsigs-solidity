@@ -274,16 +274,13 @@ library ShrincsHypertree {
             // Load the revealed 32-byte chain value directly from calldata.
             out := calldataload(value.offset)
         }
+        uint256 chainAddressBase = addressBase | (uint256(chainIdx) << 32);
         // The chain must continue from the revealed digit position up to w - 1.
         uint256 steps = uint256(w - 1) - digit;
         for (uint256 j = 0; j < steps;) {
-            // Encode which chain inside the WOTS key this step belongs to.
-            uint256 shiftedChain = uint256(chainIdx) << 32;
             // Encode the current position within that chain.
             uint256 chainStep = uint256(digit) + j;
-            uint256 addressValue = addressBase;
-            addressValue |= shiftedChain;
-            addressValue |= chainStep;
+            uint256 addressValue = chainAddressBase | chainStep;
             // Hash one step forward using the chain-specific address.
             out = hashStatelessWotsCChainNoMask32(pkSeed, bytes32(addressValue), out);
             unchecked {
