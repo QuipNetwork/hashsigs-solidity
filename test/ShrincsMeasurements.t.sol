@@ -27,6 +27,8 @@ import {ShrincsStatelessVectorSigner} from "./helpers/ShrincsStatelessVectorSign
 contract MeasurementAccountSigningHarness is ShrincsStatelessVectorSigner {}
 
 contract ShrincsMeasurementsTest is Test {
+    string internal constant STATEFUL_RAW_K_VECTOR_PATH = "test/test_vectors/shrincs_stateful_k_gas_vector.json";
+    address internal constant STATEFUL_VECTOR_ACCOUNT = address(uint160(0xCAFE));
     bytes4 internal constant ERC1271_MAGIC_VALUE = 0x1626ba7e;
     bytes32 internal constant ACTION_TYPE = keccak256("measure");
     bytes32 internal constant PAYLOAD_HASH = keccak256("measurement payload");
@@ -122,15 +124,25 @@ contract ShrincsMeasurementsTest is Test {
     }
 
     function prepareStatefulCase(bytes memory seedMaterial) internal returns (StatefulCase memory c) {
-        (ShrincsTypes.SigningKey memory signingKey, ShrincsTypes.PublicKey memory publicKey, bool ok) =
-            ShrincsAccountSigningFacade.keygen(seedMaterial, 4);
-        assertTrue(ok, "stateful keygen must succeed");
+        seedMaterial;
+        string memory vectors = vm.readFile(STATEFUL_RAW_K_VECTOR_PATH);
+        bytes memory args = stripSelector(vm.parseJsonBytes(vectors, ".statefulRawK.canonicalCalldata"));
+        (
+            ShrincsTypes.PublicKey memory publicKey,
+            bytes32 actionType,
+            bytes32 payloadHash,
+            ShrincsTypes.StatefulSignature memory signature
+        ) = abi.decode(args, (ShrincsTypes.PublicKey, bytes32, bytes32, ShrincsTypes.StatefulSignature));
+        assertEq(actionType, ACTION_TYPE, "stateful vector action type mismatch");
+        assertEq(payloadHash, PAYLOAD_HASH, "stateful vector payload hash mismatch");
 
-        ShrincsAccountVerifierExample account = new ShrincsAccountVerifierExample(publicKeyCommitmentWord(publicKey));
-        ShrincsTypes.StatefulSignature memory signature;
-        (, , signature, ok) =
-            ShrincsAccountSigningFacade.signStatefulActionNow(account, signingKey, ACTION_TYPE, PAYLOAD_HASH);
-        assertTrue(ok, "stateful signing must succeed");
+        deployCodeTo(
+            "ShrincsAccountVerifierExample.sol:ShrincsAccountVerifierExample",
+            abi.encode(publicKeyCommitmentWord(publicKey)),
+            STATEFUL_VECTOR_ACCOUNT
+        );
+        ShrincsAccountVerifierExample account = ShrincsAccountVerifierExample(STATEFUL_VECTOR_ACCOUNT);
+        account.setStatefulPolicyMonotonicIndex(uint32(signature.authPath.length));
 
         ShrincsTypes.ActionContext memory context =
             ShrincsAccountSigningFacade.actionContext(account, ACTION_TYPE, PAYLOAD_HASH);
@@ -184,6 +196,16 @@ contract ShrincsMeasurementsTest is Test {
         bytes memory commitmentBytes = publicKey.publicKeyCommitment;
         assembly {
             out := mload(add(commitmentBytes, 32))
+        }
+    }
+
+    function stripSelector(bytes memory input) internal pure returns (bytes memory output) {
+        output = new bytes(input.length - 4);
+        for (uint256 i = 4; i < input.length;) {
+            output[i - 4] = input[i];
+            unchecked {
+                ++i;
+            }
         }
     }
 }
