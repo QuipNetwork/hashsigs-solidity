@@ -20,13 +20,13 @@ import {ShrincsTypes} from "./ShrincsTypes.sol";
 import {ShrincsUtils} from "./ShrincsUtils.sol";
 
 library ShrincsStateful {
-    // verifyStatefulUncheckedMessage: Verify a stateful signature against an exact caller-supplied message.
+    // verifyStatefulUncheckedMessage: Verify a JARDIN compact-path stateful signature against an exact caller-supplied message.
     // 1. Check that the public key uses the compiled fixed layout.
     // 2. Check the installed public-key commitment and the public-key encoding.
     // 3. Decode the compact stateful public key embedded inside the SHRINCS public bundle.
-    // 4. Recover and validate the consumed stateful leaf index from the auth path length.
-    // 5. Reconstruct the compact WOTS-C public-key hash from the signature and message.
-    // 6. Rebuild the unbalanced stateful tree root from that leaf and auth path.
+    // 4. Validate the explicit compact-path slot q and the FORS+C signature shape.
+    // 5. Reconstruct the compact FORS+C public key from the opened body and message.
+    // 6. Rebuild the balanced h=7 JARDIN compact-path root from q and the Merkle auth path.
     // 7. Accept only if the reconstructed root matches the decoded stateful public root.
     function verifyStatefulUncheckedMessage(
         bytes32 expectedPublicKeyCommitment,
@@ -34,204 +34,274 @@ library ShrincsStateful {
         bytes memory message,
         ShrincsTypes.StatefulSignature calldata signature
     ) internal pure returns (bool) {
-        // The public key must satisfy the compiled fixed key shape.
+        // Reject malformed composite public-key fields before touching stateful internals.
         if (!ShrincsUtils.validPublicKey(publicKey)) return false;
-        // The bundled public key must match the installed public-key commitment.
+        // Ensure the caller supplied the currently installed SHRINCS public-key commitment.
         if (!ShrincsUtils.matchesExpectedPublicKeyCommitment(publicKey, expectedPublicKeyCommitment)) return false;
-        // Decode the compact stateful public key fields from the public bundle.
+
+        // Decode the packed stateful subkey: subPkSeed || subPkRoot || maxSignatures.
         (ShrincsTypes.StatefulPublicKey memory statefulKey, bool ok) =
             ShrincsUtils.decodeStatefulPublicKey(publicKey.statefulPublicKey);
         if (!ok) return false;
 
-        // In this unbalanced stateful tree, the leaf index is encoded by auth-path length.
-        uint32 leafIndex = uint32(signature.authPath.length);
-        // Leaf 0 is reserved and never used for valid stateful signatures.
-        if (leafIndex == 0) return false;
-        // Reject signatures that claim a leaf beyond the configured stateful budget.
-        if (leafIndex > statefulKey.maxSignatures) return false;
-        // Stateful WOTS-C always reveals a fixed number of chains.
-        if (signature.chains.length != ShrincsTypes.WOTS_CHAINS_STATEFUL) return false;
+        // The signature carries the consumed compact-path slot explicitly as q.
+        uint32 q = uint32(signature.q);
+        // The embedded usage budget must be nonzero and cannot exceed the committed Q_MAX tree size.
+        if (statefulKey.maxSignatures == 0 || statefulKey.maxSignatures > ShrincsTypes.STATEFUL_Q_MAX) return false;
+        // Reject signatures for slots outside this key's allowed usage budget.
+        if (q >= statefulKey.maxSignatures) return false;
+        // Compact path opens k_open FORS trees and omits the final constrained tree.
+        if (signature.forsEntries.length != ShrincsTypes.STATEFUL_FORS_K_OPEN) return false;
+        // The compact-path Merkle proof is over the balanced Q_MAX tree, so it has fixed height h.
+        if (signature.authPath.length != ShrincsTypes.STATEFUL_MERKLE_HEIGHT) return false;
 
-        // Reconstruct the compact WOTS-C public-key hash from the signature and message.
-        (bytes32 pkHash, bool validWots) =
-            compactStatefulWotsPublicKeyFromSignature(statefulKey.pkSeed, leafIndex, message, signature);
-        if (!validWots) return false;
+        // Reconstruct the FORS+C public key committed as the selected balanced-tree leaf.
+        (bytes32 forsPk, bool validFors) =
+            verifyCompactForsCAndReturnPk(statefulKey.pkSeed, statefulKey.root, signature.q, message, signature);
+        if (!validFors) return false;
 
-        // Rebuild the unbalanced stateful tree root above that WOTS-derived leaf.
+        // Climb from the reconstructed FORS+C public key to the candidate compact-path root.
         (bytes32 root, bool validPath) =
-            rootFromUnbalancedPath(statefulKey.pkSeed, leafIndex, pkHash, signature.authPath);
+            rootFromJardinMerklePath(statefulKey.pkSeed, signature.q, forsPk, signature.authPath);
         if (!validPath) return false;
-        return statefulKey.root == root;
+        // Accept only the root committed in the decoded stateful public key.
+        return root == statefulKey.root;
     }
 
-    // compactStatefulWotsPublicKeyFromSignature: Reconstruct the compact stateful WOTS-C public-key hash.
-    // 1. Derive the stateful WOTS-C digest from the public seed, leaf index, randomizer, counter, and message.
-    // 2. Read one base-16 digit per WOTS chain from that digest.
-    // 3. Advance each revealed chain value to its endpoint.
-    // 4. Enforce the fixed target-sum constraint used instead of an explicit checksum suffix.
-    // 5. Hash the reconstructed chain endpoints into the compact WOTS-C public-key hash.
-    function compactStatefulWotsPublicKeyFromSignature(
-        bytes32 pkSeed,
-        uint32 leafIndex,
+    // verifyCompactForsCAndReturnPk: Reconstruct the compact FORS+C public key.
+    // 1. Derive the 260-bit digest from `M*` and the signature randomizer/counter.
+    // 2. Enforce the compact-path opening rule: the hidden k_total-k_open tree must select leaf 0.
+    // 3. Recompute each opened FORS tree root from its secret leaf and auth path.
+    // 4. Hash the ordered opened roots with the JARDIN FORS-roots address to obtain `forsPk`.
+    function verifyCompactForsCAndReturnPk(
+        bytes32 subPkSeed,
+        bytes32 subPkRoot,
+        uint8 q,
         bytes memory message,
         ShrincsTypes.StatefulSignature calldata signature
-    ) internal pure returns (bytes32 pkHash, bool ok) {
-        // Bind the stateful WOTS-C digest to the seed, leaf, randomizer, counter, and signed message.
-        bytes32 digest = keccak256(
-            abi.encodePacked("uxmss-wots-digits", pkSeed, leafIndex, signature.randomizer, signature.counter, message)
-        );
-
-        uint32 digitSum;
-        // Reserve one 32-byte slot per reconstructed WOTS chain endpoint.
-        bytes memory segments = new bytes(ShrincsTypes.WOTS_CHAINS_STATEFUL * 32);
-        for (uint256 i = 0; i < ShrincsTypes.WOTS_CHAINS_STATEFUL;) {
-            // Read the base-16 digit that chooses where this chain stopped during signing.
-            uint32 digit = baseW16Digit(digest, i);
-            // Accumulate the fixed target-sum check used by this compact WOTS-C variant.
-            digitSum += digit;
-            // casting to 'uint32' is safe because i ranges over 64 stateful WOTS chains
-            // forge-lint: disable-next-line(unsafe-typecast)
-            uint32 chainIndex = uint32(i);
-            // Complete the revealed chain from its signing position to the chain endpoint.
-            bytes32 segment = statefulChainNoMask(
-                pkSeed, leafIndex, chainIndex, signature.chains[i], digit, ShrincsTypes.WOTS_BASE_STATEFUL - 1 - digit
-            );
-            // Store the reconstructed endpoint into the packed segment buffer.
-            setSlice32(segments, segment, i * 32);
-            unchecked {
-                ++i;
-            }
+    ) internal pure returns (bytes32 forsPk, bool ok) {
+        bytes memory digest = compactDigest(subPkSeed, subPkRoot, q, signature.randomizer, signature.counter, message);
+        // `a` is the per-FORS-tree leaf-index bit width.
+        uint256 a = uint256(ShrincsTypes.STATEFUL_FORS_TREE_HEIGHT);
+        // `kOpen` is the number of explicit FORS openings carried in the signature.
+        uint256 kOpen = uint256(ShrincsTypes.STATEFUL_FORS_K_OPEN);
+        // The final digest slice corresponds to the omitted tree; compact path fixes it to leaf 0.
+        if (ShrincsUtils.readBits32(digest, kOpen * a, ShrincsTypes.STATEFUL_FORS_TREE_HEIGHT) != 0) {
+            return (bytes32(0), false);
         }
 
-        // Reject messages whose reconstructed digit sum does not hit the fixed target.
-        if (digitSum != ShrincsTypes.WOTS_TARGET_SUM_STATEFUL) return (bytes32(0), false);
-        // Hash the reconstructed endpoints into the compact stateful WOTS public-key hash.
-        return (keccak256(abi.encodePacked("uxmss-wots-pk", pkSeed, leafIndex, segments)), true);
+        // Store the opened roots contiguously so `T_k` hashes exactly the JARDIN roots byte string.
+        uint256 rootsLen = kOpen * 32;
+        bytes memory roots = new bytes(rootsLen);
+        for (uint256 tree = 0; tree < kOpen;) {
+            // Each `a`-bit digest slice selects the opened leaf for this FORS tree.
+            uint32 entryLeafIndex = ShrincsUtils.readBits32(digest, tree * a, ShrincsTypes.STATEFUL_FORS_TREE_HEIGHT);
+            // Reconstruct the root that this FORS opening commits to.
+            bytes32 root = compactForsEntryRoot(subPkSeed, q, uint32(tree), entryLeafIndex, signature.forsEntries[tree]);
+            if (root == bytes32(0)) return (bytes32(0), false);
+            // Append the root in tree order before computing the aggregate FORS+C public key.
+            setSlice32(roots, root, tree * 32);
+            unchecked {
+                ++tree;
+            }
+        }
+        return (
+            keccak256(
+                abi.encodePacked(
+                    "JARDIN/T_k", subPkSeed, jardinAddressWord(ShrincsTypes.AddressTypeForsRoots, q, 0, 0), roots
+                )
+            ),
+            true
+        );
     }
 
-    // rootFromUnbalancedPath: Rebuild the root of the custom unbalanced stateful tree from one leaf and path.
-    // 1. Check that the auth path length matches the encoded leaf index.
-    // 2. Hash the leaf together with the first auth node to form the first parent.
-    // 3. Walk upward through the remaining auth path nodes in the tree's unbalanced order.
-    // 4. Return the reconstructed root and success flag.
-    function rootFromUnbalancedPath(bytes32 pkSeed, uint32 leafIndex, bytes32 leaf, bytes32[] calldata authPath)
+    // compactForsEntryRoot: Rebuild one opened FORS tree root.
+    // 1. Validate the opened secret leaf and its a-level authentication path.
+    // 2. Hash the secret leaf into the selected FORS leaf address.
+    // 3. Walk upward, ordering each sibling by the current low bit.
+    // 4. Return the root for this FORS tree.
+    function compactForsEntryRoot(
+        bytes32 subPkSeed,
+        uint8 q,
+        uint32 forsTree,
+        uint32 leaf,
+        ShrincsTypes.ForsEntry calldata entry
+    ) internal pure returns (bytes32 node) {
+        if (entry.secretLeaf.length != 32) return bytes32(0);
+        if (entry.authPath.length != ShrincsTypes.STATEFUL_FORS_TREE_HEIGHT) return bytes32(0);
+
+        // Leaf hash `F` binds the revealed secret to the FORS tree and leaf address.
+        node = keccak256(
+            abi.encodePacked(
+                "JARDIN/F",
+                subPkSeed,
+                jardinAddressWord(ShrincsTypes.AddressTypeForsTree, q, 0, compactForsTreeLowLeafIndex(forsTree, leaf)),
+                entry.secretLeaf
+            )
+        );
+
+        // `index` tracks the node's position within the current level while climbing to the root.
+        uint256 index = leaf;
+        // `height` is `a`, the fixed compact FORS tree height.
+        uint32 height = uint32(ShrincsTypes.STATEFUL_FORS_TREE_HEIGHT);
+        for (uint32 level = 0; level < height;) {
+            // Every auth node is one 32-byte sibling hash.
+            bytes calldata authNode = entry.authPath[level];
+            if (authNode.length != 32) return bytes32(0);
+            bytes32 sibling;
+            assembly {
+                sibling := calldataload(authNode.offset)
+            }
+            // Even indices are left children; odd indices are right children.
+            (bytes32 left, bytes32 right) = index & 1 == 0 ? (node, sibling) : (sibling, node);
+            // JARDIN stores parent height as one-based FORS height in the address `x` field.
+            uint32 nodeHeight = level + 1;
+            // Fold the FORS tree number and parent position into the low-leaf-index address field.
+            uint64 shiftedTree = uint64(forsTree) << (height - nodeHeight);
+            uint64 parentLowIndex = shiftedTree + uint64(index >> 1);
+            // Parent hash `H` binds the ordered children to the parent address.
+            node = keccak256(
+                abi.encodePacked(
+                    "JARDIN/H",
+                    subPkSeed,
+                    jardinAddressWord(ShrincsTypes.AddressTypeForsTree, q, nodeHeight, parentLowIndex),
+                    left,
+                    right
+                )
+            );
+            // Move to the parent index for the next level.
+            index >>= 1;
+            unchecked {
+                ++level;
+            }
+        }
+    }
+
+    // rootFromJardinMerklePath: Climb the balanced Q_MAX-slot compact-path tree.
+    // 1. Start from the FORS+C public key for slot q.
+    // 2. At each level, order the sibling by the corresponding q bit.
+    // 3. Hash with the JARDIN Merkle address for that parent.
+    // 4. Return the reconstructed `subPkRoot`.
+    function rootFromJardinMerklePath(bytes32 subPkSeed, uint8 q, bytes32 leaf, bytes32[] calldata authPath)
         internal
         pure
-        returns (bytes32 root, bool ok)
+        returns (bytes32 node, bool ok)
     {
-        // This unbalanced tree encodes the leaf index as the auth-path length.
-        if (authPath.length != leafIndex) return (bytes32(0), false);
-        // Leaf 0 is invalid, so a valid auth path is never empty.
-        if (authPath.length == 0) return (bytes32(0), false);
-        // The first parent hashes the leaf with the first auth-path node on its right.
-        root = statefulParentHash(pkSeed, leafIndex, leaf, authPath[0]);
-        for (uint256 offset = 0; offset < authPath.length - 1;) {
-            // casting to 'uint32' is safe because offset is bounded by authPath.length - 1, and authPath.length == leafIndex
-            // forge-lint: disable-next-line(unsafe-typecast)
-            // Higher parents hash the next auth node on the left with the running root on the right.
-            root = statefulParentHash(pkSeed, leafIndex - uint32(offset) - 1, authPath[offset + 1], root);
+        if (authPath.length != ShrincsTypes.STATEFUL_MERKLE_HEIGHT) return (bytes32(0), false);
+        // The first node is the opened slot commitment, i.e. the FORS+C public key.
+        node = leaf;
+        // Keep q as a word so bit tests and shifts are explicit.
+        uint32 qValue = uint32(q);
+        for (uint32 j = 0; j < ShrincsTypes.STATEFUL_MERKLE_HEIGHT;) {
+            // Auth paths are stored bottom-up; JARDIN address levels count top-down here.
+            uint32 level = uint32(ShrincsTypes.STATEFUL_MERKLE_HEIGHT) - 1 - j;
+            // Parent index is q with the consumed child bits removed.
+            uint32 parentIndex = qValue >> (j + 1);
+            // The j-th q bit selects whether the current node is left or right.
+            (bytes32 left, bytes32 right) = ((qValue >> j) & 1) == 0 ? (node, authPath[j]) : (authPath[j], node);
+            // Hash the ordered pair at the exact balanced-tree parent address.
+            node = keccak256(
+                abi.encodePacked("JARDIN/H", subPkSeed, jardinMerkleAddressWord(level, parentIndex), left, right)
+            );
             unchecked {
-                ++offset;
+                ++j;
             }
         }
         ok = true;
     }
 
-    // statefulParentHash: Hash one parent node in the stateful unbalanced tree.
-    // 1. Domain-separate the hash as an unbalanced XMSS-style node computation.
-    // 2. Bind the public seed and left-leaf index that identify this parent location.
-    // 3. Mix in the left and right child values in tree order.
-    // 4. Return the parent node value.
-    function statefulParentHash(bytes32 pkSeed, uint32 leftLeafIndex, bytes32 left, bytes32 right)
-        internal
-        pure
-        returns (bytes32 out)
-    {
-        assembly {
-            // Allocate a scratch buffer starting at the free-memory pointer.
-            let ptr := mload(0x40)
-            // Write the domain tag prefix for unbalanced stateful parent hashing.
-            mstore(ptr, "uxmss-node")
-            // Write the 32-byte public seed after the 10-byte tag.
-            mstore(add(ptr, 10), pkSeed)
-            // Write the 4-byte left-leaf index after the seed.
-            mstore(add(ptr, 42), shl(224, leftLeafIndex))
-            // Write the left child after the leaf index.
-            mstore(add(ptr, 46), left)
-            // Write the right child after the left child.
-            mstore(add(ptr, 78), right)
-            // Hash the complete parent-node preimage.
-            out := keccak256(ptr, 110)
+    // compactDigest: Build the JARDIN compact FORS+C digest.
+    // 1. Compute k_total*a bits; with current params this is 52*5 = 260 bits.
+    // 2. Build `M* = tag || subPkSeed || subPkRoot || q || message`.
+    // 3. Domain-separate H_msg with the signature randomizer and grind counter.
+    // 4. Expand Keccak blocks until enough digest bytes are available.
+    function compactDigest(
+        bytes32 subPkSeed,
+        bytes32 subPkRoot,
+        uint8 q,
+        bytes32 randomizer,
+        uint32 counter,
+        bytes memory message
+    ) internal pure returns (bytes memory out) {
+        uint256 digestBits = uint256(ShrincsTypes.STATEFUL_FORS_K_TOTAL)
+            * uint256(ShrincsTypes.STATEFUL_FORS_TREE_HEIGHT);
+        // Round up to whole bytes because the 260-bit digest occupies 33 bytes.
+        uint256 digestBytes = (digestBits + 7) / 8;
+        // `M*` binds the message to this compact subkey and the exact slot q.
+        bytes memory mStar = abi.encodePacked("JARDIN/TYPE2/v1", subPkSeed, subPkRoot, q, message);
+        // The H_msg base includes both anti-replay key material and the grind counter.
+        bytes memory base = abi.encodePacked("JARDIN/H_msg/v1", randomizer, subPkSeed, subPkRoot, counter, mStar);
+        // Allocate the exact digest byte length that bit extraction will read from.
+        out = new bytes(digestBytes);
+        if (digestBytes <= 32) {
+            // One Keccak word is enough for parameter sets up to 256 digest bits.
+            setHashChunk(out, keccak256(base), 0, digestBytes);
+            return out;
         }
-    }
 
-    // statefulChainNoMask: Advance one stateful WOTS-C chain for a chosen number of steps.
-    // 1. Start from the revealed chain value.
-    // 2. Rebuild the address word for each remaining chain position.
-    // 3. Apply one unmasked WOTS-C chain hash per remaining step.
-    // 4. Return the reconstructed chain endpoint.
-    function statefulChainNoMask(
-        bytes32 pkSeed,
-        uint32 leafIndex,
-        uint32 chainIdx,
-        bytes32 value,
-        uint32 start,
-        uint32 steps
-    ) internal pure returns (bytes32 out) {
-        // Start from the revealed chain value carried in the signature.
-        out = value;
-        for (uint32 j = 0; j < steps;) {
-            // Rebuild the WOTS chain-step address for this leaf, chain, and step index.
-            bytes32 addressWord =
-                ShrincsUtils.addressWord32(0, 0, ShrincsTypes.AddressTypeWotsHash, leafIndex, chainIdx, start + j);
-            // Hash one step forward along the chain.
-            out = hashStatefulWotsCChainNoMask32(pkSeed, addressWord, out);
+        // For 260 bits, append counter-suffixed Keccak words and truncate the final chunk.
+        uint256 offset;
+        uint32 blockCounter;
+        while (offset < digestBytes) {
+            // Copy a full word except for the final partial chunk.
+            uint256 chunk = digestBytes - offset;
+            if (chunk > 32) chunk = 32;
+            setHashChunk(out, keccak256(abi.encodePacked(base, blockCounter)), offset, chunk);
+            offset += chunk;
             unchecked {
-                ++j;
+                ++blockCounter;
             }
         }
     }
 
-    // hashStatefulWotsCChainNoMask32: Execute one unmasked stateful WOTS-C chain-hash step.
-    // 1. Domain-separate the hash as a WOTS-C chain computation.
-    // 2. Bind the public seed and chain-step address.
-    // 3. Mix in the current chain segment value.
-    // 4. Return the next chain value.
-    function hashStatefulWotsCChainNoMask32(bytes32 pkSeed, bytes32 addressWord, bytes32 segment)
-        internal
-        pure
-        returns (bytes32 out)
-    {
-        assembly {
-            // Allocate a scratch buffer starting at the free-memory pointer.
-            let ptr := mload(0x40)
-            // Write the domain tag prefix for WOTS-C chain hashing.
-            mstore(ptr, "wots-c-chain")
-            // Write the 32-byte public seed after the 12-byte tag.
-            mstore(add(ptr, 12), pkSeed)
-            // Write the 32-byte address word after the seed.
-            mstore(add(ptr, 44), addressWord)
-            // Write the current chain segment after the address.
-            mstore(add(ptr, 76), segment)
-            // Hash the complete WOTS-C chain-step preimage.
-            out := keccak256(ptr, 108)
+    // compactForsTreeLowLeafIndex: Pack a FORS tree id and leaf id into JARDIN's low-index field.
+    function compactForsTreeLowLeafIndex(uint32 forsTree, uint32 leaf) internal pure returns (uint64) {
+        return (uint64(forsTree) << ShrincsTypes.STATEFUL_FORS_TREE_HEIGHT) | uint64(leaf);
+    }
+
+    // jardinAddressWord: Pack the JARDIN FORS+C address word.
+    // 1. Put the address type in the high type field.
+    // 2. Encode JARDIN ci as q+1 because q is zero-indexed in the signature.
+    // 3. Store x and y in the low address fields used for node height and low index.
+    function jardinAddressWord(uint32 addressType, uint8 q, uint32 x, uint64 y) internal pure returns (bytes32) {
+        // Place the JARDIN address type in the address word.
+        uint256 value = uint256(addressType) << 128;
+        // JARDIN ci is one-indexed, so the zero-indexed signature slot q becomes q + 1.
+        value |= uint256(uint32(q) + 1) << 64;
+        // Pack the x field, used here for FORS node height.
+        value |= uint256(x) << 32;
+        // Pack the y field, used here for the FORS low leaf/node index.
+        value |= uint256(y);
+        return bytes32(value);
+    }
+
+    // jardinMerkleAddressWord: Pack the balanced compact-path Merkle address word.
+    // 1. Use the dedicated JARDIN Merkle address type.
+    // 2. Store the current Merkle level.
+    // 3. Store the parent node index at that level.
+    function jardinMerkleAddressWord(uint32 level, uint32 nodeIndex) internal pure returns (bytes32) {
+        // Place the dedicated balanced-Merkle address type in the address word.
+        uint256 value = uint256(ShrincsTypes.AddressTypeJardinMerkle) << 128;
+        // Pack the Merkle level into the x-style low address field.
+        value |= uint256(level) << 32;
+        // Pack the parent node index at that level.
+        value |= uint256(nodeIndex);
+        return bytes32(value);
+    }
+
+    // setHashChunk: Copy `chunk` bytes from one Keccak word into a digest byte array.
+    function setHashChunk(bytes memory out, bytes32 blockHash, uint256 offset, uint256 chunk) internal pure {
+        for (uint256 i = 0; i < chunk;) {
+            // Copy byte i from the hash word into the requested output offset.
+            out[offset + i] = blockHash[i];
+            unchecked {
+                // The loop bound guarantees i cannot overflow before exiting.
+                ++i;
+            }
         }
     }
 
-    // baseW16Digit: Read one base-16 digit from a 32-byte digest.
-    // 1. Select the byte containing the requested high or low nibble.
-    // 2. Return the high nibble for even indices.
-    // 3. Return the low nibble for odd indices.
-    function baseW16Digit(bytes32 digest, uint256 index) internal pure returns (uint32 digit) {
-        // Each byte of the digest carries two base-16 digits.
-        uint8 b = uint8(digest[index >> 1]);
-        return index & 1 == 0 ? uint32(b >> 4) : uint32(b & 0x0f);
-    }
-
-    // setSlice32: Write one 32-byte segment into a packed byte buffer.
-    // 1. Skip the bytes-array length prefix.
-    // 2. Advance to the requested byte offset.
-    // 3. Store the 32-byte segment in place.
+    // setSlice32: Write one 32-byte root into an already allocated byte string.
     function setSlice32(bytes memory dst, bytes32 src, uint256 offset) internal pure {
         assembly {
             // Skip the bytes length word to reach the payload start.
