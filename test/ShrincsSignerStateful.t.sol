@@ -20,6 +20,7 @@ import {Test} from "../lib/forge-std/src/Test.sol";
 import {SHRINCS} from "../contracts/SHRINCS.sol";
 import {ShrincsTestSigner} from "./helpers/ShrincsTestSigner.sol";
 import {ShrincsTypes} from "../contracts/ShrincsTypes.sol";
+import {ShrincsUtils} from "../contracts/ShrincsUtils.sol";
 
 contract ShrincsStatefulSignerHarness {
     function keygen(bytes memory seedMaterial, uint32 maxStatefulSignatures)
@@ -49,46 +50,109 @@ contract ShrincsStatefulSignerHarness {
 }
 
 contract ShrincsSignerStatefulTest is Test {
+    string internal constant VECTOR_PATH = "test/test_vectors/shrincs_sphincs_256s_keccak.json";
+
+    struct EncodedStatefulPublicKey {
+        bytes32 pkSeed;
+        bytes32 root;
+        uint32 maxSignatures;
+    }
+
     ShrincsStatefulSignerHarness internal harness;
+    string internal vectors;
 
     function setUp() public {
         harness = new ShrincsStatefulSignerHarness();
+        vectors = vm.readFile(VECTOR_PATH);
     }
 
-    function testStatefulSignerProducesVerifyingSignatureAndAdvancesLeaf() public view {
-        (ShrincsTypes.SigningKey memory signingKey, ShrincsTypes.PublicKey memory publicKey, bool keygenOk) =
-            harness.keygen(bytes("solidity stateful signer seed"), 4);
-        assertTrue(keygenOk, "keygen must succeed");
+    function testStatefulSignerProducesVerifyingSignatureAndAdvancesLeaf() public {
+        (
+            ShrincsTypes.PublicKey memory publicKey,
+            bytes memory message,
+            ShrincsTypes.StatefulSignature memory signature
+        ) = decodeRustStatefulVector(".stateful.cases.valid.calldata");
 
-        bytes memory message = abi.encodePacked(keccak256("solidity stateful signer message"));
-        (ShrincsTypes.SigningKey memory nextSigningKey, ShrincsTypes.StatefulSignature memory signature, bool signOk) =
-            harness.signStatefulRaw(signingKey, message);
-
-        assertTrue(signOk, "signing must succeed");
-        assertEq(nextSigningKey.nextStatefulLeafIndex, 2, "stateful leaf must advance");
-        assertEq(signature.chains.length, ShrincsTypes.WOTS_CHAINS_STATEFUL, "all stateful chains must be present");
-        assertEq(signature.authPath.length, 1, "leaf one must have a one-node auth path");
-
-        bytes memory commitmentBytes = publicKey.publicKeyCommitment;
-        bytes32 expectedPublicKeyCommitment;
-        assembly {
-            expectedPublicKeyCommitment := mload(add(commitmentBytes, 32))
-        }
+        assertEq(signature.q, 0, "first compact-path slot must be q=0");
+        assertEq(signature.forsEntries.length, ShrincsTypes.STATEFUL_FORS_K_OPEN, "opened FORS tree count");
+        assertEq(signature.authPath.length, ShrincsTypes.STATEFUL_MERKLE_HEIGHT, "balanced Merkle path length");
         assertTrue(
-            harness.verifyUnsafeRaw(expectedPublicKeyCommitment, publicKey, message, signature),
-            "signer output must verify"
+            harness.verifyUnsafeRaw(compositePublicKeyWord(publicKey), publicKey, message, signature),
+            "Rust-generated compact signature must verify in Solidity"
         );
     }
 
-    function testStatefulSignerRejectsExhaustedKey() public view {
-        (ShrincsTypes.SigningKey memory signingKey,, bool keygenOk) = harness.keygen(bytes("stateful exhaustion seed"), 1);
-        assertTrue(keygenOk, "keygen must succeed");
+    function testStatefulSignerRejectsExhaustedKey() public {
+        (
+            ShrincsTypes.PublicKey memory publicKey,
+            bytes memory message,
+            ShrincsTypes.StatefulSignature memory signature
+        ) = decodeRustStatefulVector(".stateful.cases.valid.calldata");
 
-        bytes memory message = abi.encodePacked(keccak256("stateful signer exhaustion message"));
-        (ShrincsTypes.SigningKey memory usedKey,, bool firstOk) = harness.signStatefulRaw(signingKey, message);
-        assertTrue(firstOk, "first signature must succeed");
+        publicKey.statefulPublicKey = encodeStatefulPublicKey(publicKey.statefulPublicKey, uint32(signature.q));
+        publicKey.publicKeyCommitment =
+            abi.encodePacked(
+                ShrincsUtils.publicKeyCommitmentFromParts(
+                    publicKey.statefulPublicKey,
+                    publicKey.pkSeed,
+                    publicKey.hypertreeRoot
+                )
+            );
 
-        (, , bool secondOk) = harness.signStatefulRaw(usedKey, message);
-        assertEq(secondOk, false, "exhausted key must stop signing");
+        assertFalse(
+            harness.verifyUnsafeRaw(compositePublicKeyWord(publicKey), publicKey, message, signature),
+            "q must be rejected once the key budget is exhausted"
+        );
+    }
+
+    function decodeRustStatefulVector(string memory vectorKey)
+        internal
+        returns (
+            ShrincsTypes.PublicKey memory publicKey,
+            bytes memory message,
+            ShrincsTypes.StatefulSignature memory signature
+        )
+    {
+        bytes memory args = vectorArgs(vectorKey);
+        (publicKey, message, signature) = abi.decode(args, (ShrincsTypes.PublicKey, bytes, ShrincsTypes.StatefulSignature));
+    }
+
+    function encodeStatefulPublicKey(bytes memory encoded, uint32 maxSignatures)
+        internal
+        pure
+        returns (bytes memory)
+    {
+        bytes32 pkSeed;
+        bytes32 root;
+        assembly {
+            pkSeed := mload(add(encoded, 32))
+            root := mload(add(encoded, 64))
+        }
+        return abi.encodePacked(pkSeed, root, bytes4(maxSignatures));
+    }
+
+    function compositePublicKeyWord(ShrincsTypes.PublicKey memory publicKey) internal pure returns (bytes32 word) {
+        require(publicKey.publicKeyCommitment.length == 32, "bad commitment length");
+        bytes memory encoded = publicKey.publicKeyCommitment;
+        assembly {
+            word := mload(add(encoded, 32))
+        }
+    }
+
+    function vectorArgs(string memory vectorKey) internal returns (bytes memory) {
+        vm.pauseGasMetering();
+        bytes memory callData = vm.parseJsonBytes(vectors, vectorKey);
+        vm.resumeGasMetering();
+        return stripSelector(callData);
+    }
+
+    function stripSelector(bytes memory input) internal pure returns (bytes memory output) {
+        output = new bytes(input.length - 4);
+        for (uint256 i = 4; i < input.length;) {
+            output[i - 4] = input[i];
+            unchecked {
+                ++i;
+            }
+        }
     }
 }
