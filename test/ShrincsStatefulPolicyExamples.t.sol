@@ -113,7 +113,7 @@ contract ShrincsStatefulPolicyExamplesTest is Test {
             ShrincsTypes.StatefulSignature memory signature
         ) = decodeStatefulVector(".stateful.cases.valid.calldata");
         bytes32 expectedCompositePublicKey = compositePublicKeyWord(publicKey);
-        uint32 leafIndex = uint32(signature.authPath.length);
+        uint32 leafIndex = uint32(signature.q);
         ShrincsStatefulPolicyHarness account = new ShrincsStatefulPolicyHarness(expectedCompositePublicKey);
         account.setStatefulPolicyMonotonicIndex(leafIndex);
 
@@ -132,7 +132,7 @@ contract ShrincsStatefulPolicyExamplesTest is Test {
             ShrincsTypes.StatefulSignature memory signature
         ) = decodeStatefulVector(".stateful.cases.valid.calldata");
         bytes32 expectedCompositePublicKey = compositePublicKeyWord(publicKey);
-        uint32 leafIndex = uint32(signature.authPath.length);
+        uint32 leafIndex = uint32(signature.q);
         ShrincsStatefulPolicyHarness account = new ShrincsStatefulPolicyHarness(expectedCompositePublicKey);
         account.setStatefulPolicyMonotonicIndex(leafIndex + 1);
 
@@ -213,7 +213,7 @@ contract ShrincsStatefulPolicyExamplesTest is Test {
             ShrincsTypes.StatefulSignature memory signature
         ) = decodeStatefulVector(".stateful.cases.valid.calldata");
         bytes32 expectedCompositePublicKey = compositePublicKeyWord(publicKey);
-        uint32 leafIndex = uint32(signature.authPath.length);
+        uint32 leafIndex = uint32(signature.q);
         ShrincsStatefulPolicyHarness account = new ShrincsStatefulPolicyHarness(expectedCompositePublicKey);
         account.setStatefulPolicyLeafBitmap();
 
@@ -242,26 +242,7 @@ contract ShrincsStatefulPolicyExamplesTest is Test {
         )
     {
         bytes memory args = vectorArgs(vectorKey);
-        (
-            LegacyStatefulPublicKey memory legacyKey,
-            bytes memory legacyMessage,
-            LegacyStatefulSignature memory legacySignature
-        ) = abi.decode(args, (LegacyStatefulPublicKey, bytes, LegacyStatefulSignature));
-
-        (ShrincsTypes.PublicKey memory statelessPublicKey,,) = decodeStatelessVector(".stateless.cases.valid.calldata");
-
-        bytes memory encodedStatefulKey =
-            abi.encodePacked(legacyKey.pkSeed, legacyKey.root, bytes4(legacyKey.maxSignatures));
-
-        publicKey = publicKeyFromParts(encodedStatefulKey, statelessPublicKey.pkSeed, statelessPublicKey.hypertreeRoot);
-
-        message = legacyMessage;
-        signature = ShrincsTypes.StatefulSignature({
-            randomizer: legacySignature.randomizer,
-            counter: legacySignature.counter,
-            chains: fixedToDynamicChains(legacySignature.chains),
-            authPath: legacySignature.authPath
-        });
+        (publicKey, message, signature) = abi.decode(args, (ShrincsTypes.PublicKey, bytes, ShrincsTypes.StatefulSignature));
     }
 
     function decodeStatelessVector(string memory vectorKey)
