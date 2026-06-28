@@ -300,7 +300,7 @@ contract ShrincsSphincs256sVectorsTest is Test {
             bytes memory message,
             ShrincsTypes.StatefulSignature memory signature
         ) = decodeStatefulVector(".stateful.cases.valid.calldata");
-        setStatefulMaxSignatures(publicKey, uint32(signature.authPath.length));
+        setStatefulMaxSignatures(publicKey, uint32(signature.q) + 1);
         assertEq(
             stateful.verifyUnsafeRaw(compositePublicKeyWord(publicKey), publicKey, message, signature),
             true,
@@ -314,7 +314,7 @@ contract ShrincsSphincs256sVectorsTest is Test {
             bytes memory message,
             ShrincsTypes.StatefulSignature memory signature
         ) = decodeStatefulVector(".stateful.cases.valid.calldata");
-        setStatefulMaxSignatures(publicKey, uint32(signature.authPath.length - 1));
+        setStatefulMaxSignatures(publicKey, uint32(signature.q));
         assertEq(
             stateful.verifyUnsafeRaw(compositePublicKeyWord(publicKey), publicKey, message, signature),
             false,
@@ -336,17 +336,17 @@ contract ShrincsSphincs256sVectorsTest is Test {
         );
     }
 
-    function testStatefulSphincs256sRejectsWrongWotsChainCount() public {
+    function testStatefulSphincs256sRejectsWrongForsEntryCount() public {
         (
             ShrincsTypes.PublicKey memory publicKey,
             bytes memory message,
             ShrincsTypes.StatefulSignature memory signature
         ) = decodeStatefulVector(".stateful.cases.valid.calldata");
-        signature.chains = dropLastBytes32(signature.chains);
+        signature.forsEntries = new ShrincsTypes.ForsEntry[](0);
         assertEq(
             stateful.verifyUnsafeRaw(compositePublicKeyWord(publicKey), publicKey, message, signature),
             false,
-            "stateful wrong WOTS chain count"
+            "stateful wrong FORS entry count"
         );
     }
 
@@ -1056,26 +1056,7 @@ contract ShrincsSphincs256sVectorsTest is Test {
         )
     {
         bytes memory args = vectorArgs(vectorKey);
-        (
-            LegacyStatefulPublicKey memory legacyKey,
-            bytes memory legacyMessage,
-            LegacyStatefulSignature memory legacySignature
-        ) = abi.decode(args, (LegacyStatefulPublicKey, bytes, LegacyStatefulSignature));
-
-        (ShrincsTypes.PublicKey memory statelessPublicKey,,) = decodeStatelessVector(".stateless.cases.valid.calldata");
-
-        bytes memory encodedStatefulKey =
-            abi.encodePacked(legacyKey.pkSeed, legacyKey.root, bytes4(legacyKey.maxSignatures));
-
-        publicKey = publicKeyFromParts(encodedStatefulKey, statelessPublicKey.pkSeed, statelessPublicKey.hypertreeRoot);
-
-        message = legacyMessage;
-        signature = ShrincsTypes.StatefulSignature({
-            randomizer: legacySignature.randomizer,
-            counter: legacySignature.counter,
-            chains: fixedToDynamicChains(legacySignature.chains),
-            authPath: legacySignature.authPath
-        });
+        (publicKey, message, signature) = abi.decode(args, (ShrincsTypes.PublicKey, bytes, ShrincsTypes.StatefulSignature));
     }
 
     function decodeStatelessVector(string memory vectorKey)
