@@ -38,8 +38,8 @@ contract ShrincsAccountVerifierExample {
         LeafBitmap
     }
 
-    // Freshly installed keys begin stateful signing at leaf 1.
-    uint32 internal constant INITIAL_STATEFUL_LEAF_INDEX = 1;
+    // Freshly installed JARDIN compact-path keys begin at slot q=0.
+    uint32 internal constant INITIAL_STATEFUL_LEAF_INDEX = 0;
 
     // Installed bundle commitment currently trusted by the wrapper.
     bytes32 public currentShrincsPublicKey;
@@ -169,7 +169,7 @@ contract ShrincsAccountVerifierExample {
     // 1. Record the deployer as the wrapper owner.
     // 2. Install the initial SHRINCS public-key commitment.
     // 3. Start with monotonic stateful leaf tracking.
-    // 4. Expect the first stateful signature to use leaf 1.
+    // 4. Expect the first stateful signature to use slot q=0.
     constructor(bytes32 initialShrincsPublicKey) {
         // Record the deployer as the wrapper administrator.
         owner = msg.sender;
@@ -194,7 +194,7 @@ contract ShrincsAccountVerifierExample {
     ) internal returns (bool) {
         // This path bypasses canonical wrapper message construction and therefore remains internal-only.
         // Recover the consumed stateful leaf from the signature layout.
-        uint32 leafIndex = uint32(signature.authPath.length);
+        uint32 leafIndex = uint32(signature.q);
         // Stop early if the active policy disallows this leaf.
         if (!precheckStatefulLeafUse(leafIndex)) return false;
 
@@ -222,7 +222,7 @@ contract ShrincsAccountVerifierExample {
         ShrincsTypes.StatefulSignature calldata signature
     ) external returns (bool) {
         // Recover the consumed stateful leaf from the signature layout.
-        uint32 leafIndex = uint32(signature.authPath.length);
+        uint32 leafIndex = uint32(signature.q);
         // Stop early if the active policy disallows this leaf.
         if (!precheckStatefulLeafUse(leafIndex)) return false;
 
@@ -480,7 +480,7 @@ contract ShrincsAccountVerifierExample {
         bytes32 payloadHash,
         ShrincsTypes.StatefulSignature calldata signature
     ) external view onlySelf returns (bool) {
-        uint32 leafIndex = uint32(signature.authPath.length);
+        uint32 leafIndex = uint32(signature.q);
         if (!precheckStatefulLeafUse(leafIndex)) return false;
 
         ShrincsTypes.ActionContext memory context = ShrincsTypes.ActionContext({

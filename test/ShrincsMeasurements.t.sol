@@ -27,7 +27,7 @@ import {ShrincsStatelessVectorSigner} from "./helpers/ShrincsStatelessVectorSign
 contract MeasurementAccountSigningHarness is ShrincsStatelessVectorSigner {}
 
 contract ShrincsMeasurementsTest is Test {
-    string internal constant STATEFUL_RAW_K_VECTOR_PATH = "test/test_vectors/shrincs_stateful_k_gas_vector.json";
+    string internal constant MEASUREMENT_VECTOR_PATH = "test/test_vectors/shrincs_sphincs_256s_keccak.json";
     address internal constant STATEFUL_VECTOR_ACCOUNT = address(uint160(0xCAFE));
     bytes4 internal constant ERC1271_MAGIC_VALUE = 0x1626ba7e;
     bytes32 internal constant ACTION_TYPE = keccak256("measure");
@@ -125,8 +125,8 @@ contract ShrincsMeasurementsTest is Test {
 
     function prepareStatefulCase(bytes memory seedMaterial) internal returns (StatefulCase memory c) {
         seedMaterial;
-        string memory vectors = vm.readFile(STATEFUL_RAW_K_VECTOR_PATH);
-        bytes memory args = stripSelector(vm.parseJsonBytes(vectors, ".statefulRawK.canonicalCalldata"));
+        string memory vectors = vm.readFile(MEASUREMENT_VECTOR_PATH);
+        bytes memory args = stripSelector(vm.parseJsonBytes(vectors, ".measurements.stateful.canonicalCalldata"));
         (
             ShrincsTypes.PublicKey memory publicKey,
             bytes32 actionType,
@@ -142,7 +142,7 @@ contract ShrincsMeasurementsTest is Test {
             STATEFUL_VECTOR_ACCOUNT
         );
         ShrincsAccountVerifierExample account = ShrincsAccountVerifierExample(STATEFUL_VECTOR_ACCOUNT);
-        account.setStatefulPolicyMonotonicIndex(uint32(signature.authPath.length));
+        account.setStatefulPolicyMonotonicIndex(uint32(signature.q));
 
         ShrincsTypes.ActionContext memory context =
             ShrincsAccountSigningFacade.actionContext(account, ACTION_TYPE, PAYLOAD_HASH);

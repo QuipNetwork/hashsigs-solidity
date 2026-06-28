@@ -30,9 +30,12 @@ library ShrincsTypes {
     uint32 internal constant AddressTypeWotsHash = 0;
     uint32 internal constant AddressTypeTree = 2;
     uint32 internal constant AddressTypeForsTree = 3;
+    uint32 internal constant AddressTypeForsRoots = 4;
+    uint32 internal constant AddressTypeForsPrf = 6;
+    uint32 internal constant AddressTypeJardinMerkle = 16;
 
     // Encoded stateful public key layout:
-    // 32-byte pkSeed || 32-byte root || 4-byte maxSignatures.
+    // 32-byte subPkSeed || 32-byte subPkRoot || 4-byte Q_MAX/usage budget.
     uint16 internal constant STATEFUL_PUBLIC_KEY_BYTES = 68;
     // Stateful WOTS-C uses 64 chains.
     uint16 internal constant WOTS_CHAINS_STATEFUL = 64;
@@ -50,6 +53,11 @@ library ShrincsTypes {
     uint8 internal constant NUM_FORS_TREES = 22;
     uint16 internal constant WOTS_CHAIN_LEN = 16;
     uint16 internal constant NUM_WOTS_CHAINS = 64;
+    uint8 internal constant STATEFUL_FORS_TREE_HEIGHT = 5;
+    uint8 internal constant STATEFUL_FORS_K_TOTAL = 52;
+    uint8 internal constant STATEFUL_FORS_K_OPEN = 51;
+    uint8 internal constant STATEFUL_MERKLE_HEIGHT = 7;
+    uint32 internal constant STATEFUL_Q_MAX = 128;
 
     struct ForsDigest {
         // Hypertree subtree selected for this stateless signature.
@@ -72,11 +80,11 @@ library ShrincsTypes {
     }
 
     struct StatefulPublicKey {
-        // Public seed for stateful WOTS-C and tree hashing.
+        // JARDIN compact-path public seed (`subPkSeed`).
         bytes32 pkSeed;
-        // Root of the custom stateful tree.
+        // Root of the balanced compact-path Merkle tree (`subPkRoot`).
         bytes32 root;
-        // Maximum number of stateful leaves/signatures under this key.
+        // Maximum number of compact-path slots accepted under this key.
         uint32 maxSignatures;
     }
 
@@ -104,13 +112,15 @@ library ShrincsTypes {
     }
 
     struct StatefulSignature {
-        // Per-signature randomizer committed into the stateful message digest.
+        // Zero-indexed compact-path slot. The FORS ADRS ci field uses q + 1.
+        uint8 q;
+        // Per-signature randomizer committed into the compact FORS digest.
         bytes32 randomizer;
-        // Grinding counter used to satisfy the WOTS-C target-sum rule.
+        // Grinding counter used to force the omitted final FORS tree to leaf zero.
         uint32 counter;
-        // Revealed WOTS-C chain values.
-        bytes32[] chains;
-        // Unbalanced authentication path proving the selected stateful leaf.
+        // Revealed compact FORS+C leaves and authentication paths.
+        ForsEntry[] forsEntries;
+        // Balanced Merkle authentication path proving the selected compact slot.
         bytes32[] authPath;
     }
 
