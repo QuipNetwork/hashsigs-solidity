@@ -301,7 +301,10 @@ library ShrincsStateful {
         }
     }
 
-    // setSlice32: Write one 32-byte root into an already allocated byte string.
+    // setSlice32: Write one 32-byte segment into a packed byte buffer.
+    // 1. Skip the bytes-array length prefix.
+    // 2. Advance to the requested byte offset.
+    // 3. Store the 32-byte segment in place.
     function setSlice32(bytes memory dst, bytes32 src, uint256 offset) internal pure {
         assembly {
             // Skip the bytes length word to reach the payload start.
