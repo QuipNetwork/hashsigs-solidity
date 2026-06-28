@@ -240,7 +240,7 @@ contract ShrincsAccountVerifierExampleTest is Test {
             uint8(account.statefulPolicy()) == uint8(ShrincsAccountVerifierExample.StatefulPolicy.MonotonicIndex),
             "stateful policy must initialize to monotonic index"
         );
-        assertTrue(account.nextStatefulLeafIndex() == 1, "next stateful leaf index must initialize to one");
+        assertTrue(account.nextStatefulLeafIndex() == 0, "next stateful leaf index must initialize to zero");
         assertTrue(account.nonce() == 0, "nonce must initialize to zero");
         assertTrue(account.keyVersion() == 0, "key version must initialize to zero");
         assertTrue(account.statelessSignaturesUsed() == 0, "stateless usage must initialize to zero");
@@ -577,7 +577,7 @@ contract ShrincsAccountVerifierExampleTest is Test {
             uint8(account.statefulPolicy()) == uint8(ShrincsAccountVerifierExample.StatefulPolicy.MonotonicIndex),
             "failed non-owner monotonic set must not update policy"
         );
-        assertTrue(account.nextStatefulLeafIndex() == 1, "failed non-owner monotonic set must not update index");
+        assertTrue(account.nextStatefulLeafIndex() == 0, "failed non-owner monotonic set must not update index");
     }
 
     function testExampleNonOwnerSetStatefulPolicyMonotonicIndexReverts() public {
@@ -713,7 +713,7 @@ contract ShrincsAccountVerifierExampleTest is Test {
         account.installFreshKeyForTest(nextCompositePublicKey);
 
         assertEq(account.currentShrincsPublicKey(), nextCompositePublicKey);
-        assertTrue(account.nextStatefulLeafIndex() == 1, "fresh key must reset next stateful leaf index");
+        assertTrue(account.nextStatefulLeafIndex() == 0, "fresh key must reset next stateful leaf index");
         assertTrue(
             uint8(account.statefulPolicy()) == uint8(ShrincsAccountVerifierExample.StatefulPolicy.MonotonicIndex),
             "fresh key must reset stateful policy to monotonic index"
@@ -731,7 +731,7 @@ contract ShrincsAccountVerifierExampleTest is Test {
         bytes32 expectedCompositePublicKey = compositePublicKeyWord(publicKey);
         ShrincsAccountVerifierExampleHarness account =
             new ShrincsAccountVerifierExampleHarness(expectedCompositePublicKey);
-        uint32 leafIndex = uint32(signature.authPath.length);
+        uint32 leafIndex = uint32(signature.q);
 
         account.setStatefulPolicyLeafBitmap();
         bool firstUse = account.verifyStatefulUncheckedForTest(publicKey, message, signature);
@@ -775,7 +775,7 @@ contract ShrincsAccountVerifierExampleTest is Test {
         assertEq(account.statelessSignaturesUsed(), 124, "stateful-only rotation must carry forward prior usage plus the recovery signature");
         assertEq(account.nonce(), 1, "stateful-only rotation must advance nonce");
         assertEq(account.keyVersion(), 1, "stateful-only rotation must advance key version");
-        assertEq(account.nextStatefulLeafIndex(), 1, "stateful-only rotation must reset stateful tracking");
+        assertEq(account.nextStatefulLeafIndex(), 0, "stateful-only rotation must reset stateful tracking");
         assertEq(uint8(account.statefulPolicy()), uint8(ShrincsAccountVerifierExample.StatefulPolicy.MonotonicIndex));
         assertEq(account.recoveryMode(), false, "stateful-only rotation must exit recovery mode");
     }
@@ -853,7 +853,7 @@ contract ShrincsAccountVerifierExampleTest is Test {
         assertEq(account.statelessSignaturesUsed(), 0, "full rotation must reset stateless usage for the new stateless key");
         assertEq(account.nonce(), 1, "full rotation must advance nonce");
         assertEq(account.keyVersion(), 1, "full rotation must advance key version");
-        assertEq(account.nextStatefulLeafIndex(), 1, "full rotation must reset stateful tracking");
+        assertEq(account.nextStatefulLeafIndex(), 0, "full rotation must reset stateful tracking");
         assertEq(uint8(account.statefulPolicy()), uint8(ShrincsAccountVerifierExample.StatefulPolicy.MonotonicIndex));
         assertEq(account.recoveryMode(), false, "full rotation must exit recovery mode");
     }
@@ -907,26 +907,7 @@ contract ShrincsAccountVerifierExampleTest is Test {
         )
     {
         bytes memory args = vectorArgs(vectorKey);
-        (
-            LegacyStatefulPublicKey memory legacyKey,
-            bytes memory legacyMessage,
-            LegacyStatefulSignature memory legacySignature
-        ) = abi.decode(args, (LegacyStatefulPublicKey, bytes, LegacyStatefulSignature));
-
-        (ShrincsTypes.PublicKey memory statelessPublicKey,,) = decodeStatelessVector(".stateless.cases.valid.calldata");
-
-        bytes memory encodedStatefulKey =
-            abi.encodePacked(legacyKey.pkSeed, legacyKey.root, bytes4(legacyKey.maxSignatures));
-
-        publicKey = publicKeyFromParts(encodedStatefulKey, statelessPublicKey.pkSeed, statelessPublicKey.hypertreeRoot);
-
-        message = legacyMessage;
-        signature = ShrincsTypes.StatefulSignature({
-            randomizer: legacySignature.randomizer,
-            counter: legacySignature.counter,
-            chains: fixedToDynamicChains(legacySignature.chains),
-            authPath: legacySignature.authPath
-        });
+        (publicKey, message, signature) = abi.decode(args, (ShrincsTypes.PublicKey, bytes, ShrincsTypes.StatefulSignature));
     }
 
     function decodeStatelessVector(string memory vectorKey)
