@@ -23,6 +23,9 @@ import {Vm} from "../lib/forge-std/src/Vm.sol";
 
 contract WOTSPlusTest is Test {
     uint256 constant NUM_SIGNATURE_CHUNKS = 67; // WOTS+ standard number of signature chunks
+    // Number of meaningful randomization elements: function key (index 0) + the
+    // w-1 shared bitmasks. Equals WOTSPlus.ChainLen.
+    uint256 constant NUM_RANDOMIZATION_ELEMENTS = 16;
     
     function testGenerateKeyPair() public pure {
         bytes32 privateSeed = bytes32(uint256(1)); // Example seed
@@ -156,11 +159,158 @@ contract WOTSPlusTest is Test {
         }
     }
 
+    /*//////////////////////////////////////////////////////////////
+                       ADVERSARIAL / NEGATIVE TESTS
+    //////////////////////////////////////////////////////////////*/
+
+    // Helper: deterministic (key, message, signature) triple for a given seed/messageHash.
+    function _keyMsgSig(bytes32 seed, bytes32 messageHash)
+        internal
+        pure
+        returns (
+            WOTSPlus.WinternitzAddress memory publicKey,
+            WOTSPlus.WinternitzMessage memory message,
+            WOTSPlus.WinternitzElements memory signature
+        )
+    {
+        bytes32 privateKey;
+        (publicKey, privateKey) = WOTSPlus.generateKeyPair(seed);
+        message = WOTSPlus.WinternitzMessage({messageHash: messageHash});
+        signature = WOTSPlus.WinternitzElements({elements: WOTSPlus.sign(privateKey, message)});
+    }
+
+    function test_Verify_TamperedSignatureFails() public pure {
+        (
+            WOTSPlus.WinternitzAddress memory publicKey,
+            WOTSPlus.WinternitzMessage memory message,
+            WOTSPlus.WinternitzElements memory signature
+        ) = _keyMsgSig(bytes32(uint256(1)), keccak256("hello"));
+
+        assertTrue(WOTSPlus.verify(publicKey, message, signature), "control should verify");
+
+        // Flip a single bit in one signature element.
+        signature.elements[5] = bytes32(uint256(signature.elements[5]) ^ 1);
+        assertFalse(WOTSPlus.verify(publicKey, message, signature), "tampered signature must not verify");
+    }
+
+    function test_Verify_WrongPublicSeedFails() public pure {
+        (
+            WOTSPlus.WinternitzAddress memory publicKey,
+            WOTSPlus.WinternitzMessage memory message,
+            WOTSPlus.WinternitzElements memory signature
+        ) = _keyMsgSig(bytes32(uint256(1)), keccak256("hello"));
+
+        publicKey.publicSeed = bytes32(uint256(publicKey.publicSeed) ^ 1);
+        assertFalse(WOTSPlus.verify(publicKey, message, signature), "wrong public seed must not verify");
+    }
+
+    function test_Verify_WrongMessageFails() public pure {
+        (
+            WOTSPlus.WinternitzAddress memory publicKey,
+            ,
+            WOTSPlus.WinternitzElements memory signature
+        ) = _keyMsgSig(bytes32(uint256(1)), keccak256("hello"));
+
+        WOTSPlus.WinternitzMessage memory other = WOTSPlus.WinternitzMessage({messageHash: keccak256("goodbye")});
+        assertFalse(WOTSPlus.verify(publicKey, other, signature), "signature must not verify a different message");
+    }
+
+    function test_VerifyOrRevert_PassesOnValid() public pure {
+        (
+            WOTSPlus.WinternitzAddress memory publicKey,
+            WOTSPlus.WinternitzMessage memory message,
+            WOTSPlus.WinternitzElements memory signature
+        ) = _keyMsgSig(bytes32(uint256(7)), keccak256("ok"));
+
+        // Must not revert.
+        WOTSPlus.verifyOrRevert(publicKey, message, signature);
+    }
+
+    function test_VerifyOrRevert_RevertsOnInvalid() public {
+        (
+            WOTSPlus.WinternitzAddress memory publicKey,
+            WOTSPlus.WinternitzMessage memory message,
+            WOTSPlus.WinternitzElements memory signature
+        ) = _keyMsgSig(bytes32(uint256(7)), keccak256("ok"));
+
+        signature.elements[0] = bytes32(uint256(signature.elements[0]) ^ 1);
+        vm.expectRevert(WOTSPlus.WOTSPlus__InvalidSignature.selector);
+        WOTSPlus.verifyOrRevert(publicKey, message, signature);
+    }
+
+    function test_VerifyWithRandomizationElements_MismatchedREFails() public pure {
+        (
+            WOTSPlus.WinternitzAddress memory publicKey,
+            WOTSPlus.WinternitzMessage memory message,
+            WOTSPlus.WinternitzElements memory signature
+        ) = _keyMsgSig(bytes32(uint256(1)), keccak256("hello"));
+
+        // Randomization elements derived from an unrelated seed must reject a valid signature.
+        WOTSPlus.WinternitzElements memory wrongRE = WOTSPlus.generateRandomizationElements(keccak256("unrelated"));
+        assertFalse(
+            WOTSPlus.verifyWithRandomizationElements(publicKey, message, signature, wrongRE),
+            "mismatched randomization elements must not verify"
+        );
+    }
+
+    /*//////////////////////////////////////////////////////////////
+                                  FUZZ
+    //////////////////////////////////////////////////////////////*/
+
+    function testFuzz_SignVerifyRoundtrip(bytes32 seed, bytes32 messageHash) public pure {
+        (
+            WOTSPlus.WinternitzAddress memory publicKey,
+            WOTSPlus.WinternitzMessage memory message,
+            WOTSPlus.WinternitzElements memory signature
+        ) = _keyMsgSig(seed, messageHash);
+        assertTrue(WOTSPlus.verify(publicKey, message, signature), "valid signature must verify");
+    }
+
+    function testFuzz_VerifyWithRandomizationElementsMatchesVerify(bytes32 seed, bytes32 messageHash) public pure {
+        (
+            WOTSPlus.WinternitzAddress memory publicKey,
+            WOTSPlus.WinternitzMessage memory message,
+            WOTSPlus.WinternitzElements memory signature
+        ) = _keyMsgSig(seed, messageHash);
+        WOTSPlus.WinternitzElements memory re = WOTSPlus.generateRandomizationElements(publicKey.publicSeed);
+        assertEq(
+            WOTSPlus.verify(publicKey, message, signature),
+            WOTSPlus.verifyWithRandomizationElements(publicKey, message, signature, re),
+            "both verify paths must agree"
+        );
+    }
+
+    function testFuzz_WrongMessageNeverVerifies(bytes32 seed, bytes32 m1, bytes32 m2) public pure {
+        vm.assume(m1 != m2);
+        (
+            WOTSPlus.WinternitzAddress memory publicKey,
+            ,
+            WOTSPlus.WinternitzElements memory signature
+        ) = _keyMsgSig(seed, m1);
+        WOTSPlus.WinternitzMessage memory other = WOTSPlus.WinternitzMessage({messageHash: m2});
+        assertFalse(
+            WOTSPlus.verify(publicKey, other, signature),
+            "a signature must never verify a different message"
+        );
+    }
+
+    function testFuzz_TamperedElementNeverVerifies(bytes32 seed, uint8 idx, bytes32 delta) public pure {
+        vm.assume(delta != bytes32(0));
+        (
+            WOTSPlus.WinternitzAddress memory publicKey,
+            WOTSPlus.WinternitzMessage memory message,
+            WOTSPlus.WinternitzElements memory signature
+        ) = _keyMsgSig(seed, keccak256("fuzz"));
+        uint256 i = uint256(idx) % NUM_SIGNATURE_CHUNKS;
+        signature.elements[i] = bytes32(uint256(signature.elements[i]) ^ uint256(delta));
+        assertFalse(WOTSPlus.verify(publicKey, message, signature), "tampered signature must not verify");
+    }
+
     struct TestVector {
         bytes32 privateKey;
         bytes32 publicSeed;
         bytes32[NUM_SIGNATURE_CHUNKS] publicKeySegments;
-        bytes32[NUM_SIGNATURE_CHUNKS] randomizationElements;
+        bytes32[NUM_RANDOMIZATION_ELEMENTS] randomizationElements;
         bytes32 publicKey;
         bytes32 message;
         bytes32[NUM_SIGNATURE_CHUNKS] signature;
@@ -199,12 +349,19 @@ contract WOTSPlusTest is Test {
             WOTSPlus.WinternitzElements memory signature = WOTSPlus.WinternitzElements({
                 elements: signatureFixed
             });
-            
+
+            // Only the first NUM_RANDOMIZATION_ELEMENTS entries are meaningful; the rest
+            // of the WinternitzElements struct is unused and stays zero.
+            bytes32[NUM_RANDOMIZATION_ELEMENTS] memory reTruncated;
+            for (uint j = 0; j < NUM_RANDOMIZATION_ELEMENTS; j++) {
+                reTruncated[j] = randomizationElements.elements[j];
+            }
+
             vectors[i] = TestVector({
                 privateKey: privateKey,
                 publicSeed: publicKey.publicSeed,
                 publicKeySegments: publicKeySegments.elements,
-                randomizationElements: randomizationElements.elements,
+                randomizationElements: reTruncated,
                 publicKey: publicKey.publicKeyHash,
                 message: messageData.messageHash,
                 signature: signature.elements

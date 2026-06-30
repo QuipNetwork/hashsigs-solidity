@@ -14,7 +14,7 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 //
 // SPDX-License-Identifier: AGPL-3.0-or-later
-pragma solidity^0.8.28;
+pragma solidity 0.8.34;
 
 // DEBUG: import {Vm} from "../lib/forge-std/src/Vm.sol";
 // DEBUG: import {console} from "../lib/forge-std/src/console.sol";
@@ -92,6 +92,8 @@ library WOTSPlus {
         bytes32 messageHash;
     }
 
+    error WOTSPlus__InvalidSignature();
+
     // verify: Verify a WOTS+ signature. 
     // 1. The first part of the publicKey is a public seed used to regenerate the randomization elements. (`r` from the paper).
     // 2. The second part of the publicKey is the hash of the NumMessageChunks + NumChecksumChunks public key segments.
@@ -151,6 +153,16 @@ library WOTSPlus {
 
         // Compare computed hash with stored public key hash
         return computedHash == quipAddress.publicKeyHash;
+    }
+
+    // verifyOrRevert: as verify, but reverts with WOTSPlus__InvalidSignature
+    // instead of returning false, so a caller cannot ignore the result.
+    function verifyOrRevert(
+        WinternitzAddress calldata quipAddress,
+        WinternitzMessage calldata message,
+        WinternitzElements calldata signature
+    ) public pure {
+        if (!verify(quipAddress, message, signature)) revert WOTSPlus__InvalidSignature();
     }
 
     // verify: Verify a WOTS+ signature. 
@@ -214,14 +226,11 @@ library WOTSPlus {
 
     // sign: Sign a message with a WOTS+ private key. Do not use this, it is present as an example and
     // you should be using a typescript version of this function because it requires your private key.
-    function sign(bytes32 privateKey, WinternitzMessage calldata message) public pure returns (bytes32[NumSignatureChunks] memory) {
+    function sign(bytes32 privateKey, WinternitzMessage memory message) internal pure returns (bytes32[NumSignatureChunks] memory) {
         // DEBUG: require(privateKey.length == HashLen, 
         // DEBUG:     string.concat("private key length must be ", vm.toString(HashLen), " bytes"));
         // DEBUG: require(message.length == MessageLen, 
         // DEBUG:     string.concat("message length must be ", vm.toString(MessageLen), " bytes"));
-
-        require(privateKey.length == HashLen, 
-            string.concat("private key length must be 32 bytes"));
 
         bytes32 publicSeed = prf(privateKey, 0);
         WinternitzElements memory randomizationElements = generateRandomizationElements(publicSeed);
@@ -241,7 +250,7 @@ library WOTSPlus {
 
     // generateKeyPair: Generate a WOTS+ key pair. Do not use this, it is present as an example and
     // you should be using a typescript version of this function, presumably with better entropy source.
-    function generateKeyPair(bytes32 privateSeed) public pure returns (WinternitzAddress memory, bytes32) {
+    function generateKeyPair(bytes32 privateSeed) internal pure returns (WinternitzAddress memory, bytes32) {
 
         bytes32 privateKey = prf(privateSeed, 0);
         bytes32 publicSeed = prf(privateKey, 0);
@@ -281,7 +290,9 @@ library WOTSPlus {
 
     function generateRandomizationElements(bytes32 publicSeed) public pure returns (WinternitzElements memory) {
         bytes32[NumSignatureChunks] memory elements;
-        for (uint8 i = 0; i < NumSignatureChunks; i++) {
+        // Only the first ChainLen elements are ever used: index 0 is the function key,
+        // indices 1..ChainLen-1 are the shared bitmasks. The rest stay zero (unused).
+        for (uint8 i = 0; i < ChainLen; i++) {
             elements[i] = prf(publicSeed, i);
         }
         return WinternitzElements({elements: elements});
@@ -334,7 +345,7 @@ library WOTSPlus {
     // ComputeMessageHashChainIndexes: Compute the chain indexes for a message. 
     // We convert the message to base-w representation (or base of ChainLen representation)
     // We attach the checksum, also in base-w representation, to the end of the hash chain index list. 
-    function ComputeMessageHashChainIndexes(WinternitzMessage calldata message) internal pure returns (uint8[] memory) {
+    function ComputeMessageHashChainIndexes(WinternitzMessage memory message) internal pure returns (uint8[] memory) {
         uint8[] memory chainIndexes = new uint8[](NumMessageChunks + NumChecksumChunks);
         toBaseW(abi.encodePacked(message.messageHash), NumMessageChunks, chainIndexes, 0);
         checksum(chainIndexes);
