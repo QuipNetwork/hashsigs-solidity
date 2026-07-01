@@ -60,8 +60,9 @@ library ShrincsTestSigner {
         });
 
         bytes memory statefulPublicKey = encodeStatefulPublicKey(statefulPkSeed, statefulRoot, maxStatefulSignatures);
-        bytes32 publicKeyCommitment =
-            ShrincsUtils.publicKeyCommitmentFromParts(statefulPublicKey, abi.encodePacked(pkSeed), abi.encodePacked(hypertreeRoot));
+        bytes32 publicKeyCommitment = ShrincsUtils.publicKeyCommitmentFromParts(
+            statefulPublicKey, abi.encodePacked(pkSeed), abi.encodePacked(hypertreeRoot)
+        );
         publicKey = ShrincsTypes.PublicKey({
             statefulPublicKey: statefulPublicKey,
             publicKeyCommitment: abi.encodePacked(publicKeyCommitment),
@@ -74,7 +75,11 @@ library ShrincsTestSigner {
     function signStatefulRaw(ShrincsTypes.SigningKey memory signingKey, bytes memory message)
         internal
         pure
-        returns (ShrincsTypes.SigningKey memory nextSigningKey, ShrincsTypes.StatefulSignature memory signature, bool ok)
+        returns (
+            ShrincsTypes.SigningKey memory nextSigningKey,
+            ShrincsTypes.StatefulSignature memory signature,
+            bool ok
+        )
     {
         uint32 leafIndex = signingKey.nextStatefulLeafIndex;
         if (leafIndex >= signingKey.maxStatefulSignatures) return (nextSigningKey, signature, false);
@@ -94,7 +99,11 @@ library ShrincsTestSigner {
     )
         internal
         pure
-        returns (ShrincsTypes.SigningKey memory nextSigningKey, ShrincsTypes.StatefulSignature memory signature, bool ok)
+        returns (
+            ShrincsTypes.SigningKey memory nextSigningKey,
+            ShrincsTypes.StatefulSignature memory signature,
+            bool ok
+        )
     {
         if (publicKey.publicKeyCommitment.length != 32) return (nextSigningKey, signature, false);
         bytes32 expectedPublicKeyCommitment;
@@ -167,7 +176,8 @@ library ShrincsTestSigner {
         bytes memory message
     ) internal pure returns (ShrincsTypes.StatefulSignature memory signature, bool ok) {
         for (uint32 counter = 0; counter < FORS_C_MAX_GRIND_COUNTER;) {
-            bytes32 randomizer = compactRandomizer(skPrf, subPkSeed, subPkRoot, q, counter, message);
+            bytes memory mStar = abi.encodePacked("JARDIN/TYPE2/v1", subPkSeed, subPkRoot, q, message);
+            bytes32 randomizer = compactRandomizer(skPrf, bytes32(0), counter, mStar);
             bytes memory digest = compactDigest(subPkSeed, subPkRoot, q, randomizer, counter, message);
             uint256 a = uint256(ShrincsTypes.STATEFUL_FORS_TREE_HEIGHT);
             uint256 kOpen = uint256(ShrincsTypes.STATEFUL_FORS_K_OPEN);
@@ -178,12 +188,9 @@ library ShrincsTestSigner {
                     (, bytes[] memory authPath) =
                         compactForsTreeRootAndAuthPath(skSeed, subPkSeed, q, uint32(tree), leaf);
                     entries[tree] = ShrincsTypes.ForsEntry({
-                        secretLeaf: abi.encodePacked(compactForsLeafSecret(
-                            skSeed,
-                            subPkSeed,
-                            q,
-                            compactForsTreeLowLeafIndex(uint32(tree), leaf)
-                        )),
+                        secretLeaf: abi.encodePacked(
+                            compactForsLeafSecret(skSeed, subPkSeed, q, compactForsTreeLowLeafIndex(uint32(tree), leaf))
+                        ),
                         authPath: authPath
                     });
                     unchecked {
@@ -191,11 +198,7 @@ library ShrincsTestSigner {
                     }
                 }
                 signature = ShrincsTypes.StatefulSignature({
-                    q: q,
-                    randomizer: randomizer,
-                    counter: counter,
-                    forsEntries: entries,
-                    authPath: new bytes32[](0)
+                    q: q, randomizer: randomizer, counter: counter, forsEntries: entries, authPath: new bytes32[](0)
                 });
                 return (signature, true);
             }
@@ -214,7 +217,11 @@ library ShrincsTestSigner {
                 ++tree;
             }
         }
-        return keccak256(abi.encodePacked("JARDIN/T_k", subPkSeed, jardinAddressWord(ShrincsTypes.AddressTypeForsRoots, q, 0, 0), roots));
+        return keccak256(
+            abi.encodePacked(
+                "JARDIN/T_k", subPkSeed, jardinAddressWord(ShrincsTypes.AddressTypeForsRoots, q, 0, 0), roots
+            )
+        );
     }
 
     function compactForsTreeRoot(bytes32 skSeed, bytes32 subPkSeed, uint8 q, uint32 forsTree)
@@ -265,7 +272,9 @@ library ShrincsTestSigner {
             for (uint256 parent = 0; parent < parents.length;) {
                 uint64 shiftedTree = uint64(forsTree) << (height - nodeHeight);
                 uint64 parentLowIndex = shiftedTree + uint64(parent);
-                parents[parent] = compactForsNodeHash(subPkSeed, q, nodeHeight, parentLowIndex, levelNodes[parent * 2], levelNodes[parent * 2 + 1]);
+                parents[parent] = compactForsNodeHash(
+                    subPkSeed, q, nodeHeight, parentLowIndex, levelNodes[parent * 2], levelNodes[parent * 2 + 1]
+                );
                 unchecked {
                     ++parent;
                 }
@@ -279,7 +288,11 @@ library ShrincsTestSigner {
         root = levelNodes[0];
     }
 
-    function statefulAuthPath(bytes32 skSeed, bytes32 subPkSeed, uint8 q) internal pure returns (bytes32[] memory path) {
+    function statefulAuthPath(bytes32 skSeed, bytes32 subPkSeed, uint8 q)
+        internal
+        pure
+        returns (bytes32[] memory path)
+    {
         path = new bytes32[](ShrincsTypes.STATEFUL_MERKLE_HEIGHT);
         uint32 index = uint32(q);
         for (uint32 j = 0; j < ShrincsTypes.STATEFUL_MERKLE_HEIGHT;) {
@@ -291,16 +304,12 @@ library ShrincsTestSigner {
         }
     }
 
-    function compactRandomizer(
-        bytes32 skPrf,
-        bytes32 subPkSeed,
-        bytes32 subPkRoot,
-        uint8 q,
-        uint32 counter,
-        bytes memory message
-    ) internal pure returns (bytes32) {
-        bytes memory mStar = abi.encodePacked("JARDIN/TYPE2/v1", subPkSeed, subPkRoot, q, message);
-        return keccak256(abi.encodePacked("JARDIN/PRF_msg/v1", skPrf, subPkSeed, counter, mStar));
+    function compactRandomizer(bytes32 skPrf, bytes32 optRand, uint32 counter, bytes memory mStar)
+        internal
+        pure
+        returns (bytes32)
+    {
+        return keccak256(abi.encodePacked("JARDIN/PRF_msg/v1", skPrf, optRand, counter, mStar));
     }
 
     function compactDigest(
@@ -311,8 +320,8 @@ library ShrincsTestSigner {
         uint32 counter,
         bytes memory message
     ) internal pure returns (bytes memory out) {
-        uint256 digestBits =
-            uint256(ShrincsTypes.STATEFUL_FORS_K_TOTAL) * uint256(ShrincsTypes.STATEFUL_FORS_TREE_HEIGHT);
+        uint256 digestBits = uint256(ShrincsTypes.STATEFUL_FORS_K_TOTAL)
+            * uint256(ShrincsTypes.STATEFUL_FORS_TREE_HEIGHT);
         uint256 digestBytes = (digestBits + 7) / 8;
         bytes memory mStar = abi.encodePacked("JARDIN/TYPE2/v1", subPkSeed, subPkRoot, q, message);
         bytes memory base = abi.encodePacked("JARDIN/H_msg/v1", randomizer, subPkSeed, subPkRoot, counter, mStar);
@@ -357,10 +366,7 @@ library ShrincsTestSigner {
         bytes32 secret = compactForsLeafSecret(skSeed, subPkSeed, q, treeIndex);
         return keccak256(
             abi.encodePacked(
-                "JARDIN/F",
-                subPkSeed,
-                jardinAddressWord(ShrincsTypes.AddressTypeForsTree, q, 0, treeIndex),
-                secret
+                "JARDIN/F", subPkSeed, jardinAddressWord(ShrincsTypes.AddressTypeForsTree, q, 0, treeIndex), secret
             )
         );
     }
@@ -389,9 +395,8 @@ library ShrincsTestSigner {
         pure
         returns (bytes32)
     {
-        return keccak256(
-            abi.encodePacked("JARDIN/H", subPkSeed, jardinMerkleAddressWord(level, nodeIndex), left, right)
-        );
+        return
+            keccak256(abi.encodePacked("JARDIN/H", subPkSeed, jardinMerkleAddressWord(level, nodeIndex), left, right));
     }
 
     function compactForsTreeLowLeafIndex(uint32 forsTree, uint32 leaf) internal pure returns (uint64) {
@@ -435,19 +440,21 @@ library ShrincsTestSigner {
         returns (bytes32[NUM_HYPERTREE_LAYERS] memory layerSeeds)
     {
         for (uint8 layer = 0; layer < NUM_HYPERTREE_LAYERS;) {
-            layerSeeds[layer] =
-                keccak256(abi.encodePacked("hypertree-layer-seed", statelessSkSeed, bytes1(layer)));
+            layerSeeds[layer] = keccak256(abi.encodePacked("hypertree-layer-seed", statelessSkSeed, bytes1(layer)));
             unchecked {
                 ++layer;
             }
         }
     }
 
-    function hypertreeVirtualNode(bytes32 pkSeed, bytes32 layerSeed, uint32 layer, uint64 tree, uint32 height, uint32 index)
-        internal
-        pure
-        returns (bytes32)
-    {
+    function hypertreeVirtualNode(
+        bytes32 pkSeed,
+        bytes32 layerSeed,
+        uint32 layer,
+        uint64 tree,
+        uint32 height,
+        uint32 index
+    ) internal pure returns (bytes32) {
         if (height == 0) {
             return hypertreeLeaf(pkSeed, layerSeed, layer, tree, index);
         }
@@ -502,7 +509,8 @@ library ShrincsTestSigner {
     ) internal pure returns (bytes32 out) {
         out = value;
         for (uint32 step = start; step < start + steps;) {
-            bytes32 addressWord = ShrincsUtils.addressWord32(layer, tree, ShrincsTypes.AddressTypeWotsHash, keypair, chain, step);
+            bytes32 addressWord =
+                ShrincsUtils.addressWord32(layer, tree, ShrincsTypes.AddressTypeWotsHash, keypair, chain, step);
             out = keccak256(abi.encodePacked("wots-c-chain", pkSeed, addressWord, out));
             unchecked {
                 ++step;

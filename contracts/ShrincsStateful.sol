@@ -213,7 +213,7 @@ library ShrincsStateful {
     // compactDigest: Build the JARDIN compact FORS+C digest.
     // 1. Compute k_total*a bits; with current params this is 52*5 = 260 bits.
     // 2. Build `M* = tag || subPkSeed || subPkRoot || q || message`.
-    // 3. Domain-separate H_msg with the signature randomizer and grind counter.
+    // 3. Build `H_msg(R, subPkSeed, subPkRoot, uint32_be(counter) || M*)`.
     // 4. Expand Keccak blocks until enough digest bytes are available.
     function compactDigest(
         bytes32 subPkSeed,
@@ -229,7 +229,7 @@ library ShrincsStateful {
         uint256 digestBytes = (digestBits + 7) / 8;
         // `M*` binds the message to this compact subkey and the exact slot q.
         bytes memory mStar = abi.encodePacked("JARDIN/TYPE2/v1", subPkSeed, subPkRoot, q, message);
-        // The H_msg base includes both anti-replay key material and the grind counter.
+        // This is the JARDIN H_msg input: R || subPkSeed || subPkRoot || counter || M*.
         bytes memory base = abi.encodePacked("JARDIN/H_msg/v1", randomizer, subPkSeed, subPkRoot, counter, mStar);
         // Allocate the exact digest byte length that bit extraction will read from.
         out = new bytes(digestBytes);
