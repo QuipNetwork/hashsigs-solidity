@@ -161,6 +161,75 @@ The vector JSON contains the Rust-generated public keys, messages, signatures,
 and negative/tampered cases. It also includes compatibility calldata fields used
 by the current Foundry vector decoder.
 
+### Measuring the kth Stateful Signature
+
+For stateful gas measurements at a specific stateful leaf/signature number
+`k`, use the focused Rust stateful-k vector generator rather than the shared
+`shrincs_sphincs_256s_keccak.json` generator.
+
+In the Rust repository, set the desired `k` in:
+
+```text
+tests/generate_stateful_gas_vector.rs
+```
+
+by changing:
+
+```rust
+const TARGET_SIGNATURE_NUMBER: u32 = 128;
+```
+
+Then generate the vector, preferably in release mode:
+
+```bash
+cd /path/to/hashsigs-rs
+cargo test --release --test generate_stateful_gas_vector -- --ignored --nocapture
+```
+
+The Rust generator writes:
+
+```text
+tests/test_vectors/shrincs_stateful_k_gas_vector.json
+```
+
+Copy that file into this Solidity repository:
+
+```bash
+cp /path/to/hashsigs-rs/tests/test_vectors/shrincs_stateful_k_gas_vector.json \
+  /path/to/hashsigs-solidity/test/test_vectors/shrincs_stateful_k_gas_vector.json
+```
+
+When using this stateful-k vector, `test/ShrincsMeasurements.t.sol` must read
+the stateful-k file and parse the stateful-k JSON shape:
+
+```solidity
+string internal constant MEASUREMENT_VECTOR_PATH =
+    "test/test_vectors/shrincs_stateful_k_gas_vector.json";
+
+bytes memory args =
+    stripSelector(vm.parseJsonBytes(vectors, ".statefulRawK.canonicalCalldata"));
+```
+
+The `.statefulRawK.canonicalCalldata` path matches the JSON produced by
+`generate_stateful_gas_vector.rs`. Do not use
+`.measurements.stateful.canonicalCalldata` with
+`shrincs_stateful_k_gas_vector.json`; that selector belongs to the shared
+`shrincs_sphincs_256s_keccak.json` measurement-vector schema.
+
+Run the stateful gas measurements from this Solidity repository:
+
+```bash
+cd /path/to/hashsigs-solidity
+forge test --match-contract ShrincsMeasurementsTest --match-test testMeasureStatefulCanonicalWrapperCallGas -vv
+forge test --match-contract ShrincsMeasurementsTest --match-test testMeasureStatefulERC1271CallGas -vv
+```
+
+To run the wrapper measurement script instead:
+
+```bash
+bash bin/measure-wrapper-gas.sh
+```
+
 ## Test-Only Signer Helpers
 
 This repository now also contains test-only Solidity signer helpers under
