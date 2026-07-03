@@ -21,11 +21,13 @@ import {SHRINCS} from "./SHRINCS.sol";
 import {ShrincsCodec} from "./ShrincsCodec.sol";
 import {ShrincsTypes} from "./ShrincsTypes.sol";
 
-/// @notice ERC-7913 signature verifier for stateless SHRINCS signatures.
+/// @title ShrincsVerifier
+/// @notice ERC-7913 signature verifier for stateful SHRINCS signatures.
 /// @dev Trustless by construction: no owner, no storage, no constructor, no upgradability.
 /// `key` is the 32-byte SHRINCS publicKeyCommitment; `signature` is the ShrincsCodec
-/// stateless envelope. Stateful SHRINCS signatures are out of scope (they need on-chain
-/// leaf tracking and belong in account wrappers, not a stateless view verifier).
+/// stateful envelope (abi.encode(PublicKey, StatefulSignature)). Verifies signature
+/// validity only; callers that require one-time-use of stateful leaves track leaf
+/// consumption themselves.
 contract ShrincsVerifier is IERC7913SignatureVerifier {
     // Version tag identifying this verifier's key/envelope format family.
     bytes32 public constant VERSION_TAG = keccak256("quip.shrincs-verifier.v1");
@@ -64,8 +66,8 @@ contract ShrincsVerifier is IERC7913SignatureVerifier {
         onlySelf
         returns (bool)
     {
-        (ShrincsTypes.PublicKey memory publicKey, ShrincsTypes.StatelessSignature memory signature) =
-            ShrincsCodec.decodeStatelessEnvelope(envelope);
+        (ShrincsTypes.PublicKey memory publicKey, ShrincsTypes.StatefulSignature memory signature) =
+            ShrincsCodec.decodeStatefulEnvelope(envelope);
 
         return this.checkDecoded(commitment, hash, publicKey, signature);
     }
@@ -73,15 +75,15 @@ contract ShrincsVerifier is IERC7913SignatureVerifier {
     // checkDecoded: Self-call hop #2 — calldata re-materialization and verification.
     // 1. Receiving the structs through an external call re-encodes them into this call's
     //    calldata — required because SHRINCS takes calldata structs.
-    // 2. Verify the stateless signature over exactly the 32 hash bytes under the commitment.
-    // 3. SHRINCS already enforces commitment-vs-bundle match, bundle shape, non-empty
-    //    hypertree, FORS root reconstruction, and the hypertree walk — nothing is added here.
+    // 2. Verify the stateful signature over exactly the 32 hash bytes under the commitment.
+    // 3. SHRINCS already enforces commitment-vs-bundle match, bundle shape, leaf-index
+    //    bounds, WOTS-C reconstruction, and the unbalanced-tree root — nothing is added here.
     function checkDecoded(
         bytes32 commitment,
         bytes32 hash,
         ShrincsTypes.PublicKey calldata publicKey,
-        ShrincsTypes.StatelessSignature calldata signature
+        ShrincsTypes.StatefulSignature calldata signature
     ) external view onlySelf returns (bool) {
-        return SHRINCS.verifyStatelessUncheckedMessage(commitment, publicKey, ShrincsCodec.toMessage(hash), signature);
+        return SHRINCS.verifyStatefulUncheckedMessage(commitment, publicKey, ShrincsCodec.toMessage(hash), signature);
     }
 }

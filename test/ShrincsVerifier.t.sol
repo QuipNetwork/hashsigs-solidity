@@ -21,32 +21,38 @@ import {IERC7913SignatureVerifier} from "../contracts/interfaces/IERC7913Signatu
 import {ShrincsCodec} from "../contracts/ShrincsCodec.sol";
 import {ShrincsTypes} from "../contracts/ShrincsTypes.sol";
 import {ShrincsVerifier} from "../contracts/ShrincsVerifier.sol";
-import {ShrincsStatelessVectorSigner} from "./helpers/ShrincsStatelessVectorSigner.sol";
-import {ShrincsStatelessVectorSigningFacade} from "./helpers/ShrincsStatelessVectorSigningFacade.sol";
+import {ShrincsTestSigner} from "./helpers/ShrincsTestSigner.sol";
 
 contract ShrincsVerifierTest is Test {
-    using ShrincsStatelessVectorSigningFacade for ShrincsStatelessVectorSigner;
-
     bytes4 internal constant INVALID_SIGNATURE = 0xffffffff;
 
     ShrincsVerifier internal verifier;
 
-    // One real stateless signature is generated once in setUp and shared across the
-    // happy-path and mutation tests because staged signing sessions are heavy.
+    // One stateful key is generated in setUp; signatures at two in-budget leaves are
+    // shared across the happy-path and mutation tests.
     bytes32 internal signedHash;
     bytes32 internal keyCommitment;
     bytes internal validKey;
     bytes internal validEnvelope;
+    bytes internal secondLeafEnvelope;
 
     function setUp() public {
         verifier = new ShrincsVerifier();
-        ShrincsStatelessVectorSigner signer = new ShrincsStatelessVectorSigner();
+
+        (ShrincsTypes.SigningKey memory signingKey, ShrincsTypes.PublicKey memory publicKey, bool keygenOk) =
+            ShrincsTestSigner.keygen(bytes("shrincs erc7913 stateful verifier seed"), 4);
+        assertTrue(keygenOk, "in-test keygen must succeed");
 
         // The ERC-7913 hash IS the signed message: sign exactly its 32 packed bytes.
-        signedHash = keccak256("shrincs erc7913 verifier vector");
-        (ShrincsTypes.PublicKey memory publicKey, ShrincsTypes.StatelessSignature memory signature, bool ok) =
-            signer.signFromSeed(bytes("shrincs erc7913 verifier seed"), 4, abi.encodePacked(signedHash));
-        assertTrue(ok, "in-test stateless signing must succeed");
+        signedHash = keccak256("shrincs erc7913 stateful verifier vector");
+        bytes memory message = abi.encodePacked(signedHash);
+
+        (ShrincsTypes.StatefulSignature memory leafOneSignature, bool leafOneOk) =
+            ShrincsTestSigner.signStatefulRawAtLeaf(signingKey, 1, message);
+        assertTrue(leafOneOk, "leaf-1 signing must succeed");
+        (ShrincsTypes.StatefulSignature memory leafTwoSignature, bool leafTwoOk) =
+            ShrincsTestSigner.signStatefulRawAtLeaf(signingKey, 2, message);
+        assertTrue(leafTwoOk, "leaf-2 signing must succeed");
 
         // The ERC-7913 key is the 32-byte bundle commitment word.
         bytes memory commitmentBytes = publicKey.publicKeyCommitment;
@@ -58,21 +64,17 @@ contract ShrincsVerifierTest is Test {
         validKey = abi.encodePacked(keyCommitment);
 
         // Encode through the codec so the tests pin the same format definition the verifier decodes.
-        validEnvelope = ShrincsCodec.encodeStatelessEnvelope(publicKey, signature);
+        validEnvelope = ShrincsCodec.encodeStatefulEnvelope(publicKey, leafOneSignature);
+        secondLeafEnvelope = ShrincsCodec.encodeStatefulEnvelope(publicKey, leafTwoSignature);
     }
 
     // decodeStoredEnvelope: Reload the shared valid envelope as mutable memory structs.
     function decodeStoredEnvelope()
         internal
         view
-        returns (ShrincsTypes.PublicKey memory publicKey, ShrincsTypes.StatelessSignature memory signature)
+        returns (ShrincsTypes.PublicKey memory publicKey, ShrincsTypes.StatefulSignature memory signature)
     {
-        return abi.decode(validEnvelope, (ShrincsTypes.PublicKey, ShrincsTypes.StatelessSignature));
-    }
-
-    // flipByte: Flip one bit inside a dynamic bytes field.
-    function flipByte(bytes memory data, uint256 index) internal pure {
-        data[index] = bytes1(uint8(data[index]) ^ 0x01);
+        return abi.decode(validEnvelope, (ShrincsTypes.PublicKey, ShrincsTypes.StatefulSignature));
     }
 
     function testVerifyValidSignatureReturnsMagicValue() public view {
@@ -81,12 +83,21 @@ contract ShrincsVerifierTest is Test {
         assertEq(result, bytes4(0x024ad318), "selector must be the ERC-7913 magic value");
     }
 
+    function testVerifyValidSecondLeafSignatureReturnsMagicValue() public view {
+        // The verifier checks signature validity only; any in-budget leaf verifies.
+        assertEq(
+            verifier.verify(validKey, signedHash, secondLeafEnvelope),
+            IERC7913SignatureVerifier.verify.selector,
+            "a second in-budget leaf must also verify"
+        );
+    }
+
     function testVersionTag() public view {
         assertEq(verifier.VERSION_TAG(), keccak256("quip.shrincs-verifier.v1"), "version tag");
     }
 
     function testRejectsBadKeyLengths() public view {
-        uint256[4] memory badLengths = [uint256(0), 20, 31, 33];
+        uint256[5] memory badLengths = [uint256(0), 20, 31, 33, 64];
         for (uint256 i = 0; i < badLengths.length; i++) {
             bytes memory key = new bytes(badLengths[i]);
             for (uint256 j = 0; j < key.length; j++) {
@@ -112,32 +123,20 @@ contract ShrincsVerifierTest is Test {
         );
     }
 
-    function testRejectsTamperedHypertreeRoot() public view {
-        (ShrincsTypes.PublicKey memory publicKey, ShrincsTypes.StatelessSignature memory signature) =
+    function testRejectsTamperedChainValue() public view {
+        (ShrincsTypes.PublicKey memory publicKey, ShrincsTypes.StatefulSignature memory signature) =
             decodeStoredEnvelope();
-        flipByte(publicKey.hypertreeRoot, 0);
-        bytes memory envelope = ShrincsCodec.encodeStatelessEnvelope(publicKey, signature);
-        assertEq(
-            verifier.verify(validKey, signedHash, envelope), INVALID_SIGNATURE, "tampered hypertree root must fail"
-        );
+        signature.chains[0] = bytes32(uint256(signature.chains[0]) ^ 1);
+        bytes memory envelope = ShrincsCodec.encodeStatefulEnvelope(publicKey, signature);
+        assertEq(verifier.verify(validKey, signedHash, envelope), INVALID_SIGNATURE, "tampered WOTS chain must fail");
     }
 
-    function testRejectsTamperedForsEntry() public view {
-        (ShrincsTypes.PublicKey memory publicKey, ShrincsTypes.StatelessSignature memory signature) =
+    function testRejectsTamperedAuthPath() public view {
+        (ShrincsTypes.PublicKey memory publicKey, ShrincsTypes.StatefulSignature memory signature) =
             decodeStoredEnvelope();
-        flipByte(signature.fors.entries[0].secretLeaf, 0);
-        bytes memory envelope = ShrincsCodec.encodeStatelessEnvelope(publicKey, signature);
-        assertEq(verifier.verify(validKey, signedHash, envelope), INVALID_SIGNATURE, "tampered FORS entry must fail");
-    }
-
-    function testRejectsTamperedHypertreeChainValue() public view {
-        (ShrincsTypes.PublicKey memory publicKey, ShrincsTypes.StatelessSignature memory signature) =
-            decodeStoredEnvelope();
-        flipByte(signature.hypertree[0].wotsCSignature.chains[0], 0);
-        bytes memory envelope = ShrincsCodec.encodeStatelessEnvelope(publicKey, signature);
-        assertEq(
-            verifier.verify(validKey, signedHash, envelope), INVALID_SIGNATURE, "tampered hypertree chain must fail"
-        );
+        signature.authPath[0] = bytes32(uint256(signature.authPath[0]) ^ 1);
+        bytes memory envelope = ShrincsCodec.encodeStatefulEnvelope(publicKey, signature);
+        assertEq(verifier.verify(validKey, signedHash, envelope), INVALID_SIGNATURE, "tampered auth path must fail");
     }
 
     function testRejectsTruncatedEnvelope() public view {
@@ -165,11 +164,11 @@ contract ShrincsVerifierTest is Test {
     function testRejectsMismatchedBundleCommitment() public view {
         // Distinct from the wrong-key case: here the declared commitment field DOES match
         // the key, but the bundle no longer recomputes to that commitment.
-        (ShrincsTypes.PublicKey memory publicKey, ShrincsTypes.StatelessSignature memory signature) =
+        (ShrincsTypes.PublicKey memory publicKey, ShrincsTypes.StatefulSignature memory signature) =
             decodeStoredEnvelope();
         bytes32 fakeCommitment = keccak256("mismatched bundle commitment");
         publicKey.publicKeyCommitment = abi.encodePacked(fakeCommitment);
-        bytes memory envelope = ShrincsCodec.encodeStatelessEnvelope(publicKey, signature);
+        bytes memory envelope = ShrincsCodec.encodeStatefulEnvelope(publicKey, signature);
         assertEq(
             verifier.verify(abi.encodePacked(fakeCommitment), signedHash, envelope),
             INVALID_SIGNATURE,
@@ -183,7 +182,7 @@ contract ShrincsVerifierTest is Test {
     }
 
     function testCheckDecodedRejectsNonSelfCaller() public {
-        (ShrincsTypes.PublicKey memory publicKey, ShrincsTypes.StatelessSignature memory signature) =
+        (ShrincsTypes.PublicKey memory publicKey, ShrincsTypes.StatefulSignature memory signature) =
             decodeStoredEnvelope();
         vm.expectRevert(bytes("only self"));
         verifier.checkDecoded(keyCommitment, signedHash, publicKey, signature);

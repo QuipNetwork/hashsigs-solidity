@@ -27,19 +27,19 @@ contract ShrincsCodecHarness {
         return ShrincsCodec.decodeKey(key);
     }
 
-    function decodeStatelessEnvelope(bytes calldata envelope)
+    function decodeStatefulEnvelope(bytes calldata envelope)
         external
         pure
-        returns (ShrincsTypes.PublicKey memory publicKey, ShrincsTypes.StatelessSignature memory signature)
+        returns (ShrincsTypes.PublicKey memory publicKey, ShrincsTypes.StatefulSignature memory signature)
     {
-        return ShrincsCodec.decodeStatelessEnvelope(envelope);
+        return ShrincsCodec.decodeStatefulEnvelope(envelope);
     }
 
-    function encodeStatelessEnvelope(
+    function encodeStatefulEnvelope(
         ShrincsTypes.PublicKey memory publicKey,
-        ShrincsTypes.StatelessSignature memory signature
+        ShrincsTypes.StatefulSignature memory signature
     ) external pure returns (bytes memory envelope) {
-        return ShrincsCodec.encodeStatelessEnvelope(publicKey, signature);
+        return ShrincsCodec.encodeStatefulEnvelope(publicKey, signature);
     }
 
     function toMessage(bytes32 hash) external pure returns (bytes memory message) {
@@ -66,34 +66,18 @@ contract ShrincsCodecTest is Test {
         });
     }
 
-    // buildSampleSignature: Construct a fully populated synthetic stateless signature with
-    // multiple FORS entries and hypertree layers so nested members are exercised.
-    function buildSampleSignature() internal pure returns (ShrincsTypes.StatelessSignature memory signature) {
-        signature.fors.randomizer = abi.encodePacked(keccak256("codec fors randomizer"));
-        signature.fors.counter = 42;
-        signature.fors.entries = new ShrincsTypes.ForsEntry[](2);
-        for (uint256 i = 0; i < 2; i++) {
-            signature.fors.entries[i].secretLeaf = abi.encodePacked(keccak256(abi.encode("codec fors leaf", i)));
-            signature.fors.entries[i].authPath = new bytes[](3);
-            for (uint256 j = 0; j < 3; j++) {
-                signature.fors.entries[i].authPath[j] = abi.encodePacked(keccak256(abi.encode("codec fors auth", i, j)));
-            }
+    // buildSampleSignature: Construct a fully populated synthetic stateful signature so
+    // every field — randomizer, counter, chains, authPath — is exercised by the round-trip.
+    function buildSampleSignature() internal pure returns (ShrincsTypes.StatefulSignature memory signature) {
+        signature.randomizer = keccak256("codec stateful randomizer");
+        signature.counter = 42;
+        signature.chains = new bytes32[](3);
+        for (uint256 i = 0; i < signature.chains.length; i++) {
+            signature.chains[i] = keccak256(abi.encode("codec stateful chain", i));
         }
-
-        signature.hypertree = new ShrincsTypes.HypertreeLayerSignature[](2);
-        for (uint256 i = 0; i < 2; i++) {
-            ShrincsTypes.HypertreeLayerSignature memory layer = signature.hypertree[i];
-            layer.treeIndex = uint64(1000 + i);
-            layer.leafIndex = uint32(20 + i);
-            layer.wotsCPkHash = abi.encodePacked(keccak256(abi.encode("codec wots pk hash", i)));
-            layer.wotsCSignature.randomizer = abi.encodePacked(keccak256(abi.encode("codec wots randomizer", i)));
-            layer.wotsCSignature.counter = uint32(300 + i);
-            layer.wotsCSignature.chains = new bytes[](2);
-            layer.wotsCSignature.chains[0] = abi.encodePacked(keccak256(abi.encode("codec wots chain a", i)));
-            layer.wotsCSignature.chains[1] = abi.encodePacked(keccak256(abi.encode("codec wots chain b", i)));
-            layer.authPath = new bytes[](2);
-            layer.authPath[0] = abi.encodePacked(keccak256(abi.encode("codec layer auth a", i)));
-            layer.authPath[1] = abi.encodePacked(keccak256(abi.encode("codec layer auth b", i)));
+        signature.authPath = new bytes32[](2);
+        for (uint256 i = 0; i < signature.authPath.length; i++) {
+            signature.authPath[i] = keccak256(abi.encode("codec stateful auth", i));
         }
     }
 
@@ -117,15 +101,15 @@ contract ShrincsCodecTest is Test {
         }
     }
 
-    function testStatelessEnvelopeRoundTripPreservesEveryField() public view {
+    function testStatefulEnvelopeRoundTripPreservesEveryField() public view {
         ShrincsTypes.PublicKey memory publicKey = buildSamplePublicKey();
-        ShrincsTypes.StatelessSignature memory signature = buildSampleSignature();
+        ShrincsTypes.StatefulSignature memory signature = buildSampleSignature();
 
-        bytes memory envelope = codec.encodeStatelessEnvelope(publicKey, signature);
-        (ShrincsTypes.PublicKey memory decodedKey, ShrincsTypes.StatelessSignature memory decodedSig) =
-            codec.decodeStatelessEnvelope(envelope);
+        bytes memory envelope = codec.encodeStatefulEnvelope(publicKey, signature);
+        (ShrincsTypes.PublicKey memory decodedKey, ShrincsTypes.StatefulSignature memory decodedSig) =
+            codec.decodeStatefulEnvelope(envelope);
 
-        // The envelope layout is exactly abi.encode(PublicKey, StatelessSignature).
+        // The envelope layout is exactly abi.encode(PublicKey, StatefulSignature).
         assertEq(envelope, abi.encode(publicKey, signature), "envelope must be plain abi.encode of both structs");
 
         assertEq(decodedKey.statefulPublicKey, publicKey.statefulPublicKey, "statefulPublicKey");
@@ -133,40 +117,15 @@ contract ShrincsCodecTest is Test {
         assertEq(decodedKey.pkSeed, publicKey.pkSeed, "pkSeed");
         assertEq(decodedKey.hypertreeRoot, publicKey.hypertreeRoot, "hypertreeRoot");
 
-        assertEq(decodedSig.fors.randomizer, signature.fors.randomizer, "fors randomizer");
-        assertEq(decodedSig.fors.counter, signature.fors.counter, "fors counter");
-        assertEq(decodedSig.fors.entries.length, signature.fors.entries.length, "fors entry count");
-        for (uint256 i = 0; i < signature.fors.entries.length; i++) {
-            assertEq(decodedSig.fors.entries[i].secretLeaf, signature.fors.entries[i].secretLeaf, "fors secretLeaf");
-            assertEq(
-                decodedSig.fors.entries[i].authPath.length,
-                signature.fors.entries[i].authPath.length,
-                "fors authPath length"
-            );
-            for (uint256 j = 0; j < signature.fors.entries[i].authPath.length; j++) {
-                assertEq(
-                    decodedSig.fors.entries[i].authPath[j], signature.fors.entries[i].authPath[j], "fors authPath node"
-                );
-            }
+        assertEq(decodedSig.randomizer, signature.randomizer, "randomizer");
+        assertEq(decodedSig.counter, signature.counter, "counter");
+        assertEq(decodedSig.chains.length, signature.chains.length, "chain count");
+        for (uint256 i = 0; i < signature.chains.length; i++) {
+            assertEq(decodedSig.chains[i], signature.chains[i], "chain value");
         }
-
-        assertEq(decodedSig.hypertree.length, signature.hypertree.length, "hypertree layer count");
-        for (uint256 i = 0; i < signature.hypertree.length; i++) {
-            ShrincsTypes.HypertreeLayerSignature memory expected = signature.hypertree[i];
-            ShrincsTypes.HypertreeLayerSignature memory actual = decodedSig.hypertree[i];
-            assertEq(actual.treeIndex, expected.treeIndex, "layer treeIndex");
-            assertEq(actual.leafIndex, expected.leafIndex, "layer leafIndex");
-            assertEq(actual.wotsCPkHash, expected.wotsCPkHash, "layer wotsCPkHash");
-            assertEq(actual.wotsCSignature.randomizer, expected.wotsCSignature.randomizer, "layer wots randomizer");
-            assertEq(actual.wotsCSignature.counter, expected.wotsCSignature.counter, "layer wots counter");
-            assertEq(actual.wotsCSignature.chains.length, expected.wotsCSignature.chains.length, "layer chain count");
-            for (uint256 j = 0; j < expected.wotsCSignature.chains.length; j++) {
-                assertEq(actual.wotsCSignature.chains[j], expected.wotsCSignature.chains[j], "layer chain value");
-            }
-            assertEq(actual.authPath.length, expected.authPath.length, "layer authPath length");
-            for (uint256 j = 0; j < expected.authPath.length; j++) {
-                assertEq(actual.authPath[j], expected.authPath[j], "layer authPath node");
-            }
+        assertEq(decodedSig.authPath.length, signature.authPath.length, "authPath length");
+        for (uint256 i = 0; i < signature.authPath.length; i++) {
+            assertEq(decodedSig.authPath[i], signature.authPath[i], "authPath node");
         }
     }
 

@@ -36,23 +36,23 @@ library ShrincsCodec {
         return (commitment, true);
     }
 
-    // decodeStatelessEnvelope: Decode the ERC-7913 `signature` envelope into typed SHRINCS structs.
-    // 1. Envelope layout is abi.encode(ShrincsTypes.PublicKey, ShrincsTypes.StatelessSignature) — no mode prefix.
+    // decodeStatefulEnvelope: Decode the ERC-7913 `signature` envelope into typed SHRINCS structs.
+    // 1. Envelope layout is abi.encode(ShrincsTypes.PublicKey, ShrincsTypes.StatefulSignature) — no mode prefix.
     // 2. Reverts on malformed input; callers isolate the revert via a try/self-call hop.
-    function decodeStatelessEnvelope(bytes calldata envelope)
+    function decodeStatefulEnvelope(bytes calldata envelope)
         internal
         pure
-        returns (ShrincsTypes.PublicKey memory publicKey, ShrincsTypes.StatelessSignature memory signature)
+        returns (ShrincsTypes.PublicKey memory publicKey, ShrincsTypes.StatefulSignature memory signature)
     {
-        return abi.decode(envelope, (ShrincsTypes.PublicKey, ShrincsTypes.StatelessSignature));
+        return abi.decode(envelope, (ShrincsTypes.PublicKey, ShrincsTypes.StatefulSignature));
     }
 
-    // encodeStatelessEnvelope: Inverse of decodeStatelessEnvelope.
-    // 1. Encode the key bundle and stateless signature with the exact layout the decoder expects.
+    // encodeStatefulEnvelope: Inverse of decodeStatefulEnvelope.
+    // 1. Encode the key bundle and stateful signature with the exact layout the decoder expects.
     // 2. Exists so tests and off-chain encoders share one format definition with the verifier.
-    function encodeStatelessEnvelope(
+    function encodeStatefulEnvelope(
         ShrincsTypes.PublicKey memory publicKey,
-        ShrincsTypes.StatelessSignature memory signature
+        ShrincsTypes.StatefulSignature memory signature
     ) internal pure returns (bytes memory envelope) {
         return abi.encode(publicKey, signature);
     }

@@ -415,6 +415,27 @@ It:
 - returns the next public key commitment on success
 - returns `bytes32(0)` on failure
 
+## ShrincsVerifier (ERC-7913)
+
+`ShrincsVerifier` is an [ERC-7913](https://eips.ethereum.org/EIPS/eip-7913)
+signature verifier for stateful SHRINCS signatures. It lets any ERC-7913-aware
+contract verify a SHRINCS signature for an address-less key, with no per-key
+deployment cost.
+
+`verify(bytes key, bytes32 hash, bytes signature) → bytes4`
+
+- **key** — the 32-byte SHRINCS `publicKeyCommitment`.
+- **hash** — the 32-byte message the signature is verified against; the caller
+  constructs it (typically a domain-separated digest).
+- **signature** — `abi.encode(PublicKey, StatefulSignature)`, the `ShrincsCodec`
+  stateful envelope.
+- Returns `0x024ad318` on success, `0xffffffff` on any failure. Never reverts.
+
+The verifier is stateless and trustless: no owner, no storage, not upgradeable.
+It verifies signature validity (commitment↔bundle match, WOTS-C reconstruction,
+unbalanced-tree root). It does not track which leaves a key has used, so callers
+that need one-time-use guarantees enforce leaf freshness themselves.
+
 ## Compile-Time Constants
 
 The verifier is compiled for one SHRINCS configuration. Callers do not supply selectors or arbitrary numeric tuples.
