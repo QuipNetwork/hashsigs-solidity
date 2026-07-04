@@ -13,6 +13,12 @@ fs_permissions = [
 ]
 
 [profile.production]
+# solc is PINNED here because the canonical ShrincsVerifier deployment is
+# CREATE2-deterministic: the deployed address is a function of the init code,
+# so every per-chain deploy must build byte-identically (same solc, via-ir,
+# optimizer runs). Bump deliberately — it changes the predicted address of any
+# NOT-yet-deployed artifact (already-deployed addresses are unaffected).
+solc = "0.8.35"
 via_ir = true
 optimizer = true
 optimizer_runs = 1000000
