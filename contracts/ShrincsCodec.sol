@@ -22,6 +22,8 @@ import {ShrincsTypes} from "./ShrincsTypes.sol";
 /// @dev Single source of truth for the verifier envelope format; tests (and later the SDK)
 /// must encode through this library so encoder and decoder cannot drift.
 library ShrincsCodec {
+    error InvalidEnvelope();
+
     // decodeKey: Decode an ERC-7913 `key` into the SHRINCS installed bundle commitment.
     // 1. Require the key to be exactly one 32-byte commitment word.
     // 2. Load the commitment directly from calldata.
@@ -38,13 +40,20 @@ library ShrincsCodec {
 
     // decodeStatefulEnvelope: Decode the ERC-7913 `signature` envelope into typed SHRINCS structs.
     // 1. Envelope layout is abi.encode(ShrincsTypes.PublicKey, ShrincsTypes.StatefulSignature) — no mode prefix.
-    // 2. Reverts on malformed input; callers isolate the revert via a try/self-call hop.
+    // 2. Re-encoding the decoded structs must reproduce the exact original envelope bytes.
+    // 3. Reverts on malformed input; callers isolate the revert via a try/self-call hop.
     function decodeStatefulEnvelope(bytes calldata envelope)
         internal
         pure
         returns (ShrincsTypes.PublicKey memory publicKey, ShrincsTypes.StatefulSignature memory signature)
     {
-        return abi.decode(envelope, (ShrincsTypes.PublicKey, ShrincsTypes.StatefulSignature));
+        (publicKey, signature) = abi.decode(envelope, (ShrincsTypes.PublicKey, ShrincsTypes.StatefulSignature));
+
+        if (keccak256(envelope) != keccak256(abi.encode(publicKey, signature))) {
+            revert InvalidEnvelope();
+        }
+
+        return (publicKey, signature);
     }
 
     // encodeStatefulEnvelope: Inverse of decodeStatefulEnvelope.
