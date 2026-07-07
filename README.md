@@ -2,7 +2,6 @@
 
 This repository contains a Solidity verifier-oriented implementation of the SHRINCS signature construction.
 
-
 ## What SHRINCS Is
 
 In this codebase, SHRINCS is a two-path signature design:
@@ -346,7 +345,7 @@ The account-style path also rejects invalid contexts:
 - `actionType == 0`
 - `payloadHash == 0`
 
-Both forms verify:
+This path verifies:
 
 - the provided `expectedCompositePublicKey` matches `publicKey.publicKeyCommitment`
 - the embedded stateful public key
@@ -370,7 +369,7 @@ The account-style path also rejects invalid contexts:
 - `actionType == 0`
 - `payloadHash == 0`
 
-Both forms verify:
+This path verifies:
 
 - the provided `expectedCompositePublicKey` matches `publicKey.publicKeyCommitment`
 - `FORS-C`
@@ -620,7 +619,7 @@ The developer/integrator chooses which policy fits the account design. In the ex
     - `recoveryMode`
     - active stateful policy mode
     - used-leaf bitmap marks from the prior key epoch
-  must not be carried into the new key epoch
+      must not be carried into the new key epoch
   - the example wrapper resets this state on fresh-key installation
 
 - Raw verifier paths are lower-level interfaces.
@@ -703,8 +702,9 @@ Current tests cover:
 - wrong expected public root is rejected
 - zero expected composite public key is rejected
 - malformed `pkSeed` length is rejected
-- malformed `forsRoot` length is rejected
+- malformed duplicate `pkSeed` length is rejected
 - malformed `hypertreeRoot` length is rejected
+- malformed hypertree root-as-public-root length is rejected
 - empty hypertree signatures are rejected
 - dropped hypertree layers are rejected
 - dropped `FORS` entries are rejected
