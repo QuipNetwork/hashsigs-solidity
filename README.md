@@ -42,6 +42,76 @@ flowchart LR
     end
 ```
 
+## ERC-7913 Raw Verifier
+
+This repository also includes a standalone ERC-7913 verifier for the raw
+stateful SHRINCS path:
+
+- [contracts/ShrincsVerifier.sol](./contracts/ShrincsVerifier.sol)
+- [contracts/ShrincsCodec.sol](./contracts/ShrincsCodec.sol)
+
+The ERC-7913 verifier is intentionally narrow:
+
+- it supports the **stateful raw path only**
+- it checks **signature validity only**
+- it does **not** enforce wrapper policy such as nonce, keyVersion, actionType,
+  payloadHash, or leaf-consumption tracking
+
+### Wire Format
+
+`key` format:
+
+- exactly one 32-byte word
+- this is the installed SHRINCS `publicKeyCommitment`
+
+`signature` format:
+
+- `abi.encode(ShrincsTypes.PublicKey, ShrincsTypes.StatefulSignature)`
+- decoded by [`ShrincsCodec.decodeStatefulEnvelope(...)`](./contracts/ShrincsCodec.sol)
+- no in-band mode tag or version prefix is currently carried inside the envelope
+
+`hash` / message format:
+
+- ERC-7913 passes a `bytes32 hash`
+- this verifier treats that hash as the message itself
+- internally it verifies against `abi.encodePacked(hash)`, i.e. the exact 32
+  bytes of the supplied hash
+
+### Verification Semantics
+
+At a high level, [`ShrincsVerifier.verify(...)`](./contracts/ShrincsVerifier.sol):
+
+1. decodes `key` as the expected bundle commitment
+2. decodes `signature` as a stateful SHRINCS envelope
+3. converts the ERC-7913 `bytes32 hash` into the 32-byte SHRINCS message
+4. calls `SHRINCS.verifyStatefulUncheckedMessage(...)`
+5. returns the ERC-7913 magic value on success, or `0xffffffff` on failure
+
+Malformed envelopes are treated as signature failure, not as external reverts.
+
+### Security Scope
+
+This path is not the same as the canonical account-wrapper flow.
+
+The canonical wrapper binds signatures to:
+
+- `domainSeparator`
+- `nonce`
+- `keyVersion`
+- `actionType`
+- `payloadHash`
+
+and can additionally enforce stateful leaf-use policy.
+
+The ERC-7913 raw verifier does none of that. It answers only:
+
+- "does this stateful SHRINCS signature verify for this commitment and these
+  exact 32 message bytes?"
+
+That makes it suitable as a low-level verifier surface, but not as a drop-in
+replacement for the wrapper-owned account flow unless the caller supplies the
+missing replay protection and policy checks externally.
+
 ## Repository Shape
 
 Main contracts:
