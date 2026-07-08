@@ -426,7 +426,11 @@ This repository also includes a standalone [ERC-7913](https://eips.ethereum.org/
   constructs it (typically a domain-separated digest).
 - **signature** — `abi.encode(PublicKey, StatefulSignature)`, the `ShrincsCodec`
   stateful envelope.
-- Returns `0x024ad318` on success, `0xffffffff` on any failure. Never reverts.
+- For ABI-valid `verify(...)` calls, returns `0x024ad318` on success and
+  `0xffffffff` on verification failure, malformed key bytes, or malformed
+  SHRINCS envelope bytes. The public `verify(...)` entrypoint catches
+  envelope-decoding failures; lower-level decoder helpers may revert if called
+  directly.
 
 
 The ERC-7913 verifier is intentionally narrow:
@@ -447,7 +451,8 @@ At a high level, [`ShrincsVerifier.verify(...)`](./contracts/ShrincsVerifier.sol
 4. calls `SHRINCS.verifyStatefulUncheckedMessage(...)`
 5. returns the ERC-7913 magic value on success, or `0xffffffff` on failure
 
-Malformed envelopes are treated as signature failure, not as external reverts.
+Malformed signature envelopes passed through `ShrincsVerifier.verify(...)` are
+treated as signature failure, not bubbled as verifier reverts.
 
 ### Security Scope
 
@@ -605,7 +610,8 @@ Important semantics:
 
 - ERC-1271 validity here is snapshot-based.
   - a signature can be valid now and invalid later after `nonce`, `keyVersion`, policy state, or key state changes
-- malformed known-mode envelopes return `0xffffffff` instead of reverting
+- for ABI-valid `isValidSignature(...)` calls, empty envelopes, unknown modes,
+  and malformed known-mode envelopes return `0xffffffff` instead of reverting
 - legacy raw vectors and primitive raw SHRINCS signatures are intentionally rejected on this path
 - stateless/key-rotation authorizations are not part of this ERC-1271 surface
 
