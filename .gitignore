@@ -21,27 +21,3 @@ node_modules
 ignition/deployments/chain-31337
 
 test/test_vectors/tmp.json
-
-# local planning notes (not part of the repo)
-_prompt_planning/
-
-# local agent/editor workspaces (not part of the repo)
-.agents/
-.claude/
-.obsidian/
-skills-lock.json
-
-# local audit + learning workspace (not part of the repo)
-AUDIT/
-GLOSSARY.md
-MISSION.md
-NOTES.md
-RESOURCES.md
-WOTS_AND_SHRINCS_EXPLAINED.md
-assets/
-index.html
-learning-records/
-lessons/
-reference/
-transcript.md
-travel.md
