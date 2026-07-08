@@ -309,7 +309,11 @@ This repository also includes a standalone [ERC-7913](https://eips.ethereum.org/
   constructs it (typically a domain-separated digest).
 - **signature** — `abi.encode(PublicKey, StatefulSignature)`, the `ShrincsCodec`
   stateful envelope.
-- Returns `0x024ad318` on success, `0xffffffff` on any failure. Never reverts.
+- For ABI-valid `verify(...)` calls, returns `0x024ad318` on success and
+  `0xffffffff` on verification failure, malformed key bytes, or malformed
+  SHRINCS envelope bytes. The public `verify(...)` entrypoint catches
+  envelope-decoding failures; lower-level decoder helpers may revert if called
+  directly.
 
 The envelope fields are:
 
@@ -335,7 +339,8 @@ At a high level, [`ShrincsVerifier.verify(...)`](./contracts/ShrincsVerifier.sol
 4. calls `SHRINCS.verifyStatefulUncheckedMessage(...)`
 5. returns the ERC-7913 magic value on success, or `0xffffffff` on failure
 
-Malformed envelopes are treated as signature failure, not as external reverts.
+Malformed signature envelopes passed through `ShrincsVerifier.verify(...)` are
+treated as signature failure, not bubbled as verifier reverts.
 
 
 #### Security Scope
@@ -362,7 +367,7 @@ replacement for the wrapper-owned account flow unless the caller supplies the
 missing replay protection and policy checks externally.
 
 
-#### Interface Choice
+### Interface Choice
 
 Use the verifier surfaces for different purposes:
 
