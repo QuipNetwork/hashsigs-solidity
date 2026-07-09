@@ -225,10 +225,12 @@ It:
   - `expectedCompositePublicKey`
   - `currentPublicKey.publicKeyCommitment`
   - `rotationContext`
-  - `nextStatefulKey`
+  - `nextStatefulKey.publicKeyCommitment`
 - verifies a stateless recovery signature over that canonical hash under the current key
 - validates a proposed next stateful public key
 - decodes the next stateful key and rejects `maxSignatures == 0`
+- recomputes the declared next commitment from the next stateful key plus the current stateless seed/root
+- rejects mismatches between the declared and recomputed next commitment
 - rejects zero `domainSeparator`
 - returns the next public key commitment on success
 - returns `bytes32(0)` on failure
@@ -253,12 +255,13 @@ It:
   - `expectedCompositePublicKey`
   - `currentPublicKey.publicKeyCommitment`
   - `rotationContext`
-  - the full `nextKey` bundle
+  - `nextKey.publicKeyCommitment`
 - verifies the current stateless recovery signature over that canonical hash
 - validates the full next key payload
 - decodes the next stateful key and rejects `maxSignatures == 0`
 - rejects zero `domainSeparator`
-- validates the next key payload
+- recomputes the declared next commitment from the full next key payload
+- rejects mismatches between the declared and recomputed next commitment
 - returns the next public key commitment on success
 - returns `bytes32(0)` on failure
 
@@ -312,8 +315,9 @@ This repository also includes a standalone [ERC-7913](https://eips.ethereum.org/
 - For ABI-valid `verify(...)` calls, returns `0x024ad318` on success and
   `0xffffffff` on verification failure, malformed key bytes, or malformed
   SHRINCS envelope bytes. The public `verify(...)` entrypoint catches
-  envelope-decoding failures; lower-level decoder helpers may revert if called
-  directly.
+  envelope-decoding failures. Malformed ABI calldata can still fail before the
+  function body is entered, and lower-level self-call or decoder helpers may
+  revert when called directly because of `onlySelf` checks or decoder errors.
 
 The envelope fields are:
 
@@ -327,7 +331,6 @@ The ERC-7913 verifier is intentionally narrow:
 - it does **not** enforce wrapper policy such as nonce, keyVersion, actionType,
   payloadHash, or leaf-consumption tracking
 - the envelope currently carries no in-band mode tag or version prefix
-
 
 #### Verification Semantics
 
@@ -526,7 +529,7 @@ The developer/integrator chooses which policy fits the account design. In the ex
     - `recoveryMode`
     - active stateful policy mode
     - used-leaf bitmap marks from the prior key epoch
-  must not be carried into the new key epoch
+      must not be carried into the new key epoch
   - the example wrapper resets this state on fresh-key installation
 
 - Raw verifier paths are lower-level interfaces.
@@ -587,10 +590,13 @@ Current tests cover:
 - zero expected composite public key is rejected
 - corrupted stateful signature is rejected
 - tampered stateful authentication path is rejected
+- mismatched stateless root is rejected
 - signature at `maxSignatures` boundary verifies
 - signature exceeding `maxSignatures` is rejected
 - malformed `pkSeed` length is rejected
+- malformed stateful public-key length is rejected
 - wrong stateful `WOTS-C` chain count is rejected
+- empty stateful authentication path is rejected
 - canonical action hash changes when payload changes
 - zeroed account-style action context is rejected
 
@@ -601,11 +607,16 @@ Current tests cover:
 - tampered `FORS` data is rejected
 - tampered hypertree `WOTS-C` public-key hash is rejected
 - tampered hypertree authentication path is rejected
+- tampered component public-key vector is rejected
 - wrong expected public root is rejected
 - zero expected composite public key is rejected
 - malformed `pkSeed` length is rejected
-- malformed `forsRoot` length is rejected
 - malformed `hypertreeRoot` length is rejected
+- malformed hypertree root-as-public-root length is rejected
+- empty hypertree signatures are rejected
+- dropped hypertree layers are rejected
+- dropped `FORS` entries are rejected
+- short `FORS` randomizers, secret leaves, auth paths, and auth nodes are rejected
 - hypertree leaf index out of range is rejected
 - malformed hypertree `WOTS-C` chain length is rejected
 - wrong hypertree authentication path length is rejected
@@ -630,17 +641,71 @@ Current tests cover:
 
 ### Example wrapper policies
 
+- wrapper initialization stores the expected owner, key, nonce, key version, and default policy state
+- failed wrapper verification and rotation calls preserve account state
+- wrapper domain separators differ across contract instances
 - owner-gated policy changes are enforced
 - non-owner policy changes are rejected
 - non-owner recovery-mode toggles are rejected
-- no-tracking policy allows repeated valid raw stateful signatures
+- entering recovery mode outside `RecoveryRotation` policy reverts
+- monotonic-index policy rejects rollback to an earlier expected leaf
+- default monotonic-index policy rejects repeated use of the same valid stateful leaf
 - monotonic-index policy accepts the expected leaf once and rejects replay
 - monotonic-index policy rejects unexpected leaf indices
+- policy changes freeze after the first successful stateful use in a key epoch
 - recovery-rotation policy blocks stateful use after recovery mode is entered
-- recovery-rotation policy allows stateless raw verification in recovery mode
+- under `RecoveryRotation`, stateless action verification is rejected until the owner enters recovery mode
+- full-key rotation requires `RecoveryRotation` policy and entered recovery mode
 - recovery-rotation policy rejects legacy rotation authorization and stays in recovery mode
 - leaf-bitmap policy marks a leaf as used and rejects reuse
 - fresh-key installation clears stale stateful tracking state
+- fresh-key installation resets the leaf-bitmap namespace
+- fresh-key installation always resets stateless usage
+- fresh-key installation unfreezes policy changes for the new key epoch
+- ERC-1271 rejects malformed, unknown-mode, and legacy raw-signature envelopes without mutating state
+- stateless action verification and rotation reject calls at the stateless usage limit
+- stateful-only rotation consumes one stateless recovery use and preserves stateless usage accounting
+- stateful-only rotation at the final stateless slot consumes it and rejects the next stateless use
+- repeated stateful-only rotation does not mint fresh stateless budget
+- full-key rotation consumes one stateless recovery use under the old key and resets stateless usage accounting for the new key
+- stateful-only and full-key rotations emit dedicated stateless-usage events
+
+### ERC-7913 raw verifier and codec
+
+- ERC-7913 `verify(...)` returns `0x024ad318` for a valid stateful raw signature
+- valid signatures from multiple in-budget stateful leaves verify
+- wrong key lengths return `0xffffffff` without reverting
+- wrong commitments, tampered hashes, tampered WOTS chains, tampered auth paths, and mismatched key bundles return `0xffffffff`
+- empty, garbage, truncated, trailing-byte, and malformed SHRINCS envelopes are rejected
+- fuzzed ABI-valid `verify(...)` inputs return the failure value instead of reverting
+- direct lower-level self-call helpers reject non-self callers by reverting
+- `ShrincsCodec.decodeKey(...)` accepts exactly 32-byte keys and rejects other lengths without reverting
+- `ShrincsCodec.decodeStatefulEnvelope(...)` round-trips canonical envelopes and rejects non-canonical ABI encodings
+- `ShrincsCodec.toMessage(...)` maps the ERC-7913 `bytes32 hash` to exactly those 32 packed bytes
+- ERC-7913 consumer examples accept `verifier || key` signers and reject no-code, wrong-verifier, short-signer, and non-magic-return cases
+- 20-byte signer values use the ERC-1271 fallback path rather than ERC-7913 with an empty key
+
+### Test-only signer and export helpers
+
+- Solidity keygen rejects zero and excessive stateful budgets
+- Solidity keygen is deterministic for a fixed seed and matches Rust output
+- test-only stateful signing advances the signing leaf and rejects exhausted keys
+- canonical stateful-action signing rejects malformed public-key commitment fields
+- staged and high-level stateless vector signing produce verifier-feedable signatures
+- account-aware signer helpers produce action and rotation signatures that the example wrapper accepts
+- account-vector export produces wrapper-ready action and rotation bundles, including calldata and ERC-1271 envelopes
+
+### Gas measurement helpers
+
+- stateful canonical wrapper calls verify without reverting
+- stateful ERC-1271 calls verify without reverting
+- stateless canonical wrapper calls verify without reverting
+- stateless ERC-1271 calls verify without reverting
+
+### Toy stateless profile
+
+- toy stateless signing verifies successfully
+- toy stateless signing is deterministic
 
 ## Development
 
@@ -688,7 +753,7 @@ forge test --via-ir
 
 Current expected result:
 
-- `169 passed, 0 failed`
+- `169 passed, 0 failed, 0 skipped`
 
 
 ### Using Rust-Generated SHRINCS Vectors
@@ -849,7 +914,6 @@ The export tests emit four wrapper-feedable bundle categories:
 These exports are intended for local tooling, debugging, and cross-repo vector
 work. They are not a production signer interface.
 
-
 ## Deployment
 
 Hardhat Ignition deployment is intentionally split by target:
@@ -872,7 +936,7 @@ Example commands:
 
 ## License
 
-Copyright (C) 2024-2026 quip.network
+Copyright (C) 2026 quip.network
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as published by
