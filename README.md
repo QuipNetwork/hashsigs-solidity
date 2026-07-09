@@ -101,7 +101,6 @@ Test vectors:
 
 - [test/test_vectors/shrincs_sphincs_256s_keccak.json](./test/test_vectors/shrincs_sphincs_256s_keccak.json)
 
-
 ## Public-Key Shape
 
 The SHRINCS public key exposed by this implementation contains:
@@ -126,7 +125,6 @@ The full hybrid bundle is then bound together by `publicKeyCommitment`. The veri
 
 This keeps the repo's hybrid stateful/stateless public key coherent while preserving the SPHINCS-style stateless core.
 
-
 ## Verification Flows
 
 ```mermaid
@@ -147,8 +145,6 @@ flowchart LR
         B5 --> B6{"== hypertree root?"}
     end
 ```
-
-
 
 ### 1. Stateful verification
 
@@ -345,7 +341,6 @@ At a high level, [`ShrincsVerifier.verify(...)`](./contracts/ShrincsVerifier.sol
 Malformed signature envelopes passed through `ShrincsVerifier.verify(...)` are
 treated as signature failure, not bubbled as verifier reverts.
 
-
 #### Security Scope
 
 This path is not the same as the canonical account-wrapper flow.
@@ -368,7 +363,6 @@ The ERC-7913 raw verifier does none of that. It answers only:
 That makes it suitable as a low-level verifier surface, but not as a drop-in
 replacement for the wrapper-owned account flow unless the caller supplies the
 missing replay protection and policy checks externally.
-
 
 ### Interface Choice
 
@@ -612,7 +606,6 @@ Current tests cover:
 - zero expected composite public key is rejected
 - malformed `pkSeed` length is rejected
 - malformed `hypertreeRoot` length is rejected
-- malformed hypertree root-as-public-root length is rejected
 - empty hypertree signatures are rejected
 - dropped hypertree layers are rejected
 - dropped `FORS` entries are rejected
@@ -753,8 +746,7 @@ forge test --via-ir
 
 Current expected result:
 
-- `169 passed, 0 failed, 0 skipped`
-
+- `169 passed, 0 failed`
 
 ### Using Rust-Generated SHRINCS Vectors
 
@@ -929,6 +921,7 @@ Example commands:
 ./node_modules/.bin/hardhat ignition deploy ignition/modules/WOTSPlus.ts
 ./node_modules/.bin/hardhat ignition deploy ignition/modules/ShrincsAccountVerifierExample.ts
 ```
+
 ## Notes
 
 - `forge-std` is restored as a real dependency in `lib/forge-std`.
@@ -936,7 +929,7 @@ Example commands:
 
 ## License
 
-Copyright (C) 2026 quip.network
+Copyright (C) 2024-2026 quip.network
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as published by
