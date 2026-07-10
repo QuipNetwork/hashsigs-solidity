@@ -122,7 +122,7 @@ contract ShrincsAccountVerifierExample {
     /// SHRINCS signature without mutating state. Returns 0xffffffff instead
     /// of reverting on malformed envelopes.
     /// @dev Minimum gas: a stateful check costs roughly 260k gas and a
-    /// stateless check roughly 2.69M gas. Each envelope is verified behind a
+    /// stateless check roughly 3.03M gas. Each envelope is verified behind a
     /// try/catch self-call, so an inner out-of-gas (the 63/64 rule strands
     /// the hop while the outer frame keeps 1/64) is caught and returned as
     /// INVALID_SIGNATURE — a valid signature then reports invalid. Callers
