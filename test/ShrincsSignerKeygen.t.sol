@@ -25,7 +25,11 @@ contract ShrincsSignerHarness {
     function keygen(bytes memory seedMaterial, uint32 maxStatefulSignatures)
         external
         pure
-        returns (ShrincsTypes.SigningKey memory, ShrincsTypes.PublicKey memory, bool)
+        returns (
+            ShrincsTypes.SigningKey memory,
+            ShrincsTypes.PublicKey memory,
+            bool
+        )
     {
         return ShrincsTestSigner.keygen(seedMaterial, maxStatefulSignatures);
     }
@@ -67,66 +71,116 @@ contract ShrincsSignerKeygenTest is Test {
     }
 
     function testKeygenRejectsZeroStatefulBudget() public view {
-        (, , bool ok) = harness.keygen(bytes("seed"), 0);
+        (,, bool ok) = harness.keygen(bytes("seed"), 0);
         assertEq(ok, false, "zero budget must fail");
     }
 
     function testKeygenRejectsExcessiveStatefulBudget() public view {
-        (, , bool ok) = harness.keygen(bytes("seed"), 4097);
+        (,, bool ok) = harness.keygen(bytes("seed"), 4097);
         assertEq(ok, false, "excessive budget must fail");
     }
 
     function testKeygenIsDeterministicForSameSeed() public view {
-        (ShrincsTypes.SigningKey memory signingKeyA, ShrincsTypes.PublicKey memory publicKeyA, bool okA) =
-            harness.keygen(bytes("solidity keygen seed"), 8);
-        (ShrincsTypes.SigningKey memory signingKeyB, ShrincsTypes.PublicKey memory publicKeyB, bool okB) =
-            harness.keygen(bytes("solidity keygen seed"), 8);
+        (
+            ShrincsTypes.SigningKey memory signingKeyA,
+            ShrincsTypes.PublicKey memory publicKeyA,
+            bool okA
+        ) = harness.keygen(bytes("solidity keygen seed"), 8);
+        (
+            ShrincsTypes.SigningKey memory signingKeyB,
+            ShrincsTypes.PublicKey memory publicKeyB,
+            bool okB
+        ) = harness.keygen(bytes("solidity keygen seed"), 8);
 
         assertTrue(okA && okB, "keygen must succeed");
         assertEq(signingKeyA.statefulSkSeed, signingKeyB.statefulSkSeed);
         assertEq(signingKeyA.statefulPrfSeed, signingKeyB.statefulPrfSeed);
         assertEq(signingKeyA.statefulPkSeed, signingKeyB.statefulPkSeed);
         assertEq(signingKeyA.statefulRoot, signingKeyB.statefulRoot);
-        assertEq(signingKeyA.maxStatefulSignatures, signingKeyB.maxStatefulSignatures);
-        assertEq(signingKeyA.nextStatefulLeafIndex, signingKeyB.nextStatefulLeafIndex);
+        assertEq(
+            signingKeyA.maxStatefulSignatures,
+            signingKeyB.maxStatefulSignatures
+        );
+        assertEq(
+            signingKeyA.nextStatefulLeafIndex,
+            signingKeyB.nextStatefulLeafIndex
+        );
         assertEq(signingKeyA.statelessSkSeed, signingKeyB.statelessSkSeed);
         assertEq(signingKeyA.statelessPrfSeed, signingKeyB.statelessPrfSeed);
         assertEq(signingKeyA.pkSeed, signingKeyB.pkSeed);
         assertEq(signingKeyA.hypertreeRoot, signingKeyB.hypertreeRoot);
-        assertEq(keccak256(publicKeyA.statefulPublicKey), keccak256(publicKeyB.statefulPublicKey));
-        assertEq(keccak256(publicKeyA.publicKeyCommitment), keccak256(publicKeyB.publicKeyCommitment));
+        assertEq(
+            keccak256(publicKeyA.statefulPublicKey),
+            keccak256(publicKeyB.statefulPublicKey)
+        );
+        assertEq(
+            keccak256(publicKeyA.publicKeyCommitment),
+            keccak256(publicKeyB.publicKeyCommitment)
+        );
         assertEq(keccak256(publicKeyA.pkSeed), keccak256(publicKeyB.pkSeed));
-        assertEq(keccak256(publicKeyA.hypertreeRoot), keccak256(publicKeyB.hypertreeRoot));
+        assertEq(
+            keccak256(publicKeyA.hypertreeRoot),
+            keccak256(publicKeyB.hypertreeRoot)
+        );
     }
 
     function testKeygenBuildsConsistentPublicKeyBundle() public view {
-        (ShrincsTypes.SigningKey memory signingKey, ShrincsTypes.PublicKey memory publicKey, bool ok) =
-            harness.keygen(bytes("solidity public key seed"), 4);
+        (
+            ShrincsTypes.SigningKey memory signingKey,
+            ShrincsTypes.PublicKey memory publicKey,
+            bool ok
+        ) = harness.keygen(bytes("solidity public key seed"), 4);
 
         assertTrue(ok, "keygen must succeed");
-        assertEq(signingKey.nextStatefulLeafIndex, 1, "stateful path starts at leaf 1");
-        assertEq(publicKey.statefulPublicKey.length, ShrincsTypes.STATEFUL_PUBLIC_KEY_BYTES);
+        assertEq(
+            signingKey.nextStatefulLeafIndex,
+            1,
+            "stateful path starts at leaf 1"
+        );
+        assertEq(
+            publicKey.statefulPublicKey.length,
+            ShrincsTypes.STATEFUL_PUBLIC_KEY_BYTES
+        );
         assertEq(publicKey.publicKeyCommitment.length, 32);
         assertEq(publicKey.pkSeed.length, 32);
         assertEq(publicKey.hypertreeRoot.length, 32);
 
-        bytes32 expectedCommitment =
-            ShrincsUtils.publicKeyCommitmentFromParts(publicKey.statefulPublicKey, publicKey.pkSeed, publicKey.hypertreeRoot);
-        assertEq(keccak256(publicKey.publicKeyCommitment), keccak256(abi.encodePacked(expectedCommitment)));
+        bytes32 expectedCommitment = ShrincsUtils.publicKeyCommitmentFromParts(
+            publicKey.statefulPublicKey,
+            publicKey.pkSeed,
+            publicKey.hypertreeRoot
+        );
+        assertEq(
+            keccak256(publicKey.publicKeyCommitment),
+            keccak256(abi.encodePacked(expectedCommitment))
+        );
 
-        (ShrincsTypes.StatefulPublicKey memory decodedStateful, bool decodedOk) =
-            harness.decodeStatefulPublicKey(publicKey.statefulPublicKey);
+        (
+            ShrincsTypes.StatefulPublicKey memory decodedStateful,
+            bool decodedOk
+        ) = harness.decodeStatefulPublicKey(publicKey.statefulPublicKey);
         assertTrue(decodedOk, "stateful public key must decode");
         assertEq(decodedStateful.pkSeed, signingKey.statefulPkSeed);
         assertEq(decodedStateful.root, signingKey.statefulRoot);
-        assertEq(decodedStateful.maxSignatures, signingKey.maxStatefulSignatures);
-        assertEq(keccak256(publicKey.pkSeed), keccak256(abi.encodePacked(signingKey.pkSeed)));
-        assertEq(keccak256(publicKey.hypertreeRoot), keccak256(abi.encodePacked(signingKey.hypertreeRoot)));
+        assertEq(
+            decodedStateful.maxSignatures, signingKey.maxStatefulSignatures
+        );
+        assertEq(
+            keccak256(publicKey.pkSeed),
+            keccak256(abi.encodePacked(signingKey.pkSeed))
+        );
+        assertEq(
+            keccak256(publicKey.hypertreeRoot),
+            keccak256(abi.encodePacked(signingKey.hypertreeRoot))
+        );
     }
 
     function testKeygenMatchesRustSignerGoldenOutput() public view {
-        (ShrincsTypes.SigningKey memory signingKey, ShrincsTypes.PublicKey memory publicKey, bool ok) =
-            harness.keygen(bytes("solidity public key seed"), 4);
+        (
+            ShrincsTypes.SigningKey memory signingKey,
+            ShrincsTypes.PublicKey memory publicKey,
+            bool ok
+        ) = harness.keygen(bytes("solidity public key seed"), 4);
 
         assertTrue(ok, "keygen must succeed");
         assertEq(signingKey.statefulSkSeed, EXPECTED_STATEFUL_SK_SEED);
@@ -137,9 +191,21 @@ contract ShrincsSignerKeygenTest is Test {
         assertEq(signingKey.statelessPrfSeed, EXPECTED_STATELESS_PRF_SEED);
         assertEq(signingKey.pkSeed, EXPECTED_PK_SEED);
         assertEq(signingKey.hypertreeRoot, EXPECTED_HYPERTREE_ROOT);
-        assertEq(keccak256(publicKey.statefulPublicKey), keccak256(EXPECTED_STATEFUL_PUBLIC_KEY));
-        assertEq(keccak256(publicKey.publicKeyCommitment), keccak256(abi.encodePacked(EXPECTED_PUBLIC_KEY_COMMITMENT)));
-        assertEq(keccak256(publicKey.pkSeed), keccak256(abi.encodePacked(EXPECTED_PK_SEED)));
-        assertEq(keccak256(publicKey.hypertreeRoot), keccak256(abi.encodePacked(EXPECTED_HYPERTREE_ROOT)));
+        assertEq(
+            keccak256(publicKey.statefulPublicKey),
+            keccak256(EXPECTED_STATEFUL_PUBLIC_KEY)
+        );
+        assertEq(
+            keccak256(publicKey.publicKeyCommitment),
+            keccak256(abi.encodePacked(EXPECTED_PUBLIC_KEY_COMMITMENT))
+        );
+        assertEq(
+            keccak256(publicKey.pkSeed),
+            keccak256(abi.encodePacked(EXPECTED_PK_SEED))
+        );
+        assertEq(
+            keccak256(publicKey.hypertreeRoot),
+            keccak256(abi.encodePacked(EXPECTED_HYPERTREE_ROOT))
+        );
     }
 }

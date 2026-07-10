@@ -17,7 +17,9 @@
 pragma solidity ^0.8.28;
 
 import {Test} from "../lib/forge-std/src/Test.sol";
-import {IERC7913SignatureVerifier} from "../contracts/interfaces/IERC7913SignatureVerifier.sol";
+import {
+    IERC7913SignatureVerifier
+} from "../contracts/interfaces/IERC7913SignatureVerifier.sol";
 import {ShrincsCodec} from "../contracts/ShrincsCodec.sol";
 import {ShrincsTypes} from "../contracts/ShrincsTypes.sol";
 import {ShrincsVerifier} from "../contracts/ShrincsVerifier.sol";
@@ -26,50 +28,64 @@ import {ShrincsTestSigner} from "./helpers/ShrincsTestSigner.sol";
 contract CodecERC7913ConsumerHarness {
     bytes4 internal constant ERC1271_MAGIC_VALUE = 0x1626ba7e;
 
-    function isValidSignatureNow(bytes calldata signer, bytes32 hash, bytes calldata signature)
-        external
-        view
-        returns (bool)
-    {
+    function isValidSignatureNow(
+        bytes calldata signer,
+        bytes32 hash,
+        bytes calldata signature
+    ) external view returns (bool) {
         if (signer.length < 20) return false;
 
         address verifierAddress = verifierFromSigner(signer);
         if (signer.length == 20) {
             if (verifierAddress.code.length > 0) {
                 (bool ok, bytes memory returnData) = verifierAddress.staticcall(
-                    abi.encodeWithSignature("isValidSignature(bytes32,bytes)", hash, signature)
+                    abi.encodeWithSignature(
+                        "isValidSignature(bytes32,bytes)", hash, signature
+                    )
                 );
-                return ok && returnData.length >= 32 && returnedBytes4(returnData) == ERC1271_MAGIC_VALUE;
+                return ok && returnData.length >= 32
+                    && returnedBytes4(returnData) == ERC1271_MAGIC_VALUE;
             }
             return ecdsaRecoverMatches(verifierAddress, hash, signature);
         }
 
         if (verifierAddress.code.length == 0) return false;
 
-        try IERC7913SignatureVerifier(verifierAddress).verify(signer[20:], hash, signature) returns (bytes4 magic) {
+        try IERC7913SignatureVerifier(verifierAddress)
+            .verify(signer[20:], hash, signature) returns (
+            bytes4 magic
+        ) {
             return magic == IERC7913SignatureVerifier.verify.selector;
         } catch {
             return false;
         }
     }
 
-    function verifierFromSigner(bytes calldata signer) internal pure returns (address verifierAddress) {
+    function verifierFromSigner(bytes calldata signer)
+        internal
+        pure
+        returns (address verifierAddress)
+    {
         assembly {
             verifierAddress := shr(96, calldataload(signer.offset))
         }
     }
 
-    function returnedBytes4(bytes memory returnData) internal pure returns (bytes4 value) {
+    function returnedBytes4(bytes memory returnData)
+        internal
+        pure
+        returns (bytes4 value)
+    {
         assembly {
             value := mload(add(returnData, 32))
         }
     }
 
-    function ecdsaRecoverMatches(address expected, bytes32 hash, bytes calldata signature)
-        internal
-        pure
-        returns (bool)
-    {
+    function ecdsaRecoverMatches(
+        address expected,
+        bytes32 hash,
+        bytes calldata signature
+    ) internal pure returns (bool) {
         if (signature.length != 65) return false;
 
         bytes32 r;
@@ -98,29 +114,44 @@ contract CodecMockERC1271Signer {
         validSignatureHash = keccak256(signature);
     }
 
-    function isValidSignature(bytes32 hash, bytes calldata signature) external view returns (bytes4) {
+    function isValidSignature(bytes32 hash, bytes calldata signature)
+        external
+        view
+        returns (bytes4)
+    {
         if (hash == validHash && keccak256(signature) == validSignatureHash) return MAGIC_VALUE;
         return INVALID_SIGNATURE;
     }
 }
 
 contract CodecNonMagicERC7913Verifier is IERC7913SignatureVerifier {
-    function verify(bytes calldata, bytes32, bytes calldata) external pure returns (bytes4) {
+    function verify(bytes calldata, bytes32, bytes calldata)
+        external
+        pure
+        returns (bytes4)
+    {
         return 0xffffffff;
     }
 }
 
-// Exposes the internal codec library through external functions so tests exercise
-// the real calldata-facing decode paths.
+// Exposes the internal codec library through external functions so tests
+// exercise the real calldata-facing decode paths.
 contract ShrincsCodecHarness {
-    function decodeKey(bytes calldata key) external pure returns (bytes32 commitment, bool ok) {
+    function decodeKey(bytes calldata key)
+        external
+        pure
+        returns (bytes32 commitment, bool ok)
+    {
         return ShrincsCodec.decodeKey(key);
     }
 
     function decodeStatefulEnvelope(bytes calldata envelope)
         external
         pure
-        returns (ShrincsTypes.PublicKey memory publicKey, ShrincsTypes.StatefulSignature memory signature)
+        returns (
+            ShrincsTypes.PublicKey memory publicKey,
+            ShrincsTypes.StatefulSignature memory signature
+        )
     {
         return ShrincsCodec.decodeStatefulEnvelope(envelope);
     }
@@ -132,7 +163,11 @@ contract ShrincsCodecHarness {
         return ShrincsCodec.encodeStatefulEnvelope(publicKey, signature);
     }
 
-    function toMessage(bytes32 hash) external pure returns (bytes memory message) {
+    function toMessage(bytes32 hash)
+        external
+        pure
+        returns (bytes memory message)
+    {
         return ShrincsCodec.toMessage(hash);
     }
 }
@@ -144,38 +179,61 @@ contract ShrincsCodecTest is Test {
         codec = new ShrincsCodecHarness();
     }
 
-    // buildSamplePublicKey: Construct a fully populated synthetic key bundle for round-trip checks.
-    function buildSamplePublicKey() internal pure returns (ShrincsTypes.PublicKey memory publicKey) {
+    // buildSamplePublicKey: Construct a fully populated synthetic key bundle
+    // for round-trip checks.
+    function buildSamplePublicKey()
+        internal
+        pure
+        returns (ShrincsTypes.PublicKey memory publicKey)
+    {
         publicKey = ShrincsTypes.PublicKey({
             statefulPublicKey: abi.encodePacked(
-                keccak256("codec stateful pk seed"), keccak256("codec stateful root"), uint32(7)
+                keccak256("codec stateful pk seed"),
+                keccak256("codec stateful root"),
+                uint32(7)
             ),
-            publicKeyCommitment: abi.encodePacked(keccak256("codec bundle commitment")),
+            publicKeyCommitment: abi.encodePacked(
+                keccak256("codec bundle commitment")
+            ),
             pkSeed: abi.encodePacked(keccak256("codec pk seed")),
-            hypertreeRoot: abi.encodePacked(keccak256("codec hypertree root"))
+            hypertreeRoot: abi.encodePacked(
+                keccak256("codec hypertree root")
+            )
         });
     }
 
-    // buildSampleSignature: Construct a fully populated synthetic stateful signature so
-    // every field — randomizer, counter, chains, authPath — is exercised by the round-trip.
-    function buildSampleSignature() internal pure returns (ShrincsTypes.StatefulSignature memory signature) {
+    // buildSampleSignature: Construct a fully populated synthetic stateful
+    // signature so every field — randomizer, counter, chains, authPath —
+    // is exercised by the round-trip.
+    function buildSampleSignature()
+        internal
+        pure
+        returns (ShrincsTypes.StatefulSignature memory signature)
+    {
         signature.randomizer = keccak256("codec stateful randomizer");
         signature.counter = 42;
         signature.chains = new bytes32[](ShrincsTypes.WOTS_CHAINS_STATEFUL);
         for (uint256 i = 0; i < signature.chains.length; i++) {
-            signature.chains[i] = keccak256(abi.encode("codec stateful chain", i));
+            signature.chains[i] =
+                keccak256(abi.encode("codec stateful chain", i));
         }
         signature.authPath = new bytes32[](2);
         for (uint256 i = 0; i < signature.authPath.length; i++) {
-            signature.authPath[i] = keccak256(abi.encode("codec stateful auth", i));
+            signature.authPath[i] =
+                keccak256(abi.encode("codec stateful auth", i));
         }
     }
 
     function testDecodeKeyAcceptsExactly32Bytes() public view {
         bytes32 expected = keccak256("codec key word");
-        (bytes32 commitment, bool ok) = codec.decodeKey(abi.encodePacked(expected));
+        (bytes32 commitment, bool ok) =
+            codec.decodeKey(abi.encodePacked(expected));
         assertTrue(ok, "32-byte key must decode");
-        assertEq(commitment, expected, "decoded commitment must match the key word");
+        assertEq(
+            commitment,
+            expected,
+            "decoded commitment must match the key word"
+        );
     }
 
     function testDecodeKeyRejectsWrongLengthsWithoutReverting() public view {
@@ -187,35 +245,72 @@ contract ShrincsCodecTest is Test {
             }
             (bytes32 commitment, bool ok) = codec.decodeKey(key);
             assertFalse(ok, "wrong-length key must not decode");
-            assertEq(commitment, bytes32(0), "rejected key must return a zero commitment");
+            assertEq(
+                commitment,
+                bytes32(0),
+                "rejected key must return a zero commitment"
+            );
         }
     }
 
     function testStatefulEnvelopeRoundTripPreservesEveryField() public view {
         ShrincsTypes.PublicKey memory publicKey = buildSamplePublicKey();
-        ShrincsTypes.StatefulSignature memory signature = buildSampleSignature();
+        ShrincsTypes.StatefulSignature memory signature =
+            buildSampleSignature();
 
-        bytes memory envelope = codec.encodeStatefulEnvelope(publicKey, signature);
-        (ShrincsTypes.PublicKey memory decodedKey, ShrincsTypes.StatefulSignature memory decodedSig) =
-            codec.decodeStatefulEnvelope(envelope);
+        bytes memory envelope =
+            codec.encodeStatefulEnvelope(publicKey, signature);
+        (
+            ShrincsTypes.PublicKey memory decodedKey,
+            ShrincsTypes.StatefulSignature memory decodedSig
+        ) = codec.decodeStatefulEnvelope(envelope);
 
-        // The envelope layout is exactly abi.encode(PublicKey, StatefulSignature).
-        assertEq(envelope, abi.encode(publicKey, signature), "envelope must be plain abi.encode of both structs");
+        // The envelope layout is exactly abi.encode(PublicKey,
+        // StatefulSignature).
+        assertEq(
+            envelope,
+            abi.encode(publicKey, signature),
+            "envelope must be plain abi.encode of both structs"
+        );
 
-        assertEq(decodedKey.statefulPublicKey, publicKey.statefulPublicKey, "statefulPublicKey");
-        assertEq(decodedKey.publicKeyCommitment, publicKey.publicKeyCommitment, "publicKeyCommitment");
+        assertEq(
+            decodedKey.statefulPublicKey,
+            publicKey.statefulPublicKey,
+            "statefulPublicKey"
+        );
+        assertEq(
+            decodedKey.publicKeyCommitment,
+            publicKey.publicKeyCommitment,
+            "publicKeyCommitment"
+        );
         assertEq(decodedKey.pkSeed, publicKey.pkSeed, "pkSeed");
-        assertEq(decodedKey.hypertreeRoot, publicKey.hypertreeRoot, "hypertreeRoot");
+        assertEq(
+            decodedKey.hypertreeRoot,
+            publicKey.hypertreeRoot,
+            "hypertreeRoot"
+        );
 
         assertEq(decodedSig.randomizer, signature.randomizer, "randomizer");
         assertEq(decodedSig.counter, signature.counter, "counter");
-        assertEq(decodedSig.chains.length, signature.chains.length, "chain count");
+        assertEq(
+            decodedSig.chains.length, signature.chains.length, "chain count"
+        );
         for (uint256 i = 0; i < signature.chains.length; i++) {
-            assertEq(decodedSig.chains[i], signature.chains[i], "chain value");
+            assertEq(
+                decodedSig.chains[i], signature.chains[i], "chain value"
+            );
         }
-        assertEq(decodedSig.authPath.length, signature.authPath.length, "authPath length");
+        assertEq(
+            decodedSig.authPath.length,
+            signature.authPath.length,
+            "authPath length"
+        );
         for (uint256 i = 0; i < signature.authPath.length; i++) {
-            assertEq(decodedSig.authPath[i], signature.authPath[i], "authPath node");
+            assertEq(
+                decodedSig.authPath[i],
+                signature.authPath[i],
+                "authPath node"
+            );
         }
     }
 
@@ -229,48 +324,67 @@ contract ShrincsCodecTest is Test {
     }
 
     // Checks that unused bytes inside the public key part are rejected.
-    function testDecodeStatefulEnvelopeRejectsNestedTrailingBytesInsidePublicKey() public {
-        bytes memory malformed = insertGapBeforePublicKeyCommitment(validEnvelope());
+    function testDecodeStatefulEnvelopeRejectsNestedTrailingBytesInsidePublicKey()
+        public
+    {
+        bytes memory malformed =
+            insertGapBeforePublicKeyCommitment(validEnvelope());
 
         vm.expectRevert(ShrincsCodec.InvalidEnvelope.selector);
         codec.decodeStatefulEnvelope(malformed);
     }
 
     // Checks that a bad pointer inside the encoded signature is rejected.
-    function testDecodeStatefulEnvelopeRejectsMalformedDynamicOffset() public {
-        bytes memory malformed = overwriteSignatureChainsOffset(validEnvelope(), 0x81);
+    function testDecodeStatefulEnvelopeRejectsMalformedDynamicOffset()
+        public
+    {
+        bytes memory malformed =
+            overwriteSignatureChainsOffset(validEnvelope(), 0x81);
 
         vm.expectRevert();
         codec.decodeStatefulEnvelope(malformed);
     }
 
     // Checks that reused pointers inside the encoded public key are rejected.
-    function testDecodeStatefulEnvelopeRejectsDuplicatedInternalOffsets() public {
-        bytes memory malformed = duplicatePublicKeyCommitmentOffset(validEnvelope());
+    function testDecodeStatefulEnvelopeRejectsDuplicatedInternalOffsets()
+        public
+    {
+        bytes memory malformed =
+            duplicatePublicKeyCommitmentOffset(validEnvelope());
 
         vm.expectRevert(ShrincsCodec.InvalidEnvelope.selector);
         codec.decodeStatefulEnvelope(malformed);
     }
 
-    // Checks that out-of-order ABI pointers are rejected even if abi.decode could read them.
-    function testDecodeStatefulEnvelopeRejectsOutOfOrderOffsetsThatStillDecode() public {
-        bytes memory malformed = reorderPublicKeyStatefulAndCommitmentData(validEnvelope());
+    // Checks that out-of-order ABI pointers are rejected even if abi.decode
+    // could read them.
+    function testDecodeStatefulEnvelopeRejectsOutOfOrderOffsetsThatStillDecode()
+        public
+    {
+        bytes memory malformed =
+            reorderPublicKeyStatefulAndCommitmentData(validEnvelope());
 
         vm.expectRevert(ShrincsCodec.InvalidEnvelope.selector);
         codec.decodeStatefulEnvelope(malformed);
     }
 
-    // Checks that a stateful signature must have exactly 64 WOTS-C chain values.
-    function testDecodeStatefulEnvelopeRejectsOversizedDeclaredChainArray() public {
-        bytes memory malformed = overwriteSignatureChainsLength(validEnvelope(), 65);
+    // Checks that a stateful signature must have exactly 64 WOTS-C chain
+    // values.
+    function testDecodeStatefulEnvelopeRejectsOversizedDeclaredChainArray()
+        public
+    {
+        bytes memory malformed =
+            overwriteSignatureChainsLength(validEnvelope(), 65);
 
         vm.expectRevert();
         codec.decodeStatefulEnvelope(malformed);
     }
 
-    // Checks that a huge claimed auth path length is rejected before the decoded value is accepted.
+    // Checks that a huge claimed auth path length is rejected before the
+    // decoded value is accepted.
     function testDecodeStatefulEnvelopeRejectsHugeAuthPathLength() public {
-        bytes memory malformed = overwriteSignatureAuthPathLength(validEnvelope(), 10_000);
+        bytes memory malformed =
+            overwriteSignatureAuthPathLength(validEnvelope(), 10_000);
 
         vm.expectRevert();
         codec.decodeStatefulEnvelope(malformed);
@@ -280,50 +394,96 @@ contract ShrincsCodecTest is Test {
         bytes32 hash = keccak256("codec message hash");
         bytes memory message = codec.toMessage(hash);
         assertEq(message.length, 32, "message must be exactly 32 bytes");
-        assertEq(message, abi.encodePacked(hash), "message must be the packed hash bytes");
+        assertEq(
+            message,
+            abi.encodePacked(hash),
+            "message must be the packed hash bytes"
+        );
     }
 
     function testFuzzToMessageMatchesPackedHash(bytes32 hash) public view {
-        assertEq(codec.toMessage(hash), abi.encodePacked(hash), "message must always be the packed hash bytes");
+        assertEq(
+            codec.toMessage(hash),
+            abi.encodePacked(hash),
+            "message must always be the packed hash bytes"
+        );
     }
 
     function validEnvelope() internal view returns (bytes memory) {
-        return codec.encodeStatefulEnvelope(buildSamplePublicKey(), buildSampleSignature());
+        return codec.encodeStatefulEnvelope(
+            buildSamplePublicKey(), buildSampleSignature()
+        );
     }
 
-    function duplicatePublicKeyCommitmentOffset(bytes memory source) internal pure returns (bytes memory out) {
+    function duplicatePublicKeyCommitmentOffset(bytes memory source)
+        internal
+        pure
+        returns (bytes memory out)
+    {
         out = cloneBytes(source);
         uint256 publicKeyOffset = wordAt(out, 0);
-        bytes32 statefulPublicKeyOffset = bytes32(wordAt(out, publicKeyOffset));
+        bytes32 statefulPublicKeyOffset =
+            bytes32(wordAt(out, publicKeyOffset));
         writeWord(out, publicKeyOffset + 32, statefulPublicKeyOffset);
     }
 
-    function insertGapBeforePublicKeyCommitment(bytes memory source) internal pure returns (bytes memory out) {
+    function insertGapBeforePublicKeyCommitment(bytes memory source)
+        internal
+        pure
+        returns (bytes memory out)
+    {
         uint256 publicKeyOffset = wordAt(source, 0);
         uint256 oldSignatureOffset = wordAt(source, 32);
-        uint256 gapOffset = publicKeyOffset + wordAt(source, publicKeyOffset + 32);
+        uint256 gapOffset =
+            publicKeyOffset + wordAt(source, publicKeyOffset + 32);
 
         out = insertZeroWordAt(source, gapOffset);
         writeWord(out, 32, bytes32(oldSignatureOffset + 32));
-        writeWord(out, publicKeyOffset + 32, bytes32(wordAt(source, publicKeyOffset + 32) + 32));
-        writeWord(out, publicKeyOffset + 64, bytes32(wordAt(source, publicKeyOffset + 64) + 32));
-        writeWord(out, publicKeyOffset + 96, bytes32(wordAt(source, publicKeyOffset + 96) + 32));
+        writeWord(
+            out,
+            publicKeyOffset + 32,
+            bytes32(wordAt(source, publicKeyOffset + 32) + 32)
+        );
+        writeWord(
+            out,
+            publicKeyOffset + 64,
+            bytes32(wordAt(source, publicKeyOffset + 64) + 32)
+        );
+        writeWord(
+            out,
+            publicKeyOffset + 96,
+            bytes32(wordAt(source, publicKeyOffset + 96) + 32)
+        );
     }
 
-    function reorderPublicKeyStatefulAndCommitmentData(bytes memory source) internal pure returns (bytes memory out) {
+    function reorderPublicKeyStatefulAndCommitmentData(bytes memory source)
+        internal
+        pure
+        returns (bytes memory out)
+    {
         out = cloneBytes(source);
 
         uint256 publicKeyOffset = wordAt(source, 0);
         uint256 statefulOffset = wordAt(source, publicKeyOffset);
         uint256 commitmentOffset = wordAt(source, publicKeyOffset + 32);
-        uint256 statefulSize = dynamicBytesSegmentSize(source, publicKeyOffset + statefulOffset);
-        uint256 commitmentSize = dynamicBytesSegmentSize(source, publicKeyOffset + commitmentOffset);
+        uint256 statefulSize = dynamicBytesSegmentSize(
+            source, publicKeyOffset + statefulOffset
+        );
+        uint256 commitmentSize = dynamicBytesSegmentSize(
+            source, publicKeyOffset + commitmentOffset
+        );
 
-        writeWord(out, publicKeyOffset, bytes32(statefulOffset + commitmentSize));
+        writeWord(
+            out, publicKeyOffset, bytes32(statefulOffset + commitmentSize)
+        );
         writeWord(out, publicKeyOffset + 32, bytes32(statefulOffset));
 
         copyBytesRange(
-            out, publicKeyOffset + statefulOffset, source, publicKeyOffset + commitmentOffset, commitmentSize
+            out,
+            publicKeyOffset + statefulOffset,
+            source,
+            publicKeyOffset + commitmentOffset,
+            commitmentSize
         );
         copyBytesRange(
             out,
@@ -334,39 +494,40 @@ contract ShrincsCodecTest is Test {
         );
     }
 
-    function overwriteSignatureChainsOffset(bytes memory source, uint256 newOffset)
-        internal
-        pure
-        returns (bytes memory out)
-    {
+    function overwriteSignatureChainsOffset(
+        bytes memory source,
+        uint256 newOffset
+    ) internal pure returns (bytes memory out) {
         out = cloneBytes(source);
         uint256 signatureOffset = wordAt(out, 32);
         writeWord(out, signatureOffset + 64, bytes32(newOffset));
     }
 
-    function overwriteSignatureChainsLength(bytes memory source, uint256 newLength)
-        internal
-        pure
-        returns (bytes memory out)
-    {
+    function overwriteSignatureChainsLength(
+        bytes memory source,
+        uint256 newLength
+    ) internal pure returns (bytes memory out) {
         out = cloneBytes(source);
         uint256 signatureOffset = wordAt(out, 32);
         uint256 chainsOffset = wordAt(out, signatureOffset + 64);
         writeWord(out, signatureOffset + chainsOffset, bytes32(newLength));
     }
 
-    function overwriteSignatureAuthPathLength(bytes memory source, uint256 newLength)
-        internal
-        pure
-        returns (bytes memory out)
-    {
+    function overwriteSignatureAuthPathLength(
+        bytes memory source,
+        uint256 newLength
+    ) internal pure returns (bytes memory out) {
         out = cloneBytes(source);
         uint256 signatureOffset = wordAt(out, 32);
         uint256 authPathOffset = wordAt(out, signatureOffset + 96);
         writeWord(out, signatureOffset + authPathOffset, bytes32(newLength));
     }
 
-    function insertZeroWordAt(bytes memory source, uint256 offset) internal pure returns (bytes memory out) {
+    function insertZeroWordAt(bytes memory source, uint256 offset)
+        internal
+        pure
+        returns (bytes memory out)
+    {
         out = new bytes(source.length + 32);
         for (uint256 i = 0; i < offset; ++i) {
             out[i] = source[i];
@@ -376,7 +537,11 @@ contract ShrincsCodecTest is Test {
         }
     }
 
-    function dynamicBytesSegmentSize(bytes memory source, uint256 offset) internal pure returns (uint256) {
+    function dynamicBytesSegmentSize(bytes memory source, uint256 offset)
+        internal
+        pure
+        returns (uint256)
+    {
         uint256 byteLength = wordAt(source, offset);
         return 32 + ((byteLength + 31) / 32) * 32;
     }
@@ -393,20 +558,31 @@ contract ShrincsCodecTest is Test {
         }
     }
 
-    function cloneBytes(bytes memory source) internal pure returns (bytes memory out) {
+    function cloneBytes(bytes memory source)
+        internal
+        pure
+        returns (bytes memory out)
+    {
         out = new bytes(source.length);
         for (uint256 i = 0; i < source.length; ++i) {
             out[i] = source[i];
         }
     }
 
-    function wordAt(bytes memory data, uint256 offset) internal pure returns (uint256 value) {
+    function wordAt(bytes memory data, uint256 offset)
+        internal
+        pure
+        returns (uint256 value)
+    {
         assembly {
             value := mload(add(add(data, 32), offset))
         }
     }
 
-    function writeWord(bytes memory data, uint256 offset, bytes32 value) internal pure {
+    function writeWord(bytes memory data, uint256 offset, bytes32 value)
+        internal
+        pure
+    {
         assembly {
             mstore(add(add(data, 32), offset), value)
         }
@@ -415,7 +591,8 @@ contract ShrincsCodecTest is Test {
 
 contract ShrincsCodecERC7913IntegrationTest is Test {
     bytes4 internal constant INVALID_SIGNATURE = 0xffffffff;
-    string internal constant VECTOR_PATH = "test/test_vectors/shrincs_sphincs_256s_keccak.json";
+    string internal constant VECTOR_PATH =
+        "test/test_vectors/shrincs_sphincs_256s_keccak.json";
 
     ShrincsVerifier internal verifier;
     CodecERC7913ConsumerHarness internal consumer;
@@ -446,8 +623,13 @@ contract ShrincsCodecERC7913IntegrationTest is Test {
         nonMagicVerifier = new CodecNonMagicERC7913Verifier();
         vectors = vm.readFile(VECTOR_PATH);
 
-        (ShrincsTypes.SigningKey memory signingKey, ShrincsTypes.PublicKey memory publicKey, bool keygenOk) =
-            ShrincsTestSigner.keygen(bytes("shrincs erc7913 stateful verifier seed"), 4);
+        (
+            ShrincsTypes.SigningKey memory signingKey,
+            ShrincsTypes.PublicKey memory publicKey,
+            bool keygenOk
+        ) = ShrincsTestSigner.keygen(
+            bytes("shrincs erc7913 stateful verifier seed"), 4
+        );
         assertTrue(keygenOk, "in-test keygen must succeed");
 
         signedHash = keccak256("shrincs erc7913 stateful verifier vector");
@@ -464,15 +646,23 @@ contract ShrincsCodecERC7913IntegrationTest is Test {
         }
 
         validKey = abi.encodePacked(commitmentWord);
-        validEnvelope = ShrincsCodec.encodeStatefulEnvelope(publicKey, signature);
+        validEnvelope =
+            ShrincsCodec.encodeStatefulEnvelope(publicKey, signature);
         erc1271Signer = new CodecMockERC1271Signer(signedHash, validEnvelope);
     }
 
-    // Checks that a stateful signature made by the Rust code works through ERC-7913.
-    function testVerifyRustGeneratedStatefulVectorReturnsMagicValue() public {
-        (ShrincsTypes.PublicKey memory publicKey, bytes32 hash, ShrincsTypes.StatefulSignature memory signature) =
-            decodeRustStatefulVector();
-        bytes memory envelope = ShrincsCodec.encodeStatefulEnvelope(publicKey, signature);
+    // Checks that a stateful signature made by the Rust code works through
+    // ERC-7913.
+    function testVerifyRustGeneratedStatefulVectorReturnsMagicValue()
+        public
+    {
+        (
+            ShrincsTypes.PublicKey memory publicKey,
+            bytes32 hash,
+            ShrincsTypes.StatefulSignature memory signature
+        ) = decodeRustStatefulVector();
+        bytes memory envelope =
+            ShrincsCodec.encodeStatefulEnvelope(publicKey, signature);
 
         assertEq(
             verifier.verify(publicKey.publicKeyCommitment, hash, envelope),
@@ -484,17 +674,21 @@ contract ShrincsCodecERC7913IntegrationTest is Test {
     // Checks that a 32-byte key of all zeros is rejected.
     function testRejectsZeroCommitmentKey() public view {
         assertEq(
-            verifier.verify(abi.encodePacked(bytes32(0)), signedHash, validEnvelope),
+            verifier.verify(
+                abi.encodePacked(bytes32(0)), signedHash, validEnvelope
+            ),
             INVALID_SIGNATURE,
             "zero commitment key must be rejected"
         );
     }
 
-    // Checks that a caller can verify signer = verifier address followed by key bytes.
+    // Checks that a caller can verify signer = verifier address followed by
+    // key bytes.
     function testConsumerAcceptsVerifierKeySigner() public view {
         bytes memory signer = abi.encodePacked(address(verifier), validKey);
         assertTrue(
-            consumer.isValidSignatureNow(signer, signedHash, validEnvelope), "verifier || key signer must verify"
+            consumer.isValidSignatureNow(signer, signedHash, validEnvelope),
+            "verifier || key signer must verify"
         );
     }
 
@@ -502,34 +696,48 @@ contract ShrincsCodecERC7913IntegrationTest is Test {
     function testConsumerRejectsSignerShorterThanAddress() public view {
         bytes memory signer = new bytes(19);
         assertFalse(
-            consumer.isValidSignatureNow(signer, signedHash, validEnvelope), "signer shorter than one address must fail"
+            consumer.isValidSignatureNow(signer, signedHash, validEnvelope),
+            "signer shorter than one address must fail"
         );
     }
 
-    // Checks that a 20-byte signer uses ERC-1271, not ERC-7913 with an empty key.
+    // Checks that a 20-byte signer uses ERC-1271, not ERC-7913 with an empty
+    // key.
     function testConsumerUsesERC1271FallbackForEmptyKey() public view {
         bytes memory signer = abi.encodePacked(address(erc1271Signer));
         assertTrue(
-            consumer.isValidSignatureNow(signer, signedHash, validEnvelope), "20-byte signer must use ERC-1271 fallback"
+            consumer.isValidSignatureNow(signer, signedHash, validEnvelope),
+            "20-byte signer must use ERC-1271 fallback"
         );
         assertFalse(
-            consumer.isValidSignatureNow(abi.encodePacked(address(verifier)), signedHash, validEnvelope),
+            consumer.isValidSignatureNow(
+                abi.encodePacked(address(verifier)),
+                signedHash,
+                validEnvelope
+            ),
             "20-byte ERC-7913 verifier address must not be called with an empty key"
         );
     }
 
-    // Checks that verification fails if the verifier does not return the ERC-7913 success value.
+    // Checks that verification fails if the verifier does not return the
+    // ERC-7913 success value.
     function testConsumerRejectsNonMagicVerifierReturn() public view {
-        bytes memory signer = abi.encodePacked(address(nonMagicVerifier), validKey);
+        bytes memory signer =
+            abi.encodePacked(address(nonMagicVerifier), validKey);
         assertFalse(
-            consumer.isValidSignatureNow(signer, signedHash, validEnvelope), "non-magic ERC-7913 return value must fail"
+            consumer.isValidSignatureNow(signer, signedHash, validEnvelope),
+            "non-magic ERC-7913 return value must fail"
         );
     }
 
-    // Checks that a consumer rejects verifier addresses that have no contract code.
+    // Checks that a consumer rejects verifier addresses that have no contract
+    // code.
     function testConsumerRejectsVerifierAddressWithNoCode() public view {
-        address noCodeVerifier = address(0x1234567890123456789012345678901234567890);
-        assertEq(noCodeVerifier.code.length, 0, "test address must have no code");
+        address noCodeVerifier =
+            address(0x1234567890123456789012345678901234567890);
+        assertEq(
+            noCodeVerifier.code.length, 0, "test address must have no code"
+        );
 
         bytes memory signer = abi.encodePacked(noCodeVerifier, validKey);
         assertFalse(
@@ -538,9 +746,14 @@ contract ShrincsCodecERC7913IntegrationTest is Test {
         );
     }
 
-    // Checks that a good key and signature fail if the signer points at the wrong contract.
-    function testConsumerRejectsValidSignatureWithWrongVerifierAddress() public view {
-        bytes memory signer = abi.encodePacked(address(erc1271Signer), validKey);
+    // Checks that a good key and signature fail if the signer points at the
+    // wrong contract.
+    function testConsumerRejectsValidSignatureWithWrongVerifierAddress()
+        public
+        view
+    {
+        bytes memory signer =
+            abi.encodePacked(address(erc1271Signer), validKey);
         assertFalse(
             consumer.isValidSignatureNow(signer, signedHash, validEnvelope),
             "wrong verifier address must fail even with a good signature"
@@ -549,26 +762,42 @@ contract ShrincsCodecERC7913IntegrationTest is Test {
 
     function decodeRustStatefulVector()
         internal
-        returns (ShrincsTypes.PublicKey memory publicKey, bytes32 hash, ShrincsTypes.StatefulSignature memory signature)
+        returns (
+            ShrincsTypes.PublicKey memory publicKey,
+            bytes32 hash,
+            ShrincsTypes.StatefulSignature memory signature
+        )
     {
         bytes memory args = vectorArgs(".stateful.cases.valid.calldata");
         (
             LegacyStatefulPublicKey memory legacyKey,
             bytes memory message,
             LegacyStatefulSignature memory legacySignature
-        ) = abi.decode(args, (LegacyStatefulPublicKey, bytes, LegacyStatefulSignature));
+        ) = abi.decode(
+            args, (LegacyStatefulPublicKey, bytes, LegacyStatefulSignature)
+        );
 
-        assertEq(message.length, 32, "ERC-7913 vector message must be exactly one bytes32");
+        assertEq(
+            message.length,
+            32,
+            "ERC-7913 vector message must be exactly one bytes32"
+        );
         assembly {
             hash := mload(add(message, 32))
         }
 
-        bytes memory pkSeed = vm.parseJsonBytes(vectors, ".stateless.cases.valid.publicKey.pkSeed");
-        bytes memory hypertreeRoot = vm.parseJsonBytes(vectors, ".stateless.cases.valid.publicKey.hypertreeRoot");
-        bytes memory statefulPublicKey =
-            abi.encodePacked(legacyKey.pkSeed, legacyKey.root, bytes4(legacyKey.maxSignatures));
+        bytes memory pkSeed = vm.parseJsonBytes(
+            vectors, ".stateless.cases.valid.publicKey.pkSeed"
+        );
+        bytes memory hypertreeRoot = vm.parseJsonBytes(
+            vectors, ".stateless.cases.valid.publicKey.hypertreeRoot"
+        );
+        bytes memory statefulPublicKey = abi.encodePacked(
+            legacyKey.pkSeed, legacyKey.root, bytes4(legacyKey.maxSignatures)
+        );
 
-        publicKey = publicKeyFromParts(statefulPublicKey, pkSeed, hypertreeRoot);
+        publicKey =
+            publicKeyFromParts(statefulPublicKey, pkSeed, hypertreeRoot);
         signature = ShrincsTypes.StatefulSignature({
             randomizer: legacySignature.randomizer,
             counter: legacySignature.counter,
@@ -577,12 +806,19 @@ contract ShrincsCodecERC7913IntegrationTest is Test {
         });
     }
 
-    function publicKeyFromParts(bytes memory statefulPublicKey, bytes memory pkSeed, bytes memory hypertreeRoot)
-        internal
-        pure
-        returns (ShrincsTypes.PublicKey memory)
-    {
-        bytes32 commitment = keccak256(abi.encodePacked("shrincs-public-key", statefulPublicKey, pkSeed, hypertreeRoot));
+    function publicKeyFromParts(
+        bytes memory statefulPublicKey,
+        bytes memory pkSeed,
+        bytes memory hypertreeRoot
+    ) internal pure returns (ShrincsTypes.PublicKey memory) {
+        bytes32 commitment = keccak256(
+            abi.encodePacked(
+                "shrincs-public-key",
+                statefulPublicKey,
+                pkSeed,
+                hypertreeRoot
+            )
+        );
         return ShrincsTypes.PublicKey({
             statefulPublicKey: statefulPublicKey,
             publicKeyCommitment: abi.encodePacked(commitment),
@@ -591,21 +827,32 @@ contract ShrincsCodecERC7913IntegrationTest is Test {
         });
     }
 
-    function fixedToDynamicChains(bytes32[64] memory fixedChains) internal pure returns (bytes32[] memory chains) {
+    function fixedToDynamicChains(bytes32[64] memory fixedChains)
+        internal
+        pure
+        returns (bytes32[] memory chains)
+    {
         chains = new bytes32[](64);
         for (uint256 i = 0; i < 64; ++i) {
             chains[i] = fixedChains[i];
         }
     }
 
-    function vectorArgs(string memory vectorKey) internal returns (bytes memory) {
+    function vectorArgs(string memory vectorKey)
+        internal
+        returns (bytes memory)
+    {
         vm.pauseGasMetering();
         bytes memory callData = vm.parseJsonBytes(vectors, vectorKey);
         vm.resumeGasMetering();
         return stripSelector(callData);
     }
 
-    function stripSelector(bytes memory input) internal pure returns (bytes memory output) {
+    function stripSelector(bytes memory input)
+        internal
+        pure
+        returns (bytes memory output)
+    {
         output = new bytes(input.length - 4);
         for (uint256 i = 4; i < input.length; ++i) {
             output[i - 4] = input[i];

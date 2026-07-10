@@ -20,9 +20,11 @@ import {SHRINCS} from "../../contracts/SHRINCS.sol";
 import {ShrincsTypes} from "../../contracts/ShrincsTypes.sol";
 import {ShrincsUtils} from "../../contracts/ShrincsUtils.sol";
 
-/// @notice TEST-ONLY Solidity signer helpers that mirror the Rust signer for stateful flows.
-/// @dev This library is kept under `test/helpers` so it does not become part of the
-/// production Solidity surface. It is used for deterministic keygen and stateful-signing tests.
+/// @notice TEST-ONLY Solidity signer helpers that mirror the Rust signer for
+/// stateful flows.
+/// @dev This library is kept under `test/helpers` so it does not become part
+/// of the production Solidity surface. It is used for deterministic keygen
+/// and stateful-signing tests.
 library ShrincsTestSigner {
     uint32 internal constant INITIAL_STATEFUL_LEAF_INDEX = 1;
     uint32 internal constant MAX_STATEFUL_SIGNATURES_LIMIT = 4096;
@@ -32,18 +34,35 @@ library ShrincsTestSigner {
     function keygen(bytes memory seedMaterial, uint32 maxStatefulSignatures)
         internal
         pure
-        returns (ShrincsTypes.SigningKey memory signingKey, ShrincsTypes.PublicKey memory publicKey, bool ok)
+        returns (
+            ShrincsTypes.SigningKey memory signingKey,
+            ShrincsTypes.PublicKey memory publicKey,
+            bool ok
+        )
     {
-        if (maxStatefulSignatures == 0) return (signingKey, publicKey, false);
-        if (maxStatefulSignatures > MAX_STATEFUL_SIGNATURES_LIMIT) return (signingKey, publicKey, false);
+        if (maxStatefulSignatures == 0) {
+            return (signingKey, publicKey, false);
+        }
+        if (maxStatefulSignatures > MAX_STATEFUL_SIGNATURES_LIMIT) {
+            return (signingKey, publicKey, false);
+        }
 
-        bytes32 statefulSkSeed = derive32("shrincs-stateful-sk-seed", seedMaterial, "");
-        bytes32 statefulPrfSeed = derive32("shrincs-stateful-prf-seed", seedMaterial, "");
-        bytes32 statefulPkSeed = derive32("shrincs-stateful-pk-seed", seedMaterial, "");
-        bytes32 statefulRoot =
-            statefulSubtreeRoot(statefulSkSeed, statefulPkSeed, INITIAL_STATEFUL_LEAF_INDEX, maxStatefulSignatures);
-        bytes32 statelessSkSeed = derive32("shrincs-stateless-sk-seed", seedMaterial, "");
-        bytes32 statelessPrfSeed = derive32("shrincs-stateless-prf-seed", seedMaterial, "");
+        bytes32 statefulSkSeed =
+            derive32("shrincs-stateful-sk-seed", seedMaterial, "");
+        bytes32 statefulPrfSeed =
+            derive32("shrincs-stateful-prf-seed", seedMaterial, "");
+        bytes32 statefulPkSeed =
+            derive32("shrincs-stateful-pk-seed", seedMaterial, "");
+        bytes32 statefulRoot = statefulSubtreeRoot(
+            statefulSkSeed,
+            statefulPkSeed,
+            INITIAL_STATEFUL_LEAF_INDEX,
+            maxStatefulSignatures
+        );
+        bytes32 statelessSkSeed =
+            derive32("shrincs-stateless-sk-seed", seedMaterial, "");
+        bytes32 statelessPrfSeed =
+            derive32("shrincs-stateless-prf-seed", seedMaterial, "");
         bytes32 pkSeed = derive32("shrincs-pk-seed", seedMaterial, "");
         bytes32 hypertreeRoot = hypertreePublicRoot(statelessSkSeed, pkSeed);
 
@@ -60,9 +79,15 @@ library ShrincsTestSigner {
             hypertreeRoot: hypertreeRoot
         });
 
-        bytes memory statefulPublicKey = encodeStatefulPublicKey(statefulPkSeed, statefulRoot, maxStatefulSignatures);
+        bytes memory statefulPublicKey = encodeStatefulPublicKey(
+            statefulPkSeed, statefulRoot, maxStatefulSignatures
+        );
         bytes32 publicKeyCommitment =
-            ShrincsUtils.publicKeyCommitmentFromParts(statefulPublicKey, abi.encodePacked(pkSeed), abi.encodePacked(hypertreeRoot));
+            ShrincsUtils.publicKeyCommitmentFromParts(
+                statefulPublicKey,
+                abi.encodePacked(pkSeed),
+                abi.encodePacked(hypertreeRoot)
+            );
         publicKey = ShrincsTypes.PublicKey({
             statefulPublicKey: statefulPublicKey,
             publicKeyCommitment: abi.encodePacked(publicKeyCommitment),
@@ -72,16 +97,26 @@ library ShrincsTestSigner {
         return (signingKey, publicKey, true);
     }
 
-    function signStatefulRaw(ShrincsTypes.SigningKey memory signingKey, bytes memory message)
+    function signStatefulRaw(
+        ShrincsTypes.SigningKey memory signingKey,
+        bytes memory message
+    )
         internal
         pure
-        returns (ShrincsTypes.SigningKey memory nextSigningKey, ShrincsTypes.StatefulSignature memory signature, bool ok)
+        returns (
+            ShrincsTypes.SigningKey memory nextSigningKey,
+            ShrincsTypes.StatefulSignature memory signature,
+            bool ok
+        )
     {
         uint32 leafIndex = signingKey.nextStatefulLeafIndex;
         if (leafIndex == 0) return (nextSigningKey, signature, false);
-        if (leafIndex > signingKey.maxStatefulSignatures) return (nextSigningKey, signature, false);
+        if (leafIndex > signingKey.maxStatefulSignatures) {
+            return (nextSigningKey, signature, false);
+        }
 
-        (signature, ok) = signStatefulRawAtLeaf(signingKey, leafIndex, message);
+        (signature, ok) =
+            signStatefulRawAtLeaf(signingKey, leafIndex, message);
         if (!ok) return (nextSigningKey, signature, false);
 
         nextSigningKey = signingKey;
@@ -96,53 +131,81 @@ library ShrincsTestSigner {
     )
         internal
         pure
-        returns (ShrincsTypes.SigningKey memory nextSigningKey, ShrincsTypes.StatefulSignature memory signature, bool ok)
+        returns (
+            ShrincsTypes.SigningKey memory nextSigningKey,
+            ShrincsTypes.StatefulSignature memory signature,
+            bool ok
+        )
     {
-        if (publicKey.publicKeyCommitment.length != 32) return (nextSigningKey, signature, false);
+        if (publicKey.publicKeyCommitment.length != 32) {
+            return (nextSigningKey, signature, false);
+        }
         bytes32 expectedPublicKeyCommitment;
         bytes memory commitmentBytes = publicKey.publicKeyCommitment;
         assembly {
             expectedPublicKeyCommitment := mload(add(commitmentBytes, 32))
         }
-        bytes memory message = abi.encodePacked(SHRINCS.statefulActionMessageHash(expectedPublicKeyCommitment, context));
+        bytes memory message = abi.encodePacked(
+            SHRINCS.statefulActionMessageHash(
+                expectedPublicKeyCommitment, context
+            )
+        );
         return signStatefulRaw(signingKey, message);
     }
 
-    function derive32(bytes memory domain, bytes memory seed, bytes memory data) internal pure returns (bytes32) {
+    function derive32(
+        bytes memory domain,
+        bytes memory seed,
+        bytes memory data
+    ) internal pure returns (bytes32) {
         return keccak256(abi.encodePacked(domain, seed, data));
     }
 
-    function signStatefulRawAtLeaf(ShrincsTypes.SigningKey memory signingKey, uint32 leafIndex, bytes memory message)
+    function signStatefulRawAtLeaf(
+        ShrincsTypes.SigningKey memory signingKey,
+        uint32 leafIndex,
+        bytes memory message
+    )
         internal
         pure
         returns (ShrincsTypes.StatefulSignature memory signature, bool ok)
     {
         if (leafIndex == 0) return (signature, false);
-        if (leafIndex > signingKey.maxStatefulSignatures) return (signature, false);
+        if (leafIndex > signingKey.maxStatefulSignatures) {
+            return (signature, false);
+        }
 
         (signature, ok) = signStatefulWotsC(
-            signingKey.statefulSkSeed, signingKey.statefulPrfSeed, signingKey.statefulPkSeed, leafIndex, message
+            signingKey.statefulSkSeed,
+            signingKey.statefulPrfSeed,
+            signingKey.statefulPkSeed,
+            leafIndex,
+            message
         );
         if (!ok) return (signature, false);
         signature.authPath = statefulAuthPath(
-            signingKey.statefulSkSeed, signingKey.statefulPkSeed, leafIndex, signingKey.maxStatefulSignatures
+            signingKey.statefulSkSeed,
+            signingKey.statefulPkSeed,
+            leafIndex,
+            signingKey.maxStatefulSignatures
         );
         return (signature, true);
     }
 
-    function encodeStatefulPublicKey(bytes32 pkSeed, bytes32 root, uint32 maxSignatures)
-        internal
-        pure
-        returns (bytes memory)
-    {
+    function encodeStatefulPublicKey(
+        bytes32 pkSeed,
+        bytes32 root,
+        uint32 maxSignatures
+    ) internal pure returns (bytes memory) {
         return abi.encodePacked(pkSeed, root, maxSignatures);
     }
 
-    function statefulSubtreeRoot(bytes32 skSeed, bytes32 pkSeed, uint32 leafIndex, uint32 maxSignatures)
-        internal
-        pure
-        returns (bytes32 right)
-    {
+    function statefulSubtreeRoot(
+        bytes32 skSeed,
+        bytes32 pkSeed,
+        uint32 leafIndex,
+        uint32 maxSignatures
+    ) internal pure returns (bytes32 right) {
         right = statefulEmptyTail(pkSeed, maxSignatures);
         for (uint32 currentLeaf = maxSignatures; currentLeaf >= leafIndex;) {
             bytes32 leaf = statefulWotsPkHash(skSeed, pkSeed, currentLeaf);
@@ -154,37 +217,83 @@ library ShrincsTestSigner {
         }
     }
 
-    function statefulWotsPkHash(bytes32 skSeed, bytes32 pkSeed, uint32 leafIndex) internal pure returns (bytes32) {
-        bytes memory endpoints = new bytes(uint256(ShrincsTypes.WOTS_CHAINS_STATEFUL) * 32);
-        for (uint32 chainIndex = 0; chainIndex < ShrincsTypes.WOTS_CHAINS_STATEFUL;) {
-            bytes32 secret = statefulChainSecret(skSeed, pkSeed, leafIndex, chainIndex);
-            bytes32 endpoint =
-                statefulChainNoMask(pkSeed, leafIndex, chainIndex, secret, 0, ShrincsTypes.WOTS_BASE_STATEFUL - 1);
+    function statefulWotsPkHash(
+        bytes32 skSeed,
+        bytes32 pkSeed,
+        uint32 leafIndex
+    ) internal pure returns (bytes32) {
+        bytes memory endpoints = new bytes(
+            uint256(ShrincsTypes.WOTS_CHAINS_STATEFUL) * 32
+        );
+        for (
+            uint32 chainIndex = 0;
+            chainIndex < ShrincsTypes.WOTS_CHAINS_STATEFUL;
+
+        ) {
+            bytes32 secret =
+                statefulChainSecret(skSeed, pkSeed, leafIndex, chainIndex);
+            bytes32 endpoint = statefulChainNoMask(
+                pkSeed,
+                leafIndex,
+                chainIndex,
+                secret,
+                0,
+                ShrincsTypes.WOTS_BASE_STATEFUL - 1
+            );
             setSlice32(endpoints, endpoint, uint256(chainIndex) * 32);
             unchecked {
                 ++chainIndex;
             }
         }
-        return keccak256(abi.encodePacked("uxmss-wots-pk", pkSeed, leafIndex, endpoints));
+        return keccak256(
+            abi.encodePacked("uxmss-wots-pk", pkSeed, leafIndex, endpoints)
+        );
     }
 
-    function signStatefulWotsC(bytes32 skSeed, bytes32 prfSeed, bytes32 pkSeed, uint32 leafIndex, bytes memory message)
+    function signStatefulWotsC(
+        bytes32 skSeed,
+        bytes32 prfSeed,
+        bytes32 pkSeed,
+        uint32 leafIndex,
+        bytes memory message
+    )
         internal
         pure
         returns (ShrincsTypes.StatefulSignature memory signature, bool ok)
     {
-        bytes32 randomizer = keccak256(abi.encodePacked("uxmss-wots-randomizer", prfSeed, leafIndex, message));
+        bytes32 randomizer = keccak256(
+            abi.encodePacked(
+                "uxmss-wots-randomizer", prfSeed, leafIndex, message
+            )
+        );
 
         for (uint32 counter = 0; counter < WOTS_C_MAX_GRIND_COUNTER;) {
-            bytes32 digest =
-                keccak256(abi.encodePacked("uxmss-wots-digits", pkSeed, leafIndex, randomizer, counter, message));
+            bytes32 digest = keccak256(
+                abi.encodePacked(
+                    "uxmss-wots-digits",
+                    pkSeed,
+                    leafIndex,
+                    randomizer,
+                    counter,
+                    message
+                )
+            );
             uint32 digitSum;
-            bytes32[] memory chains = new bytes32[](ShrincsTypes.WOTS_CHAINS_STATEFUL);
-            for (uint32 chainIndex = 0; chainIndex < ShrincsTypes.WOTS_CHAINS_STATEFUL;) {
+            bytes32[] memory chains =
+                new bytes32[](ShrincsTypes.WOTS_CHAINS_STATEFUL);
+            for (
+                uint32 chainIndex = 0;
+                chainIndex < ShrincsTypes.WOTS_CHAINS_STATEFUL;
+
+            ) {
                 uint32 digit = baseW16Digit(digest, chainIndex);
                 digitSum += digit;
-                bytes32 secret = statefulChainSecret(skSeed, pkSeed, leafIndex, chainIndex);
-                chains[chainIndex] = statefulChainNoMask(pkSeed, leafIndex, chainIndex, secret, 0, digit);
+                bytes32 secret = statefulChainSecret(
+                    skSeed, pkSeed, leafIndex, chainIndex
+                );
+                chains[chainIndex] = statefulChainNoMask(
+                    pkSeed, leafIndex, chainIndex, secret, 0, digit
+                );
                 unchecked {
                     ++chainIndex;
                 }
@@ -205,12 +314,21 @@ library ShrincsTestSigner {
         return (signature, false);
     }
 
-    function statefulChainSecret(bytes32 skSeed, bytes32 pkSeed, uint32 leafIndex, uint32 chainIndex)
-        internal
-        pure
-        returns (bytes32)
-    {
-        return keccak256(abi.encodePacked("uxmss-wots-chain-secret", skSeed, pkSeed, leafIndex, chainIndex));
+    function statefulChainSecret(
+        bytes32 skSeed,
+        bytes32 pkSeed,
+        uint32 leafIndex,
+        uint32 chainIndex
+    ) internal pure returns (bytes32) {
+        return keccak256(
+            abi.encodePacked(
+                "uxmss-wots-chain-secret",
+                skSeed,
+                pkSeed,
+                leafIndex,
+                chainIndex
+            )
+        );
     }
 
     function statefulChainNoMask(
@@ -223,35 +341,57 @@ library ShrincsTestSigner {
     ) internal pure returns (bytes32 out) {
         out = value;
         for (uint32 stepOffset = 0; stepOffset < steps;) {
-            bytes32 addressWord =
-                ShrincsUtils.addressWord32(0, 0, ShrincsTypes.AddressTypeWotsHash, leafIndex, chainIndex, start + stepOffset);
-            out = keccak256(abi.encodePacked("wots-c-chain", pkSeed, addressWord, out));
+            bytes32 addressWord = ShrincsUtils.addressWord32(
+                0,
+                0,
+                ShrincsTypes.AddressTypeWotsHash,
+                leafIndex,
+                chainIndex,
+                start + stepOffset
+            );
+            out = keccak256(
+                abi.encodePacked("wots-c-chain", pkSeed, addressWord, out)
+            );
             unchecked {
                 ++stepOffset;
             }
         }
     }
 
-    function statefulParentHash(bytes32 pkSeed, uint32 leftLeafIndex, bytes32 left, bytes32 right)
+    function statefulParentHash(
+        bytes32 pkSeed,
+        uint32 leftLeafIndex,
+        bytes32 left,
+        bytes32 right
+    ) internal pure returns (bytes32) {
+        return keccak256(
+            abi.encodePacked(
+                "uxmss-node", pkSeed, leftLeafIndex, left, right
+            )
+        );
+    }
+
+    function statefulEmptyTail(bytes32 pkSeed, uint32 leafIndex)
         internal
         pure
         returns (bytes32)
     {
-        return keccak256(abi.encodePacked("uxmss-node", pkSeed, leftLeafIndex, left, right));
+        return keccak256(
+            abi.encodePacked("uxmss-empty-tail", pkSeed, leafIndex)
+        );
     }
 
-    function statefulEmptyTail(bytes32 pkSeed, uint32 leafIndex) internal pure returns (bytes32) {
-        return keccak256(abi.encodePacked("uxmss-empty-tail", pkSeed, leafIndex));
-    }
-
-    function statefulAuthPath(bytes32 skSeed, bytes32 pkSeed, uint32 leafIndex, uint32 maxSignatures)
-        internal
-        pure
-        returns (bytes32[] memory path)
-    {
+    function statefulAuthPath(
+        bytes32 skSeed,
+        bytes32 pkSeed,
+        uint32 leafIndex,
+        uint32 maxSignatures
+    ) internal pure returns (bytes32[] memory path) {
         path = new bytes32[](leafIndex);
         if (leafIndex < maxSignatures) {
-            path[0] = statefulSubtreeRoot(skSeed, pkSeed, leafIndex + 1, maxSignatures);
+            path[0] = statefulSubtreeRoot(
+                skSeed, pkSeed, leafIndex + 1, maxSignatures
+            );
         } else {
             path[0] = statefulEmptyTail(pkSeed, leafIndex);
         }
@@ -268,11 +408,19 @@ library ShrincsTestSigner {
         }
     }
 
-    function hypertreePublicRoot(bytes32 statelessSkSeed, bytes32 pkSeed) internal pure returns (bytes32) {
-        bytes32[NUM_HYPERTREE_LAYERS] memory layerSeeds = hypertreeLayerSeeds(statelessSkSeed);
+    function hypertreePublicRoot(bytes32 statelessSkSeed, bytes32 pkSeed)
+        internal
+        pure
+        returns (bytes32)
+    {
+        bytes32[NUM_HYPERTREE_LAYERS] memory layerSeeds =
+            hypertreeLayerSeeds(statelessSkSeed);
         uint32 topLayer = NUM_HYPERTREE_LAYERS - 1;
-        uint32 subtreeHeight = uint32(ShrincsTypes.HYPERTREE_HEIGHT / NUM_HYPERTREE_LAYERS);
-        return hypertreeVirtualNode(pkSeed, layerSeeds[topLayer], topLayer, 0, subtreeHeight, 0);
+        uint32 subtreeHeight =
+            uint32(ShrincsTypes.HYPERTREE_HEIGHT / NUM_HYPERTREE_LAYERS);
+        return hypertreeVirtualNode(
+            pkSeed, layerSeeds[topLayer], topLayer, 0, subtreeHeight, 0
+        );
     }
 
     function hypertreeLayerSeeds(bytes32 statelessSkSeed)
@@ -281,49 +429,81 @@ library ShrincsTestSigner {
         returns (bytes32[NUM_HYPERTREE_LAYERS] memory layerSeeds)
     {
         for (uint8 layer = 0; layer < NUM_HYPERTREE_LAYERS;) {
-            layerSeeds[layer] =
-                keccak256(abi.encodePacked("hypertree-layer-seed", statelessSkSeed, bytes1(layer)));
+            layerSeeds[layer] = keccak256(
+                abi.encodePacked(
+                    "hypertree-layer-seed", statelessSkSeed, bytes1(layer)
+                )
+            );
             unchecked {
                 ++layer;
             }
         }
     }
 
-    function hypertreeVirtualNode(bytes32 pkSeed, bytes32 layerSeed, uint32 layer, uint64 tree, uint32 height, uint32 index)
-        internal
-        pure
-        returns (bytes32)
-    {
+    function hypertreeVirtualNode(
+        bytes32 pkSeed,
+        bytes32 layerSeed,
+        uint32 layer,
+        uint64 tree,
+        uint32 height,
+        uint32 index
+    ) internal pure returns (bytes32) {
         if (height == 0) {
             return hypertreeLeaf(pkSeed, layerSeed, layer, tree, index);
         }
-        bytes32 left = hypertreeVirtualNode(pkSeed, layerSeed, layer, tree, height - 1, index << 1);
+        bytes32 left = hypertreeVirtualNode(
+            pkSeed, layerSeed, layer, tree, height - 1, index << 1
+        );
         uint32 rightIndex = (index << 1) | 1;
-        bytes32 right = hypertreeVirtualNode(pkSeed, layerSeed, layer, tree, height - 1, rightIndex);
-        bytes32 addressWord = hypertreeAddressWord(layer, tree, height, index);
-        return keccak256(abi.encodePacked("hypertree-node", pkSeed, addressWord, left, right));
+        bytes32 right = hypertreeVirtualNode(
+            pkSeed, layerSeed, layer, tree, height - 1, rightIndex
+        );
+        bytes32 addressWord =
+            hypertreeAddressWord(layer, tree, height, index);
+        return keccak256(
+            abi.encodePacked(
+                "hypertree-node", pkSeed, addressWord, left, right
+            )
+        );
     }
 
-    function hypertreeLeaf(bytes32 pkSeed, bytes32 layerSeed, uint32 layer, uint64 tree, uint32 leaf)
-        internal
-        pure
-        returns (bytes32)
-    {
-        bytes32 leafSeed = keccak256(abi.encodePacked("hypertree-leaf-seed", layerSeed, tree, leaf));
-        bytes32 skSeed = keccak256(abi.encodePacked("hypertree-wots-sk-seed", leafSeed));
+    function hypertreeLeaf(
+        bytes32 pkSeed,
+        bytes32 layerSeed,
+        uint32 layer,
+        uint64 tree,
+        uint32 leaf
+    ) internal pure returns (bytes32) {
+        bytes32 leafSeed = keccak256(
+            abi.encodePacked("hypertree-leaf-seed", layerSeed, tree, leaf)
+        );
+        bytes32 skSeed =
+            keccak256(abi.encodePacked("hypertree-wots-sk-seed", leafSeed));
         return statelessWotsCPublicKey(pkSeed, skSeed, layer, tree, leaf);
     }
 
-    function statelessWotsCPublicKey(bytes32 pkSeed, bytes32 skSeed, uint32 layer, uint64 tree, uint32 keypair)
-        internal
-        pure
-        returns (bytes32)
-    {
-        bytes memory endpoints = new bytes(uint256(ShrincsTypes.NUM_WOTS_CHAINS) * 32);
+    function statelessWotsCPublicKey(
+        bytes32 pkSeed,
+        bytes32 skSeed,
+        uint32 layer,
+        uint64 tree,
+        uint32 keypair
+    ) internal pure returns (bytes32) {
+        bytes memory endpoints = new bytes(
+            uint256(ShrincsTypes.NUM_WOTS_CHAINS) * 32
+        );
         for (uint32 chain = 0; chain < ShrincsTypes.NUM_WOTS_CHAINS;) {
             bytes32 secret = statelessWotsCSecret(skSeed, chain);
-            bytes32 endpoint =
-                statelessWotsCChain(pkSeed, layer, tree, keypair, chain, secret, 0, ShrincsTypes.WOTS_CHAIN_LEN - 1);
+            bytes32 endpoint = statelessWotsCChain(
+                pkSeed,
+                layer,
+                tree,
+                keypair,
+                chain,
+                secret,
+                0,
+                ShrincsTypes.WOTS_CHAIN_LEN - 1
+            );
             setSlice32(endpoints, endpoint, uint256(chain) * 32);
             unchecked {
                 ++chain;
@@ -332,7 +512,11 @@ library ShrincsTestSigner {
         return keccak256(abi.encodePacked("wots-c-pk", pkSeed, endpoints));
     }
 
-    function statelessWotsCSecret(bytes32 skSeed, uint32 chain) internal pure returns (bytes32) {
+    function statelessWotsCSecret(bytes32 skSeed, uint32 chain)
+        internal
+        pure
+        returns (bytes32)
+    {
         return keccak256(abi.encodePacked("wots-c-secret", skSeed, chain));
     }
 
@@ -348,19 +532,29 @@ library ShrincsTestSigner {
     ) internal pure returns (bytes32 out) {
         out = value;
         for (uint32 step = start; step < start + steps;) {
-            bytes32 addressWord = ShrincsUtils.addressWord32(layer, tree, ShrincsTypes.AddressTypeWotsHash, keypair, chain, step);
-            out = keccak256(abi.encodePacked("wots-c-chain", pkSeed, addressWord, out));
+            bytes32 addressWord = ShrincsUtils.addressWord32(
+                layer,
+                tree,
+                ShrincsTypes.AddressTypeWotsHash,
+                keypair,
+                chain,
+                step
+            );
+            out = keccak256(
+                abi.encodePacked("wots-c-chain", pkSeed, addressWord, out)
+            );
             unchecked {
                 ++step;
             }
         }
     }
 
-    function hypertreeAddressWord(uint32 layer, uint64 treeIndex, uint32 nodeHeight, uint32 parentIndex)
-        internal
-        pure
-        returns (bytes32)
-    {
+    function hypertreeAddressWord(
+        uint32 layer,
+        uint64 treeIndex,
+        uint32 nodeHeight,
+        uint32 parentIndex
+    ) internal pure returns (bytes32) {
         bytes32 out;
         assembly {
             out := or(shl(224, layer), shl(128, treeIndex))
@@ -370,13 +564,20 @@ library ShrincsTestSigner {
         return out;
     }
 
-    function setSlice32(bytes memory dst, bytes32 src, uint256 offset) internal pure {
+    function setSlice32(bytes memory dst, bytes32 src, uint256 offset)
+        internal
+        pure
+    {
         assembly {
             mstore(add(add(dst, 32), offset), src)
         }
     }
 
-    function baseW16Digit(bytes32 digest, uint256 index) internal pure returns (uint32 digit) {
+    function baseW16Digit(bytes32 digest, uint256 index)
+        internal
+        pure
+        returns (uint32 digit)
+    {
         uint8 b = uint8(digest[index >> 1]);
         return index & 1 == 0 ? uint32(b >> 4) : uint32(b & 0x0f);
     }

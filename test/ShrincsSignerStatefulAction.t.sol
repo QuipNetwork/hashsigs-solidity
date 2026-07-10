@@ -25,7 +25,11 @@ contract ShrincsStatefulActionSignerHarness {
     function keygen(bytes memory seedMaterial, uint32 maxStatefulSignatures)
         external
         pure
-        returns (ShrincsTypes.SigningKey memory, ShrincsTypes.PublicKey memory, bool)
+        returns (
+            ShrincsTypes.SigningKey memory,
+            ShrincsTypes.PublicKey memory,
+            bool
+        )
     {
         return ShrincsTestSigner.keygen(seedMaterial, maxStatefulSignatures);
     }
@@ -34,8 +38,18 @@ contract ShrincsStatefulActionSignerHarness {
         ShrincsTypes.SigningKey memory signingKey,
         ShrincsTypes.PublicKey memory publicKey,
         ShrincsTypes.ActionContext memory context
-    ) external pure returns (ShrincsTypes.SigningKey memory, ShrincsTypes.StatefulSignature memory, bool) {
-        return ShrincsTestSigner.signStatefulAction(signingKey, publicKey, context);
+    )
+        external
+        pure
+        returns (
+            ShrincsTypes.SigningKey memory,
+            ShrincsTypes.StatefulSignature memory,
+            bool
+        )
+    {
+        return ShrincsTestSigner.signStatefulAction(
+            signingKey, publicKey, context
+        );
     }
 
     function verify(
@@ -44,7 +58,9 @@ contract ShrincsStatefulActionSignerHarness {
         ShrincsTypes.ActionContext calldata context,
         ShrincsTypes.StatefulSignature calldata signature
     ) external pure returns (bool) {
-        return SHRINCS.verifyStateful(expectedPublicKeyCommitment, publicKey, context, signature);
+        return SHRINCS.verifyStateful(
+            expectedPublicKeyCommitment, publicKey, context, signature
+        );
     }
 }
 
@@ -55,9 +71,15 @@ contract ShrincsSignerStatefulActionTest is Test {
         harness = new ShrincsStatefulActionSignerHarness();
     }
 
-    function testStatefulActionSignerProducesCanonicalVerifyingSignature() public view {
-        (ShrincsTypes.SigningKey memory signingKey, ShrincsTypes.PublicKey memory publicKey, bool keygenOk) =
-            harness.keygen(bytes("solidity stateful action signer seed"), 4);
+    function testStatefulActionSignerProducesCanonicalVerifyingSignature()
+        public
+        view
+    {
+        (
+            ShrincsTypes.SigningKey memory signingKey,
+            ShrincsTypes.PublicKey memory publicKey,
+            bool keygenOk
+        ) = harness.keygen(bytes("solidity stateful action signer seed"), 4);
         assertTrue(keygenOk, "keygen must succeed");
 
         ShrincsTypes.ActionContext memory context = ShrincsTypes.ActionContext({
@@ -75,7 +97,11 @@ contract ShrincsSignerStatefulActionTest is Test {
         ) = harness.signStatefulAction(signingKey, publicKey, context);
 
         assertTrue(signOk, "action signing must succeed");
-        assertEq(nextSigningKey.nextStatefulLeafIndex, 2, "canonical action signing must consume one leaf");
+        assertEq(
+            nextSigningKey.nextStatefulLeafIndex,
+            2,
+            "canonical action signing must consume one leaf"
+        );
 
         bytes memory commitmentBytes = publicKey.publicKeyCommitment;
         bytes32 expectedPublicKeyCommitment;
@@ -84,14 +110,22 @@ contract ShrincsSignerStatefulActionTest is Test {
         }
 
         assertTrue(
-            harness.verify(expectedPublicKeyCommitment, publicKey, context, signature),
+            harness.verify(
+                expectedPublicKeyCommitment, publicKey, context, signature
+            ),
             "canonical stateful action signature must verify"
         );
     }
 
-    function testStatefulActionSignerRejectsMalformedPublicKeyCommitmentField() public view {
-        (ShrincsTypes.SigningKey memory signingKey, ShrincsTypes.PublicKey memory publicKey, bool keygenOk) =
-            harness.keygen(bytes("stateful malformed public key seed"), 4);
+    function testStatefulActionSignerRejectsMalformedPublicKeyCommitmentField()
+        public
+        view
+    {
+        (
+            ShrincsTypes.SigningKey memory signingKey,
+            ShrincsTypes.PublicKey memory publicKey,
+            bool keygenOk
+        ) = harness.keygen(bytes("stateful malformed public key seed"), 4);
         assertTrue(keygenOk, "keygen must succeed");
 
         publicKey.publicKeyCommitment = hex"1234";
@@ -104,7 +138,10 @@ contract ShrincsSignerStatefulActionTest is Test {
             payloadHash: keccak256("payload")
         });
 
-        (, , bool signOk) = harness.signStatefulAction(signingKey, publicKey, context);
-        assertEq(signOk, false, "malformed public key commitment must be rejected");
+        (,, bool signOk) =
+            harness.signStatefulAction(signingKey, publicKey, context);
+        assertEq(
+            signOk, false, "malformed public key commitment must be rejected"
+        );
     }
 }

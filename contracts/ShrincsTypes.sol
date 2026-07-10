@@ -21,10 +21,14 @@ library ShrincsTypes {
     uint32 internal constant HASH_SUITE_KECCAK_256 = 1;
     uint32 internal constant HASH_SUITE_UNSUPPORTED = 2;
     // Operation tags domain-separating each signed message family.
-    bytes32 internal constant OP_VERIFY_STATEFUL = keccak256("shrincs-verify-stateful");
-    bytes32 internal constant OP_VERIFY_STATELESS = keccak256("shrincs-verify-stateless");
-    bytes32 internal constant OP_ROTATE_STATEFUL = keccak256("shrincs-rotate-stateful");
-    bytes32 internal constant OP_ROTATE_FULL = keccak256("shrincs-rotate-full");
+    bytes32 internal constant OP_VERIFY_STATEFUL =
+        keccak256("shrincs-verify-stateful");
+    bytes32 internal constant OP_VERIFY_STATELESS =
+        keccak256("shrincs-verify-stateless");
+    bytes32 internal constant OP_ROTATE_STATEFUL =
+        keccak256("shrincs-rotate-stateful");
+    bytes32 internal constant OP_ROTATE_FULL =
+        keccak256("shrincs-rotate-full");
 
     // Address-type words for the SPHINCS-style keyed hash inputs.
     uint32 internal constant AddressTypeWotsHash = 0;
@@ -38,8 +42,8 @@ library ShrincsTypes {
     uint16 internal constant WOTS_CHAINS_STATEFUL = 64;
     // Stateful WOTS-C uses base-16 digits for message expansion.
     uint16 internal constant WOTS_BASE_STATEFUL = 16;
-    // The 64 base-16 digits reconstructed from the stateful message digest must
-    // sum to 480.
+    // The 64 base-16 digits reconstructed from the stateful message digest
+    // must sum to 480.
     uint32 internal constant WOTS_TARGET_SUM_STATEFUL = 480;
     // Compile-time SHRINCS/SPHINCS constants.
     uint64 internal constant STATELESS_SIGNATURE_LIMIT = 1_048_576;
@@ -93,18 +97,22 @@ library ShrincsTypes {
         uint32 maxStatefulSignatures;
         // Next monotonic stateful leaf index to consume.
         uint32 nextStatefulLeafIndex;
-        // Stateless SK.seed-style material used to derive FORS-C and hypertree WOTS-C secrets.
+        // Stateless SK.seed-style material used to derive FORS-C and
+        // hypertree WOTS-C secrets.
         bytes32 statelessSkSeed;
-        // Stateless SK.prf-style material used to derive stateless message randomizers.
+        // Stateless SK.prf-style material used to derive stateless message
+        // randomizers.
         bytes32 statelessPrfSeed;
-        // Global public seed used in FORS-C, hypertree WOTS-C, and Merkle node hashing.
+        // Global public seed used in FORS-C, hypertree WOTS-C, and Merkle
+        // node hashing.
         bytes32 pkSeed;
         // Top hypertree root committed in the public key.
         bytes32 hypertreeRoot;
     }
 
     struct StatefulSignature {
-        // Per-signature randomizer committed into the stateful message digest.
+        // Per-signature randomizer committed into the stateful message
+        // digest.
         bytes32 randomizer;
         // Grinding counter used to satisfy the WOTS-C target-sum rule.
         uint32 counter;
@@ -153,7 +161,8 @@ library ShrincsTypes {
     }
 
     struct StatelessSignature {
-        // Message-signing few-time signature at the bottom of the stateless path.
+        // Message-signing few-time signature at the bottom of the stateless
+        // path.
         ForsSignature fors;
         // Hypertree layers authenticating the FORS root to the public root.
         HypertreeLayerSignature[] hypertree;

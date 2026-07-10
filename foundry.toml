@@ -25,7 +25,11 @@ optimizer_runs = 1000000
 gas_limit = "18446744073709551615" # u64::MAX
 
 [fmt]
-line_length = 78 # CODINGSTANDARDS.md §3
+# 78-char cap (CODINGSTANDARDS.md §3). Set to 77 because forge fmt
+# 1.7.1 excludes the trailing token (';', '{') from its width
+# accounting; 77 keeps canonical output within the 78-char hard limit
+# enforced by scripts/check-line-length.sh.
+line_length = 77
 tab_width = 4
 bracket_spacing = false
 int_types = 'long'

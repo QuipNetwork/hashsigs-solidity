@@ -20,10 +20,12 @@ pragma solidity ^0.8.28;
 // DEBUG: import {console} from "../lib/forge-std/src/console.sol";
 
 library WOTSPlus {
-    // DEBUG: Vm constant vm = Vm(address(uint160(uint256(keccak256("hevm cheat code")))));
+    // DEBUG: Vm constant vm =
+    // DEBUG:     Vm(address(uint160(uint256(keccak256("hevm cheat code")))));
 
     // SignatureSize: The size of the signature in bytes.
-    uint16 public constant SignatureSize = uint16(NumSignatureChunks) * uint16(HashLen);
+    uint16 public constant SignatureSize =
+        uint16(NumSignatureChunks) * uint16(HashLen);
     // PublicKeySize: The size of the public key in bytes.
     uint8 public constant PublicKeySize = HashLen * 2;
 
@@ -77,7 +79,8 @@ library WOTSPlus {
     // Python: math.floor(math.log(64 * 15, 2) / math.log(16, 2)) + 1
     uint8 public constant NumChecksumChunks = 3;
 
-    uint8 public constant NumSignatureChunks = NumMessageChunks + NumChecksumChunks;
+    uint8 public constant NumSignatureChunks =
+        NumMessageChunks + NumChecksumChunks;
 
     struct WinternitzAddress {
         bytes32 publicSeed;
@@ -93,25 +96,35 @@ library WOTSPlus {
     }
 
     // verify: Verify a WOTS+ signature.
-    // 1. The first part of the publicKey is a public seed used to regenerate the randomization elements. (`r` from the paper).
-    // 2. The second part of the publicKey is the hash of the NumMessageChunks + NumChecksumChunks public key segments.
-    // 3. Convert the Message to "base-w" representation (or base of ChainLen representation).
+    // 1. The first part of the publicKey is a public seed used to regenerate
+    // the randomization elements. (`r` from the paper).
+    // 2. The second part of the publicKey is the hash of the NumMessageChunks
+    // + NumChecksumChunks public key segments.
+    // 3. Convert the Message to "base-w" representation (or base of ChainLen
+    // representation).
     // 4. Compute and add the checksum.
-    // 5. Run the chain function on each segment to reproduce each public key segment.
-    // 6. Hash all public key segments together to recreate the original public key.
+    // 5. Run the chain function on each segment to reproduce each public key
+    // segment.
+    // 6. Hash all public key segments together to recreate the original
+    // public key.
     function verify(
         WinternitzAddress calldata quipAddress,
         WinternitzMessage calldata message,
         WinternitzElements calldata signature
     ) public pure returns (bool) {
         // DEBUG: require(publicKey.length == PublicKeySize,
-        // DEBUG:     string.concat("public key length must be ", vm.toString(PublicKeySize), " bytes"));
+        // DEBUG:     string.concat("public key length must be ",
+        // DEBUG:     vm.toString(PublicKeySize), " bytes"));
         // DEBUG: require(message.length == MessageLen,
-        // DEBUG:     string.concat("message length must be ", vm.toString(MessageLen), " bytes"));
+        // DEBUG:     string.concat("message length must be ",
+        // DEBUG:     vm.toString(MessageLen), " bytes"));
         // DEBUG: require(signature.length == NumSignatureChunks,
-        // DEBUG:     string.concat("signature length must be ", vm.toString(NumSignatureChunks), " bytes, not", vm.toString(signature.length)));
+        // DEBUG:     string.concat("signature length must be ",
+        // DEBUG:     vm.toString(NumSignatureChunks), " bytes, not",
+        // DEBUG:     vm.toString(signature.length)));
 
-        WinternitzElements memory randomizationElements = generateRandomizationElements(quipAddress.publicSeed);
+        WinternitzElements memory randomizationElements =
+            generateRandomizationElements(quipAddress.publicSeed);
 
         // DEBUG: console.log("Public key seed:");
         // DEBUG: console.logBytes32(publicSeed);
@@ -122,17 +135,23 @@ library WOTSPlus {
 
         bytes memory publicKeySegments = new bytes(SignatureSize);
 
-        // would it be clearer to compute these together in a subfunction, hiding the checksum details entirely?
-        uint8[] memory chainSegments = ComputeMessageHashChainIndexes(message);
+        // would it be clearer to compute these together in a subfunction,
+        // hiding the checksum details entirely?
+        uint8[] memory chainSegments =
+            ComputeMessageHashChainIndexes(message);
 
-        // Compute each public key segment. These are done by taking the signature, which is prevChainOut at chainIdx - 1,
-        // and completing the hash chain via the chain function to recompute the public key segment.
+        // Compute each public key segment. These are done by taking the
+        // signature, which is prevChainOut at chainIdx - 1, and completing
+        // the hash chain via the chain function to recompute the public key
+        // segment.
         for (uint8 i = 0; i < chainSegments.length; i++) {
             uint8 chainIdx = chainSegments[i];
             uint8 numIterations = ChainLen - chainIdx - 1;
             bytes32 prevChainOut = signature.elements[i];
 
-            bytes32 segment = chain(prevChainOut, randomizationElements, chainIdx, numIterations);
+            bytes32 segment = chain(
+                prevChainOut, randomizationElements, chainIdx, numIterations
+            );
 
             // Copy bytes32 to the correct position in publicKeySegments
             uint16 offset = uint16(i) * uint16(HashLen);
@@ -142,7 +161,8 @@ library WOTSPlus {
         // DEBUG: console.log("Computed Public key segments:");
         // DEBUG: console.logBytes(publicKeySegments);
 
-        // Hash all public key segments together to recreate the original public key.
+        // Hash all public key segments together to recreate the original
+        // public key.
         bytes32 computedHash = Hash(publicKeySegments);
 
         // DEBUG: console.log("Computed public key hash:");
@@ -153,12 +173,17 @@ library WOTSPlus {
     }
 
     // verify: Verify a WOTS+ signature.
-    // 1. The first part of the publicKey is a public seed used to regenerate the randomization elements. (`r` from the paper).
-    // 2. The second part of the publicKey is the hash of the NumMessageChunks + NumChecksumChunks public key segments.
-    // 3. Convert the Message to "base-w" representation (or base of ChainLen representation).
+    // 1. The first part of the publicKey is a public seed used to regenerate
+    // the randomization elements. (`r` from the paper).
+    // 2. The second part of the publicKey is the hash of the NumMessageChunks
+    // + NumChecksumChunks public key segments.
+    // 3. Convert the Message to "base-w" representation (or base of ChainLen
+    // representation).
     // 4. Compute and add the checksum.
-    // 5. Run the chain function on each segment to reproduce each public key segment.
-    // 6. Hash all public key segments together to recreate the original public key.
+    // 5. Run the chain function on each segment to reproduce each public key
+    // segment.
+    // 6. Hash all public key segments together to recreate the original
+    // public key.
     function verifyWithRandomizationElements(
         WinternitzAddress calldata quipAddress,
         WinternitzMessage calldata message,
@@ -166,11 +191,15 @@ library WOTSPlus {
         WinternitzElements memory randomizationElements
     ) public pure returns (bool) {
         // DEBUG: require(publicKey.length == PublicKeySize,
-        // DEBUG:     string.concat("public key length must be ", vm.toString(PublicKeySize), " bytes"));
+        // DEBUG:     string.concat("public key length must be ",
+        // DEBUG:     vm.toString(PublicKeySize), " bytes"));
         // DEBUG: require(message.length == MessageLen,
-        // DEBUG:     string.concat("message length must be ", vm.toString(MessageLen), " bytes"));
+        // DEBUG:     string.concat("message length must be ",
+        // DEBUG:     vm.toString(MessageLen), " bytes"));
         // DEBUG: require(signature.length == NumSignatureChunks,
-        // DEBUG:     string.concat("signature length must be ", vm.toString(NumSignatureChunks), " bytes, not", vm.toString(signature.length)));
+        // DEBUG:     string.concat("signature length must be ",
+        // DEBUG:     vm.toString(NumSignatureChunks), " bytes, not",
+        // DEBUG:     vm.toString(signature.length)));
 
         // DEBUG: console.log("Public key hash:");
         // DEBUG: console.logBytes32(publicKeyHash);
@@ -179,16 +208,21 @@ library WOTSPlus {
 
         bytes memory publicKeySegments = new bytes(SignatureSize);
 
-        uint8[] memory chainSegments = ComputeMessageHashChainIndexes(message);
+        uint8[] memory chainSegments =
+            ComputeMessageHashChainIndexes(message);
 
-        // Compute each public key segment. These are done by taking the signature, which is prevChainOut at chainIdx - 1,
-        // and completing the hash chain via the chain function to recompute the public key segment.
+        // Compute each public key segment. These are done by taking the
+        // signature, which is prevChainOut at chainIdx - 1, and completing
+        // the hash chain via the chain function to recompute the public key
+        // segment.
         for (uint8 i = 0; i < chainSegments.length; i++) {
             uint8 chainIdx = chainSegments[i];
             uint8 numIterations = ChainLen - chainIdx - 1;
             bytes32 prevChainOut = signature.elements[i];
 
-            bytes32 segment = chain(prevChainOut, randomizationElements, chainIdx, numIterations);
+            bytes32 segment = chain(
+                prevChainOut, randomizationElements, chainIdx, numIterations
+            );
 
             // Copy bytes32 to the correct position in publicKeySegments
             uint16 offset = uint16(i) * uint16(HashLen);
@@ -198,7 +232,8 @@ library WOTSPlus {
         // DEBUG: console.log("Computed Public key segments:");
         // DEBUG: console.logBytes(publicKeySegments);
 
-        // Hash all public key segments together to recreate the original public key.
+        // Hash all public key segments together to recreate the original
+        // public key.
         bytes32 computedHash = Hash(publicKeySegments);
 
         // DEBUG: console.log("Computed public key hash:");
@@ -208,57 +243,77 @@ library WOTSPlus {
         return computedHash == quipAddress.publicKeyHash;
     }
 
-    // sign: Sign a message with a WOTS+ private key. Do not use this, it is present as an example and
-    // you should be using a typescript version of this function because it requires your private key.
+    // sign: Sign a message with a WOTS+ private key. Do not use this, it is
+    // present as an example and you should be using a typescript version of
+    // this function because it requires your private key.
     function sign(bytes32 privateKey, WinternitzMessage calldata message)
         public
         pure
         returns (bytes32[NumSignatureChunks] memory)
     {
         // DEBUG: require(privateKey.length == HashLen,
-        // DEBUG:     string.concat("private key length must be ", vm.toString(HashLen), " bytes"));
+        // DEBUG:     string.concat("private key length must be ",
+        // DEBUG:     vm.toString(HashLen), " bytes"));
         // DEBUG: require(message.length == MessageLen,
-        // DEBUG:     string.concat("message length must be ", vm.toString(MessageLen), " bytes"));
+        // DEBUG:     string.concat("message length must be ",
+        // DEBUG:     vm.toString(MessageLen), " bytes"));
 
-        require(privateKey.length == HashLen, string.concat("private key length must be 32 bytes"));
+        require(
+            privateKey.length == HashLen,
+            string.concat("private key length must be 32 bytes")
+        );
 
         bytes32 publicSeed = prf(privateKey, 0);
-        WinternitzElements memory randomizationElements = generateRandomizationElements(publicSeed);
+        WinternitzElements memory randomizationElements =
+            generateRandomizationElements(publicSeed);
         bytes32 functionKey = randomizationElements.elements[0];
         bytes32[NumSignatureChunks] memory signature;
 
-        uint8[] memory chainSegments = ComputeMessageHashChainIndexes(message);
+        uint8[] memory chainSegments =
+            ComputeMessageHashChainIndexes(message);
 
         for (uint8 i = 0; i < chainSegments.length; i++) {
             uint16 chainIdx = chainSegments[i];
-            bytes32 secretKeySegment = Hash(abi.encodePacked(functionKey, prf(privateKey, i + 1)));
-            signature[i] = chain(secretKeySegment, randomizationElements, 0, chainIdx);
+            bytes32 secretKeySegment =
+                Hash(abi.encodePacked(functionKey, prf(privateKey, i + 1)));
+            signature[i] =
+                chain(secretKeySegment, randomizationElements, 0, chainIdx);
         }
 
         return signature;
     }
 
-    // generateKeyPair: Generate a WOTS+ key pair. Do not use this, it is present as an example and
-    // you should be using a typescript version of this function, presumably with better entropy source.
-    function generateKeyPair(bytes32 privateSeed) public pure returns (WinternitzAddress memory, bytes32) {
+    // generateKeyPair: Generate a WOTS+ key pair. Do not use this, it is
+    // present as an example and you should be using a typescript version of
+    // this function, presumably with better entropy source.
+    function generateKeyPair(bytes32 privateSeed)
+        public
+        pure
+        returns (WinternitzAddress memory, bytes32)
+    {
         bytes32 privateKey = prf(privateSeed, 0);
         bytes32 publicSeed = prf(privateKey, 0);
 
-        WinternitzElements memory randomizationElements = generateRandomizationElements(publicSeed);
-        // functionKey is `k` from the paper, we define it as the index 0 from the prf,
-        // as the prf output is not used on the first element in the chain function.
-        // This is hashed in on each chain iteration along with the randomization element.
-        // It is part of the public key, so safe to define it with the public seed.
-        // To set it, we hash it into the first segment with the secret key.
-        // TODO: take a closer look at XMSS et al and see how they handle this, we should be
-        // doing the same.
+        WinternitzElements memory randomizationElements =
+            generateRandomizationElements(publicSeed);
+        // functionKey is `k` from the paper, we define it as the index 0 from
+        // the prf, as the prf output is not used on the first element in the
+        // chain function. This is hashed in on each chain iteration along
+        // with the randomization element. It is part of the public key, so
+        // safe to define it with the public seed. To set it, we hash it into
+        // the first segment with the secret key. TODO: take a closer look at
+        // XMSS et al and see how they handle this, we should be doing the
+        // same.
         bytes32 functionKey = randomizationElements.elements[0];
 
         bytes memory publicKeySegments = new bytes(SignatureSize);
 
         for (uint8 i = 0; i < NumSignatureChunks; i++) {
-            bytes32 secretKeySegment = Hash(abi.encodePacked(functionKey, prf(privateKey, i + 1)));
-            bytes32 segment = chain(secretKeySegment, randomizationElements, 0, ChainLen - 1);
+            bytes32 secretKeySegment =
+                Hash(abi.encodePacked(functionKey, prf(privateKey, i + 1)));
+            bytes32 segment = chain(
+                secretKeySegment, randomizationElements, 0, ChainLen - 1
+            );
 
             // Copy bytes32 to the correct position in publicKeySegments
             uint16 offset = uint16(i) * uint16(HashLen);
@@ -273,11 +328,17 @@ library WOTSPlus {
         // DEBUG: console.log("Public key hash:");
         // DEBUG: console.logBytes32(publicKeyHash);
 
-        WinternitzAddress memory publicKey = WinternitzAddress({publicKeyHash: publicKeyHash, publicSeed: publicSeed});
+        WinternitzAddress memory publicKey = WinternitzAddress({
+            publicKeyHash: publicKeyHash, publicSeed: publicSeed
+        });
         return (publicKey, privateKey);
     }
 
-    function generateRandomizationElements(bytes32 publicSeed) public pure returns (WinternitzElements memory) {
+    function generateRandomizationElements(bytes32 publicSeed)
+        public
+        pure
+        returns (WinternitzElements memory)
+    {
         bytes32[NumSignatureChunks] memory elements;
         for (uint8 i = 0; i < NumSignatureChunks; i++) {
             elements[i] = prf(publicSeed, i);
@@ -289,17 +350,23 @@ library WOTSPlus {
     // the hash of (prevChainOut XOR randomization element at index).
     // As a practical matter, we generate the randomization elements
     // via a seed like in XMSS(rfc8391) with a defined PRF.
-    function chain(bytes32 prevChainOut, WinternitzElements memory randomizationElements, uint16 index, uint16 steps)
-        public
-        pure
-        returns (bytes32)
-    {
+    function chain(
+        bytes32 prevChainOut,
+        WinternitzElements memory randomizationElements,
+        uint16 index,
+        uint16 steps
+    ) public pure returns (bytes32) {
         // DEBUG: require((index + steps) < ChainLen,
-        // DEBUG:     string.concat("steps + index must be less than ", vm.toString(ChainLen)));
+        // DEBUG:     string.concat("steps + index must be less than ",
+        // DEBUG:     vm.toString(ChainLen)));
 
         bytes32 chainOut = prevChainOut;
         for (uint8 i = 1; i <= steps; i++) {
-            chainOut = Hash(abi.encodePacked(xor(chainOut, randomizationElements.elements[i + index])));
+            chainOut = Hash(
+                abi.encodePacked(
+                    xor(chainOut, randomizationElements.elements[i + index])
+                )
+            );
         }
         return chainOut;
     }
@@ -309,18 +376,26 @@ library WOTSPlus {
         return bytes32(uint256(a) ^ uint256(b));
     }
 
-    // There's no built-in x[a:b] semantic for bytes or bytes32 unless it's calldata, apparently...
-    function setSlice32(bytes memory dst, bytes32 src, uint16 offset) internal pure {
+    // There's no built-in x[a:b] semantic for bytes or bytes32 unless it's
+    // calldata, apparently...
+    function setSlice32(bytes memory dst, bytes32 src, uint16 offset)
+        internal
+        pure
+    {
         assembly {
             mstore(add(add(dst, 32), offset), src)
         }
     }
 
-    // prf: Generate randomization elements from seed and index
-    // Similar to XMSS RFC 8391 section 5.1
-    // NOTE: while sha256 and ripemd160 are available in solidity,
-    // they are implemented as precompiled contracts and are more expensive for gas.
-    function prf(bytes32 seed, uint16 index) internal pure returns (bytes32) {
+    // prf: Generate randomization elements from seed and index Similar to
+    // XMSS RFC 8391 section 5.1 NOTE: while sha256 and ripemd160 are
+    // available in solidity, they are implemented as precompiled contracts
+    // and are more expensive for gas.
+    function prf(bytes32 seed, uint16 index)
+        internal
+        pure
+        returns (bytes32)
+    {
         return keccak256(
             abi.encodePacked(
                 bytes1(0x03), // prefix to domain separate
@@ -330,12 +405,23 @@ library WOTSPlus {
         );
     }
 
-    // ComputeMessageHashChainIndexes: Compute the chain indexes for a message.
-    // We convert the message to base-w representation (or base of ChainLen representation)
-    // We attach the checksum, also in base-w representation, to the end of the hash chain index list.
-    function ComputeMessageHashChainIndexes(WinternitzMessage calldata message) internal pure returns (uint8[] memory) {
-        uint8[] memory chainIndexes = new uint8[](NumMessageChunks + NumChecksumChunks);
-        toBaseW(abi.encodePacked(message.messageHash), NumMessageChunks, chainIndexes, 0);
+    // ComputeMessageHashChainIndexes: Compute the chain indexes for a
+    // message. We convert the message to base-w representation (or base of
+    // ChainLen representation) We attach the checksum, also in base-w
+    // representation, to the end of the hash chain index list.
+    function ComputeMessageHashChainIndexes(WinternitzMessage calldata message)
+        internal
+        pure
+        returns (uint8[] memory)
+    {
+        uint8[] memory chainIndexes =
+            new uint8[](NumMessageChunks + NumChecksumChunks);
+        toBaseW(
+            abi.encodePacked(message.messageHash),
+            NumMessageChunks,
+            chainIndexes,
+            0
+        );
         checksum(chainIndexes);
         return chainIndexes;
     }
@@ -348,19 +434,21 @@ library WOTSPlus {
         }
 
         // this is left-shifting the checksum to ensure proper alignment when
-        // converting to base-w representation.
-        // This shift ensures that when we convert to base-w, the least significant
-        // bits of the checksum will be properly aligned with the w-bit boundaries.
-        // (8 - ((NumChecksumChunks * LgChainLen) % 8)) = 4
+        // converting to base-w representation. This shift ensures that when
+        // we convert to base-w, the least significant bits of the checksum
+        // will be properly aligned with the w-bit boundaries. (8 -
+        // ((NumChecksumChunks * LgChainLen) % 8)) = 4
         csum = csum << 4;
-        // Per XMSS (rfc8391) this is done in big endian...
-        // It's 2 bytes because thats ceil( ( len_2 * lg(w) ) / 8 ), technically actually
+        // Per XMSS (rfc8391) this is done in big endian... It's 2 bytes
+        // because thats ceil( ( len_2 * lg(w) ) / 8 ), technically actually
         // 12 bits, or 3 basew segments.
         bytes memory csumBytes = new bytes(2);
-        // casting to 'uint8' is safe because each checksum byte extracts only the low 8 bits
+        // casting to 'uint8' is safe because each checksum byte extracts only
+        // the low 8 bits
         // forge-lint: disable-next-line(unsafe-typecast)
         csumBytes[0] = bytes1(uint8(csum >> 8)); // Most significant byte
-        // casting to 'uint8' is safe because masking with 0xFF bounds the result to one byte
+        // casting to 'uint8' is safe because masking with 0xFF bounds the
+        // result to one byte
         // forge-lint: disable-next-line(unsafe-typecast)
         csumBytes[1] = bytes1(uint8(csum & 0xFF)); // Least significant byte
 
@@ -368,11 +456,18 @@ library WOTSPlus {
         toBaseW(csumBytes, NumChecksumChunks, basew, NumMessageChunks);
     }
 
-    // toBaseW: Convert a message to base-w representation (or base of ChainLen representation)
-    // These numbers are used to index into each hash chain which is rooted at a secret key segment and produces
-    // a public key segment at the end of the chain. Verification of a signature means using these
-    // index into each hash chain to recompute the corresponding public key segment.
-    function toBaseW(bytes memory message, uint8 numChunks, uint8[] memory basew, uint8 offset) internal pure {
+    // toBaseW: Convert a message to base-w representation (or base of
+    // ChainLen representation) These numbers are used to index into each hash
+    // chain which is rooted at a secret key segment and produces a public key
+    // segment at the end of the chain. Verification of a signature means
+    // using these index into each hash chain to recompute the corresponding
+    // public key segment.
+    function toBaseW(
+        bytes memory message,
+        uint8 numChunks,
+        uint8[] memory basew,
+        uint8 offset
+    ) internal pure {
         // Input message index
         uint8 mIdx = 0;
         // Output basew index

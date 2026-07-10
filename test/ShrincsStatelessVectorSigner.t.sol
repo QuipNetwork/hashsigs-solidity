@@ -19,17 +19,25 @@ pragma solidity ^0.8.28;
 import {Test} from "../lib/forge-std/src/Test.sol";
 import {SHRINCS} from "../contracts/SHRINCS.sol";
 import {ShrincsTypes} from "../contracts/ShrincsTypes.sol";
-import {ShrincsStatelessVectorSigner} from "./helpers/ShrincsStatelessVectorSigner.sol";
-import {ShrincsStatelessVectorSigningFacade} from "./helpers/ShrincsStatelessVectorSigningFacade.sol";
+import {
+    ShrincsStatelessVectorSigner
+} from "./helpers/ShrincsStatelessVectorSigner.sol";
+import {
+    ShrincsStatelessVectorSigningFacade
+} from "./helpers/ShrincsStatelessVectorSigningFacade.sol";
 
-contract ShrincsStatelessVectorSignerHarness is ShrincsStatelessVectorSigner {
+contract ShrincsStatelessVectorSignerHarness is
+    ShrincsStatelessVectorSigner
+{
     function verifyUnsafeRaw(
         bytes32 expectedPublicKeyCommitment,
         ShrincsTypes.PublicKey calldata publicKey,
         bytes calldata message,
         ShrincsTypes.StatelessSignature calldata signature
     ) external pure returns (bool) {
-        return SHRINCS.verifyStatelessUncheckedMessage(expectedPublicKeyCommitment, publicKey, message, signature);
+        return SHRINCS.verifyStatelessUncheckedMessage(
+            expectedPublicKeyCommitment, publicKey, message, signature
+        );
     }
 }
 
@@ -42,14 +50,23 @@ contract ShrincsStatelessVectorSignerTest is Test {
         signer = new ShrincsStatelessVectorSignerHarness();
     }
 
-    function testStagedStatelessVectorSignerProducesVerifyingSignature() public {
-        bytes memory message = abi.encodePacked(keccak256("staged stateless vector message"));
-        (bytes32 sessionId, bool ok) =
-            signer.beginSessionFromSeed(bytes("staged stateless vector seed"), 4, message);
+    function testStagedStatelessVectorSignerProducesVerifyingSignature()
+        public
+    {
+        bytes memory message =
+            abi.encodePacked(keccak256("staged stateless vector message"));
+        (bytes32 sessionId, bool ok) = signer.beginSessionFromSeed(
+            bytes("staged stateless vector seed"), 4, message
+        );
         assertTrue(ok, "session must start");
 
-        (bool active, bool forsPrepared, bool forsFinalized, uint32 nextForsTree, uint32 nextLayer) =
-            signer.sessionProgress(sessionId);
+        (
+            bool active,
+            bool forsPrepared,
+            bool forsFinalized,
+            uint32 nextForsTree,
+            uint32 nextLayer
+        ) = signer.sessionProgress(sessionId);
         assertTrue(active, "session active");
         assertTrue(forsPrepared, "fors prepared");
         assertFalse(forsFinalized, "fors not finalized yet");
@@ -59,12 +76,21 @@ contract ShrincsStatelessVectorSignerTest is Test {
         uint32 totalForsProcessed;
         bool forsDone;
         while (!forsDone) {
-            (uint32 processedFors, bool stepDone) = signer.stepFors(sessionId, 1);
-            assertEq(processedFors, 1, "one FORS tree should be processed per step");
+            (uint32 processedFors, bool stepDone) =
+                signer.stepFors(sessionId, 1);
+            assertEq(
+                processedFors,
+                1,
+                "one FORS tree should be processed per step"
+            );
             totalForsProcessed += processedFors;
             forsDone = stepDone;
         }
-        assertEq(totalForsProcessed, ShrincsTypes.NUM_FORS_TREES - 1, "all signed FORS trees must be processed");
+        assertEq(
+            totalForsProcessed,
+            ShrincsTypes.NUM_FORS_TREES - 1,
+            "all signed FORS trees must be processed"
+        );
 
         bytes32 forsRoot = signer.finalizeFors(sessionId);
         assertTrue(forsRoot != bytes32(0), "FORS root must finalize");
@@ -72,21 +98,39 @@ contract ShrincsStatelessVectorSignerTest is Test {
         uint32 totalLayersProcessed;
         bool hypertreeDone;
         while (!hypertreeDone) {
-            (uint32 processedLayers, bool stepDone) = signer.stepHypertree(sessionId, 1);
-            assertEq(processedLayers, 1, "one hypertree layer should be processed per step");
+            (uint32 processedLayers, bool stepDone) =
+                signer.stepHypertree(sessionId, 1);
+            assertEq(
+                processedLayers,
+                1,
+                "one hypertree layer should be processed per step"
+            );
             totalLayersProcessed += processedLayers;
             hypertreeDone = stepDone;
         }
-        assertEq(totalLayersProcessed, ShrincsTypes.NUM_HYPERTREE_LAYERS, "all hypertree layers must be processed");
+        assertEq(
+            totalLayersProcessed,
+            ShrincsTypes.NUM_HYPERTREE_LAYERS,
+            "all hypertree layers must be processed"
+        );
 
         bytes memory encodedSignature = signer.finalizeSignature(sessionId);
         ShrincsTypes.StatelessSignature memory signature =
             abi.decode(encodedSignature, (ShrincsTypes.StatelessSignature));
-        ShrincsTypes.PublicKey memory publicKey = signer.sessionPublicKey(sessionId);
+        ShrincsTypes.PublicKey memory publicKey =
+            signer.sessionPublicKey(sessionId);
         bytes memory signedMessage = signer.sessionMessage(sessionId);
 
-        assertEq(signature.fors.entries.length, ShrincsTypes.NUM_FORS_TREES - 1, "FORS-C entry count");
-        assertEq(signature.hypertree.length, ShrincsTypes.NUM_HYPERTREE_LAYERS, "hypertree layer count");
+        assertEq(
+            signature.fors.entries.length,
+            ShrincsTypes.NUM_FORS_TREES - 1,
+            "FORS-C entry count"
+        );
+        assertEq(
+            signature.hypertree.length,
+            ShrincsTypes.NUM_HYPERTREE_LAYERS,
+            "hypertree layer count"
+        );
 
         bytes memory commitmentBytes = publicKey.publicKeyCommitment;
         bytes32 expectedPublicKeyCommitment;
@@ -95,22 +139,41 @@ contract ShrincsStatelessVectorSignerTest is Test {
         }
 
         assertTrue(
-            signer.verifyUnsafeRaw(expectedPublicKeyCommitment, publicKey, signedMessage, signature),
+            signer.verifyUnsafeRaw(
+                expectedPublicKeyCommitment,
+                publicKey,
+                signedMessage,
+                signature
+            ),
             "staged stateless signer output must verify"
         );
     }
 
-    function testHighLevelStatelessFacadeProducesVerifyingSignature() public {
-        bytes memory message = abi.encodePacked(keccak256("high level stateless vector message"));
+    function testHighLevelStatelessFacadeProducesVerifyingSignature()
+        public
+    {
+        bytes memory message = abi.encodePacked(
+            keccak256("high level stateless vector message")
+        );
         (
             ShrincsTypes.PublicKey memory publicKey,
             ShrincsTypes.StatelessSignature memory signature,
             bool ok
-        ) = signer.signFromSeed(bytes("high level stateless vector seed"), 4, message);
+        ) = signer.signFromSeed(
+            bytes("high level stateless vector seed"), 4, message
+        );
 
         assertTrue(ok, "high-level signing must succeed");
-        assertEq(signature.fors.entries.length, ShrincsTypes.NUM_FORS_TREES - 1, "FORS-C entry count");
-        assertEq(signature.hypertree.length, ShrincsTypes.NUM_HYPERTREE_LAYERS, "hypertree layer count");
+        assertEq(
+            signature.fors.entries.length,
+            ShrincsTypes.NUM_FORS_TREES - 1,
+            "FORS-C entry count"
+        );
+        assertEq(
+            signature.hypertree.length,
+            ShrincsTypes.NUM_HYPERTREE_LAYERS,
+            "hypertree layer count"
+        );
 
         bytes memory commitmentBytes = publicKey.publicKeyCommitment;
         bytes32 expectedPublicKeyCommitment;
@@ -119,7 +182,9 @@ contract ShrincsStatelessVectorSignerTest is Test {
         }
 
         assertTrue(
-            signer.verifyUnsafeRaw(expectedPublicKeyCommitment, publicKey, message, signature),
+            signer.verifyUnsafeRaw(
+                expectedPublicKeyCommitment, publicKey, message, signature
+            ),
             "high-level stateless signer output must verify"
         );
     }

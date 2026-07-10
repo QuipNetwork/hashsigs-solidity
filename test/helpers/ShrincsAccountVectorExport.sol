@@ -18,10 +18,15 @@ pragma solidity ^0.8.28;
 
 import {SHRINCS} from "../../contracts/SHRINCS.sol";
 import {ShrincsTypes} from "../../contracts/ShrincsTypes.sol";
-import {ShrincsAccountVerifierExample} from "../../contracts/examples/ShrincsAccountVerifierExample.sol";
-import {ShrincsAccountSigningFacade} from "./ShrincsAccountSigningFacade.sol";
+import {
+    ShrincsAccountVerifierExample
+} from "../../contracts/examples/ShrincsAccountVerifierExample.sol";
+import {
+    ShrincsAccountSigningFacade
+} from "./ShrincsAccountSigningFacade.sol";
 
-/// @notice TEST-ONLY wrapper-feedable vector export helpers for canonical account flows.
+/// @notice TEST-ONLY wrapper-feedable vector export helpers for canonical
+/// account flows.
 library ShrincsAccountVectorExport {
     struct StatefulActionVector {
         bytes32 currentShrincsPublicKey;
@@ -76,7 +81,9 @@ library ShrincsAccountVectorExport {
         ShrincsTypes.StatefulSignature memory signature
     ) internal view returns (StatefulActionVector memory vector_) {
         bytes32 current = account.currentShrincsPublicKey();
-        bytes memory message = abi.encodePacked(SHRINCS.statefulActionMessageHash(current, context));
+        bytes memory message = abi.encodePacked(
+            SHRINCS.statefulActionMessageHash(current, context)
+        );
         vector_ = StatefulActionVector({
             currentShrincsPublicKey: current,
             publicKey: publicKey,
@@ -85,8 +92,13 @@ library ShrincsAccountVectorExport {
             payloadHash: payloadHash,
             signature: signature,
             message: message,
-            verifyCalldata: abi.encodeCall(account.verifyStatefulAction, (publicKey, actionType, payloadHash, signature)),
-            erc1271Envelope: ShrincsAccountSigningFacade.encodeStateful1271Envelope(publicKey, actionType, payloadHash, signature)
+            verifyCalldata: abi.encodeCall(
+                account.verifyStatefulAction,
+                (publicKey, actionType, payloadHash, signature)
+            ),
+            erc1271Envelope: ShrincsAccountSigningFacade.encodeStateful1271Envelope(
+                publicKey, actionType, payloadHash, signature
+            )
         });
     }
 
@@ -99,7 +111,9 @@ library ShrincsAccountVectorExport {
         ShrincsTypes.StatelessSignature memory signature
     ) internal view returns (StatelessActionVector memory vector_) {
         bytes32 current = account.currentShrincsPublicKey();
-        bytes memory message = abi.encodePacked(SHRINCS.statelessActionMessageHash(current, context));
+        bytes memory message = abi.encodePacked(
+            SHRINCS.statelessActionMessageHash(current, context)
+        );
         vector_ = StatelessActionVector({
             currentShrincsPublicKey: current,
             publicKey: publicKey,
@@ -108,8 +122,13 @@ library ShrincsAccountVectorExport {
             payloadHash: payloadHash,
             signature: signature,
             message: message,
-            verifyCalldata: abi.encodeCall(account.verifyStatelessAction, (publicKey, actionType, payloadHash, signature)),
-            erc1271Envelope: ShrincsAccountSigningFacade.encodeStateless1271Envelope(publicKey, actionType, payloadHash, signature)
+            verifyCalldata: abi.encodeCall(
+                account.verifyStatelessAction,
+                (publicKey, actionType, payloadHash, signature)
+            ),
+            erc1271Envelope: ShrincsAccountSigningFacade.encodeStateless1271Envelope(
+                publicKey, actionType, payloadHash, signature
+            )
         });
     }
 
@@ -142,7 +161,10 @@ library ShrincsAccountVectorExport {
             nextKey: nextKey,
             recoverySignature: recoverySignature,
             message: message,
-            rotateCalldata: abi.encodeCall(account.rotateToFreshKey, (currentPublicKey, recoverySignature, nextKey))
+            rotateCalldata: abi.encodeCall(
+                account.rotateToFreshKey,
+                (currentPublicKey, recoverySignature, nextKey)
+            )
         });
     }
 
@@ -175,7 +197,10 @@ library ShrincsAccountVectorExport {
             nextKey: nextKey,
             recoverySignature: recoverySignature,
             message: message,
-            rotateCalldata: abi.encodeCall(account.rotateFullKey, (currentPublicKey, recoverySignature, nextKey))
+            rotateCalldata: abi.encodeCall(
+                account.rotateFullKey,
+                (currentPublicKey, recoverySignature, nextKey)
+            )
         });
     }
 }

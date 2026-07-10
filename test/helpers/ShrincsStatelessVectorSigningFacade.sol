@@ -16,12 +16,15 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 pragma solidity ^0.8.28;
 
-import {ShrincsStatelessVectorSigner} from "./ShrincsStatelessVectorSigner.sol";
+import {
+    ShrincsStatelessVectorSigner
+} from "./ShrincsStatelessVectorSigner.sol";
 import {ShrincsTypes} from "../../contracts/ShrincsTypes.sol";
 
 /// @notice TEST-ONLY orchestration facade for the staged stateless signer.
-/// @dev This library keeps the actual signing work in the storage-backed staged signer,
-/// but hides the manual FORS / hypertree loops from tests and vector generators.
+/// @dev This library keeps the actual signing work in the storage-backed
+/// staged signer, but hides the manual FORS / hypertree loops from tests and
+/// vector generators.
 library ShrincsStatelessVectorSigningFacade {
     function signFromSeed(
         ShrincsStatelessVectorSigner signer,
@@ -37,12 +40,17 @@ library ShrincsStatelessVectorSigningFacade {
         )
     {
         bytes32 sessionId;
-        (sessionId, ok) = signer.beginSessionFromSeed(seedMaterial, maxStatefulSignatures, message);
+        (sessionId, ok) = signer.beginSessionFromSeed(
+            seedMaterial, maxStatefulSignatures, message
+        );
         if (!ok) return (publicKey, signature, false);
         return completeSession(signer, sessionId);
     }
 
-    function completeSession(ShrincsStatelessVectorSigner signer, bytes32 sessionId)
+    function completeSession(
+        ShrincsStatelessVectorSigner signer,
+        bytes32 sessionId
+    )
         internal
         returns (
             ShrincsTypes.PublicKey memory publicKey,
@@ -63,7 +71,8 @@ library ShrincsStatelessVectorSigningFacade {
 
         bytes memory encodedSignature = signer.finalizeSignature(sessionId);
         publicKey = signer.sessionPublicKey(sessionId);
-        signature = abi.decode(encodedSignature, (ShrincsTypes.StatelessSignature));
+        signature =
+            abi.decode(encodedSignature, (ShrincsTypes.StatelessSignature));
         return (publicKey, signature, true);
     }
 }

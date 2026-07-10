@@ -20,35 +20,40 @@ import {Script, console} from "../lib/forge-std/src/Script.sol";
 import {ShrincsVerifier} from "../contracts/ShrincsVerifier.sol";
 
 /// @title DeployShrincsVerifier
-/// @notice Deploys the canonical ShrincsVerifier singleton — THIS repo owns the
-/// deployment (the EntryPoint/Multicall3 pattern: the artifact's author deploys it
-/// deterministically once per chain; consumers pin the well-known address).
+/// @notice Deploys the canonical ShrincsVerifier singleton — THIS repo owns
+/// the deployment (the EntryPoint/Multicall3 pattern: the artifact's author
+/// deploys it deterministically once per chain; consumers pin the well-known
+/// address).
 ///
 /// Determinism: CREATE2 through the canonical deterministic-deployment proxy
-/// (0x4e59b44847b379578588920cA78FbF26c0B4956C — forge's default CREATE2 deployer,
-/// present on virtually every chain). The verifier has no constructor args and no
-/// immutables, so with the same factory + salt + init code the DEPLOYED ADDRESS and
-/// the RUNTIME CODEHASH are both chain-invariant. HARD REQUIREMENT: every canonical
-/// deploy MUST be run from the release commit with `FOUNDRY_PROFILE=production`, or
-/// the init code (and thus the address) diverges across chains.
+/// (0x4e59b44847b379578588920cA78FbF26c0B4956C — forge's default CREATE2
+/// deployer, present on virtually every chain). The verifier has no
+/// constructor args and no immutables, so with the same factory + salt + init
+/// code the DEPLOYED ADDRESS and the RUNTIME CODEHASH are both
+/// chain-invariant. HARD REQUIREMENT: every canonical deploy MUST be run from
+/// the release commit with `FOUNDRY_PROFILE=production`, or the init code
+/// (and thus the address) diverges across chains.
 ///
-/// After each per-chain deploy, record (version, VERSION_TAG, address, runtime
-/// codehash via `cast codehash <addr>`, chain) in RELEASES.md — consumers pin from
-/// that registry, never from a local rebuild.
+/// After each per-chain deploy, record (version, VERSION_TAG, address,
+/// runtime codehash via `cast codehash <addr>`, chain) in RELEASES.md —
+/// consumers pin from that registry, never from a local rebuild.
 ///
 /// Usage:
-///   FOUNDRY_PROFILE=production forge script script/DeployShrincsVerifier.s.sol \
+///   FOUNDRY_PROFILE=production forge script \
+///       script/DeployShrincsVerifier.s.sol \
 ///       --rpc-url $RPC --private-key $DEPLOYER_PK --broadcast --verify
 contract DeployShrincsVerifier is Script {
-    /// @notice CREATE2 salt for the V1 singleton. This salt lives HERE — the
-    /// artifact owner's namespace. Bump the version string only for an
+    /// @notice CREATE2 salt for the V1 singleton. This salt lives HERE —
+    /// the artifact owner's namespace. Bump the version string only for an
     /// intentional new deployment (a verifier V2 is a new address, never an
     /// upgrade in place).
     bytes32 internal constant SALT = keccak256("QUIP:ShrincsVerifier:V1.0");
 
     function run() external {
-        bytes memory initCode = type(ShrincsVerifier).creationCode; // no ctor args
-        address expected = vm.computeCreate2Address(SALT, keccak256(initCode));
+        // no ctor args
+        bytes memory initCode = type(ShrincsVerifier).creationCode;
+        address expected =
+            vm.computeCreate2Address(SALT, keccak256(initCode));
 
         console.log("CREATE2 factory:           ", CREATE2_FACTORY);
         console.log("Expected ShrincsVerifier:  ", expected);
@@ -64,12 +69,15 @@ contract DeployShrincsVerifier is Script {
         ShrincsVerifier deployed = new ShrincsVerifier{salt: SALT}();
         vm.stopBroadcast();
 
-        require(address(deployed) == expected, "ShrincsVerifier address mismatch");
+        require(
+            address(deployed) == expected, "ShrincsVerifier address mismatch"
+        );
 
         console.log("ShrincsVerifier deployed at:", address(deployed));
         console.log("VERSION_TAG:");
         console.logBytes32(deployed.VERSION_TAG());
-        // the registry value; consumers pin (address, codehash) from RELEASES.md
+        // the registry value; consumers pin (address, codehash) from
+        // RELEASES.md
         console.log("Runtime codehash (record in RELEASES.md):");
         console.logBytes32(address(deployed).codehash);
     }

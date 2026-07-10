@@ -20,17 +20,25 @@ import {Test} from "../lib/forge-std/src/Test.sol";
 import {Vm} from "../lib/forge-std/src/Vm.sol";
 import {SHRINCS} from "../contracts/SHRINCS.sol";
 import {ShrincsTypes} from "../contracts/ShrincsTypes.sol";
-import {ShrincsAccountVerifierExample} from "../contracts/examples/ShrincsAccountVerifierExample.sol";
-import {ShrincsAccountSigningFacade} from "./helpers/ShrincsAccountSigningFacade.sol";
-import {ShrincsStatelessVectorSigner} from "./helpers/ShrincsStatelessVectorSigner.sol";
+import {
+    ShrincsAccountVerifierExample
+} from "../contracts/examples/ShrincsAccountVerifierExample.sol";
+import {
+    ShrincsAccountSigningFacade
+} from "./helpers/ShrincsAccountSigningFacade.sol";
+import {
+    ShrincsStatelessVectorSigner
+} from "./helpers/ShrincsStatelessVectorSigner.sol";
 
 contract MeasurementAccountSigningHarness is ShrincsStatelessVectorSigner {}
 
 contract ShrincsMeasurementsTest is Test {
-    address internal constant STATEFUL_VECTOR_ACCOUNT = address(uint160(0xCAFE));
+    address internal constant STATEFUL_VECTOR_ACCOUNT =
+        address(uint160(0xCAFE));
     bytes4 internal constant ERC1271_MAGIC_VALUE = 0x1626ba7e;
     bytes32 internal constant ACTION_TYPE = keccak256("measure");
-    bytes32 internal constant PAYLOAD_HASH = keccak256("measurement payload");
+    bytes32 internal constant PAYLOAD_HASH =
+        keccak256("measurement payload");
 
     struct StatefulCase {
         ShrincsTypes.PublicKey publicKey;
@@ -62,87 +70,132 @@ contract ShrincsMeasurementsTest is Test {
 
     function testMeasureStatefulCanonicalWrapperCallGas() public {
         vm.pauseGasMetering();
-        StatefulCase memory c = prepareStatefulCase(bytes("measure stateful wrapper seed"));
-        bytes memory callData =
-            abi.encodeCall(c.account.verifyStatefulAction, (c.publicKey, ACTION_TYPE, PAYLOAD_HASH, c.signature));
+        StatefulCase memory c =
+            prepareStatefulCase(bytes("measure stateful wrapper seed"));
+        bytes memory callData = abi.encodeCall(
+            c.account.verifyStatefulAction,
+            (c.publicKey, ACTION_TYPE, PAYLOAD_HASH, c.signature)
+        );
         vm.resumeGasMetering();
 
-        (bool success, bytes memory returnData) = address(c.account).call(callData);
+        (bool success, bytes memory returnData) =
+            address(c.account).call(callData);
         Vm.Gas memory gas = vm.lastCallGas();
 
         vm.pauseGasMetering();
         assertTrue(success, "stateful wrapper call must not revert");
-        assertTrue(abi.decode(returnData, (bool)), "stateful wrapper call must verify");
-        emit log_named_uint("stateful.canonical_wrapper_call_gas", gas.gasTotalUsed);
+        assertTrue(
+            abi.decode(returnData, (bool)),
+            "stateful wrapper call must verify"
+        );
+        emit log_named_uint(
+            "stateful.canonical_wrapper_call_gas", gas.gasTotalUsed
+        );
     }
 
     function testMeasureStatefulERC1271CallGas() public {
         vm.pauseGasMetering();
-        StatefulCase memory c = prepareStatefulCase(bytes("measure stateful 1271 seed"));
-        bytes memory callData = abi.encodeCall(c.account.isValidSignature, (c.hash, c.envelope));
+        StatefulCase memory c =
+            prepareStatefulCase(bytes("measure stateful 1271 seed"));
+        bytes memory callData =
+            abi.encodeCall(c.account.isValidSignature, (c.hash, c.envelope));
         vm.resumeGasMetering();
 
-        (bool success, bytes memory returnData) = address(c.account).call(callData);
+        (bool success, bytes memory returnData) =
+            address(c.account).call(callData);
         Vm.Gas memory gas = vm.lastCallGas();
 
         vm.pauseGasMetering();
         assertTrue(success, "stateful 1271 call must not revert");
-        assertEq(abi.decode(returnData, (bytes4)), ERC1271_MAGIC_VALUE, "stateful 1271 must verify");
+        assertEq(
+            abi.decode(returnData, (bytes4)),
+            ERC1271_MAGIC_VALUE,
+            "stateful 1271 must verify"
+        );
         emit log_named_uint("stateful.erc1271_call_gas", gas.gasTotalUsed);
     }
 
     function testMeasureStatelessCanonicalWrapperCallGas() public {
         vm.pauseGasMetering();
-        StatelessCase memory c = prepareStatelessCase(bytes("measure stateless wrapper seed"));
-        bytes memory callData =
-            abi.encodeCall(c.account.verifyStatelessAction, (c.publicKey, ACTION_TYPE, PAYLOAD_HASH, c.signature));
+        StatelessCase memory c =
+            prepareStatelessCase(bytes("measure stateless wrapper seed"));
+        bytes memory callData = abi.encodeCall(
+            c.account.verifyStatelessAction,
+            (c.publicKey, ACTION_TYPE, PAYLOAD_HASH, c.signature)
+        );
         vm.resumeGasMetering();
 
-        (bool success, bytes memory returnData) = address(c.account).call(callData);
+        (bool success, bytes memory returnData) =
+            address(c.account).call(callData);
         Vm.Gas memory gas = vm.lastCallGas();
 
         vm.pauseGasMetering();
         assertTrue(success, "stateless wrapper call must not revert");
-        assertTrue(abi.decode(returnData, (bool)), "stateless wrapper call must verify");
-        emit log_named_uint("stateless.canonical_wrapper_call_gas", gas.gasTotalUsed);
+        assertTrue(
+            abi.decode(returnData, (bool)),
+            "stateless wrapper call must verify"
+        );
+        emit log_named_uint(
+            "stateless.canonical_wrapper_call_gas", gas.gasTotalUsed
+        );
     }
 
     function testMeasureStatelessERC1271CallGas() public {
         vm.pauseGasMetering();
-        StatelessCase memory c = prepareStatelessCase(bytes("measure stateless 1271 seed"));
-        bytes memory callData = abi.encodeCall(c.account.isValidSignature, (c.hash, c.envelope));
+        StatelessCase memory c =
+            prepareStatelessCase(bytes("measure stateless 1271 seed"));
+        bytes memory callData =
+            abi.encodeCall(c.account.isValidSignature, (c.hash, c.envelope));
         vm.resumeGasMetering();
 
-        (bool success, bytes memory returnData) = address(c.account).call(callData);
+        (bool success, bytes memory returnData) =
+            address(c.account).call(callData);
         Vm.Gas memory gas = vm.lastCallGas();
 
         vm.pauseGasMetering();
         assertTrue(success, "stateless 1271 call must not revert");
-        assertEq(abi.decode(returnData, (bytes4)), ERC1271_MAGIC_VALUE, "stateless 1271 must verify");
+        assertEq(
+            abi.decode(returnData, (bytes4)),
+            ERC1271_MAGIC_VALUE,
+            "stateless 1271 must verify"
+        );
         emit log_named_uint("stateless.erc1271_call_gas", gas.gasTotalUsed);
     }
 
-    function prepareStatefulCase(bytes memory seedMaterial) internal returns (StatefulCase memory c) {
-        (ShrincsTypes.SigningKey memory signingKey, ShrincsTypes.PublicKey memory publicKey, bool keygenOk) =
-            ShrincsAccountSigningFacade.keygen(seedMaterial, 4);
+    function prepareStatefulCase(bytes memory seedMaterial)
+        internal
+        returns (StatefulCase memory c)
+    {
+        (
+            ShrincsTypes.SigningKey memory signingKey,
+            ShrincsTypes.PublicKey memory publicKey,
+            bool keygenOk
+        ) = ShrincsAccountSigningFacade.keygen(seedMaterial, 4);
         assertTrue(keygenOk, "stateful keygen must succeed");
         deployCodeTo(
             "ShrincsAccountVerifierExample.sol:ShrincsAccountVerifierExample",
             abi.encode(publicKeyCommitmentWord(publicKey)),
             STATEFUL_VECTOR_ACCOUNT
         );
-        ShrincsAccountVerifierExample account = ShrincsAccountVerifierExample(STATEFUL_VECTOR_ACCOUNT);
+        ShrincsAccountVerifierExample account =
+            ShrincsAccountVerifierExample(STATEFUL_VECTOR_ACCOUNT);
 
         (
             ,
             ShrincsTypes.ActionContext memory context,
             ShrincsTypes.StatefulSignature memory signature,
             bool signOk
-        ) = ShrincsAccountSigningFacade.signStatefulActionNow(account, signingKey, ACTION_TYPE, PAYLOAD_HASH);
+        ) = ShrincsAccountSigningFacade.signStatefulActionNow(
+            account, signingKey, ACTION_TYPE, PAYLOAD_HASH
+        );
         assertTrue(signOk, "stateful signing must succeed");
-        account.setStatefulPolicyMonotonicIndex(uint32(signature.authPath.length));
+        account.setStatefulPolicyMonotonicIndex(
+            uint32(signature.authPath.length)
+        );
 
-        bytes32 hash = SHRINCS.statefulActionMessageHash(account.currentShrincsPublicKey(), context);
+        bytes32 hash = SHRINCS.statefulActionMessageHash(
+            account.currentShrincsPublicKey(), context
+        );
         bytes memory message = abi.encodePacked(hash);
 
         c.publicKey = publicKey;
@@ -156,25 +209,47 @@ contract ShrincsMeasurementsTest is Test {
         );
     }
 
-    function prepareStatelessCase(bytes memory seedMaterial) internal returns (StatelessCase memory c) {
-        (ShrincsTypes.SigningKey memory signingKey, ShrincsTypes.PublicKey memory publicKey, bool ok) =
-            ShrincsAccountSigningFacade.keygen(seedMaterial, 4);
+    function prepareStatelessCase(bytes memory seedMaterial)
+        internal
+        returns (StatelessCase memory c)
+    {
+        (
+            ShrincsTypes.SigningKey memory signingKey,
+            ShrincsTypes.PublicKey memory publicKey,
+            bool ok
+        ) = ShrincsAccountSigningFacade.keygen(seedMaterial, 4);
         assertTrue(ok, "stateless keygen must succeed");
 
-        ShrincsAccountVerifierExample account = new ShrincsAccountVerifierExample(publicKeyCommitmentWord(publicKey));
-        bytes32 sessionId;
-        (, sessionId, ok) = ShrincsAccountSigningFacade.beginStatelessActionSessionNow(
-            accountSigner, account, signingKey, publicKey, ACTION_TYPE, PAYLOAD_HASH
+        ShrincsAccountVerifierExample account = new ShrincsAccountVerifierExample(
+            publicKeyCommitmentWord(publicKey)
         );
+        bytes32 sessionId;
+        (, sessionId, ok) =
+            ShrincsAccountSigningFacade.beginStatelessActionSessionNow(
+                accountSigner,
+                account,
+                signingKey,
+                publicKey,
+                ACTION_TYPE,
+                PAYLOAD_HASH
+            );
         assertTrue(ok, "stateless session must begin");
 
-        (ShrincsTypes.StatelessSignature memory signature, bool completeOk) =
-            ShrincsAccountSigningFacade.completeStatelessSession(accountSigner, sessionId);
+        (
+            ShrincsTypes.StatelessSignature memory signature,
+            bool completeOk
+        ) = ShrincsAccountSigningFacade.completeStatelessSession(
+                accountSigner, sessionId
+            );
         assertTrue(completeOk, "stateless signing must complete");
 
         ShrincsTypes.ActionContext memory context =
-            ShrincsAccountSigningFacade.actionContext(account, ACTION_TYPE, PAYLOAD_HASH);
-        bytes32 hash = SHRINCS.statelessActionMessageHash(account.currentShrincsPublicKey(), context);
+            ShrincsAccountSigningFacade.actionContext(
+                account, ACTION_TYPE, PAYLOAD_HASH
+            );
+        bytes32 hash = SHRINCS.statelessActionMessageHash(
+            account.currentShrincsPublicKey(), context
+        );
         bytes memory message = abi.encodePacked(hash);
 
         c.publicKey = publicKey;
@@ -188,11 +263,14 @@ contract ShrincsMeasurementsTest is Test {
         );
     }
 
-    function publicKeyCommitmentWord(ShrincsTypes.PublicKey memory publicKey) internal pure returns (bytes32 out) {
+    function publicKeyCommitmentWord(ShrincsTypes.PublicKey memory publicKey)
+        internal
+        pure
+        returns (bytes32 out)
+    {
         bytes memory commitmentBytes = publicKey.publicKeyCommitment;
         assembly {
             out := mload(add(commitmentBytes, 32))
         }
     }
-
 }

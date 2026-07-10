@@ -17,7 +17,9 @@
 pragma solidity ^0.8.28;
 
 import {Test} from "../lib/forge-std/src/Test.sol";
-import {IERC7913SignatureVerifier} from "../contracts/interfaces/IERC7913SignatureVerifier.sol";
+import {
+    IERC7913SignatureVerifier
+} from "../contracts/interfaces/IERC7913SignatureVerifier.sol";
 import {ShrincsCodec} from "../contracts/ShrincsCodec.sol";
 import {ShrincsTypes} from "../contracts/ShrincsTypes.sol";
 import {ShrincsVerifier} from "../contracts/ShrincsVerifier.sol";
@@ -28,8 +30,8 @@ contract ShrincsVerifierTest is Test {
 
     ShrincsVerifier internal verifier;
 
-    // One stateful key is generated in setUp; signatures at two in-budget leaves are
-    // shared across the happy-path and mutation tests.
+    // One stateful key is generated in setUp; signatures at two in-budget
+    // leaves are shared across the happy-path and mutation tests.
     bytes32 internal signedHash;
     bytes32 internal keyCommitment;
     bytes internal validKey;
@@ -39,19 +41,29 @@ contract ShrincsVerifierTest is Test {
     function setUp() public {
         verifier = new ShrincsVerifier();
 
-        (ShrincsTypes.SigningKey memory signingKey, ShrincsTypes.PublicKey memory publicKey, bool keygenOk) =
-            ShrincsTestSigner.keygen(bytes("shrincs erc7913 stateful verifier seed"), 4);
+        (
+            ShrincsTypes.SigningKey memory signingKey,
+            ShrincsTypes.PublicKey memory publicKey,
+            bool keygenOk
+        ) = ShrincsTestSigner.keygen(
+            bytes("shrincs erc7913 stateful verifier seed"), 4
+        );
         assertTrue(keygenOk, "in-test keygen must succeed");
 
-        // The ERC-7913 hash IS the signed message: sign exactly its 32 packed bytes.
+        // The ERC-7913 hash IS the signed message: sign exactly its 32 packed
+        // bytes.
         signedHash = keccak256("shrincs erc7913 stateful verifier vector");
         bytes memory message = abi.encodePacked(signedHash);
 
-        (ShrincsTypes.StatefulSignature memory leafOneSignature, bool leafOneOk) =
-            ShrincsTestSigner.signStatefulRawAtLeaf(signingKey, 1, message);
+        (
+            ShrincsTypes.StatefulSignature memory leafOneSignature,
+            bool leafOneOk
+        ) = ShrincsTestSigner.signStatefulRawAtLeaf(signingKey, 1, message);
         assertTrue(leafOneOk, "leaf-1 signing must succeed");
-        (ShrincsTypes.StatefulSignature memory leafTwoSignature, bool leafTwoOk) =
-            ShrincsTestSigner.signStatefulRawAtLeaf(signingKey, 2, message);
+        (
+            ShrincsTypes.StatefulSignature memory leafTwoSignature,
+            bool leafTwoOk
+        ) = ShrincsTestSigner.signStatefulRawAtLeaf(signingKey, 2, message);
         assertTrue(leafTwoOk, "leaf-2 signing must succeed");
 
         // The ERC-7913 key is the 32-byte bundle commitment word.
@@ -63,28 +75,50 @@ contract ShrincsVerifierTest is Test {
         keyCommitment = commitmentWord;
         validKey = abi.encodePacked(keyCommitment);
 
-        // Encode through the codec so the tests pin the same format definition the verifier decodes.
-        validEnvelope = ShrincsCodec.encodeStatefulEnvelope(publicKey, leafOneSignature);
-        secondLeafEnvelope = ShrincsCodec.encodeStatefulEnvelope(publicKey, leafTwoSignature);
+        // Encode through the codec so the tests pin the same format
+        // definition the verifier decodes.
+        validEnvelope =
+            ShrincsCodec.encodeStatefulEnvelope(publicKey, leafOneSignature);
+        secondLeafEnvelope =
+            ShrincsCodec.encodeStatefulEnvelope(publicKey, leafTwoSignature);
     }
 
-    // decodeStoredEnvelope: Reload the shared valid envelope as mutable memory structs.
+    // decodeStoredEnvelope: Reload the shared valid envelope as mutable
+    // memory structs.
     function decodeStoredEnvelope()
         internal
         view
-        returns (ShrincsTypes.PublicKey memory publicKey, ShrincsTypes.StatefulSignature memory signature)
+        returns (
+            ShrincsTypes.PublicKey memory publicKey,
+            ShrincsTypes.StatefulSignature memory signature
+        )
     {
-        return abi.decode(validEnvelope, (ShrincsTypes.PublicKey, ShrincsTypes.StatefulSignature));
+        return abi.decode(
+            validEnvelope,
+            (ShrincsTypes.PublicKey, ShrincsTypes.StatefulSignature)
+        );
     }
 
     function testVerifyValidSignatureReturnsMagicValue() public view {
         bytes4 result = verifier.verify(validKey, signedHash, validEnvelope);
-        assertEq(result, IERC7913SignatureVerifier.verify.selector, "must return the interface selector");
-        assertEq(result, bytes4(0x024ad318), "selector must be the ERC-7913 magic value");
+        assertEq(
+            result,
+            IERC7913SignatureVerifier.verify.selector,
+            "must return the interface selector"
+        );
+        assertEq(
+            result,
+            bytes4(0x024ad318),
+            "selector must be the ERC-7913 magic value"
+        );
     }
 
-    function testVerifyValidSecondLeafSignatureReturnsMagicValue() public view {
-        // The verifier checks signature validity only; any in-budget leaf verifies.
+    function testVerifyValidSecondLeafSignatureReturnsMagicValue()
+        public
+        view
+    {
+        // The verifier checks signature validity only; any in-budget leaf
+        // verifies.
         assertEq(
             verifier.verify(validKey, signedHash, secondLeafEnvelope),
             IERC7913SignatureVerifier.verify.selector,
@@ -93,7 +127,11 @@ contract ShrincsVerifierTest is Test {
     }
 
     function testVersionTag() public view {
-        assertEq(verifier.VERSION_TAG(), keccak256("quip.shrincs-verifier.v1"), "version tag");
+        assertEq(
+            verifier.VERSION_TAG(),
+            keccak256("quip.shrincs-verifier.v1"),
+            "version tag"
+        );
     }
 
     function testRejectsBadKeyLengths() public view {
@@ -104,39 +142,60 @@ contract ShrincsVerifierTest is Test {
                 key[j] = validKey[j % 32];
             }
             assertEq(
-                verifier.verify(key, signedHash, validEnvelope), INVALID_SIGNATURE, "bad key length must be rejected"
+                verifier.verify(key, signedHash, validEnvelope),
+                INVALID_SIGNATURE,
+                "bad key length must be rejected"
             );
         }
     }
 
     function testRejectsWrongCommitment() public view {
-        bytes memory wrongKey = abi.encodePacked(keccak256("some other installed commitment"));
+        bytes memory wrongKey =
+            abi.encodePacked(keccak256("some other installed commitment"));
         assertEq(
-            verifier.verify(wrongKey, signedHash, validEnvelope), INVALID_SIGNATURE, "wrong commitment must be rejected"
+            verifier.verify(wrongKey, signedHash, validEnvelope),
+            INVALID_SIGNATURE,
+            "wrong commitment must be rejected"
         );
     }
 
     function testRejectsTamperedHash() public view {
         bytes32 otherHash = keccak256("a different message hash");
         assertEq(
-            verifier.verify(validKey, otherHash, validEnvelope), INVALID_SIGNATURE, "tampered hash must be rejected"
+            verifier.verify(validKey, otherHash, validEnvelope),
+            INVALID_SIGNATURE,
+            "tampered hash must be rejected"
         );
     }
 
     function testRejectsTamperedChainValue() public view {
-        (ShrincsTypes.PublicKey memory publicKey, ShrincsTypes.StatefulSignature memory signature) =
-            decodeStoredEnvelope();
+        (
+            ShrincsTypes.PublicKey memory publicKey,
+            ShrincsTypes.StatefulSignature memory signature
+        ) = decodeStoredEnvelope();
         signature.chains[0] = bytes32(uint256(signature.chains[0]) ^ 1);
-        bytes memory envelope = ShrincsCodec.encodeStatefulEnvelope(publicKey, signature);
-        assertEq(verifier.verify(validKey, signedHash, envelope), INVALID_SIGNATURE, "tampered WOTS chain must fail");
+        bytes memory envelope =
+            ShrincsCodec.encodeStatefulEnvelope(publicKey, signature);
+        assertEq(
+            verifier.verify(validKey, signedHash, envelope),
+            INVALID_SIGNATURE,
+            "tampered WOTS chain must fail"
+        );
     }
 
     function testRejectsTamperedAuthPath() public view {
-        (ShrincsTypes.PublicKey memory publicKey, ShrincsTypes.StatefulSignature memory signature) =
-            decodeStoredEnvelope();
+        (
+            ShrincsTypes.PublicKey memory publicKey,
+            ShrincsTypes.StatefulSignature memory signature
+        ) = decodeStoredEnvelope();
         signature.authPath[0] = bytes32(uint256(signature.authPath[0]) ^ 1);
-        bytes memory envelope = ShrincsCodec.encodeStatefulEnvelope(publicKey, signature);
-        assertEq(verifier.verify(validKey, signedHash, envelope), INVALID_SIGNATURE, "tampered auth path must fail");
+        bytes memory envelope =
+            ShrincsCodec.encodeStatefulEnvelope(publicKey, signature);
+        assertEq(
+            verifier.verify(validKey, signedHash, envelope),
+            INVALID_SIGNATURE,
+            "tampered auth path must fail"
+        );
     }
 
     function testRejectsTruncatedEnvelope() public view {
@@ -146,31 +205,50 @@ contract ShrincsVerifierTest is Test {
             mstore(truncated, sub(mload(truncated), 1))
         }
         assertEq(
-            verifier.verify(validKey, signedHash, truncated), INVALID_SIGNATURE, "truncated envelope must be rejected"
+            verifier.verify(validKey, signedHash, truncated),
+            INVALID_SIGNATURE,
+            "truncated envelope must be rejected"
         );
     }
 
     function testRejectsEmptyEnvelope() public view {
-        assertEq(verifier.verify(validKey, signedHash, bytes("")), INVALID_SIGNATURE, "empty envelope must be rejected");
+        assertEq(
+            verifier.verify(validKey, signedHash, bytes("")),
+            INVALID_SIGNATURE,
+            "empty envelope must be rejected"
+        );
     }
 
     function testRejectsGarbageEnvelope() public view {
         bytes memory garbage = abi.encodePacked(
-            keccak256("garbage word one"), keccak256("garbage word two"), keccak256("garbage word three"), uint8(0x99)
+            keccak256("garbage word one"),
+            keccak256("garbage word two"),
+            keccak256("garbage word three"),
+            uint8(0x99)
         );
-        assertEq(verifier.verify(validKey, signedHash, garbage), INVALID_SIGNATURE, "garbage envelope must be rejected");
+        assertEq(
+            verifier.verify(validKey, signedHash, garbage),
+            INVALID_SIGNATURE,
+            "garbage envelope must be rejected"
+        );
     }
 
     function testRejectsMismatchedBundleCommitment() public view {
-        // Distinct from the wrong-key case: here the declared commitment field DOES match
-        // the key, but the bundle no longer recomputes to that commitment.
-        (ShrincsTypes.PublicKey memory publicKey, ShrincsTypes.StatefulSignature memory signature) =
-            decodeStoredEnvelope();
+        // Distinct from the wrong-key case: here the declared commitment
+        // field DOES match the key, but the bundle no longer recomputes to
+        // that commitment.
+        (
+            ShrincsTypes.PublicKey memory publicKey,
+            ShrincsTypes.StatefulSignature memory signature
+        ) = decodeStoredEnvelope();
         bytes32 fakeCommitment = keccak256("mismatched bundle commitment");
         publicKey.publicKeyCommitment = abi.encodePacked(fakeCommitment);
-        bytes memory envelope = ShrincsCodec.encodeStatefulEnvelope(publicKey, signature);
+        bytes memory envelope =
+            ShrincsCodec.encodeStatefulEnvelope(publicKey, signature);
         assertEq(
-            verifier.verify(abi.encodePacked(fakeCommitment), signedHash, envelope),
+            verifier.verify(
+                abi.encodePacked(fakeCommitment), signedHash, envelope
+            ),
             INVALID_SIGNATURE,
             "bundle that does not recompute to the key commitment must fail"
         );
@@ -182,24 +260,42 @@ contract ShrincsVerifierTest is Test {
     }
 
     function testCheckDecodedRejectsNonSelfCaller() public {
-        (ShrincsTypes.PublicKey memory publicKey, ShrincsTypes.StatefulSignature memory signature) =
-            decodeStoredEnvelope();
+        (
+            ShrincsTypes.PublicKey memory publicKey,
+            ShrincsTypes.StatefulSignature memory signature
+        ) = decodeStoredEnvelope();
         vm.expectRevert(bytes("only self"));
-        verifier.checkDecoded(keyCommitment, signedHash, publicKey, signature);
+        verifier.checkDecoded(
+            keyCommitment, signedHash, publicKey, signature
+        );
     }
 
-    function testFuzzVerifyNeverReverts(bytes calldata key, bytes32 hash, bytes calldata signature) public view {
-        // Any random input must produce a clean failure value, never a revert.
+    function testFuzzVerifyNeverReverts(
+        bytes calldata key,
+        bytes32 hash,
+        bytes calldata signature
+    ) public view {
+        // Any random input must produce a clean failure value, never a
+        // revert.
         bytes4 result = verifier.verify(key, hash, signature);
-        assertEq(result, INVALID_SIGNATURE, "random inputs must yield the failure value");
+        assertEq(
+            result,
+            INVALID_SIGNATURE,
+            "random inputs must yield the failure value"
+        );
     }
 
     function testGasSnapshotHappyPathVerify() public {
         uint256 gasBefore = gasleft();
         bytes4 result = verifier.verify(validKey, signedHash, validEnvelope);
         uint256 gasUsed = gasBefore - gasleft();
-        assertEq(result, IERC7913SignatureVerifier.verify.selector, "snapshot call must succeed");
-        // Recorded happy-path verify gas (see test logs with -vv for the current number).
+        assertEq(
+            result,
+            IERC7913SignatureVerifier.verify.selector,
+            "snapshot call must succeed"
+        );
+        // Recorded happy-path verify gas (see test logs with -vv for the
+        // current number).
         emit log_named_uint("happy-path verify gas", gasUsed);
     }
 }
