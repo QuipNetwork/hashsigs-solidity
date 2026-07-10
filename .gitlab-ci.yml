@@ -8,6 +8,12 @@ stages:
 
 variables:
   GIT_SUBMODULE_STRATEGY: recursive
+  # Deterministic per-MR fuzzing: foundry >= 1.7.0 randomizes the fuzz
+  # seed by default, so pin it here. A rerun of the same commit then
+  # replays identical fuzz cases and any flake is a real bug. Bump this
+  # deliberately, in its own commit, to rotate the explored cases.
+  # Value: "SHRNCS" as hex.
+  FOUNDRY_FUZZ_SEED: "0x5348524e4353"
 
 .foundry:
   stage: verify
@@ -27,6 +33,8 @@ variables:
 # identity test is the in-Solidity backstop for the same hazard.
 format-and-checks:
   extends: .foundry
+  rules:
+    - if: $CI_PIPELINE_SOURCE != "schedule"
   script:
     - test ! -f remappings.txt
     - forge fmt --check
@@ -38,13 +46,24 @@ format-and-checks:
 # cosmetic "AST source not found" note for the skipped files but exits 0.
 # The 256s-specific vector/stateless tests are skipped under the 128s
 # profiles via foundry.toml until the T6 vector regeneration (design
-# §3.6).
+# §3.6). The 256s leg runs under the `ci` profile: 256s params (inherited
+# from default) plus bounded, deterministic fuzz/invariant runs
+# (foundry.toml). FOUNDRY_FUZZ_SEED (global) pins the seed; the
+# failure_persist cache replays any counterexample a nightly or prior MR
+# found before exploring new cases.
 build-lint-test:
   extends: .foundry
+  rules:
+    - if: $CI_PIPELINE_SOURCE != "schedule"
   parallel:
     matrix:
-      - FOUNDRY_PROFILE: ["default", "128s-q18", "128s-q20"]
+      - FOUNDRY_PROFILE: ["ci", "128s-q18", "128s-q20"]
   script:
     - forge build
     - forge lint --deny warnings contracts/ test/ script/
     - forge test
+  cache:
+    key: "fuzz-failures-$FOUNDRY_PROFILE"
+    paths:
+      - cache/fuzz
+      - cache/invariant

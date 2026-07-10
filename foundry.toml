@@ -125,6 +125,50 @@ skip = [
     "script/DeployShrincsVerifier128sQ18.s.sol",
 ]
 
+# Per-MR security gate: the 256s (default) profile plus bounded,
+# deterministic fuzz/invariant runs. Inherits src/remappings/skip/
+# via_ir/optimizer/gas_limit/ffi/fs_permissions from [profile.default]
+# (Foundry merges the selected profile over default). Foundry >= 1.7.0
+# randomizes the fuzz seed by default, so per-MR determinism requires
+# pinning FOUNDRY_FUZZ_SEED in .gitlab-ci.yml; bump it deliberately in
+# its own commit to rotate cases. failure_persist_dir is cached in CI so
+# any counterexample a nightly (or prior MR) found replays first here.
+[profile.ci]
+
+[profile.ci.fuzz]
+runs = 512
+max_test_rejects = 65536
+failure_persist_dir = "cache/fuzz"
+
+[profile.ci.invariant]
+runs = 64
+depth = 32
+fail_on_revert = true
+failure_persist_dir = "cache/invariant"
+shrink_run_limit = 5000
+
+# Nightly deep campaign: the 256s (default) profile plus long randomized
+# runs with a coverage-guided corpus. The nightly pipeline leaves
+# FOUNDRY_FUZZ_SEED unset (random). corpus_dir enables coverage-guided
+# mutation (foundry >= 1.7.0 for stateless fuzz, >= 1.3.0 for
+# invariants); both corpus and failure dirs are cached across runs.
+[profile.nightly]
+
+[profile.nightly.fuzz]
+runs = 65536
+failure_persist_dir = "cache/fuzz"
+corpus_dir = "cache/fuzz-corpus"
+corpus_gzip = true
+
+[profile.nightly.invariant]
+runs = 2048
+depth = 128
+fail_on_revert = true
+failure_persist_dir = "cache/invariant"
+corpus_dir = "cache/invariant-corpus"
+corpus_gzip = true
+timeout = 10800 # 3h wall-clock cap per invariant test
+
 [fmt]
 # 78-char cap (CODINGSTANDARDS.md §3). Set to 77 because forge fmt
 # 1.7.1 excludes the trailing token (';', '{') from its width

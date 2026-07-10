@@ -47,9 +47,11 @@ contract ShrincsProfileInvariantsTest is Test {
     }
 
     // Resolve the expected tuple for a FOUNDRY_PROFILE name. The default
-    // developer profile, the empty (unset) value, and the canonical
-    // production build all select 256s. Reverts on an unknown name so a
-    // mis-set profile fails closed rather than skipping the check.
+    // developer profile, the empty (unset) value, the security-gate
+    // profiles (ci, nightly — 256s params plus fuzz tuning), and the
+    // canonical production build all select 256s. Reverts on an unknown
+    // name so a mis-set profile fails closed rather than skipping the
+    // check.
     function expectedFor(string memory profile)
         internal
         pure
@@ -59,6 +61,8 @@ contract ShrincsProfileInvariantsTest is Test {
         if (
             nameHash == keccak256("") || nameHash == keccak256("default")
                 || nameHash == keccak256("production")
+                || nameHash == keccak256("ci")
+                || nameHash == keccak256("nightly")
         ) {
             return ProfileExpectation({
                 profileId: keccak256("shrincs-256s"),
