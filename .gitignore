@@ -21,3 +21,13 @@ node_modules
 ignition/deployments/chain-31337
 
 test/test_vectors/tmp.json
+
+# Editor autosave/backup/lock files
+*#
+.#*
+*~
+
+# Claude Code local settings and worktrees
+# (skills in .claude/skills/ ARE tracked)
+.claude/settings.local.json
+.claude/worktrees/
