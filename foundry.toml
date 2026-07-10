@@ -25,7 +25,7 @@ optimizer_runs = 1000000
 gas_limit = "18446744073709551615" # u64::MAX
 
 [fmt]
-line_length = 120
+line_length = 78 # CODINGSTANDARDS.md §3
 tab_width = 4
 bracket_spacing = false
 int_types = 'long'
@@ -33,3 +33,8 @@ multiline_func_header = 'attributes_first'
 quote_style = 'double'
 number_underscore = 'preserve'
 single_line_statement_blocks = 'preserve'
+
+[lint]
+# PascalCase spec-parameter constants are codified in
+# CODINGSTANDARDS.md §2 and deliberately override the style guide.
+exclude_lints = ["screaming-snake-case-const"]
