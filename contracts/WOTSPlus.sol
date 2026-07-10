@@ -260,10 +260,8 @@ library WOTSPlus {
         // DEBUG:     string.concat("message length must be ",
         // DEBUG:     vm.toString(MessageLen), " bytes"));
 
-        require(
-            privateKey.length == HashLen,
-            string.concat("private key length must be 32 bytes")
-        );
+        // privateKey is a bytes32, so its length is fixed at HashLen
+        // (32 bytes) by the type; no runtime length check is needed.
 
         bytes32 publicSeed = prf(privateKey, 0);
         WinternitzElements memory randomizationElements =
