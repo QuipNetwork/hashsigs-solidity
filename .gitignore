@@ -15,6 +15,9 @@ node_modules
 /coverage.json
 lcov.info
 
+# Slither SARIF report (CI artifact, not committed)
+slither.sarif
+
 test/test_vectors/tmp.json
 
 # Editor autosave/backup/lock files

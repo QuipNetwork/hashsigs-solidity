@@ -113,6 +113,10 @@ library ShrincsStateful {
             )
         );
 
+        // Zero-initialized accumulator: summed over every WOTS-C chain in
+        // the loop below before the target-sum check; the default-zero
+        // start is intended, not an uninitialized read.
+        // slither-disable-next-line uninitialized-local
         uint32 digitSum;
         // Reserve one 32-byte slot per reconstructed WOTS chain endpoint.
         bytes memory segments =

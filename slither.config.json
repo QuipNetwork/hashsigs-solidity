@@ -1,0 +1,6 @@
+{
+  "detectors_to_exclude": "assembly,solc-version,naming-convention,too-many-digits,pragma",
+  "filter_paths": "lib/|test/",
+  "compile_force_framework": "foundry",
+  "exclude_dependencies": true
+}

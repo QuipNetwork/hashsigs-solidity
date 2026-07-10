@@ -5,6 +5,8 @@
 
 stages:
   - verify
+  - analyze
+  - nightly
 
 variables:
   GIT_SUBMODULE_STRATEGY: recursive
@@ -67,3 +69,35 @@ build-lint-test:
     paths:
       - cache/fuzz
       - cache/invariant
+
+# Static analysis (Slither 0.11.5). Slither reads the solc compact AST via
+# crytic-compile, so via_ir does not change what it sees. slither.config.json
+# excludes the assembly/naming/pragma informational tiers and filters
+# lib/ and test/. The four false-positive medium findings
+# (divide-before-multiply, uninitialized-local) are suppressed inline with
+# justifications; dead-code stays enabled (F-15) and surfaces as
+# informational SARIF. --fail-medium gates the pipeline on any medium+
+# finding. python:3.12-slim is multi-arch and foundryup installs the matching
+# foundry binary, so no runner arch tag is needed.
+slither:
+  stage: analyze
+  image: python:3.12-slim
+  rules:
+    - if: $CI_PIPELINE_SOURCE != "schedule"
+  before_script:
+    - apt-get update && apt-get install -y --no-install-recommends
+      curl git ca-certificates
+    - curl -L https://foundry.paradigm.xyz | bash
+    - export PATH="$HOME/.foundry/bin:$PATH"
+    - foundryup --install v1.7.1
+    - pip install --no-cache-dir slither-analyzer==0.11.5
+  script:
+    - git config --global --add safe.directory "$CI_PROJECT_DIR"
+    - slither . --config-file slither.config.json --fail-medium
+      --sarif slither.sarif
+  artifacts:
+    when: always
+    reports:
+      sarif: slither.sarif
+    paths:
+      - slither.sarif

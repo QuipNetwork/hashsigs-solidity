@@ -117,6 +117,9 @@ library ShrincsAccountEnvelope {
                 // arithmetic below may wrap, but `good` is zero and the
                 // caller discards `end`.
                 let len, okl := rdLen(po, pl, pos)
+                // (len + 31) / 32, later * 32, is exact ceiling rounding of
+                // the byte length up to a whole word; no precision is lost.
+                // slither-disable-next-line divide-before-multiply
                 let dataWords := div(add(len, 31), 32)
                 let dataStart := add(pos, 32)
                 let rem := mod(len, 32)

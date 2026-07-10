@@ -267,6 +267,9 @@ library WOTSPlus {
         WinternitzElements memory randomizationElements =
             generateRandomizationElements(publicSeed);
         bytes32 functionKey = randomizationElements.elements[0];
+        // Fixed-size memory array, fully written by the signing loop below
+        // before use; the default-zero start is overwritten per chunk.
+        // slither-disable-next-line uninitialized-local
         bytes32[NumSignatureChunks] memory signature;
 
         uint8[] memory chainSegments =
@@ -339,6 +342,9 @@ library WOTSPlus {
         pure
         returns (WinternitzElements memory)
     {
+        // Fixed-size memory array, fully written by the loop below before it
+        // is returned; the default-zero start is overwritten per element.
+        // slither-disable-next-line uninitialized-local
         bytes32[NumSignatureChunks] memory elements;
         for (uint8 i = 0; i < NumSignatureChunks; i++) {
             elements[i] = prf(publicSeed, i);
