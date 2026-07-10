@@ -19,6 +19,9 @@ pragma solidity ^0.8.28;
 library ShrincsTypes {
     // Hash-suite identifiers bound into canonical action and rotation hashes.
     uint32 internal constant HASH_SUITE_KECCAK_256 = 1;
+    // Sentinel for an unsupported hash suite. Referenced only by tests
+    // today; kept as a named constant so fail-closed suite checks and
+    // negative tests have a stable non-keccak identifier.
     uint32 internal constant HASH_SUITE_UNSUPPORTED = 2;
     // Operation tags domain-separating each signed message family.
     bytes32 internal constant OP_VERIFY_STATEFUL =

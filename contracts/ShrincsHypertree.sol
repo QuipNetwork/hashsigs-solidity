@@ -42,7 +42,9 @@ library ShrincsHypertree {
         if (layers.length != ShrincsTypes.NUM_HYPERTREE_LAYERS) {
             return false;
         }
-        // The hypertree cannot be empty.
+        // The hypertree cannot be empty. Unreachable given the exact-count
+        // check above (NUM_HYPERTREE_LAYERS is nonzero); kept as
+        // deliberate fail-closed defense-in-depth.
         if (layers.length == 0) return false;
         // Each subtree has height h / d in the supported balanced hypertree
         // layout.
@@ -145,7 +147,9 @@ library ShrincsHypertree {
             expectedRoot := calldataload(expectedRootBytes.offset)
         }
         // All tree-index bits must be consumed exactly by the time the top
-        // layer is reached.
+        // layer is reached. Always false for the balanced layout (a uint64
+        // right-shifted by d * (h/d) = 64 bits is zero); kept as deliberate
+        // fail-closed defense-in-depth.
         if (expectedTreeIndex != 0) return false;
         return current == expectedRoot;
     }

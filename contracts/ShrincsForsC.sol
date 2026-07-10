@@ -426,6 +426,10 @@ library ShrincsForsC {
                 dst := add(dst, 32)
             }
         }
+        // Single-block fast path. The sole in-repo caller (forsDigest)
+        // always requests 47 bytes, so digestBytes <= 32 is unreachable
+        // today; kept as a correct general-purpose branch and deliberate
+        // defense-in-depth.
         if (digestBytes <= 32) {
             bytes32 digestWord;
             assembly {
