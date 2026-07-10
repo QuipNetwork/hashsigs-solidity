@@ -16,6 +16,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 pragma solidity ^0.8.28;
 
+import {ShrincsParams} from "shrincs-profile/ShrincsParams.sol";
+
 library ShrincsTypes {
     // Hash-suite identifiers bound into canonical action and rotation hashes.
     uint32 internal constant HASH_SUITE_KECCAK_256 = 1;
@@ -40,46 +42,34 @@ library ShrincsTypes {
     uint32 internal constant AddressTypeTree = 2;
     uint32 internal constant AddressTypeForsTree = 3;
 
-    // Encoded stateful public key layout:
-    // 32-byte pkSeed || 32-byte root || 4-byte maxSignatures.
-    uint16 internal constant STATEFUL_PUBLIC_KEY_BYTES = 68;
-    // Stateful WOTS-C uses 64 chains.
-    uint16 internal constant WOTS_CHAINS_STATEFUL = 64;
-    // Stateful WOTS-C uses base-16 digits for message expansion.
-    uint16 internal constant WOTS_BASE_STATEFUL = 16;
-    // WOTS_TARGET_SUM_STATEFUL: the WOTS-C constant digit-sum target
-    // = len * (w - 1) / 2
-    // -> WOTS_CHAINS_STATEFUL * (WOTS_BASE_STATEFUL - 1) / 2
-    //    = 64 * (16 - 1) / 2 = 480
-    // Python: 64 * (16 - 1) // 2
-    uint32 internal constant WOTS_TARGET_SUM_STATEFUL = 480;
-    // Compile-time SHRINCS/SPHINCS constants.
-    // STATELESS_SIGNATURE_LIMIT: the stateless-signature budget for this
-    // profile = 2^20
-    // -> 1 << 20 = 1048576
-    // Python: 2 ** 20
-    uint64 internal constant STATELESS_SIGNATURE_LIMIT = 1_048_576;
-    // HASH_LEN: the SPHINCS/WOTS `n` security parameter [FIPS205 §11] —
-    // hash output length in bytes.
-    uint16 internal constant HASH_LEN = 32;
-    // HYPERTREE_HEIGHT: the FIPS205 `h` parameter [FIPS205 §7] — total
-    // hypertree height (sum of all subtree heights).
-    uint8 internal constant HYPERTREE_HEIGHT = 64;
-    // NUM_HYPERTREE_LAYERS: the FIPS205 `d` parameter [FIPS205 §7] —
-    // number of hypertree layers.
-    uint8 internal constant NUM_HYPERTREE_LAYERS = 8;
-    // FORS_TREE_HEIGHT: the SPHINCSPLUS `a` parameter [SPHINCSPLUS §5.5]
-    // — FORS tree height (each FORS tree has 2^a leaves).
-    uint8 internal constant FORS_TREE_HEIGHT = 14;
-    // NUM_FORS_TREES: the SPHINCSPLUS `k` parameter [SPHINCSPLUS §5.5] —
-    // number of FORS trees per FORS signature.
-    uint8 internal constant NUM_FORS_TREES = 22;
-    // WOTS_CHAIN_LEN: the WOTSPLUS `w` (Winternitz) parameter
-    // [WOTSPLUS §3] — hash-chain length and digit base.
-    uint16 internal constant WOTS_CHAIN_LEN = 16;
-    // NUM_WOTS_CHAINS: the WOTSPLUS `len` parameter [WOTSPLUS §3] —
-    // number of hash chains per WOTS signature.
-    uint16 internal constant NUM_WOTS_CHAINS = 64;
+    // Per-profile SHRINCS/SPHINCS parameter tuple, re-exported as
+    // aliases from the profile-selected `ShrincsParams` library (see
+    // contracts/profiles/<profile>/ShrincsParams.sol, chosen by the
+    // `shrincs-profile/` Foundry remapping). The full §1/§2 citations
+    // and §4 derivation comments live at each constant's declaration
+    // in ShrincsParams; these aliases keep every `ShrincsTypes.X`
+    // reference site profile-agnostic. via-ir folds a constant defined
+    // from another constant, so no runtime cost is introduced.
+    uint16 internal constant STATEFUL_PUBLIC_KEY_BYTES =
+        ShrincsParams.STATEFUL_PUBLIC_KEY_BYTES;
+    uint16 internal constant WOTS_CHAINS_STATEFUL =
+        ShrincsParams.WOTS_CHAINS_STATEFUL;
+    uint16 internal constant WOTS_BASE_STATEFUL =
+        ShrincsParams.WOTS_BASE_STATEFUL;
+    uint32 internal constant WOTS_TARGET_SUM_STATEFUL =
+        ShrincsParams.WOTS_TARGET_SUM_STATEFUL;
+    uint64 internal constant STATELESS_SIGNATURE_LIMIT =
+        ShrincsParams.STATELESS_SIGNATURE_LIMIT;
+    uint16 internal constant HASH_LEN = ShrincsParams.HASH_LEN;
+    uint8 internal constant HYPERTREE_HEIGHT =
+        ShrincsParams.HYPERTREE_HEIGHT;
+    uint8 internal constant NUM_HYPERTREE_LAYERS =
+        ShrincsParams.NUM_HYPERTREE_LAYERS;
+    uint8 internal constant FORS_TREE_HEIGHT =
+        ShrincsParams.FORS_TREE_HEIGHT;
+    uint8 internal constant NUM_FORS_TREES = ShrincsParams.NUM_FORS_TREES;
+    uint16 internal constant WOTS_CHAIN_LEN = ShrincsParams.WOTS_CHAIN_LEN;
+    uint16 internal constant NUM_WOTS_CHAINS = ShrincsParams.NUM_WOTS_CHAINS;
 
     struct ForsDigest {
         // Hypertree subtree selected for this stateless signature.

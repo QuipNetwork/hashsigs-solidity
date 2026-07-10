@@ -6,6 +6,13 @@ via_ir = true
 optimizer = true
 optimizer_runs = 200
 gas_limit = "18446744073709551615" # u64::MAX
+# Profile selection (design §3.4): the `shrincs-profile/` prefix
+# resolves to the active profile's ShrincsParams library. Default is
+# the 256s profile. Other profiles override this remapping AND the
+# `out` dir. WARNING: a top-level remappings.txt silently overrides
+# these per-profile TOML remappings (verified hazard, design §2(d′));
+# the profile-identity test + CI guard (T3) fail closed if one exists.
+remappings = ["shrincs-profile/=contracts/profiles/256s/"]
 
 ffi = true
 fs_permissions = [
