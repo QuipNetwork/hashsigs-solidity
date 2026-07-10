@@ -386,7 +386,9 @@ library WOTSPlus {
         internal
         pure
     {
-        assembly {
+        // Memory-safe: writes one 32-byte word into the dst buffer's
+        // payload at the caller-supplied offset; no scratch or FMP change.
+        assembly ("memory-safe") {
             mstore(add(add(dst, 32), offset), src)
         }
     }

@@ -105,7 +105,9 @@ library ShrincsUtils {
         if (publicKey.publicKeyCommitment.length != 32) return false;
         bytes calldata encodedCommitment = publicKey.publicKeyCommitment;
         bytes32 actualCommitment;
-        assembly {
+        // Memory-safe: reads one calldata word into a stack variable; no
+        // memory is written.
+        assembly ("memory-safe") {
             // Load the declared 32-byte commitment directly from calldata.
             actualCommitment := calldataload(encodedCommitment.offset)
         }
@@ -142,7 +144,9 @@ library ShrincsUtils {
         if (publicKey.hypertreeRoot.length != 32) return false;
         bytes calldata encodedCommitment = publicKey.publicKeyCommitment;
         bytes32 expectedCommitment;
-        assembly {
+        // Memory-safe: reads one calldata word into a stack variable; no
+        // memory is written.
+        assembly ("memory-safe") {
             // Load the embedded 32-byte commitment directly from calldata.
             expectedCommitment := calldataload(encodedCommitment.offset)
         }
@@ -164,7 +168,14 @@ library ShrincsUtils {
         if (encoded.length != ShrincsTypes.STATEFUL_PUBLIC_KEY_BYTES) {
             return (publicKey, false);
         }
-        assembly {
+        // Decoded StatefulPublicKey layout (0x60 bytes) written at the
+        // free-memory pointer:
+        //   [0x00..0x20) pkSeed
+        //   [0x20..0x40) root
+        //   [0x40..0x60) maxSignatures (high 4 bytes of the last input word)
+        // Memory-safe: allocates 0x60 bytes and advances the free-memory
+        // pointer past them.
+        assembly ("memory-safe") {
             // Allocate the decoded struct starting at the free-memory
             // pointer.
             publicKey := mload(0x40)
@@ -283,7 +294,10 @@ library ShrincsUtils {
         // Keep only the bit offset within that byte.
         uint256 bitOffset = startBit & 7;
         uint256 word;
-        assembly {
+        // Memory-safe: reads one 32-byte word from within input's allocated
+        // buffer (the caller guarantees 32 bytes of readable slack, above);
+        // no memory is written.
+        assembly ("memory-safe") {
             // Load the 32-byte word starting at the requested byte offset.
             word := mload(add(add(input, 32), byteOffset))
         }
@@ -320,7 +334,10 @@ library ShrincsUtils {
         // Keep only the bit offset within that byte.
         uint256 bitOffset = startBit & 7;
         uint256 word;
-        assembly {
+        // Memory-safe: reads one 32-byte word from within input's allocated
+        // buffer (the caller guarantees 32 bytes of readable slack, above);
+        // no memory is written.
+        assembly ("memory-safe") {
             // Load the 32-byte word starting at the requested byte offset.
             word := mload(add(add(input, 32), byteOffset))
         }

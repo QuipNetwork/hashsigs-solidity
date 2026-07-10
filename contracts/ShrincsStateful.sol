@@ -218,7 +218,15 @@ library ShrincsStateful {
         bytes32 left,
         bytes32 right
     ) internal pure returns (bytes32 out) {
-        assembly {
+        // keccak256 input ("uxmss-node" tag [§1 tags], 110 bytes):
+        //   [0..10)   "uxmss-node"
+        //   [10..42)  pkSeed
+        //   [42..46)  leftLeafIndex (big-endian uint32)
+        //   [46..78)  left child
+        //   [78..110) right child
+        // Memory-safe: uses scratch at the free-memory pointer without
+        // advancing it and without relying on prior contents.
+        assembly ("memory-safe") {
             // Allocate a scratch buffer starting at the free-memory pointer.
             let ptr := mload(0x40)
             // Write the domain tag prefix for unbalanced stateful parent
@@ -295,7 +303,14 @@ library ShrincsStateful {
         bytes32 addressWord,
         bytes32 segment
     ) internal pure returns (bytes32 out) {
-        assembly {
+        // keccak256 input ("wots-c-chain" tag [§1 tags], 108 bytes):
+        //   [0..12)   "wots-c-chain"
+        //   [12..44)  pkSeed
+        //   [44..76)  addressWord
+        //   [76..108) chain segment
+        // Memory-safe: uses scratch at the free-memory pointer without
+        // advancing it and without relying on prior contents.
+        assembly ("memory-safe") {
             // Allocate a scratch buffer starting at the free-memory pointer.
             let ptr := mload(0x40)
             // Write the domain tag prefix for WOTS-C chain hashing.
@@ -336,7 +351,9 @@ library ShrincsStateful {
         internal
         pure
     {
-        assembly {
+        // Memory-safe: writes one 32-byte word into the dst buffer's
+        // payload at the caller-checked offset; no scratch or FMP change.
+        assembly ("memory-safe") {
             // Skip the bytes length word to reach the payload start.
             let dataPtr := add(dst, 32)
             // Advance to the caller-requested byte offset inside the payload.

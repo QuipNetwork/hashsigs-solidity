@@ -79,7 +79,16 @@ library ShrincsForsC {
         // "fors-pk" || pkSeed || root_0 || ... || root_{k-2}
         uint256 forsPkInputLen = 39 + signedTrees * 32;
         uint256 forsPkInput;
-        assembly {
+        // keccak256 input ("fors-pk" tag [§1 tags], forsPkInputLen bytes):
+        //   [0..7)         "fors-pk"
+        //   [7..39)        pkSeed
+        //   [39..39+32*t)  reconstructed per-tree roots (t = signedTrees)
+        // forsPkInputLen = 39 + signedTrees * 32.
+        // Memory-safe: allocates roundup32(forsPkInputLen) bytes at the
+        // free-memory pointer and advances the pointer past them; the loop
+        // below fills the per-tree roots and the final hash reads exactly
+        // forsPkInputLen bytes.
+        assembly ("memory-safe") {
             // Allocate a scratch buffer starting at the free-memory pointer.
             forsPkInput := mload(0x40)
             // Write the domain tag prefix at the start of the buffer.
@@ -132,7 +141,9 @@ library ShrincsForsC {
             if (root == bytes32(0)) return (bytes32(0), false);
             // Append each reconstructed root into the final FORS public-key
             // hash input.
-            assembly {
+            // Memory-safe: writes one 32-byte root into the forsPkInput
+            // buffer allocated above (slot 39 + tree*32).
+            assembly ("memory-safe") {
                 // Write this 32-byte root at slot `tree` after the fixed
                 // tag-and-seed prefix.
                 mstore(add(add(forsPkInput, 39), mul(tree, 32)), root)
@@ -142,7 +153,9 @@ library ShrincsForsC {
             }
         }
 
-        assembly {
+        // Memory-safe: hashes the forsPkInput buffer built above; no memory
+        // is written.
+        assembly ("memory-safe") {
             // Hash the per-tree roots into the reconstructed FORS public
             // value.
             forsRoot := keccak256(forsPkInput, forsPkInputLen)
@@ -191,7 +204,9 @@ library ShrincsForsC {
             bytes calldata authNode = entry.authPath[level];
             if (authNode.length != 32) return bytes32(0);
             bytes32 sibling;
-            assembly {
+            // Memory-safe: reads one calldata word into a stack variable;
+            // no memory is written.
+            assembly ("memory-safe") {
                 // Load the 32-byte sibling node directly from calldata.
                 sibling := calldataload(authNode.offset)
             }
@@ -261,7 +276,14 @@ library ShrincsForsC {
         bytes32 addressWord,
         bytes calldata sk
     ) internal pure returns (bytes32 out) {
-        assembly {
+        // keccak256 input ("fors-leaf" tag [§1 tags], 105 bytes):
+        //   [0..9)    "fors-leaf"
+        //   [9..41)   pkSeed
+        //   [41..73)  addressWord
+        //   [73..105) secret leaf
+        // Memory-safe: uses scratch at the free-memory pointer without
+        // advancing it and without relying on prior contents.
+        assembly ("memory-safe") {
             // Use the current free-memory pointer as scratch without
             // advancing it.
             let ptr := mload(0x40)
@@ -290,7 +312,15 @@ library ShrincsForsC {
         bytes32 left,
         bytes32 right
     ) internal pure returns (bytes32 out) {
-        assembly {
+        // keccak256 input ("fors-node" tag [§1 tags], 137 bytes):
+        //   [0..9)     "fors-node"
+        //   [9..41)    pkSeed
+        //   [41..73)   addressWord
+        //   [73..105)  left child
+        //   [105..137) right child
+        // Memory-safe: uses scratch at the free-memory pointer without
+        // advancing it and without relying on prior contents.
+        assembly ("memory-safe") {
             // Use the current free-memory pointer as scratch without
             // advancing it.
             let ptr := mload(0x40)
@@ -395,7 +425,21 @@ library ShrincsForsC {
         // write above the free-memory pointer.
         uint256 scratchLen = ((baseLen + 31) & ~uint256(31)) + 32;
         uint256 ptr;
-        assembly {
+        // keccak256 input ("fors-digest" tag [§1 tags], baseLen bytes; a
+        // 4-byte block counter is appended at [baseLen..baseLen+4) in the
+        // multi-block path below):
+        //   [0..11)      "fors-digest"
+        //   [11..43)     pkSeed
+        //   [43..75)     hypertreeRoot
+        //   [75..107)    randomizer
+        //   [107..111)   grind counter (big-endian uint32)
+        //   [111..111+m) message (m = messageLen)
+        // baseLen = 111 + messageLen; scratchLen bytes are reserved above.
+        // Memory-safe: the whole scratch region is allocated by advancing
+        // the free-memory pointer before any write, so the whole-word
+        // message copy and the multi-block counter suffix stay at or below
+        // the pointer.
+        assembly ("memory-safe") {
             // Set the visible bytes length of the output buffer.
             mstore(out, digestBytes)
             // Reserve the scratch buffer at the free-memory pointer and
@@ -432,7 +476,9 @@ library ShrincsForsC {
         // defense-in-depth.
         if (digestBytes <= 32) {
             bytes32 digestWord;
-            assembly {
+            // Memory-safe: hashes the scratch buffer and writes one word
+            // into the out buffer's payload (both allocated above).
+            assembly ("memory-safe") {
                 // One digest block is enough for the whole FORS and hypertree
                 // coordinate stream.
                 digestWord := keccak256(ptr, baseLen)
@@ -451,7 +497,10 @@ library ShrincsForsC {
             // Emit only as many bytes as remain needed from this block.
             uint256 chunk = digestBytes - offset;
             if (chunk > 32) chunk = 32;
-            assembly {
+            // Memory-safe: writes the 4-byte block counter into the reserved
+            // scratch (offset baseLen) and hashes; scratchLen reserved above
+            // covers baseLen + 32 bytes.
+            assembly ("memory-safe") {
                 // Append a block counter when more than one digest block is
                 // needed.
                 mstore(add(ptr, baseLen), shl(224, blockCounter))

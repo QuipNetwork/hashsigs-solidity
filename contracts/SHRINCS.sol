@@ -142,7 +142,9 @@ library SHRINCS {
         bytes32 declaredNextPublicKeyCommitment;
         bytes calldata declaredNextPublicKeyCommitmentBytes =
             nextStatefulKey.publicKeyCommitment;
-        assembly {
+        // Memory-safe: reads one calldata word into a stack variable; no
+        // memory is written.
+        assembly ("memory-safe") {
             declaredNextPublicKeyCommitment := calldataload(
                 declaredNextPublicKeyCommitmentBytes.offset
             )
@@ -242,7 +244,9 @@ library SHRINCS {
         bytes32 declaredNextPublicKeyCommitment;
         bytes calldata declaredNextPublicKeyCommitmentBytes =
             nextKey.publicKeyCommitment;
-        assembly {
+        // Memory-safe: reads one calldata word into a stack variable; no
+        // memory is written.
+        assembly ("memory-safe") {
             declaredNextPublicKeyCommitment := calldataload(
                 declaredNextPublicKeyCommitmentBytes.offset
             )

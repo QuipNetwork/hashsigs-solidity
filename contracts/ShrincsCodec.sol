@@ -42,7 +42,9 @@ library ShrincsCodec {
         // The key format is exactly the 32-byte SHRINCS publicKeyCommitment,
         // nothing else.
         if (key.length != 32) return (bytes32(0), false);
-        assembly {
+        // Memory-safe: reads one calldata word into a stack variable; no
+        // memory is written.
+        assembly ("memory-safe") {
             // Load the 32-byte commitment word directly from calldata.
             commitment := calldataload(key.offset)
         }

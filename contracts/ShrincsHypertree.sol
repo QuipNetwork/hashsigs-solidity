@@ -101,7 +101,9 @@ library ShrincsHypertree {
 
             bytes calldata wotsPkHash = layerSig.wotsCPkHash;
             bytes32 leaf;
-            assembly {
+            // Memory-safe: reads one calldata word into a stack variable;
+            // no memory is written.
+            assembly ("memory-safe") {
                 // Load the 32-byte WOTS-C public-key hash that becomes the
                 // subtree leaf value.
                 leaf := calldataload(wotsPkHash.offset)
@@ -142,7 +144,9 @@ library ShrincsHypertree {
 
         bytes calldata expectedRootBytes = publicKey.hypertreeRoot;
         bytes32 expectedRoot;
-        assembly {
+        // Memory-safe: reads one calldata word into a stack variable; no
+        // memory is written.
+        assembly ("memory-safe") {
             // Load the installed 32-byte hypertree root from calldata.
             expectedRoot := calldataload(expectedRootBytes.offset)
         }
@@ -191,7 +195,9 @@ library ShrincsHypertree {
         bytes32 pkSeed;
         bytes32 expectedPkHash;
         bytes32 randomizer;
-        assembly {
+        // Memory-safe: reads three calldata words into stack variables; no
+        // memory is written.
+        assembly ("memory-safe") {
             // Load the 32-byte public seed from calldata.
             pkSeed := calldataload(pkSeedBytes.offset)
             // Load the expected compressed WOTS-C public-key hash from
@@ -209,7 +215,16 @@ library ShrincsHypertree {
         // "wots-c-pk" || pkSeed || segment_0 || ... || segment_{len-1}
         uint256 pkInputLen = 41 + chainCount * 32;
         uint256 pkInput;
-        assembly {
+        // keccak256 input ("wots-c-pk" tag [§1 tags], pkInputLen bytes):
+        //   [0..9)          "wots-c-pk"
+        //   [9..41)         pkSeed
+        //   [41..41+32*len) reconstructed chain endpoints (len = chainCount)
+        // pkInputLen = 41 + chainCount * 32.
+        // Memory-safe: allocates roundup32(pkInputLen) bytes at the
+        // free-memory pointer and advances the pointer past them; the loop
+        // below fills the endpoints and the final hash reads exactly
+        // pkInputLen bytes.
+        assembly ("memory-safe") {
             // Allocate a scratch buffer starting at the free-memory pointer.
             pkInput := mload(0x40)
             // Write the domain tag prefix for compressed WOTS-C public-key
@@ -251,7 +266,9 @@ library ShrincsHypertree {
                 chain,
                 digit
             );
-            assembly {
+            // Memory-safe: writes one 32-byte endpoint into the pkInput
+            // buffer allocated above (slot 41 + i*32).
+            assembly ("memory-safe") {
                 // Write this reconstructed chain endpoint after the fixed
                 // tag-and-seed prefix.
                 mstore(add(add(pkInput, 41), mul(i, 32)), segment)
@@ -266,7 +283,9 @@ library ShrincsHypertree {
         if (digitSum != ShrincsTypes.WOTS_TARGET_SUM_STATEFUL) return false;
 
         bytes32 computedPkHash;
-        assembly {
+        // Memory-safe: hashes the pkInput buffer built above; no memory is
+        // written.
+        assembly ("memory-safe") {
             // Hash the reconstructed chain endpoints into the compressed
             // WOTS-C public-key hash.
             computedPkHash := keccak256(pkInput, pkInputLen)
@@ -289,7 +308,16 @@ library ShrincsHypertree {
         uint32 counter,
         bytes32 message
     ) internal pure returns (bytes32 out) {
-        assembly {
+        // keccak256 input ("wots-c-msg" tag [§1 tags], 142 bytes):
+        //   [0..10)    "wots-c-msg"
+        //   [10..42)   pkSeed
+        //   [42..74)   expectedPkHash
+        //   [74..106)  randomizer
+        //   [106..110) grind counter (big-endian uint32)
+        //   [110..142) message
+        // Memory-safe: uses scratch at the free-memory pointer without
+        // advancing it and without relying on prior contents.
+        assembly ("memory-safe") {
             // Allocate a scratch buffer starting at the free-memory pointer.
             let ptr := mload(0x40)
             // Write the digest domain tag prefix.
@@ -339,7 +367,9 @@ library ShrincsHypertree {
         bytes calldata value,
         uint32 digit
     ) internal pure returns (bytes32 out) {
-        assembly {
+        // Memory-safe: reads one calldata word into a stack variable; no
+        // memory is written.
+        assembly ("memory-safe") {
             // Load the revealed 32-byte chain value directly from calldata.
             out := calldataload(value.offset)
         }
@@ -384,7 +414,14 @@ library ShrincsHypertree {
         bytes32 addressWord,
         bytes32 segment
     ) internal pure returns (bytes32 out) {
-        assembly {
+        // keccak256 input ("wots-c-chain" tag [§1 tags], 108 bytes):
+        //   [0..12)   "wots-c-chain"
+        //   [12..44)  pkSeed
+        //   [44..76)  addressWord
+        //   [76..108) chain segment
+        // Memory-safe: uses scratch at the free-memory pointer without
+        // advancing it and without relying on prior contents.
+        assembly ("memory-safe") {
             // Allocate a scratch buffer starting at the free-memory pointer.
             let ptr := mload(0x40)
             // Write the domain tag prefix for WOTS-C chain hashing.
@@ -431,7 +468,9 @@ library ShrincsHypertree {
         // Every subtree auth path must contain one node per subtree level.
         if (authPath.length != height) return (bytes32(0), false);
         bytes32 pkSeedWord;
-        assembly {
+        // Memory-safe: reads one calldata word into a stack variable; no
+        // memory is written.
+        assembly ("memory-safe") {
             // Load the 32-byte public seed from calldata once for repeated
             // subtree hashing.
             pkSeedWord := calldataload(pkSeed.offset)
@@ -454,7 +493,9 @@ library ShrincsHypertree {
             bytes calldata authNode = authPath[level];
             if (authNode.length != 32) return (bytes32(0), false);
             bytes32 sibling;
-            assembly {
+            // Memory-safe: reads one calldata word into a stack variable;
+            // no memory is written.
+            assembly ("memory-safe") {
                 // Load the 32-byte sibling node directly from calldata.
                 sibling := calldataload(authNode.offset)
             }
@@ -496,7 +537,15 @@ library ShrincsHypertree {
         bytes32 left,
         bytes32 right
     ) internal pure returns (bytes32 out) {
-        assembly {
+        // keccak256 input ("hypertree-node" tag [§1 tags], 142 bytes):
+        //   [0..14)    "hypertree-node"
+        //   [14..46)   pkSeed
+        //   [46..78)   addressWord
+        //   [78..110)  left child
+        //   [110..142) right child
+        // Memory-safe: uses scratch at the free-memory pointer without
+        // advancing it and without relying on prior contents.
+        assembly ("memory-safe") {
             // Allocate a scratch buffer starting at the free-memory pointer.
             let ptr := mload(0x40)
             // Write the domain tag prefix for hypertree internal-node
