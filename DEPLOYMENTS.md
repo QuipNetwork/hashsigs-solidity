@@ -86,7 +86,7 @@ land with the Rust-signer coordination (tracked as T6); don't treat a
 | Contract | `WOTSPlus` (library) |
 | Build profile | `production` |
 | CREATE3 salt string | `QUIP:WOTSPlus:V1.0` |
-| Predicted address | *(run the script to print)* |
+| Predicted address | `0x628bCbF1A1dfE63cad765012DD20e1dFD4461585` |
 | Runtime codehash | *(capture on first deploy)* |
 | Chains deployed | *(none yet)* |
 

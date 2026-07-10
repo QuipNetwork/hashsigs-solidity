@@ -56,7 +56,7 @@ scripts/check-line-length.sh
 
 ## Reviewing Solidity (diffs, MRs)
 
-Walk the numbered checklist above against each hunk. Additionally:
+Walk the numbered checklist above against each hunk, and also check:
 
 - Comment headers must name the item they document — flag
   copy-pasted or stale headers describing another function (§4).
