@@ -267,6 +267,12 @@ library ShrincsUtils {
     // 2. Load the surrounding 32-byte word from memory.
     // 3. Shift the requested bit range down to the low bits.
     // 4. Mask off any higher bits and return the 32-bit result.
+    // Caller contract: mload reads a full 32-byte word at the byte offset,
+    // touching up to 31 bytes past input's logical length. The caller MUST
+    // keep startBit + bitLen <= 8 * input.length and provide at least 32
+    // bytes of readable slack beyond input's data, or the load reads
+    // adjacent heap. forsDigestBytes over-allocates digestBytes + 32 to
+    // satisfy this.
     function readBits32(bytes memory input, uint256 startBit, uint32 bitLen)
         internal
         pure
@@ -298,6 +304,12 @@ library ShrincsUtils {
     // 2. Load the surrounding 32-byte word from memory.
     // 3. Shift the requested bit range down to the low bits.
     // 4. Mask off any higher bits and return the 64-bit result.
+    // Caller contract: mload reads a full 32-byte word at the byte offset,
+    // touching up to 31 bytes past input's logical length. The caller MUST
+    // keep startBit + bitLen <= 8 * input.length and provide at least 32
+    // bytes of readable slack beyond input's data, or the load reads
+    // adjacent heap. forsDigestBytes over-allocates digestBytes + 32 to
+    // satisfy this.
     function readBits64(bytes memory input, uint256 startBit, uint32 bitLen)
         internal
         pure

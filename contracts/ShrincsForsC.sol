@@ -379,8 +379,10 @@ library ShrincsForsC {
         bytes memory message,
         uint256 digestBytes
     ) internal pure returns (bytes memory out) {
-        // Allocate output plus one spare block so partial chunk writes stay
-        // simple.
+        // Allocate the requested digest bytes plus one spare 32-byte word.
+        // readBits32/64 loads a full 32-byte word at its byte offset, so it
+        // may touch up to 31 bytes past the logical end of this buffer; the
+        // spare word guarantees that slack is allocated, readable memory.
         out = new bytes(digestBytes + 32);
         uint256 messageLen = message.length;
         // "fors-digest" || pkSeed || hypertreeRoot || randomizer || counter
