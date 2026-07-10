@@ -80,6 +80,29 @@ library ShrincsTypes {
         uint32 maxSignatures;
     }
 
+    struct SigningKey {
+        // Secret seed used to derive stateful WOTS-C chain secrets.
+        bytes32 statefulSkSeed;
+        // Secret PRF seed used to derive stateful WOTS-C message randomizers.
+        bytes32 statefulPrfSeed;
+        // Public seed used in stateful WOTS-C and stateful tree hashing.
+        bytes32 statefulPkSeed;
+        // Root of the stateful unbalanced tree committed in the public key.
+        bytes32 statefulRoot;
+        // Highest stateful leaf index this key may sign with.
+        uint32 maxStatefulSignatures;
+        // Next monotonic stateful leaf index to consume.
+        uint32 nextStatefulLeafIndex;
+        // Stateless SK.seed-style material used to derive FORS-C and hypertree WOTS-C secrets.
+        bytes32 statelessSkSeed;
+        // Stateless SK.prf-style material used to derive stateless message randomizers.
+        bytes32 statelessPrfSeed;
+        // Global public seed used in FORS-C, hypertree WOTS-C, and Merkle node hashing.
+        bytes32 pkSeed;
+        // Top hypertree root committed in the public key.
+        bytes32 hypertreeRoot;
+    }
+
     struct StatefulSignature {
         // Per-signature randomizer committed into the stateful message digest.
         bytes32 randomizer;
