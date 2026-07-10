@@ -101,3 +101,102 @@ slither:
       sarif: slither.sarif
     paths:
       - slither.sarif
+
+# ---------------------------------------------------------------------------
+# Nightly campaigns (schedule-only). Long randomized runs that do not block
+# MRs directly: a counterexample they persist into cache/fuzz//cache/invariant
+# fails subsequent per-MR pipelines until fixed (the promotion path). EVM
+# execution is arch-deterministic, so results are comparable across runners;
+# arch tags below pin only tool-availability (medusa binary and hevm ship
+# x86_64-only). NOTE for the maintainer: replace `x86_64` in the `tags:`
+# blocks with the actual tag advertised by the group's x86_64 Docker runners
+# (tesla-x86_64 / cray / finney / hopper / lovelace); tesla-arm is ARM and
+# must not run the medusa/hevm jobs.
+# ---------------------------------------------------------------------------
+
+# Deep forge fuzz + invariant campaign under [profile.nightly] (random seed,
+# coverage-guided corpus). Foundry is multi-arch, so no arch tag is needed.
+fuzz-deep:
+  stage: nightly
+  image:
+    name: ghcr.io/foundry-rs/foundry:v1.7.1
+    entrypoint: [""]
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+  timeout: 5h
+  variables:
+    GIT_SUBMODULE_STRATEGY: recursive
+    FOUNDRY_FUZZ_SEED: "" # randomized nightly
+  script:
+    - git config --global --add safe.directory "$CI_PROJECT_DIR"
+    - forge --version
+    - FOUNDRY_PROFILE=nightly forge test
+  cache:
+    key: nightly-corpus
+    paths:
+      - cache/fuzz-corpus
+      - cache/invariant-corpus
+      - cache/fuzz
+      - cache/invariant
+  artifacts:
+    when: on_failure
+    paths:
+      - cache/fuzz
+      - cache/invariant
+
+# Medusa v1.5.1 coverage-guided campaign over the state-machine harness
+# (ShrincsMedusaHarness). eth-security-toolbox bundles medusa + crytic-compile
+# + foundry + solc; foundryup pins forge to v1.7.1 for a via-ir-honest build.
+# medusa ships an x86_64 binary, so this job is pinned to an x86_64 runner.
+medusa:
+  stage: nightly
+  image: ghcr.io/trailofbits/eth-security-toolbox:nightly
+  tags:
+    - x86_64
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+  timeout: 5h
+  before_script:
+    - git config --global --add safe.directory "$CI_PROJECT_DIR"
+    - export PATH="$HOME/.foundry/bin:$PATH"
+    - foundryup --install v1.7.1 || true
+  script:
+    - medusa fuzz --config medusa.json
+  cache:
+    key: medusa-corpus
+    paths:
+      - medusa-corpus
+  artifacts:
+    when: on_failure
+    paths:
+      - medusa-corpus
+
+# Advisory hevm 0.58.0 symbolic checks over the base-w/readBits bounds slice
+# (ShrincsSymbolic prove_ functions). hevm ships an x86_64-only static binary
+# and needs an SMT solver (z3), so this job installs both on an x86_64 runner
+# and is allow_failure (upstream is advisory here). NOTE: verify the hevm
+# release asset URL at run time; the argotorg/hevm asset path can change.
+hevm:
+  stage: nightly
+  image: ubuntu:24.04
+  tags:
+    - x86_64
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+  timeout: 90m
+  allow_failure: true
+  variables:
+    GIT_SUBMODULE_STRATEGY: recursive
+  before_script:
+    - apt-get update && apt-get install -y --no-install-recommends
+      curl git z3 ca-certificates
+    - curl -L https://foundry.paradigm.xyz | bash
+    - export PATH="$HOME/.foundry/bin:$PATH"
+    - foundryup --install v1.7.1
+    - curl -L -o /usr/local/bin/hevm
+      https://github.com/argotorg/hevm/releases/download/release/0.58.0/hevm-x86_64-linux
+    - chmod +x /usr/local/bin/hevm
+  script:
+    - git config --global --add safe.directory "$CI_PROJECT_DIR"
+    - forge build
+    - hevm test --root . --match "prove_" --smttimeout 120000

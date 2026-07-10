@@ -1,0 +1,45 @@
+{
+  "fuzzing": {
+    "workers": 8,
+    "workerResetLimit": 50,
+    "timeout": 14400,
+    "testLimit": 0,
+    "callSequenceLength": 100,
+    "corpusDirectory": "medusa-corpus",
+    "coverageEnabled": true,
+    "targetContracts": ["ShrincsMedusaHarness"],
+    "deploymentOrder": ["ShrincsMedusaHarness"],
+    "testAllContracts": false,
+    "transactionGasLimit": 12500000
+  },
+  "compilation": {
+    "platform": "crytic-compile",
+    "platformConfig": {
+      "target": ".",
+      "solcVersion": "",
+      "exportDirectory": "",
+      "args": ["--foundry-compile-all"]
+    }
+  },
+  "testing": {
+    "stopOnFailedTest": false,
+    "stopOnFailedContractMatching": false,
+    "stopOnNoTests": true,
+    "testAllContracts": false,
+    "assertionTesting": {
+      "enabled": true,
+      "testViewMethods": false
+    },
+    "propertyTesting": {
+      "enabled": true,
+      "testPrefixes": ["property_"]
+    },
+    "optimizationTesting": {
+      "enabled": false
+    }
+  },
+  "logging": {
+    "level": "info",
+    "logDirectory": ""
+  }
+}

@@ -18,6 +18,9 @@ lcov.info
 # Slither SARIF report (CI artifact, not committed)
 slither.sarif
 
+# Medusa corpus (CI cache, not committed)
+medusa-corpus/
+
 test/test_vectors/tmp.json
 
 # Editor autosave/backup/lock files
