@@ -278,6 +278,18 @@ library ShrincsStateful {
     // 2. Bind the public seed and chain-step address.
     // 3. Mix in the current chain segment value.
     // 4. Return the next chain value.
+    // Domain separation: this "wots-c-chain" tag and its 108-byte
+    // preimage layout are identical to the hypertree WOTS-C chain hash
+    // (ShrincsHypertree.hashStatelessWotsCChainNoMask32). The two
+    // subsystems stay separated through pkSeed: this path binds the
+    // stateful key's pkSeed while the hypertree path binds the stateless
+    // bundle pkSeed, and honest keygen derives the two seeds
+    // independently, so their preimages never coincide. Setting both
+    // seeds equal only collides a key against itself and cannot forge
+    // against an honest key whose seeds differ. A dedicated tag (e.g.
+    // "uxmss-wots-chain") would separate them unconditionally but is
+    // deferred: it is a breaking change to the Rust-anchored stateful
+    // vectors and keygen constants.
     function hashStatefulWotsCChainNoMask32(
         bytes32 pkSeed,
         bytes32 addressWord,
