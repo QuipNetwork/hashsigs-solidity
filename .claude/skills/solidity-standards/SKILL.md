@@ -28,7 +28,10 @@ Apply while writing, then verify before presenting the change:
 4. Computed constants — derivation comment with formula and a Python
    one-liner reproducing the value (§4).
 5. Verifiers fail closed — return false/zero, never revert;
-   length-check `bytes` before assembly reads (§5).
+   length-check `bytes` before assembly reads; a calldata read used
+   only in a compare-against-constant/cursor may skip the check
+   under the narrow framing-read exception with a fail-closed site
+   comment (§5).
 6. Assembly — buffer-layout comment above every block; free-memory
    pointer handled; tags noted (§6).
 7. Lint suppressions — justification line then directive line, never

@@ -150,6 +150,20 @@ Rules:
 - **Validate lengths before assembly reads.** Every `calldataload`/
   `calldatacopy` of a `bytes` value is preceded by an explicit
   `.length` check in Solidity.
+- **Calldata framing reads (narrow exception).** A `calldataload`
+  whose result is used *only* as an operand of an equality/comparison
+  against an expected constant or a running cursor — never in
+  arithmetic, indexing, loop bounds, lengths, or as returned data —
+  may be read without a prior bounds check. The justification, which
+  the site comment must state, is that `calldataload` past
+  `calldatasize` returns zero, and a zero read must fail the
+  comparison (fail closed) rather than pass it. This applies to
+  **calldata only** (`returndatacopy`/`mload` past their region do
+  not return a safe zero and are out of scope). Every value that
+  feeds arithmetic, a loop bound, an index, or a length keeps the
+  strict pre-check above. Each exception site carries a comment
+  citing this rule and stating why an out-of-bounds zero fails the
+  specific comparison closed.
 - `unchecked` blocks need a comment stating why overflow/underflow
   is impossible, unless the block is the bare loop-increment idiom
   `unchecked { ++i; }` under a bounded loop.
