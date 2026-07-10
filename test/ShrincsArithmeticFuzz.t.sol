@@ -46,7 +46,7 @@ contract ShrincsArithmeticFuzzTest is Test {
         bytes32 lo,
         uint256 startBitSeed,
         uint256 bitLenSeed
-    ) public {
+    ) public pure {
         uint32 bitLen = uint32(bound(bitLenSeed, 1, 32));
         // Two data words give 512 readable bits; keep the window inside them.
         uint256 startBit = bound(startBitSeed, 0, 512 - bitLen);
@@ -67,7 +67,7 @@ contract ShrincsArithmeticFuzzTest is Test {
         bytes32 lo,
         uint256 startBitSeed,
         uint256 bitLenSeed
-    ) public {
+    ) public pure {
         uint32 bitLen = uint32(bound(bitLenSeed, 1, 64));
         uint256 startBit = bound(startBitSeed, 0, 512 - bitLen);
         bytes memory buffer = _twoWordBuffer(hi, lo);
@@ -88,7 +88,7 @@ contract ShrincsArithmeticFuzzTest is Test {
         uint256 startBitSeed,
         uint256 bitLenSeed,
         bytes32 slackNoise
-    ) public {
+    ) public pure {
         uint32 bitLen = uint32(bound(bitLenSeed, 1, 32));
         // Only the first word holds window data; the second word is pure
         // slack, so perturbing it must not change the result.
@@ -105,19 +105,21 @@ contract ShrincsArithmeticFuzzTest is Test {
     // (w-1) - digit never underflows.
     function testFuzz_baseW16DigitBounded(bytes32 word, uint256 indexSeed)
         public
+        pure
     {
         uint256 index = bound(indexSeed, 0, 63);
         bytes memory digest = abi.encodePacked(word);
         uint32 digit = ShrincsUtils.baseWDigit(CHAIN_BASE_16, digest, index);
         assertLe(uint256(digit), CHAIN_BASE_16 - 1, "base16 digit range");
         // Underflow guard: (w-1) - digit stays inside [0, w-1].
-        uint16 stepsLeft = CHAIN_BASE_16 - 1 - uint16(digit);
-        assertLe(uint256(stepsLeft), CHAIN_BASE_16 - 1, "steps underflow");
+        uint256 stepsLeft = uint256(CHAIN_BASE_16 - 1) - uint256(digit);
+        assertLe(stepsLeft, CHAIN_BASE_16 - 1, "steps underflow");
     }
 
     // A byte-wide (base-256) digit is always one byte.
     function testFuzz_baseW256DigitBounded(bytes32 word, uint256 indexSeed)
         public
+        pure
     {
         uint256 index = bound(indexSeed, 0, 31);
         bytes memory digest = abi.encodePacked(word);
