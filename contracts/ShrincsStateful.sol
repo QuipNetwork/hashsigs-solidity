@@ -186,13 +186,13 @@ library ShrincsStateful {
         // its right.
         root = statefulParentHash(pkSeed, leafIndex, leaf, authPath[0]);
         for (uint256 offset = 0; offset < authPath.length - 1;) {
-            // casting to 'uint32' is safe because offset is bounded by
-            // authPath.length - 1, and authPath.length == leafIndex
-            // forge-lint: disable-next-line(unsafe-typecast)
             // Higher parents hash the next auth node on the left with the
             // running root on the right.
             root = statefulParentHash(
                 pkSeed,
+                // casting to 'uint32' is safe because offset is bounded by
+                // authPath.length - 1, and authPath.length == leafIndex
+                // forge-lint: disable-next-line(unsafe-typecast)
                 leafIndex - uint32(offset) - 1,
                 authPath[offset + 1],
                 root

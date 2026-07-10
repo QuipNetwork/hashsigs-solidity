@@ -125,12 +125,12 @@ library ShrincsHypertree {
             // Carry the reconstructed subtree root into the next layer.
             current = nextRoot;
 
+            // The next layer's leaf index comes from the low subtree-height
+            // bits of the current tree index.
             // casting to 'uint32' is safe because leafMask keeps only
             // subtreeHeight bits, and leafCount above bounds each fixed
             // subtree to 256 leaves
             // forge-lint: disable-next-line(unsafe-typecast)
-            // The next layer's leaf index comes from the low subtree-height
-            // bits of the current tree index.
             expectedLeafIndex = uint32(expectedTreeIndex & leafMask);
             // Shift away this layer's subtree bits to get the next layer's
             // tree index.
@@ -239,14 +239,14 @@ library ShrincsHypertree {
             uint32 digit = baseW16Digit32(digest, i);
             // Accumulate the fixed WOTS-C target-sum check.
             digitSum += digit;
-            // casting to 'uint32' is safe because i ranges over the fixed 64
-            // WOTS chains
-            // forge-lint: disable-next-line(unsafe-typecast)
             // Complete the chain from the revealed value to its endpoint.
             bytes32 segment = wotsChain32NoMaskBase(
                 ShrincsTypes.WOTS_CHAIN_LEN,
                 pkSeed,
                 addressBase,
+                // casting to 'uint32' is safe because i ranges over the
+                // fixed 64 WOTS chains
+                // forge-lint: disable-next-line(unsafe-typecast)
                 uint32(i),
                 chain,
                 digit
