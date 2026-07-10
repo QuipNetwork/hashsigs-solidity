@@ -17,6 +17,13 @@ verify:
   script:
     - git config --global --add safe.directory "$CI_PROJECT_DIR"
     - forge --version
+    # Profile-selection hazard guard (design §2(d′)/§3.5): a top-level
+    # remappings.txt silently overrides the per-profile TOML remappings,
+    # so a profile build could compile with another profile's constants.
+    # Per-profile remappings live only in foundry.toml; fail closed if a
+    # remappings.txt exists. The ShrincsProfileInvariants identity test
+    # is the in-Solidity backstop for the same hazard.
+    - test ! -f remappings.txt
     - forge fmt --check
     - forge build
     - forge lint --deny warnings contracts/ test/ script/
