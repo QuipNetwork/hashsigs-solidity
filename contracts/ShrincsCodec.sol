@@ -26,11 +26,14 @@ import {ShrincsTypes} from "./ShrincsTypes.sol";
 library ShrincsCodec {
     error InvalidEnvelope();
 
-    // decodeKey: Decode an ERC-7913 `key` into the SHRINCS installed bundle
-    // commitment.
-    // 1. Require the key to be exactly one 32-byte commitment word.
-    // 2. Load the commitment directly from calldata.
-    // 3. Never revert; report malformed keys through the ok flag.
+    /// @notice Decode an ERC-7913 `key` into the SHRINCS installed bundle
+    /// commitment.
+    /// @dev Requires the key to be exactly one 32-byte commitment word and
+    /// loads it from calldata. Never reverts; malformed keys are reported
+    /// through the ok flag.
+    /// @param key The ERC-7913 key bytes (exactly 32 bytes).
+    /// @return commitment The decoded 32-byte publicKeyCommitment.
+    /// @return ok False when the key length is not 32.
     function decodeKey(bytes calldata key)
         internal
         pure
@@ -46,14 +49,15 @@ library ShrincsCodec {
         return (commitment, true);
     }
 
-    // decodeStatefulEnvelope: Decode the ERC-7913 `signature` envelope into
-    // typed SHRINCS structs.
-    // 1. Envelope layout is abi.encode(ShrincsTypes.PublicKey,
-    // ShrincsTypes.StatefulSignature) — no mode prefix.
-    // 2. Re-encoding the decoded structs must reproduce the exact original
-    // envelope bytes.
-    // 3. Reverts on malformed input; callers isolate the revert via a
-    // try/self-call hop.
+    /// @notice Decode the ERC-7913 `signature` envelope into typed SHRINCS
+    /// structs.
+    /// @dev Envelope layout is abi.encode(PublicKey, StatefulSignature) with
+    /// no mode prefix. Reverts on malformed input and on any non-canonical
+    /// encoding (re-encoding the decoded structs must reproduce the exact
+    /// bytes); callers isolate the revert via a try/self-call hop.
+    /// @param envelope The abi-encoded stateful envelope bytes.
+    /// @return publicKey The decoded SHRINCS public-key bundle.
+    /// @return signature The decoded stateful signature.
     function decodeStatefulEnvelope(bytes calldata envelope)
         internal
         pure
@@ -77,11 +81,13 @@ library ShrincsCodec {
         return (publicKey, signature);
     }
 
-    // encodeStatefulEnvelope: Inverse of decodeStatefulEnvelope.
-    // 1. Encode the key bundle and stateful signature with the exact layout
-    // the decoder expects.
-    // 2. Exists so tests and off-chain encoders share one format definition
-    // with the verifier.
+    /// @notice Inverse of decodeStatefulEnvelope.
+    /// @dev Encodes the bundle and stateful signature with the exact layout
+    /// the decoder expects, so tests and off-chain encoders share one format
+    /// definition with the verifier.
+    /// @param publicKey The SHRINCS public-key bundle.
+    /// @param signature The stateful signature.
+    /// @return envelope The abi-encoded stateful envelope bytes.
     function encodeStatefulEnvelope(
         ShrincsTypes.PublicKey memory publicKey,
         ShrincsTypes.StatefulSignature memory signature
@@ -89,10 +95,12 @@ library ShrincsCodec {
         return abi.encode(publicKey, signature);
     }
 
-    // toMessage: Convert the ERC-7913 32-byte hash into the SHRINCS signed
-    // message bytes.
-    // 1. ERC-7913 hands us a bytes32 hash; SHRINCS signs raw message bytes.
-    // 2. The hash IS the message: exactly its 32 bytes, packed.
+    /// @notice Convert the ERC-7913 32-byte hash into the SHRINCS signed
+    /// message bytes.
+    /// @dev ERC-7913 hands a bytes32 hash; SHRINCS signs raw message bytes.
+    /// The hash IS the message: exactly its 32 bytes, packed.
+    /// @param hash The 32-byte ERC-7913 hash.
+    /// @return message The message bytes SHRINCS signs (the 32 hash bytes).
     function toMessage(bytes32 hash)
         internal
         pure

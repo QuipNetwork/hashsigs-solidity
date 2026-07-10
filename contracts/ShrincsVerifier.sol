@@ -48,14 +48,16 @@ contract ShrincsVerifier is IERC7913SignatureVerifier {
         _;
     }
 
-    // verify: ERC-7913 entrypoint. Never reverts.
-    // 1. Decode the 32-byte key into the installed bundle commitment; bad
-    // length -> 0xffffffff.
-    // 2. Self-call decodeAndCheck through try/catch so abi.decode reverts on
-    // malformed
-    //    envelopes surface as a failure value instead of bubbling up.
-    // 3. Return the ERC-7913 magic value on success or 0xffffffff on any
-    // failure.
+    /// @notice ERC-7913 verification entrypoint. Never reverts.
+    /// @dev Decodes the 32-byte key into the installed bundle commitment
+    /// (bad length -> 0xffffffff), then self-calls decodeAndCheck through
+    /// try/catch so an abi.decode revert on a malformed envelope surfaces as
+    /// a failure value instead of bubbling up. See the contract-level @dev
+    /// for the minimum-gas requirement.
+    /// @param key The 32-byte SHRINCS publicKeyCommitment.
+    /// @param hash The 32-byte message hash to verify.
+    /// @param signature The ShrincsCodec stateful envelope.
+    /// @return The verify selector on success, 0xffffffff on any failure.
     function verify(
         bytes calldata key,
         bytes32 hash,
@@ -74,12 +76,14 @@ contract ShrincsVerifier is IERC7913SignatureVerifier {
         return INVALID_SIGNATURE;
     }
 
-    // decodeAndCheck: Self-call hop #1 — envelope decoding.
-    // 1. Decode the envelope into memory structs via ShrincsCodec (reverts on
-    // malformed bytes;
-    //    verify(...) catches that revert).
-    // 2. Re-enter through hop #2 so the memory structs are re-materialized as
-    // calldata structs.
+    /// @notice Self-call hop #1 — envelope decoding. onlySelf.
+    /// @dev Decodes the envelope into memory structs via ShrincsCodec
+    /// (reverts on malformed bytes, which verify catches), then re-enters
+    /// through hop #2 so the memory structs are re-materialized as calldata.
+    /// @param commitment The installed bundle commitment.
+    /// @param hash The 32-byte message hash.
+    /// @param envelope The stateful envelope bytes.
+    /// @return True when the decoded stateful signature verifies.
     function decodeAndCheck(
         bytes32 commitment,
         bytes32 hash,
@@ -93,17 +97,19 @@ contract ShrincsVerifier is IERC7913SignatureVerifier {
         return this.checkDecoded(commitment, hash, publicKey, signature);
     }
 
-    // checkDecoded: Self-call hop #2 — calldata re-materialization and
-    // verification.
-    // 1. Receiving the structs through an external call re-encodes them into
-    // this call's
-    //    calldata — required because SHRINCS takes calldata structs.
-    // 2. Verify the stateful signature over exactly the 32 hash bytes under
-    // the commitment.
-    // 3. SHRINCS already enforces commitment-vs-bundle match, bundle shape,
-    // leaf-index
-    //    bounds, WOTS-C reconstruction, and the unbalanced-tree root —
-    //    nothing is added here.
+    /// @notice Self-call hop #2 — calldata re-materialization and
+    /// verification. onlySelf.
+    /// @dev Receiving the structs through an external call re-encodes them
+    /// into calldata (SHRINCS takes calldata structs), then verifies the
+    /// stateful signature over exactly the 32 hash bytes under the
+    /// commitment. SHRINCS already enforces commitment-vs-bundle match,
+    /// bundle shape, leaf-index bounds, WOTS-C reconstruction, and the
+    /// unbalanced-tree root; nothing is added here.
+    /// @param commitment The installed bundle commitment.
+    /// @param hash The 32-byte message hash.
+    /// @param publicKey The decoded public-key bundle.
+    /// @param signature The decoded stateful signature.
+    /// @return True when the stateful signature verifies.
     function checkDecoded(
         bytes32 commitment,
         bytes32 hash,

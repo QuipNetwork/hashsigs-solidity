@@ -112,24 +112,23 @@ contract ShrincsAccountVerifierExample {
         _;
     }
 
-    // isValidSignature: ERC-1271 compatibility view for canonical SHRINCS
-    // account-action signatures.
-    // 1. Decode the leading envelope mode byte.
-    // 2. Decode the remaining bytes as either a canonical stateful or
-    // stateless action envelope.
-    // 3. Rebuild the current account action context from wrapper-owned state.
-    // 4. Verify that the supplied hash matches the current canonical action
-    // hash.
-    // 5. Verify the embedded SHRINCS signature without mutating wrapper
-    // state.
-    // 6. Return 0xffffffff instead of reverting on malformed envelopes.
-    // 7. Return the ERC-1271 magic value on success or 0xffffffff on failure.
-    // Minimum gas: a stateful check costs roughly 260k gas and a stateless
-    // check roughly 2.69M gas. Each envelope is verified behind a try/catch
-    // self-call, so an inner out-of-gas (the 63/64 rule strands the hop
-    // while the outer frame keeps 1/64) is caught and returned as
-    // INVALID_SIGNATURE — a valid signature then reports invalid. Callers
-    // MUST forward gas comfortably above those figures.
+    /// @notice ERC-1271 compatibility view for canonical SHRINCS
+    /// account-action signatures.
+    /// @dev Decodes the leading envelope mode byte, decodes the remainder as
+    /// a canonical stateful or stateless action envelope, rebuilds the
+    /// current action context from wrapper-owned state, checks the supplied
+    /// hash against the canonical action hash, and verifies the embedded
+    /// SHRINCS signature without mutating state. Returns 0xffffffff instead
+    /// of reverting on malformed envelopes.
+    /// @dev Minimum gas: a stateful check costs roughly 260k gas and a
+    /// stateless check roughly 2.69M gas. Each envelope is verified behind a
+    /// try/catch self-call, so an inner out-of-gas (the 63/64 rule strands
+    /// the hop while the outer frame keeps 1/64) is caught and returned as
+    /// INVALID_SIGNATURE — a valid signature then reports invalid. Callers
+    /// MUST forward gas comfortably above those figures.
+    /// @param hash The 32-byte hash the signature must authorize.
+    /// @param signature The mode-prefixed ERC-1271 envelope.
+    /// @return The ERC-1271 magic value on success, 0xffffffff on failure.
     function isValidSignature(bytes32 hash, bytes calldata signature)
         external
         view
@@ -170,12 +169,14 @@ contract ShrincsAccountVerifierExample {
         return INVALID_SIGNATURE;
     }
 
-    // decodeAndCheckStateful1271Envelope: Self-call decoder for stateful
-    // ERC-1271 envelopes.
-    // 1. Decode the canonical stateful envelope layout from bytes.
-    // 2. Delegate the read-only cryptographic and policy checks.
-    // 3. Allow isValidSignature(...) to catch malformed payloads and return
-    // INVALID_SIGNATURE.
+    /// @notice Self-call decoder for stateful ERC-1271 envelopes. onlySelf.
+    /// @dev Decodes the canonical stateful envelope, rejects non-canonical
+    /// encodings, and delegates the read-only cryptographic and policy
+    /// checks. A revert here is caught by isValidSignature and reported as
+    /// INVALID_SIGNATURE.
+    /// @param hash The 32-byte hash the signature must authorize.
+    /// @param payload The abi-encoded stateful envelope (no mode prefix).
+    /// @return True when the decoded stateful signature is valid now.
     function decodeAndCheckStateful1271Envelope(
         bytes32 hash,
         bytes calldata payload
@@ -216,12 +217,14 @@ contract ShrincsAccountVerifierExample {
         );
     }
 
-    // decodeAndCheckStateless1271Envelope: Self-call decoder for stateless
-    // ERC-1271 envelopes.
-    // 1. Decode the canonical stateless envelope layout from bytes.
-    // 2. Delegate the read-only cryptographic and policy checks.
-    // 3. Allow isValidSignature(...) to catch malformed payloads and return
-    // INVALID_SIGNATURE.
+    /// @notice Self-call decoder for stateless ERC-1271 envelopes. onlySelf.
+    /// @dev Decodes the canonical stateless envelope, rejects non-canonical
+    /// encodings, and delegates the read-only cryptographic and policy
+    /// checks. A revert here is caught by isValidSignature and reported as
+    /// INVALID_SIGNATURE.
+    /// @param hash The 32-byte hash the signature must authorize.
+    /// @param payload The abi-encoded stateless envelope (no mode prefix).
+    /// @return True when the decoded stateless signature is valid now.
     function decodeAndCheckStateless1271Envelope(
         bytes32 hash,
         bytes calldata payload
@@ -262,12 +265,13 @@ contract ShrincsAccountVerifierExample {
         );
     }
 
-    // constructor: Install the initial key commitment and start in the
-    // default safe wrapper mode.
-    // 1. Record the deployer as the wrapper owner.
-    // 2. Install the initial SHRINCS public-key commitment.
-    // 3. Start with monotonic stateful leaf tracking.
-    // 4. Expect the first stateful signature to use leaf 1.
+    /// @notice Install the initial key commitment and start in the default
+    /// safe wrapper mode.
+    /// @dev Records the deployer as owner, installs the initial commitment,
+    /// starts with monotonic stateful leaf tracking, and expects the first
+    /// stateful signature to use leaf 1.
+    /// @param initialShrincsPublicKey The initial installed bundle
+    /// commitment.
     constructor(bytes32 initialShrincsPublicKey) {
         // Record the deployer as the wrapper administrator.
         owner = msg.sender;
@@ -315,15 +319,16 @@ contract ShrincsAccountVerifierExample {
         return true;
     }
 
-    // verifyStatefulAction: Canonical stateful account-action verification
-    // path.
-    // 1. Recover the leaf index that this stateful signature consumes.
-    // 2. Reject leaves that violate the active stateful policy.
-    // 3. Build the canonical typed action context from wrapper-owned
-    // freshness state.
-    // 4. Verify the signature against that canonical action message.
-    // 5. Commit the leaf, emit the verification event, and then advance the
-    // nonce.
+    /// @notice Canonical stateful account-action verification path.
+    /// @dev Recovers the consumed leaf index, rejects leaves that violate
+    /// the active policy, builds the canonical typed action context from
+    /// wrapper freshness state, verifies the signature, then commits the
+    /// leaf, emits the event, and advances the nonce.
+    /// @param publicKey The SHRINCS public-key bundle.
+    /// @param actionType The action type bound into the canonical hash.
+    /// @param payloadHash The action payload hash.
+    /// @param signature The stateful signature.
+    /// @return True when the action signature verifies and is consumed.
     function verifyStatefulAction(
         ShrincsTypes.PublicKey calldata publicKey,
         bytes32 actionType,
@@ -363,15 +368,16 @@ contract ShrincsAccountVerifierExample {
         return true;
     }
 
-    // verifyStatelessAction: Canonical stateless account-action verification
-    // path.
-    // 1. Reject stateless actions when recovery mode gating forbids them.
-    // 2. Enforce the fixed stateless usage budget for the current key epoch.
-    // 3. Build the canonical typed action context from wrapper-owned
-    // freshness state.
-    // 4. Verify the stateless signature against that canonical action
-    // message.
-    // 5. Advance nonce and stateless-usage counters only after success.
+    /// @notice Canonical stateless account-action verification path.
+    /// @dev Rejects stateless actions when recovery-mode gating forbids
+    /// them, enforces the per-key stateless usage budget, builds the
+    /// canonical typed action context, verifies the signature, then advances
+    /// the nonce and stateless-usage counters only after success.
+    /// @param publicKey The SHRINCS public-key bundle.
+    /// @param actionType The action type bound into the canonical hash.
+    /// @param payloadHash The action payload hash.
+    /// @param signature The stateless signature.
+    /// @return True when the action signature verifies and is consumed.
     function verifyStatelessAction(
         ShrincsTypes.PublicKey calldata publicKey,
         bytes32 actionType,
@@ -416,17 +422,17 @@ contract ShrincsAccountVerifierExample {
         return true;
     }
 
-    // rotateToFreshKey: Recovery-only path that replaces the installed
-    // stateful subkey.
-    // 1. Require the wrapper to be in recovery-rotation mode.
-    // 2. Require recovery mode to be actively entered by the owner.
-    // 3. Enforce the stateless usage budget for the current key epoch.
-    // 4. Build the canonical rotation context from wrapper-owned freshness
-    // state.
-    // 5. Verify the stateless recovery signature and derive the next key
-    // commitment.
-    // 6. Install the fresh key bundle and reset wrapper state for the new
-    // epoch.
+    /// @notice Recovery-only path that replaces the installed stateful
+    /// subkey.
+    /// @dev Requires recovery-rotation policy with recovery mode armed,
+    /// enforces the stateless usage budget, builds the canonical rotation
+    /// context, verifies the stateless recovery signature to derive the next
+    /// commitment, then installs the fresh stateful subkey while preserving
+    /// stateless usage accounting.
+    /// @param currentPublicKey The currently installed public-key bundle.
+    /// @param recoverySignature The stateless recovery signature.
+    /// @param nextKey The stateful-only rotation target.
+    /// @return True when rotation succeeds.
     function rotateToFreshKey(
         ShrincsTypes.PublicKey calldata currentPublicKey,
         ShrincsTypes.StatelessSignature calldata recoverySignature,
@@ -472,17 +478,17 @@ contract ShrincsAccountVerifierExample {
         return true;
     }
 
-    // rotateFullKey: Recovery-only path that replaces the full installed
-    // SHRINCS key bundle.
-    // 1. Require the wrapper to be in recovery-rotation mode.
-    // 2. Require recovery mode to be actively entered by the owner.
-    // 3. Enforce the stateless usage budget for the current key epoch.
-    // 4. Build the canonical rotation context from wrapper-owned freshness
-    // state.
-    // 5. Verify the stateless recovery signature and derive the next key
-    // commitment.
-    // 6. Install the new key bundle and reset wrapper state for the new
-    // epoch.
+    /// @notice Recovery-only path that replaces the full installed SHRINCS
+    /// key bundle.
+    /// @dev Requires recovery-rotation policy with recovery mode armed,
+    /// enforces the stateless usage budget, builds the canonical rotation
+    /// context, verifies the stateless recovery signature to derive the next
+    /// commitment, then installs the new full key bundle and resets wrapper
+    /// state for the new stateless epoch.
+    /// @param currentPublicKey The currently installed public-key bundle.
+    /// @param recoverySignature The stateless recovery signature.
+    /// @param nextKey The full-key rotation target.
+    /// @return True when rotation succeeds.
     function rotateFullKey(
         ShrincsTypes.PublicKey calldata currentPublicKey,
         ShrincsTypes.StatelessSignature calldata recoverySignature,
@@ -528,11 +534,12 @@ contract ShrincsAccountVerifierExample {
         return true;
     }
 
-    // isLeafUsed: Read bitmap-based stateful leaf usage for the current key
-    // epoch.
-    // 1. Select the 256-leaf word containing the requested leaf.
-    // 2. Select the bit inside that word for the requested leaf.
-    // 3. Return whether that bit has already been marked as used.
+    /// @notice Read bitmap-based stateful leaf usage for the current key
+    /// epoch.
+    /// @dev Selects the 256-leaf word and bit for the requested leaf and
+    /// reports whether that bit is marked used under the current keyVersion.
+    /// @param leafIndex The stateful leaf index to query.
+    /// @return True when the leaf is already marked used this epoch.
     function isLeafUsed(uint32 leafIndex) public view returns (bool) {
         // Group leaves into 256-bit words for compact bitmap storage.
         uint256 wordIndex = uint256(leafIndex) >> 8;
@@ -543,16 +550,12 @@ contract ShrincsAccountVerifierExample {
                     & (uint256(1) << bitIndex)) != 0;
     }
 
-    // setStatefulPolicyMonotonicIndex: Switch to monotonic stateful leaf
-    // tracking.
-    // 1. Only the owner may change the wrapper policy.
-    // 2. Reject policy changes after any successful stateful leaf use in this
-    // key epoch.
-    // 3. Prevent rollback to an earlier expected leaf index.
-    // 4. Install monotonic tracking with the supplied next expected leaf.
-    // 5. Exit recovery mode because the wrapper is returning to normal
-    // operation.
-    // 6. Emit the policy update for off-chain observers.
+    /// @notice Switch to monotonic stateful leaf tracking. Owner only.
+    /// @dev Rejects changes after any stateful leaf use this epoch, prevents
+    /// rollback below the current cursor, installs monotonic tracking with
+    /// the supplied next expected leaf, exits recovery mode, and emits the
+    /// policy update.
+    /// @param initialLeafIndex The next expected stateful leaf index.
     function setStatefulPolicyMonotonicIndex(uint32 initialLeafIndex)
         external
         onlyOwner
@@ -575,16 +578,11 @@ contract ShrincsAccountVerifierExample {
         emit StatefulPolicySet(statefulPolicy, nextStatefulLeafIndex);
     }
 
-    // setStatefulPolicyRecoveryRotation: Switch to recovery-only stateless
-    // rotation mode.
-    // 1. Only the owner may change the wrapper policy.
-    // 2. Reject policy changes after any successful stateful leaf use in this
-    // key epoch.
-    // 3. Preserve or initialize the stateful leaf cursor for later normal
-    // operation.
-    // 4. Require an explicit enterRecoveryMode() call before stateless
-    // recovery is accepted.
-    // 5. Emit the policy update for off-chain observers.
+    /// @notice Switch to recovery-only stateless rotation mode. Owner only.
+    /// @dev Rejects changes after any stateful leaf use this epoch, keeps
+    /// the stateful cursor initialized for later normal operation, and
+    /// requires an explicit enterRecoveryMode() call before stateless
+    /// recovery is accepted. Emits the policy update.
     function setStatefulPolicyRecoveryRotation() external onlyOwner {
         // Freeze the stateful tracking model once any stateful leaf has been
         // consumed in this epoch.
@@ -603,16 +601,10 @@ contract ShrincsAccountVerifierExample {
         emit StatefulPolicySet(statefulPolicy, nextStatefulLeafIndex);
     }
 
-    // setStatefulPolicyLeafBitmap: Switch to bitmap-based stateful leaf
-    // tracking.
-    // 1. Only the owner may change the wrapper policy.
-    // 2. Reject policy changes after any successful stateful leaf use in this
-    // key epoch.
-    // 3. Preserve or initialize the stateful leaf cursor for future monotonic
-    // use.
-    // 4. Exit recovery mode because the wrapper is returning to normal
-    // operation.
-    // 5. Emit the policy update for off-chain observers.
+    /// @notice Switch to bitmap-based stateful leaf tracking. Owner only.
+    /// @dev Rejects changes after any stateful leaf use this epoch, keeps
+    /// the stateful cursor initialized for future monotonic use, exits
+    /// recovery mode, and emits the policy update.
     function setStatefulPolicyLeafBitmap() external onlyOwner {
         // Freeze the stateful tracking model once any stateful leaf has been
         // consumed in this epoch.
@@ -629,13 +621,11 @@ contract ShrincsAccountVerifierExample {
         emit StatefulPolicySet(statefulPolicy, nextStatefulLeafIndex);
     }
 
-    // enterRecoveryMode: Arm the wrapper for recovery-only stateless
-    // rotations.
-    // 1. Only the owner may enter recovery mode.
-    // 2. Require the dedicated recovery-rotation policy to already be active.
-    // 3. Flip the recovery-mode flag so stateless recovery rotations are
-    // accepted.
-    // 4. Emit the recovery-mode event for off-chain observers.
+    /// @notice Arm the wrapper for recovery-only stateless rotations. Owner
+    /// only.
+    /// @dev Requires the recovery-rotation policy to be active, then flips
+    /// the recovery-mode flag so stateless recovery rotations are accepted
+    /// and emits the recovery-mode event.
     function enterRecoveryMode() external onlyOwner {
         // Recovery mode is meaningful only under the dedicated recovery
         // policy.
@@ -676,14 +666,17 @@ contract ShrincsAccountVerifierExample {
         return true;
     }
 
-    // isValidStatefulActionSignatureNow: Read-only self-call helper for
-    // canonical stateful action verification.
-    // 1. Enforce the current stateful leaf policy without consuming the leaf.
-    // 2. Rebuild the canonical action context from wrapper-owned state.
-    // 3. Require the caller-supplied hash to match the current canonical
-    // stateful action hash.
-    // 4. Verify the SHRINCS stateful action signature under the installed key
-    // commitment.
+    /// @notice Read-only self-call helper for canonical stateful action
+    /// verification. onlySelf.
+    /// @dev Enforces the stateful leaf policy without consuming the leaf,
+    /// rebuilds the canonical action context, requires the supplied hash to
+    /// match the canonical stateful action hash, and verifies the signature.
+    /// @param hash The 32-byte hash the signature must authorize.
+    /// @param publicKey The SHRINCS public-key bundle.
+    /// @param actionType The action type bound into the canonical hash.
+    /// @param payloadHash The action payload hash.
+    /// @param signature The stateful signature.
+    /// @return True when the stateful signature is valid now.
     function isValidStatefulActionSignatureNow(
         bytes32 hash,
         ShrincsTypes.PublicKey calldata publicKey,
@@ -714,15 +707,18 @@ contract ShrincsAccountVerifierExample {
         );
     }
 
-    // isValidStatelessActionSignatureNow: Read-only self-call helper for
-    // canonical stateless action verification.
-    // 1. Enforce current recovery-mode gating and stateless usage budget
-    // without consuming either.
-    // 2. Rebuild the canonical action context from wrapper-owned state.
-    // 3. Require the caller-supplied hash to match the current canonical
-    // stateless action hash.
-    // 4. Verify the SHRINCS stateless action signature under the installed
-    // key commitment.
+    /// @notice Read-only self-call helper for canonical stateless action
+    /// verification. onlySelf.
+    /// @dev Enforces recovery-mode gating and the stateless usage budget
+    /// without consuming either, rebuilds the canonical action context,
+    /// requires the supplied hash to match the canonical stateless action
+    /// hash, and verifies the signature.
+    /// @param hash The 32-byte hash the signature must authorize.
+    /// @param publicKey The SHRINCS public-key bundle.
+    /// @param actionType The action type bound into the canonical hash.
+    /// @param payloadHash The action payload hash.
+    /// @param signature The stateless signature.
+    /// @return True when the stateless signature is valid now.
     function isValidStatelessActionSignatureNow(
         bytes32 hash,
         ShrincsTypes.PublicKey calldata publicKey,
