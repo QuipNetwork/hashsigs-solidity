@@ -28,17 +28,16 @@ library ShrincsHypertree {
     // 5. Derive the next layer's expected coordinates from the current tree index.
     // 6. Accept only if the final reconstructed root matches the installed hypertree root.
     function verifyHypertree(
-        ShrincsTypes.ParamsView memory params,
         ShrincsTypes.PublicKey calldata publicKey,
         bytes32 forsRoot,
         ShrincsTypes.HypertreeLayerSignature[] calldata layers
     ) internal pure returns (bool) {
         // Every hypertree layer must be present exactly once.
-        if (layers.length != params.numHypertreeLayers) return false;
+        if (layers.length != ShrincsTypes.NUM_HYPERTREE_LAYERS) return false;
         // The hypertree cannot be empty.
         if (layers.length == 0) return false;
         // Each subtree has height h / d in the supported balanced hypertree layout.
-        uint32 subtreeHeight = uint32(params.hypertreeHeight / params.numHypertreeLayers);
+        uint32 subtreeHeight = uint32(ShrincsTypes.HYPERTREE_HEIGHT / ShrincsTypes.NUM_HYPERTREE_LAYERS);
         // Bound the leaf index range accepted inside each subtree.
         uint32 leafCount = uint32(1) << subtreeHeight;
         // Mask off one subtree-height slice of tree-index bits at a time.
@@ -60,14 +59,13 @@ library ShrincsHypertree {
             // Reject leaf indices that fall outside the subtree width.
             if (layerSig.leafIndex >= leafCount) return false;
             // The compressed WOTS-C public-key hash is always one hash output.
-            if (layerSig.wotsCPkHash.length != params.hashLen) return false;
+            if (layerSig.wotsCPkHash.length != ShrincsTypes.HASH_LEN) return false;
             // Every subtree auth path must contain one node per subtree level.
             if (layerSig.authPath.length != subtreeHeight) return false;
             // Verify the WOTS-C layer signature against the current carried value.
             if (!verifyWotsC32(
-                    params,
                     publicKey.pkSeed,
-                    // casting to 'uint32' is safe because layer is bounded by params.numHypertreeLayers and the supported profile uses 8 layers
+                    // casting to 'uint32' is safe because layer is bounded by the fixed 8-layer hypertree
                     // forge-lint: disable-next-line(unsafe-typecast)
                     uint32(layer),
                     layerSig.treeIndex,
@@ -84,7 +82,7 @@ library ShrincsHypertree {
                 leaf := calldataload(wotsPkHash.offset)
             }
 
-            // casting to 'uint32' is safe because layer is bounded by params.numHypertreeLayers and the supported profile uses 8 layers
+            // casting to 'uint32' is safe because layer is bounded by the fixed 8-layer hypertree
             // forge-lint: disable-next-line(unsafe-typecast)
             uint32 layerIndex = uint32(layer);
             // Rebuild the subtree root above this WOTS-C leaf.
@@ -102,7 +100,7 @@ library ShrincsHypertree {
             current = nextRoot;
 
             // casting to 'uint32' is safe because leafMask keeps only subtreeHeight bits,
-            // and leafCount above bounds the supported profile's subtree to 256 leaves
+            // and leafCount above bounds each fixed subtree to 256 leaves
             // forge-lint: disable-next-line(unsafe-typecast)
             // The next layer's leaf index comes from the low subtree-height bits of the current tree index.
             expectedLeafIndex = uint32(expectedTreeIndex & leafMask);
@@ -132,7 +130,6 @@ library ShrincsHypertree {
     // 5. Enforce the fixed WOTS-C digit-sum constraint used instead of an explicit checksum suffix.
     // 6. Hash the reconstructed segments and compare them to the expected public-key hash.
     function verifyWotsC32(
-        ShrincsTypes.ParamsView memory params,
         bytes calldata pkSeedBytes,
         uint32 layer,
         uint64 tree,
@@ -141,7 +138,7 @@ library ShrincsHypertree {
         bytes32 message,
         ShrincsTypes.WotsCSignature calldata signature
     ) internal pure returns (bool) {
-        uint256 chainCount = uint256(params.numWotsChains);
+        uint256 chainCount = uint256(ShrincsTypes.NUM_WOTS_CHAINS);
         // The WOTS-C randomizer is always one hash output wide.
         if (signature.randomizer.length != 32) return false;
         // One revealed chain value is required per WOTS-C chain.
@@ -149,7 +146,7 @@ library ShrincsHypertree {
         // The compressed WOTS-C public-key hash is always one hash output.
         if (expectedPkHashBytes.length != 32) return false;
         // This implementation supports only 32-byte WOTS digest expansion.
-        if (wotsDigestBytes(params) != 32) return false;
+        if (wotsDigestBytes() != 32) return false;
 
         bytes calldata randomizerBytes = signature.randomizer;
         bytes32 pkSeed;
@@ -165,7 +162,7 @@ library ShrincsHypertree {
         }
 
         // Recompute the digest whose base-w digits determine chain stopping points.
-        bytes memory digest = wotsDigest32(pkSeed, expectedPkHash, randomizer, signature.counter, message);
+        bytes32 digest = wotsDigest32(pkSeed, expectedPkHash, randomizer, signature.counter, message);
         // "wots-c-pk" || pkSeed || segment_0 || ... || segment_{len-1}
         uint256 pkInputLen = 41 + chainCount * 32;
         uint256 pkInput;
@@ -193,13 +190,14 @@ library ShrincsHypertree {
             bytes calldata chain = signature.chains[i];
             if (chain.length != 32) return false;
             // Read the digest-selected base-w digit for this chain.
-            uint32 digit = ShrincsUtils.baseWDigit(params.chainLen, digest, i);
+            uint32 digit = baseW16Digit32(digest, i);
             // Accumulate the fixed WOTS-C target-sum check.
             digitSum += digit;
-            // casting to 'uint32' is safe because i ranges over numWotsChains, which is 64 in the supported profile
+            // casting to 'uint32' is safe because i ranges over the fixed 64 WOTS chains
             // forge-lint: disable-next-line(unsafe-typecast)
             // Complete the chain from the revealed value to its endpoint.
-            bytes32 segment = wotsChain32NoMaskBase(params.chainLen, pkSeed, addressBase, uint32(i), chain, digit);
+            bytes32 segment =
+                wotsChain32NoMaskBase(ShrincsTypes.WOTS_CHAIN_LEN, pkSeed, addressBase, uint32(i), chain, digit);
             assembly {
                 // Write this reconstructed chain endpoint after the fixed tag-and-seed prefix.
                 mstore(add(add(pkInput, 41), mul(i, 32)), segment)
@@ -209,9 +207,8 @@ library ShrincsHypertree {
             }
         }
         // WOTS-C does not carry an explicit checksum chain suffix. Instead the message expansion
-        // is accepted only when the reconstructed base-w digits add up to the fixed target sum for
-        // the selected profile.
-        if (digitSum != params.wotsTargetSum) return false;
+        // is accepted only when the reconstructed base-w digits add up to the fixed target sum.
+        if (digitSum != ShrincsTypes.WOTS_TARGET_SUM_STATEFUL) return false;
 
         bytes32 computedPkHash;
         assembly {
@@ -229,9 +226,9 @@ library ShrincsHypertree {
     function wotsDigest32(bytes32 pkSeed, bytes32 expectedPkHash, bytes32 randomizer, uint32 counter, bytes32 message)
         internal
         pure
-        returns (bytes memory out)
+        returns (bytes32 out)
+
     {
-        out = new bytes(32);
         assembly {
             // Allocate a scratch buffer starting at the free-memory pointer.
             let ptr := mload(0x40)
@@ -248,14 +245,16 @@ library ShrincsHypertree {
             // Write the 32-byte message after the counter.
             mstore(add(ptr, 110), message)
             // Hash the full WOTS-C message preimage.
-            let digestWord := keccak256(ptr, 142)
-            // Store the digest into the output bytes payload.
-            mstore(add(out, 32), digestWord)
+            out := keccak256(ptr, 142)
             // Bump the free-memory pointer to the next 32-byte aligned slot.
             mstore(0x40, add(ptr, 160))
         }
     }
-
+    // baseW16Digit32: Read one base-16 digit from a fixed 32-byte WOTS digest.
+    function baseW16Digit32(bytes32 digest, uint256 index) internal pure returns (uint32) {
+        uint256 shift = 252 - ((index & 63) << 2);
+        return uint32((uint256(digest) >> shift) & 0x0f);
+    }
     // wotsChain32NoMaskBase: Advance one stateless WOTS-C chain from the revealed value to its endpoint.
     // 1. Load the revealed chain value from calldata.
     // 2. Compute how many steps remain until the end of the chain.
@@ -274,16 +273,13 @@ library ShrincsHypertree {
             // Load the revealed 32-byte chain value directly from calldata.
             out := calldataload(value.offset)
         }
+        uint256 chainAddressBase = addressBase | (uint256(chainIdx) << 32);
         // The chain must continue from the revealed digit position up to w - 1.
         uint256 steps = uint256(w - 1) - digit;
         for (uint256 j = 0; j < steps;) {
-            // Encode which chain inside the WOTS key this step belongs to.
-            uint256 shiftedChain = uint256(chainIdx) << 32;
             // Encode the current position within that chain.
             uint256 chainStep = uint256(digit) + j;
-            uint256 addressValue = addressBase;
-            addressValue |= shiftedChain;
-            addressValue |= chainStep;
+            uint256 addressValue = chainAddressBase | chainStep;
             // Hash one step forward using the chain-specific address.
             out = hashStatelessWotsCChainNoMask32(pkSeed, bytes32(addressValue), out);
             unchecked {
@@ -318,13 +314,13 @@ library ShrincsHypertree {
         }
     }
 
-    // wotsDigestBytes: Return the number of bytes needed to encode all WOTS-C digits for this profile.
+    // wotsDigestBytes: Return the number of bytes needed to encode all WOTS-C digits.
     // 1. Choose the number of bits per base-w digit from the chain length.
     // 2. Multiply by the number of WOTS chains.
     // 3. Round up to a whole number of bytes.
-    function wotsDigestBytes(ShrincsTypes.ParamsView memory params) internal pure returns (uint256) {
-        uint256 bitsPerDigit = params.chainLen == 256 ? 8 : 4;
-        return (uint256(params.numWotsChains) * bitsPerDigit + 7) / 8;
+    function wotsDigestBytes() internal pure returns (uint256) {
+        uint256 bitsPerDigit = ShrincsTypes.WOTS_CHAIN_LEN == 256 ? 8 : 4;
+        return (uint256(ShrincsTypes.NUM_WOTS_CHAINS) * bitsPerDigit + 7) / 8;
     }
 
     // hypertreeRootFromPath32: Rebuild one XMSS-style subtree root from a leaf value and auth path.

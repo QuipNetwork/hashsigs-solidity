@@ -34,45 +34,22 @@ library ShrincsTypes {
     // Encoded stateful public key layout:
     // 32-byte pkSeed || 32-byte root || 4-byte maxSignatures.
     uint16 internal constant STATEFUL_PUBLIC_KEY_BYTES = 68;
-    // Stateful WOTS-C uses 64 chains in the current supported profile.
+    // Stateful WOTS-C uses 64 chains.
     uint16 internal constant WOTS_CHAINS_STATEFUL = 64;
     // Stateful WOTS-C uses base-16 digits for message expansion.
     uint16 internal constant WOTS_BASE_STATEFUL = 16;
     // The 64 base-16 digits reconstructed from the stateful message digest must
-    // sum to 480 in the current supported profile.
+    // sum to 480.
     uint32 internal constant WOTS_TARGET_SUM_STATEFUL = 480;
-
-    enum ParameterSetId {
-        // The only production SHRINCS/SPHINCS profile currently supported.
-        Sphincs256sKeccakQ20,
-        // Reserved sentinel used by negative tests and validation failures.
-        Unsupported
-    }
-
-    struct ParamsView {
-        // Which parameter set these concrete values correspond to.
-        ParameterSetId parameterSetId;
-        // Hash family used by this profile.
-        uint32 hashSuiteId;
-        // Intended upper bound on stateless signatures per installed key.
-        uint64 statelessSignatureLimit;
-        // Digest/output size in bytes.
-        uint16 hashLen;
-        // Total hypertree height.
-        uint8 hypertreeHeight;
-        // Number of XMSS-style layers in the hypertree.
-        uint8 numHypertreeLayers;
-        // Height of each FORS tree.
-        uint8 forsTreeHeight;
-        // Number of FORS trees opened per signature.
-        uint8 numForsTrees;
-        // Winternitz/base-w parameter.
-        uint16 chainLen;
-        // Number of WOTS-C chains in this profile.
-        uint16 numWotsChains;
-        // Fixed WOTS-C digit-sum target replacing an explicit checksum.
-        uint32 wotsTargetSum;
-    }
+    // Compile-time SHRINCS/SPHINCS constants.
+    uint64 internal constant STATELESS_SIGNATURE_LIMIT = 1_048_576;
+    uint16 internal constant HASH_LEN = 32;
+    uint8 internal constant HYPERTREE_HEIGHT = 64;
+    uint8 internal constant NUM_HYPERTREE_LAYERS = 8;
+    uint8 internal constant FORS_TREE_HEIGHT = 14;
+    uint8 internal constant NUM_FORS_TREES = 22;
+    uint16 internal constant WOTS_CHAIN_LEN = 16;
+    uint16 internal constant NUM_WOTS_CHAINS = 64;
 
     struct ForsDigest {
         // Hypertree subtree selected for this stateless signature.
@@ -84,8 +61,6 @@ library ShrincsTypes {
     }
 
     struct PublicKey {
-        // Declared SHRINCS/SPHINCS profile.
-        ParameterSetId parameterSetId;
         // Encoded stateful fast-path public key.
         bytes statefulPublicKey;
         // Commitment binding the full hybrid public-key bundle together.
@@ -103,6 +78,29 @@ library ShrincsTypes {
         bytes32 root;
         // Maximum number of stateful leaves/signatures under this key.
         uint32 maxSignatures;
+    }
+
+    struct SigningKey {
+        // Secret seed used to derive stateful WOTS-C chain secrets.
+        bytes32 statefulSkSeed;
+        // Secret PRF seed used to derive stateful WOTS-C message randomizers.
+        bytes32 statefulPrfSeed;
+        // Public seed used in stateful WOTS-C and stateful tree hashing.
+        bytes32 statefulPkSeed;
+        // Root of the stateful unbalanced tree committed in the public key.
+        bytes32 statefulRoot;
+        // Highest stateful leaf index this key may sign with.
+        uint32 maxStatefulSignatures;
+        // Next monotonic stateful leaf index to consume.
+        uint32 nextStatefulLeafIndex;
+        // Stateless SK.seed-style material used to derive FORS-C and hypertree WOTS-C secrets.
+        bytes32 statelessSkSeed;
+        // Stateless SK.prf-style material used to derive stateless message randomizers.
+        bytes32 statelessPrfSeed;
+        // Global public seed used in FORS-C, hypertree WOTS-C, and Merkle node hashing.
+        bytes32 pkSeed;
+        // Top hypertree root committed in the public key.
+        bytes32 hypertreeRoot;
     }
 
     struct StatefulSignature {
@@ -162,8 +160,6 @@ library ShrincsTypes {
     }
 
     struct StatefulRotationTarget {
-        // Parameter set for the next installed stateful key.
-        ParameterSetId parameterSetId;
         // Replacement encoded stateful public key.
         bytes statefulPublicKey;
         // Commitment that should identify the next installed bundle.
@@ -193,8 +189,6 @@ library ShrincsTypes {
     }
 
     struct RotationTarget {
-        // Parameter set for the next full SHRINCS bundle.
-        ParameterSetId parameterSetId;
         // Replacement encoded stateful public key.
         bytes statefulPublicKey;
         // Commitment that should identify the next installed bundle.
@@ -203,63 +197,5 @@ library ShrincsTypes {
         bytes pkSeed;
         // Replacement stateless public root.
         bytes hypertreeRoot;
-    }
-
-    // defaultParamsView: Resolve the fixed parameter table for a supported profile or test sentinel.
-    // 1. Return the full production parameter table for the supported SHRINCS/SPHINCS profile.
-    // 2. Return an all-zero sentinel table for the explicit Unsupported test profile.
-    // 3. Revert for any unknown identifier that is not part of the declared enum surface.
-    function defaultParamsView(ParameterSetId parameterSetId) internal pure returns (ParamsView memory) {
-        // Return the concrete production profile used throughout the current implementation.
-        if (parameterSetId == ParameterSetId.Sphincs256sKeccakQ20) {
-            return ParamsView({
-                // Bind the concrete table back to the supported profile identifier.
-                parameterSetId: ParameterSetId.Sphincs256sKeccakQ20,
-                // Use the Keccak-256 hash suite throughout this profile.
-                hashSuiteId: HASH_SUITE_KECCAK_256,
-                // Budget stateless signatures up to the configured wrapper/account limit.
-                statelessSignatureLimit: 1_048_576,
-                // All hash outputs are 32 bytes wide.
-                hashLen: 32,
-                // Use a total hypertree height of 64.
-                hypertreeHeight: 64,
-                // Split the hypertree into 8 XMSS-style layers.
-                numHypertreeLayers: 8,
-                // Use FORS trees of height 14.
-                forsTreeHeight: 14,
-                // Use 22 FORS trees in the stateless message-signing layer.
-                numForsTrees: 22,
-                // Use base-16 WOTS chains.
-                chainLen: 16,
-                // Use 64 WOTS chains per signature.
-                numWotsChains: 64,
-                // Enforce the fixed compressed-WOTS target sum for this profile.
-                wotsTargetSum: WOTS_TARGET_SUM_STATEFUL
-            });
-        }
-
-        // Return the all-zero sentinel profile used by negative tests and validation failures.
-        if (parameterSetId == ParameterSetId.Unsupported) {
-            return ParamsView({
-                // Bind the concrete table back to the explicit unsupported sentinel identifier.
-                parameterSetId: ParameterSetId.Unsupported,
-                // No hash suite is associated with the unsupported sentinel.
-                hashSuiteId: 0,
-                // No stateless signing budget is available for the unsupported sentinel.
-                statelessSignatureLimit: 0,
-                // All structural dimensions are zeroed out in the unsupported sentinel.
-                hashLen: 0,
-                hypertreeHeight: 0,
-                numHypertreeLayers: 0,
-                forsTreeHeight: 0,
-                numForsTrees: 0,
-                chainLen: 0,
-                numWotsChains: 0,
-                wotsTargetSum: 0
-            });
-        }
-
-        // Reject any identifier that is outside the known supported/sentinel set.
-        revert("unknown parameterSetId");
     }
 }

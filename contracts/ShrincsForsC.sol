@@ -28,7 +28,6 @@ library ShrincsForsC {
     // 5. Hash those per-tree roots together into the reconstructed FORS root.
     // 6. Return the FORS root for hypertree verification together with a success flag.
     function verifyForsCAndReturnRoot(
-        ShrincsTypes.ParamsView memory params,
         ShrincsTypes.PublicKey calldata publicKey,
         bytes memory message,
         ShrincsTypes.ForsSignature calldata signature,
@@ -38,18 +37,17 @@ library ShrincsForsC {
         // FORS-C omits the final FORS tree by forcing its digest-selected leaf index to zero.
         // Verification therefore expects only k - 1 revealed entries and rejects any digest
         // whose omitted final tree would require a nonzero leaf.
-        uint256 signedTrees = uint256(params.numForsTrees) - 1;
+        uint256 signedTrees = uint256(ShrincsTypes.NUM_FORS_TREES) - 1;
         // The randomizer is always one hash output wide.
         if (signature.randomizer.length != 32) return (bytes32(0), false);
         // FORS-C reveals only the signedTrees entries, never the omitted final tree.
         if (signature.entries.length != signedTrees) return (bytes32(0), false);
 
         // Recompute the FORS digest and the hypertree coordinates that the signer committed to.
-        ShrincsTypes.ForsDigest memory digest =
-            forsDigest(params, publicKey, message, signature.randomizer, signature.counter);
-        uint256 a = uint256(params.forsTreeHeight);
+        ShrincsTypes.ForsDigest memory digest = forsDigest(publicKey, message, signature.randomizer, signature.counter);
+        uint256 a = uint256(ShrincsTypes.FORS_TREE_HEIGHT);
         // The omitted final FORS tree must always select leaf 0 in the compressed FORS-C layout.
-        if (ShrincsUtils.readBits32(digest.digest, signedTrees * a, params.forsTreeHeight) != 0) {
+        if (ShrincsUtils.readBits32(digest.digest, signedTrees * a, ShrincsTypes.FORS_TREE_HEIGHT) != 0) {
             return (bytes32(0), false);
         }
         // The stateless signature must verify for the caller-supplied hypertree coordinates.
@@ -79,11 +77,11 @@ library ShrincsForsC {
             // Every revealed auth path must have exactly one node per FORS tree level.
             if (entry.authPath.length != a) return (bytes32(0), false);
             // Read the digest-selected leaf for this FORS tree.
-            uint32 entryLeafIndex = ShrincsUtils.readBits32(digest.digest, tree * a, params.forsTreeHeight);
+            uint32 entryLeafIndex = ShrincsUtils.readBits32(digest.digest, tree * a, ShrincsTypes.FORS_TREE_HEIGHT);
             // casting to 'uint32' is safe because the supported FORS tree height is 14 bits
             // forge-lint: disable-next-line(unsafe-typecast)
             uint32 treeHeight = uint32(a);
-            // casting to 'uint32' is safe because tree ranges over signedTrees, which is 21 in the supported profile
+            // casting to 'uint32' is safe because tree ranges over the fixed 21 signed FORS trees
             // forge-lint: disable-next-line(unsafe-typecast)
             uint32 forsTreeIndex = uint32(tree);
             // Rebuild this FORS tree root from the revealed leaf and authentication path.
@@ -196,7 +194,7 @@ library ShrincsForsC {
         returns (bytes32 out)
     {
         assembly {
-            // Allocate a scratch buffer starting at the free-memory pointer.
+            // Use the current free-memory pointer as scratch without advancing it.
             let ptr := mload(0x40)
             // Write the domain tag prefix for FORS leaf hashing.
             mstore(ptr, "fors-leaf")
@@ -208,8 +206,6 @@ library ShrincsForsC {
             calldatacopy(add(ptr, 73), sk.offset, 32)
             // Hash the complete FORS leaf preimage.
             out := keccak256(ptr, 105)
-            // Bump the free-memory pointer to the next 32-byte aligned slot.
-            mstore(0x40, add(ptr, 128))
         }
     }
 
@@ -224,7 +220,7 @@ library ShrincsForsC {
         returns (bytes32 out)
     {
         assembly {
-            // Allocate a scratch buffer starting at the free-memory pointer.
+            // Use the current free-memory pointer as scratch without advancing it.
             let ptr := mload(0x40)
             // Write the domain tag prefix for FORS internal-node hashing.
             mstore(ptr, "fors-node")
@@ -238,8 +234,6 @@ library ShrincsForsC {
             mstore(add(ptr, 105), right)
             // Hash the complete FORS internal-node preimage.
             out := keccak256(ptr, 137)
-            // Bump the free-memory pointer to the next 32-byte aligned slot.
-            mstore(0x40, add(ptr, 160))
         }
     }
 
@@ -250,20 +244,19 @@ library ShrincsForsC {
     // 4. Read the hypertree leaf index from the remaining digest bits.
     // 5. Return both coordinates together with the digest bytes used for FORS leaf selection.
     function forsDigest(
-        ShrincsTypes.ParamsView memory params,
         ShrincsTypes.PublicKey calldata publicKey,
         bytes memory message,
         bytes calldata randomizer,
         uint32 counter
     ) internal pure returns (ShrincsTypes.ForsDigest memory out) {
         // Reserve bits for all signed FORS tree leaf choices.
-        uint32 indexBits = uint32(params.numForsTrees) * uint32(params.forsTreeHeight);
+        uint32 indexBits = uint32(ShrincsTypes.NUM_FORS_TREES) * uint32(ShrincsTypes.FORS_TREE_HEIGHT);
         // Each hypertree layer shares this many leaf-index bits.
-        uint32 subtreeHeight = uint32(params.hypertreeHeight / params.numHypertreeLayers);
+        uint32 subtreeHeight = uint32(ShrincsTypes.HYPERTREE_HEIGHT / ShrincsTypes.NUM_HYPERTREE_LAYERS);
         // The remaining hypertree bits identify the subtree itself.
-        uint32 treeBits = uint32(params.hypertreeHeight) - subtreeHeight;
+        uint32 treeBits = uint32(ShrincsTypes.HYPERTREE_HEIGHT) - subtreeHeight;
         // Expand enough bytes to cover FORS choices plus hypertree coordinates.
-        uint256 digestBytes = (uint256(indexBits) + uint256(params.hypertreeHeight) + 7) / 8;
+        uint256 digestBytes = (uint256(indexBits) + uint256(ShrincsTypes.HYPERTREE_HEIGHT) + 7) / 8;
         // Derive the digest stream from the public seed/root, signature randomizer, counter, and message.
         bytes memory digest =
             forsDigestBytes(publicKey.pkSeed, publicKey.hypertreeRoot, randomizer, counter, message, digestBytes);
