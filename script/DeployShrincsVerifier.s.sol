@@ -50,6 +50,16 @@ contract DeployShrincsVerifier is Script {
     bytes32 internal constant SALT = keccak256("QUIP:ShrincsVerifier:V1.0");
 
     function run() external {
+        // HARD REQUIREMENT: the canonical deploy MUST run under the
+        // production profile, or the init code (and thus the CREATE2
+        // address) diverges across chains. Fail closed rather than burn
+        // the canonical salt slot with non-canonical bytecode.
+        string memory profile = vm.envOr("FOUNDRY_PROFILE", string(""));
+        require(
+            keccak256(bytes(profile)) == keccak256(bytes("production")),
+            "deploy requires FOUNDRY_PROFILE=production"
+        );
+
         // no ctor args
         bytes memory initCode = type(ShrincsVerifier).creationCode;
         address expected =
