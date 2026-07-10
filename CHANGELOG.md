@@ -28,6 +28,11 @@
   WOTS+ deploy; both historical mechanisms are recorded in
   `DEPLOYMENTS.md`.
 
+### Removed
+- Hardhat: `hardhat.config.ts`, `ignition/`, `tsconfig.json`,
+  `package-lock.json`, and the hardhat devDependencies. The project is
+  Foundry-only; deploys go through the CREATE3 scripts.
+
 ## 0.1.0 - 2026-07-10
 
 ### Added

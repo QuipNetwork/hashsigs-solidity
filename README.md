@@ -708,35 +708,25 @@ This project uses Foundry for Solidity build and test work.
 
 ### Prerequisites
 
-1. Install Foundry:
+Install Foundry:
 
 ```bash
 curl -L https://foundry.paradigm.xyz | bash
 foundryup
 ```
 
-2. Install Node.js dependencies if you also need the Hardhat side:
-
-```bash
-npm install
-```
-
 ## Build
 
-The current verifier path is compiled with IR enabled:
+The verifier path is compiled with IR enabled (set in `foundry.toml`):
 
 ```bash
-forge build --contracts contracts --skip test --via-ir
+forge build
 ```
 
-Hardhat compilation also requires IR:
-
-```bash
-./node_modules/.bin/hardhat compile
-```
-
-- `hardhat.config.ts` enables optimizer + `viaIR: true`
-- this is required for the current SHRINCS verifier layout to avoid stack-too-deep compilation failures
+`via_ir = true` is required for the SHRINCS verifier layout to avoid
+stack-too-deep compilation failures. To build a non-default profile,
+set `FOUNDRY_PROFILE` (for example `FOUNDRY_PROFILE=128s-q18 forge
+build`); see the profile section in `foundry.toml`.
 
 ## Test
 
