@@ -76,9 +76,12 @@ library ShrincsHypertree {
             if (layerSig.leafIndex != expectedLeafIndex) return false;
             // Reject leaf indices that fall outside the subtree width.
             if (layerSig.leafIndex >= leafCount) return false;
-            // The compressed WOTS-C public-key hash is always one hash
-            // output.
-            if (layerSig.wotsCPkHash.length != ShrincsTypes.HASH_LEN) {
+            // The compressed WOTS-C public-key hash always occupies one
+            // 32-byte slot. Pinned to the slot width (literal 32), not
+            // HASH_LEN: a truncated profile still transports the hash in
+            // a full 32-byte field, high-aligned and zero-padded
+            // (design §3.2).
+            if (layerSig.wotsCPkHash.length != 32) {
                 return false;
             }
             // Every subtree auth path must contain one node per subtree
@@ -188,8 +191,13 @@ library ShrincsHypertree {
         if (signature.chains.length != chainCount) return false;
         // The compressed WOTS-C public-key hash is always one hash output.
         if (expectedPkHashBytes.length != 32) return false;
-        // This implementation supports only 32-byte WOTS digest expansion.
-        if (wotsDigestBytes() != 32) return false;
+        // The base-w digits are read from the first len/2 bytes of the
+        // 32-byte digest word (baseW16Digit32). A profile whose digest
+        // needs more than one 32-byte word is unsupported here; the
+        // exact per-profile expectation is asserted by the profile-
+        // invariants test (design §3.3/§3.5). For every supported
+        // profile wotsDigestBytes() <= 32, so this folds to false.
+        if (wotsDigestBytes() > 32) return false;
 
         bytes calldata randomizerBytes = signature.randomizer;
         bytes32 pkSeed;
@@ -284,13 +292,14 @@ library ShrincsHypertree {
 
         bytes32 computedPkHash;
         // Memory-safe: hashes the pkInput buffer built above; no memory is
-        // written.
+        // written. Output truncated to HASH_LEN bytes, high-aligned
+        // (maskHash); for 256s this folds to a no-op.
         assembly ("memory-safe") {
             // Hash the reconstructed chain endpoints into the compressed
             // WOTS-C public-key hash.
             computedPkHash := keccak256(pkInput, pkInputLen)
         }
-        return computedPkHash == expectedPkHash;
+        return ShrincsUtils.maskHash(computedPkHash) == expectedPkHash;
     }
 
     // wotsDigest32: Derive the WOTS-C message digest that determines chain
@@ -419,6 +428,8 @@ library ShrincsHypertree {
         //   [12..44)  pkSeed
         //   [44..76)  addressWord
         //   [76..108) chain segment
+        // Output truncated to HASH_LEN bytes, high-aligned (maskHash
+        // below); for 256s this folds to a no-op.
         // Memory-safe: uses scratch at the free-memory pointer without
         // advancing it and without relying on prior contents.
         assembly ("memory-safe") {
@@ -435,6 +446,7 @@ library ShrincsHypertree {
             // Hash the complete WOTS-C chain-step preimage.
             out := keccak256(ptr, 108)
         }
+        out = ShrincsUtils.maskHash(out);
     }
 
     // wotsDigestBytes: Return the number of bytes needed to encode all WOTS-C
@@ -543,6 +555,8 @@ library ShrincsHypertree {
         //   [46..78)   addressWord
         //   [78..110)  left child
         //   [110..142) right child
+        // Output truncated to HASH_LEN bytes, high-aligned (maskHash
+        // below); for 256s this folds to a no-op.
         // Memory-safe: uses scratch at the free-memory pointer without
         // advancing it and without relying on prior contents.
         assembly ("memory-safe") {
@@ -562,5 +576,6 @@ library ShrincsHypertree {
             // Hash the complete hypertree internal-node preimage.
             out := keccak256(ptr, 142)
         }
+        out = ShrincsUtils.maskHash(out);
     }
 }

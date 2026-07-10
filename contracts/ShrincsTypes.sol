@@ -61,6 +61,7 @@ library ShrincsTypes {
     uint64 internal constant STATELESS_SIGNATURE_LIMIT =
         ShrincsParams.STATELESS_SIGNATURE_LIMIT;
     uint16 internal constant HASH_LEN = ShrincsParams.HASH_LEN;
+    bytes32 internal constant HASH_MASK = ShrincsParams.HASH_MASK;
     uint8 internal constant HYPERTREE_HEIGHT =
         ShrincsParams.HYPERTREE_HEIGHT;
     uint8 internal constant NUM_HYPERTREE_LAYERS =

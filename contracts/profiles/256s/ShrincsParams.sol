@@ -57,6 +57,16 @@ library ShrincsParams {
     // HASH_LEN: the SPHINCS/WOTS `n` security parameter [FIPS205 §11] —
     // hash output length in bytes.
     uint16 internal constant HASH_LEN = 32;
+    // HASH_MASK: high-aligned truncation mask applied at every hash-
+    // producing site (design §2(b)/§3.3). Keeps the top HASH_LEN bytes
+    // of a 32-byte hash slot and zeroes the low (32 - HASH_LEN), so a
+    // truncated profile emits high-aligned, zero-padded node values in
+    // a bytes32. For 256s (HASH_LEN = 32) this is all-ones and folds to
+    // a no-op under via-ir (measured, design §2(b)).
+    // = ((1 << (8*HASH_LEN)) - 1) << (8*(32 - HASH_LEN))
+    // -> (2^256 - 1) << 0 = 2^256 - 1
+    // Python: (((1 << (8*32)) - 1) << (8*(32-32))) & (2**256 - 1)
+    bytes32 internal constant HASH_MASK = bytes32(type(uint256).max);
     // HYPERTREE_HEIGHT: the FIPS205 `h` parameter [FIPS205 §7] — total
     // hypertree height (sum of all subtree heights).
     uint8 internal constant HYPERTREE_HEIGHT = 64;

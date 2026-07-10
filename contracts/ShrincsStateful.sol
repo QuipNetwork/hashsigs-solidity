@@ -152,11 +152,14 @@ library ShrincsStateful {
             return (bytes32(0), false);
         }
         // Hash the reconstructed endpoints into the compact stateful WOTS
-        // public-key hash.
+        // public-key hash. Output truncated to HASH_LEN bytes, high-
+        // aligned (maskHash); for 256s this folds to a no-op.
         return (
-            keccak256(
-                abi.encodePacked(
-                    "uxmss-wots-pk", pkSeed, leafIndex, segments
+            ShrincsUtils.maskHash(
+                keccak256(
+                    abi.encodePacked(
+                        "uxmss-wots-pk", pkSeed, leafIndex, segments
+                    )
                 )
             ),
             true
@@ -224,6 +227,8 @@ library ShrincsStateful {
         //   [42..46)  leftLeafIndex (big-endian uint32)
         //   [46..78)  left child
         //   [78..110) right child
+        // Output truncated to HASH_LEN bytes, high-aligned (maskHash
+        // below); for 256s this folds to a no-op.
         // Memory-safe: uses scratch at the free-memory pointer without
         // advancing it and without relying on prior contents.
         assembly ("memory-safe") {
@@ -243,6 +248,7 @@ library ShrincsStateful {
             // Hash the complete parent-node preimage.
             out := keccak256(ptr, 110)
         }
+        out = ShrincsUtils.maskHash(out);
     }
 
     // statefulChainNoMask: Advance one stateful WOTS-C chain for a chosen
@@ -308,6 +314,8 @@ library ShrincsStateful {
         //   [12..44)  pkSeed
         //   [44..76)  addressWord
         //   [76..108) chain segment
+        // Output truncated to HASH_LEN bytes, high-aligned (maskHash
+        // below); for 256s this folds to a no-op.
         // Memory-safe: uses scratch at the free-memory pointer without
         // advancing it and without relying on prior contents.
         assembly ("memory-safe") {
@@ -324,6 +332,7 @@ library ShrincsStateful {
             // Hash the complete WOTS-C chain-step preimage.
             out := keccak256(ptr, 108)
         }
+        out = ShrincsUtils.maskHash(out);
     }
 
     // baseW16Digit: Read one base-16 digit from a 32-byte digest.

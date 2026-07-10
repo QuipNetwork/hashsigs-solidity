@@ -154,13 +154,14 @@ library ShrincsForsC {
         }
 
         // Memory-safe: hashes the forsPkInput buffer built above; no memory
-        // is written.
+        // is written. Output is truncated to HASH_LEN bytes, high-aligned
+        // (maskHash); for 256s this folds to a no-op.
         assembly ("memory-safe") {
             // Hash the per-tree roots into the reconstructed FORS public
             // value.
             forsRoot := keccak256(forsPkInput, forsPkInputLen)
         }
-        return (forsRoot, true);
+        return (ShrincsUtils.maskHash(forsRoot), true);
     }
 
     // forsEntryRoot32: Rebuild one FORS tree root from a revealed secret leaf
@@ -281,6 +282,8 @@ library ShrincsForsC {
         //   [9..41)   pkSeed
         //   [41..73)  addressWord
         //   [73..105) secret leaf
+        // Output truncated to HASH_LEN bytes, high-aligned (maskHash
+        // below); for 256s this folds to a no-op.
         // Memory-safe: uses scratch at the free-memory pointer without
         // advancing it and without relying on prior contents.
         assembly ("memory-safe") {
@@ -298,6 +301,7 @@ library ShrincsForsC {
             // Hash the complete FORS leaf preimage.
             out := keccak256(ptr, 105)
         }
+        out = ShrincsUtils.maskHash(out);
     }
 
     // hashForsNode32: Hash one internal FORS node from its left and right
@@ -318,6 +322,8 @@ library ShrincsForsC {
         //   [41..73)   addressWord
         //   [73..105)  left child
         //   [105..137) right child
+        // Output truncated to HASH_LEN bytes, high-aligned (maskHash
+        // below); for 256s this folds to a no-op.
         // Memory-safe: uses scratch at the free-memory pointer without
         // advancing it and without relying on prior contents.
         assembly ("memory-safe") {
@@ -337,6 +343,7 @@ library ShrincsForsC {
             // Hash the complete FORS internal-node preimage.
             out := keccak256(ptr, 137)
         }
+        out = ShrincsUtils.maskHash(out);
     }
 
     // forsDigest: Derive the FORS digest bits and selected hypertree
