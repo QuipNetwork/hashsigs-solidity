@@ -110,10 +110,11 @@ slither:
 # fails subsequent per-MR pipelines until fixed (the promotion path). EVM
 # execution is arch-deterministic, so results are comparable across runners;
 # arch tags below pin only tool-availability (medusa binary and hevm ship
-# x86_64-only). NOTE for the maintainer: replace `x86_64` in the `tags:`
-# blocks with the actual tag advertised by the group's x86_64 Docker runners
-# (tesla-x86_64 / cray / finney / hopper / lovelace); tesla-arm is ARM and
-# must not run the medusa/hevm jobs.
+# x86_64-only). Tag choice verified against the group's runner fleet
+# (2026-07-10): `docker` + `linux` + `x86_64` selects exactly lovelace and
+# finney (Linux/amd64 Docker executors). A bare `x86_64` tag would also
+# match hopper (Windows) and tesla-x86_64 (macOS on arm64 hardware),
+# neither of which can run these Docker-image jobs.
 # ---------------------------------------------------------------------------
 
 # Deep forge fuzz + invariant campaign under [profile.nightly] (random seed,
@@ -154,6 +155,8 @@ medusa:
   stage: nightly
   image: ghcr.io/trailofbits/eth-security-toolbox:nightly
   tags:
+    - docker
+    - linux
     - x86_64
   rules:
     - if: $CI_PIPELINE_SOURCE == "schedule"
@@ -176,12 +179,15 @@ medusa:
 # Advisory hevm 0.58.0 symbolic checks over the base-w/readBits bounds slice
 # (ShrincsSymbolic prove_ functions). hevm ships an x86_64-only static binary
 # and needs an SMT solver (z3), so this job installs both on an x86_64 runner
-# and is allow_failure (upstream is advisory here). NOTE: verify the hevm
-# release asset URL at run time; the argotorg/hevm asset path can change.
+# and is allow_failure (upstream is advisory here). The release asset URL
+# below was verified against the argotorg/hevm release/0.58.0 assets on
+# 2026-07-10 (hevm-x86_64-linux is published there).
 hevm:
   stage: nightly
   image: ubuntu:24.04
   tags:
+    - docker
+    - linux
     - x86_64
   rules:
     - if: $CI_PIPELINE_SOURCE == "schedule"
