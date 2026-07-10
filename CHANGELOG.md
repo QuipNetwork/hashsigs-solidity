@@ -14,6 +14,11 @@
 
 ### Changed
 - `via_ir`, optimizer settings, and test-vector `fs_permissions` are now set in `foundry.toml`.
+- `contracts/WOTSPlus.sol` reformatted to the repo coding standards; its
+  `internal` helper functions were renamed for clarity (§7 internal-rename).
+  The public API (`verify`, `verifyWithRandomizationElements`, `sign`,
+  `generateKeyPair`, `generateRandomizationElements`, `chain`, and the public
+  constants) is unchanged.
 
 ### Removed
-- Legacy WOTS+ and intermediate verifier fragments, replaced by the unified SHRINCS library.
+- `ignition/modules/Lock.ts` sample Hardhat Ignition module.
