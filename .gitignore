@@ -1,4 +1,6 @@
 out/
+# Per-profile build output dirs (foundry.toml 128s profiles).
+out-*/
 
 .DS_Store
 

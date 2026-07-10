@@ -31,6 +31,65 @@ optimizer = true
 optimizer_runs = 1000000
 gas_limit = "18446744073709551615" # u64::MAX
 
+# 128s profiles (design §3.4). Each overrides the `shrincs-profile/`
+# remapping and uses its own `out` dir so artifacts never collide.
+# `skip` excludes the 256s-specific tests: those either read the
+# Rust-anchored 256s vectors or run the in-Solidity stateless signer
+# (full 2^a FORS trees + fixed 8-layer hypertree), which is infeasible
+# at 128s (a = 24, d = 1). 128s stateless coverage lands with the
+# regenerated vectors in T6 (design §3.6). Stateful, toy-profile,
+# WOTS+, and profile-invariant tests run under every profile.
+[profile.128s-q18]
+out = "out-128s-q18"
+remappings = ["shrincs-profile/=contracts/profiles/128s-q18/"]
+skip = [
+    "test/ShrincsSphincs256sVectors.t.sol",
+    "test/ShrincsStatelessVectorSigner.t.sol",
+    "test/ShrincsAccountEnvelopeCanonicity.t.sol",
+    "test/ShrincsAccountSigningFacade.t.sol",
+    "test/ShrincsAccountVectorExport.t.sol",
+    "test/ShrincsMeasurements.t.sol",
+    "test/ShrincsAccountVerifierExample.t.sol",
+    "test/ShrincsCodec.t.sol",
+    "test/ShrincsStatefulPolicyExamples.t.sol",
+]
+
+[profile.128s-q20]
+out = "out-128s-q20"
+remappings = ["shrincs-profile/=contracts/profiles/128s-q20/"]
+skip = [
+    "test/ShrincsSphincs256sVectors.t.sol",
+    "test/ShrincsStatelessVectorSigner.t.sol",
+    "test/ShrincsAccountEnvelopeCanonicity.t.sol",
+    "test/ShrincsAccountSigningFacade.t.sol",
+    "test/ShrincsAccountVectorExport.t.sol",
+    "test/ShrincsMeasurements.t.sol",
+    "test/ShrincsAccountVerifierExample.t.sol",
+    "test/ShrincsCodec.t.sol",
+    "test/ShrincsStatefulPolicyExamples.t.sol",
+]
+
+# Production twins of the 128s profiles: same solc/via-ir/runs pin as
+# [profile.production], differing only in remapping and `out` (design
+# §3.4). Used to build each profile's canonical verifier artifact.
+[profile.production-128s-q18]
+solc = "0.8.35"
+via_ir = true
+optimizer = true
+optimizer_runs = 1000000
+gas_limit = "18446744073709551615" # u64::MAX
+out = "out-128s-q18-prod"
+remappings = ["shrincs-profile/=contracts/profiles/128s-q18/"]
+
+[profile.production-128s-q20]
+solc = "0.8.35"
+via_ir = true
+optimizer = true
+optimizer_runs = 1000000
+gas_limit = "18446744073709551615" # u64::MAX
+out = "out-128s-q20-prod"
+remappings = ["shrincs-profile/=contracts/profiles/128s-q20/"]
+
 [fmt]
 # 78-char cap (CODINGSTANDARDS.md §3). Set to 77 because forge fmt
 # 1.7.1 excludes the trailing token (';', '{') from its width

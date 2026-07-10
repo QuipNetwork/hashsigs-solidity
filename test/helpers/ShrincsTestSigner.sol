@@ -245,8 +245,15 @@ library ShrincsTestSigner {
                 ++chainIndex;
             }
         }
-        return keccak256(
-            abi.encodePacked("uxmss-wots-pk", pkSeed, leafIndex, endpoints)
+        // Mirror the verifier's high-aligned truncation (maskHash): the
+        // reconstructed stateful WOTS-C leaf is masked, so the signer's
+        // leaf must be too. No-op at 256s (all-ones mask).
+        return ShrincsUtils.maskHash(
+            keccak256(
+                abi.encodePacked(
+                    "uxmss-wots-pk", pkSeed, leafIndex, endpoints
+                )
+            )
         );
     }
 
@@ -349,8 +356,14 @@ library ShrincsTestSigner {
                 chainIndex,
                 start + stepOffset
             );
-            out = keccak256(
-                abi.encodePacked("wots-c-chain", pkSeed, addressWord, out)
+            // Truncate each chain step, mirroring the verifier's
+            // hashStatefulWotsCChainNoMask32 maskHash. No-op at 256s.
+            out = ShrincsUtils.maskHash(
+                keccak256(
+                    abi.encodePacked(
+                        "wots-c-chain", pkSeed, addressWord, out
+                    )
+                )
             );
             unchecked {
                 ++stepOffset;
@@ -364,9 +377,13 @@ library ShrincsTestSigner {
         bytes32 left,
         bytes32 right
     ) internal pure returns (bytes32) {
-        return keccak256(
-            abi.encodePacked(
-                "uxmss-node", pkSeed, leftLeafIndex, left, right
+        // Truncate the parent node, mirroring the verifier's
+        // statefulParentHash maskHash. No-op at 256s.
+        return ShrincsUtils.maskHash(
+            keccak256(
+                abi.encodePacked(
+                    "uxmss-node", pkSeed, leftLeafIndex, left, right
+                )
             )
         );
     }
@@ -460,9 +477,13 @@ library ShrincsTestSigner {
         );
         bytes32 addressWord =
             hypertreeAddressWord(layer, tree, height, index);
-        return keccak256(
-            abi.encodePacked(
-                "hypertree-node", pkSeed, addressWord, left, right
+        // Truncate the hypertree node, mirroring the verifier's
+        // hashHypertreeNode32 maskHash. No-op at 256s.
+        return ShrincsUtils.maskHash(
+            keccak256(
+                abi.encodePacked(
+                    "hypertree-node", pkSeed, addressWord, left, right
+                )
             )
         );
     }
@@ -509,7 +530,11 @@ library ShrincsTestSigner {
                 ++chain;
             }
         }
-        return keccak256(abi.encodePacked("wots-c-pk", pkSeed, endpoints));
+        // Truncate the WOTS-C public-key hash, mirroring the verifier's
+        // verifyWotsC32 maskHash. No-op at 256s.
+        return ShrincsUtils.maskHash(
+            keccak256(abi.encodePacked("wots-c-pk", pkSeed, endpoints))
+        );
     }
 
     function statelessWotsCSecret(bytes32 skSeed, uint32 chain)
@@ -540,8 +565,15 @@ library ShrincsTestSigner {
                 chain,
                 step
             );
-            out = keccak256(
-                abi.encodePacked("wots-c-chain", pkSeed, addressWord, out)
+            // Truncate each stateless chain step, mirroring the
+            // verifier's hashStatelessWotsCChainNoMask32 maskHash.
+            // No-op at 256s.
+            out = ShrincsUtils.maskHash(
+                keccak256(
+                    abi.encodePacked(
+                        "wots-c-chain", pkSeed, addressWord, out
+                    )
+                )
             );
             unchecked {
                 ++step;
