@@ -189,4 +189,59 @@ contract ShrincsStatelessVectorSignerTest is Test {
             "high-level stateless signer output must verify"
         );
     }
+
+    // Regression coverage for the forsDigestBytes message-copy loop, which
+    // copies the message in whole 32-byte words: lengths that are not a
+    // multiple of 32 exercise the final partial-word chunk, and lengths
+    // above 32 exercise multi-word copies. Guards the copy-loop class
+    // (ce0fafc) and the free-memory-pointer overhang fix (F-01).
+    function _assertRawStatelessRoundTrip(uint256 messageLen) internal {
+        bytes memory message = new bytes(messageLen);
+        for (uint256 i = 0; i < messageLen;) {
+            message[i] = bytes1(uint8((i % 251) + 1));
+            unchecked {
+                ++i;
+            }
+        }
+        (
+            ShrincsTypes.PublicKey memory publicKey,
+            ShrincsTypes.StatelessSignature memory signature,
+            bool ok
+        ) = signer.signFromSeed(
+            bytes("forsDigestBytes overhang regression seed"), 4, message
+        );
+        assertTrue(ok, "signing must succeed");
+
+        bytes memory commitmentBytes = publicKey.publicKeyCommitment;
+        bytes32 expectedPublicKeyCommitment;
+        assembly {
+            expectedPublicKeyCommitment := mload(add(commitmentBytes, 32))
+        }
+        assertTrue(
+            signer.verifyUnsafeRaw(
+                expectedPublicKeyCommitment, publicKey, message, signature
+            ),
+            "raw stateless signer output must verify"
+        );
+    }
+
+    function testStatelessRawMessageLength1() public {
+        _assertRawStatelessRoundTrip(1);
+    }
+
+    function testStatelessRawMessageLength13() public {
+        _assertRawStatelessRoundTrip(13);
+    }
+
+    function testStatelessRawMessageLength33() public {
+        _assertRawStatelessRoundTrip(33);
+    }
+
+    function testStatelessRawMessageLength64() public {
+        _assertRawStatelessRoundTrip(64);
+    }
+
+    function testStatelessRawMessageLength65() public {
+        _assertRawStatelessRoundTrip(65);
+    }
 }

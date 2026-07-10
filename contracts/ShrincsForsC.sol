@@ -386,12 +386,20 @@ library ShrincsForsC {
         // "fors-digest" || pkSeed || hypertreeRoot || randomizer || counter
         // || message
         uint256 baseLen = 111 + messageLen;
+        // Reserve scratch covering roundup32(baseLen) plus one extra
+        // word, so the whole-word message copy below (which rounds the
+        // message length up to a 32-byte boundary) and the multi-block
+        // counter suffix (a full-word mstore at offset baseLen) never
+        // write above the free-memory pointer.
+        uint256 scratchLen = ((baseLen + 31) & ~uint256(31)) + 32;
         uint256 ptr;
         assembly {
             // Set the visible bytes length of the output buffer.
             mstore(out, digestBytes)
-            // Allocate a scratch buffer starting at the free-memory pointer.
+            // Reserve the scratch buffer at the free-memory pointer and
+            // advance the pointer past it up front.
             ptr := mload(0x40)
+            mstore(0x40, add(ptr, scratchLen))
             // Write the digest domain tag prefix.
             mstore(ptr, "fors-digest")
             // Copy the 32-byte public seed after the 11-byte tag.
@@ -425,8 +433,6 @@ library ShrincsForsC {
                 // Store that single digest block into the output bytes
                 // payload.
                 mstore(add(out, 32), digestWord)
-                // Bump the free-memory pointer past the scratch buffer.
-                mstore(0x40, add(ptr, and(add(baseLen, 31), not(31))))
             }
             return out;
         }
@@ -454,11 +460,6 @@ library ShrincsForsC {
             unchecked {
                 ++blockCounter;
             }
-        }
-        assembly {
-            // Bump the free-memory pointer past the scratch buffer with
-            // counter suffix space.
-            mstore(0x40, add(ptr, and(add(totalLen, 31), not(31))))
         }
     }
 }
