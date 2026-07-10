@@ -227,11 +227,31 @@ Rules:
   78 characters, comments included. Honors the
   `// line-length: allow` directive (§3) on the preceding line.
 - **Tests** — `forge test`: behavior.
+- **Static analysis** — `slither . --config-file slither.config.json
+  --fail-medium`: the pinned Slither 0.11.5 analyzer. Fix a finding,
+  suppress it inline (`// slither-disable-next-line <detector>` with a
+  justification comment on the line above, mirroring the §5 form), or
+  exclude it in `slither.config.json` with a comment in the MR
+  description. `dead-code` stays enabled and surfaces in the SARIF
+  report (F-15).
+- **Fuzz and invariant properties** — `FOUNDRY_PROFILE=ci forge test`:
+  bounded, deterministic fuzz and invariant runs are part of the test
+  gate. The per-MR seed is pinned in `.gitlab-ci.yml`; nightly pipelines
+  run randomized deep campaigns whose counterexamples persist into
+  `cache/fuzz`/`cache/invariant` and fail later MR runs until fixed.
+  Never delete a persisted counterexample to turn CI green.
+- **New state machines and envelope formats ship with properties** — an
+  MR that adds or changes a stateful flow (nonces, key versions,
+  budgets, consumption tracking) or a serialized envelope format
+  includes fuzz/invariant properties for it in the same MR:
+  state-machine invariants for the former, decode canonicity plus
+  mutation rejection for the latter.
 
 Note: `forge` on some dev machines is shadowed by an unrelated
 tool — confirm `forge --version` reports Foundry (Homebrew installs
 to `/opt/homebrew/bin/forge`). Builds and tests require `via_ir`;
 the default `foundry.toml` profile already sets it.
 
-All four must pass before requesting review. Zero warnings: a lint
-finding is either fixed or suppressed with the §5 two-line form.
+All six must pass before requesting review; merges to main require the
+full pipeline to pass. Zero warnings: a lint finding is either fixed or
+suppressed with the §5 two-line form.

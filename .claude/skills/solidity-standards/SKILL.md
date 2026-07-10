@@ -52,6 +52,8 @@ already sets it, so run the bare commands:
 /opt/homebrew/bin/forge build   # runs forge lint; zero warnings
 scripts/check-line-length.sh
 /opt/homebrew/bin/forge test
+FOUNDRY_PROFILE=ci /opt/homebrew/bin/forge test  # fuzz/invariant gate
+slither . --config-file slither.config.json --fail-medium
 ```
 
 ## Reviewing Solidity (diffs, MRs)
@@ -65,5 +67,12 @@ Walk the numbered checklist above against each hunk, and also check:
 - Every new numeric literal is either structural (offset/mask,
   checkable from the adjacent comment) or needs a named constant
   with a derivation comment (§1, §4).
+- If the diff adds or changes a state machine (nonces, key versions,
+  budgets, consumption tracking) or an envelope format, check the same
+  MR adds fuzz/invariant properties for it — state-machine invariants
+  or decode-canonicity plus mutation rejection (§8).
+- New Slither findings are fixed or suppressed inline with a
+  justification (`// slither-disable-next-line`, mirroring §5), never
+  left to gate the pipeline (§8).
 - Per repo practice, findings on others' MRs are delivered as a
   remediation-plan comment, not pushed fixes.

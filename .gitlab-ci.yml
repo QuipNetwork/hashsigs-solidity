@@ -1,7 +1,9 @@
-# GitLab CI: runs the CODINGSTANDARDS.md §8 gates (format, build, lint
-# with zero-warnings enforcement, hard line cap, tests). Image version is
-# pinned; bump it together with local toolchains so fmt output stays
-# canonical.
+# GitLab CI: runs the CODINGSTANDARDS.md §8 gates. Per-MR: format, build,
+# lint with zero-warnings enforcement, hard line cap, tests (including the
+# ci-profile fuzz/invariant runs), and Slither static analysis. Schedule
+# only: nightly deep-fuzz, medusa, and advisory hevm campaigns. Image
+# versions are pinned; bump them together with local toolchains so fmt
+# output stays canonical.
 
 stages:
   - verify
