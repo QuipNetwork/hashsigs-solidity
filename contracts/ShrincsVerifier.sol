@@ -30,6 +30,12 @@ import {ShrincsTypes} from "./ShrincsTypes.sol";
 /// `signature` is the ShrincsCodec stateful envelope (abi.encode(PublicKey,
 /// StatefulSignature)). Verifies signature validity only; callers that
 /// require one-time-use of stateful leaves track leaf consumption themselves.
+/// @dev Minimum gas: a stateful verification costs roughly 260k gas.
+/// verify isolates the check behind a try/catch self-call, so an inner
+/// out-of-gas (the 63/64 rule strands the hop while the outer frame keeps
+/// 1/64) is caught and returned as 0xffffffff — a valid signature then
+/// reports invalid. Callers MUST forward gas comfortably above ~260k so a
+/// genuine signature is never misreported as invalid.
 contract ShrincsVerifier is IERC7913SignatureVerifier {
     // Version tag identifying this verifier's key/envelope format family.
     bytes32 public constant VERSION_TAG =

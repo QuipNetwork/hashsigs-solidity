@@ -124,6 +124,12 @@ contract ShrincsAccountVerifierExample {
     // state.
     // 6. Return 0xffffffff instead of reverting on malformed envelopes.
     // 7. Return the ERC-1271 magic value on success or 0xffffffff on failure.
+    // Minimum gas: a stateful check costs roughly 260k gas and a stateless
+    // check roughly 2.69M gas. Each envelope is verified behind a try/catch
+    // self-call, so an inner out-of-gas (the 63/64 rule strands the hop
+    // while the outer frame keeps 1/64) is caught and returned as
+    // INVALID_SIGNATURE — a valid signature then reports invalid. Callers
+    // MUST forward gas comfortably above those figures.
     function isValidSignature(bytes32 hash, bytes calldata signature)
         external
         view
