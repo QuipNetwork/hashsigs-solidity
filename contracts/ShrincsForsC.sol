@@ -194,7 +194,7 @@ library ShrincsForsC {
         returns (bytes32 out)
     {
         assembly {
-            // Allocate a scratch buffer starting at the free-memory pointer.
+            // Use the current free-memory pointer as scratch without advancing it.
             let ptr := mload(0x40)
             // Write the domain tag prefix for FORS leaf hashing.
             mstore(ptr, "fors-leaf")
@@ -206,8 +206,6 @@ library ShrincsForsC {
             calldatacopy(add(ptr, 73), sk.offset, 32)
             // Hash the complete FORS leaf preimage.
             out := keccak256(ptr, 105)
-            // Bump the free-memory pointer to the next 32-byte aligned slot.
-            mstore(0x40, add(ptr, 128))
         }
     }
 
@@ -222,7 +220,7 @@ library ShrincsForsC {
         returns (bytes32 out)
     {
         assembly {
-            // Allocate a scratch buffer starting at the free-memory pointer.
+            // Use the current free-memory pointer as scratch without advancing it.
             let ptr := mload(0x40)
             // Write the domain tag prefix for FORS internal-node hashing.
             mstore(ptr, "fors-node")
@@ -236,8 +234,6 @@ library ShrincsForsC {
             mstore(add(ptr, 105), right)
             // Hash the complete FORS internal-node preimage.
             out := keccak256(ptr, 137)
-            // Bump the free-memory pointer to the next 32-byte aligned slot.
-            mstore(0x40, add(ptr, 160))
         }
     }
 
