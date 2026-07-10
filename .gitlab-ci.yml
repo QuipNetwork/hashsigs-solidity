@@ -1,6 +1,7 @@
-# GitLab CI: runs the four CODINGSTANDARDS.md §8 gates (format, lint
-# via build, hard line cap, tests). Image version is pinned; bump it
-# together with local toolchains so fmt output stays canonical.
+# GitLab CI: runs the CODINGSTANDARDS.md §8 gates (format, build, lint
+# with zero-warnings enforcement, hard line cap, tests). Image version is
+# pinned; bump it together with local toolchains so fmt output stays
+# canonical.
 
 stages:
   - verify
@@ -18,5 +19,6 @@ verify:
     - forge --version
     - forge fmt --check
     - forge build
+    - forge lint --deny warnings contracts/ test/ script/
     - scripts/check-line-length.sh
     - forge test
