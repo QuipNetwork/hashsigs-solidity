@@ -73,6 +73,10 @@ contract ShrincsAccountVerifierExample {
 
     bytes32 internal constant DOMAIN_TAG = keccak256("shrincs-account-v1");
 
+    // Raised when an ERC-1271 envelope does not re-encode to its exact
+    // input bytes; isValidSignature converts it to INVALID_SIGNATURE.
+    error NonCanonicalEnvelope();
+
     event StatefulPolicySet(
         StatefulPolicy indexed policy, uint32 nextStatefulLeafIndex
     );
@@ -185,6 +189,22 @@ contract ShrincsAccountVerifierExample {
             )
         );
 
+        // Reject non-canonical encodings: re-encoding the decoded fields
+        // must reproduce the exact envelope bytes (mirrors
+        // ShrincsCodec.decodeStatefulEnvelope). Trailing bytes or padded
+        // heads are rejected. The onlySelf revert is converted to
+        // INVALID_SIGNATURE by isValidSignature.
+        if (
+            keccak256(payload)
+                != keccak256(
+                    abi.encode(
+                        publicKey, actionType, payloadHash, shrincsSignature
+                    )
+                )
+        ) {
+            revert NonCanonicalEnvelope();
+        }
+
         return this.isValidStatefulActionSignatureNow(
             hash, publicKey, actionType, payloadHash, shrincsSignature
         );
@@ -214,6 +234,22 @@ contract ShrincsAccountVerifierExample {
                 ShrincsTypes.StatelessSignature
             )
         );
+
+        // Reject non-canonical encodings: re-encoding the decoded fields
+        // must reproduce the exact envelope bytes (mirrors
+        // ShrincsCodec.decodeStatefulEnvelope). Trailing bytes or padded
+        // heads are rejected. The onlySelf revert is converted to
+        // INVALID_SIGNATURE by isValidSignature.
+        if (
+            keccak256(payload)
+                != keccak256(
+                    abi.encode(
+                        publicKey, actionType, payloadHash, shrincsSignature
+                    )
+                )
+        ) {
+            revert NonCanonicalEnvelope();
+        }
 
         return this.isValidStatelessActionSignatureNow(
             hash, publicKey, actionType, payloadHash, shrincsSignature

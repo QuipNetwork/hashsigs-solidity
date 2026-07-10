@@ -154,6 +154,63 @@ contract ShrincsAccountSigningFacadeTest is Test {
         );
     }
 
+    // Checks that trailing bytes appended to a stateful ERC-1271 envelope
+    // are rejected by the re-encode canonicity check.
+    // line-length: allow — test name is one unbreakable token
+    function testAccountAwareStateful1271EnvelopeRejectsTrailingBytes()
+        public
+    {
+        (
+            ShrincsTypes.SigningKey memory signingKey,
+            ShrincsTypes.PublicKey memory publicKey,
+            bool keygenOk
+        ) = ShrincsAccountSigningFacade.keygen(
+            bytes("account-aware 1271 stateful trailing key"), 4
+        );
+        assertTrue(keygenOk, "keygen must succeed");
+
+        // forgefmt: disable-next-line
+        ShrincsAccountVerifierExample account =
+            new ShrincsAccountVerifierExample(
+                ShrincsAccountSigningFacade.publicKeyCommitmentWord(
+                    publicKey
+                )
+            );
+        bytes32 actionType = keccak256("execute");
+        bytes32 payloadHash = keccak256("payload");
+
+        (
+            ,
+            ShrincsTypes.ActionContext memory context,
+            ShrincsTypes.StatefulSignature memory signature,
+            bool signOk
+        ) = ShrincsAccountSigningFacade.signStatefulActionNow(
+            account, signingKey, actionType, payloadHash
+        );
+        assertTrue(signOk, "stateful action signing must succeed");
+
+        bytes32 hash = SHRINCS.statefulActionMessageHash(
+            account.currentShrincsPublicKey(), context
+        );
+        bytes memory envelope =
+            ShrincsAccountSigningFacade.encodeStateful1271Envelope(
+                publicKey, actionType, payloadHash, signature
+            );
+
+        assertEq(
+            account.isValidSignature(hash, envelope),
+            ERC1271_MAGIC_VALUE,
+            "canonical stateful envelope must verify"
+        );
+
+        bytes memory malformed = bytes.concat(envelope, hex"00");
+        assertEq(
+            account.isValidSignature(hash, malformed),
+            INVALID_SIGNATURE,
+            "trailing bytes must invalidate the stateful envelope"
+        );
+    }
+
     function testAccountAwareStatelessActionSignerFeedsWrapper() public {
         (
             ShrincsTypes.SigningKey memory signingKey,
@@ -286,6 +343,75 @@ contract ShrincsAccountSigningFacadeTest is Test {
             account.isValidSignature(hash, envelope),
             INVALID_SIGNATURE,
             "stateless ERC-1271 snapshot must fail after nonce advances"
+        );
+    }
+
+    // Checks that trailing bytes appended to a stateless ERC-1271 envelope
+    // are rejected by the re-encode canonicity check.
+    // line-length: allow — test name is one unbreakable token
+    function testAccountAwareStateless1271EnvelopeRejectsTrailingBytes()
+        public
+    {
+        (
+            ShrincsTypes.SigningKey memory signingKey,
+            ShrincsTypes.PublicKey memory publicKey,
+            bool keygenOk
+        ) = ShrincsAccountSigningFacade.keygen(
+            bytes("account-aware 1271 stateless trailing key"), 4
+        );
+        assertTrue(keygenOk, "keygen must succeed");
+
+        // forgefmt: disable-next-line
+        ShrincsAccountVerifierExample account =
+            new ShrincsAccountVerifierExample(
+                ShrincsAccountSigningFacade.publicKeyCommitmentWord(
+                    publicKey
+                )
+            );
+        bytes32 actionType = keccak256("execute");
+        bytes32 payloadHash = keccak256("payload");
+
+        (
+            ShrincsTypes.ActionContext memory context,
+            bytes32 sessionId,
+            bool signOk
+        ) = ShrincsAccountSigningFacade.beginStatelessActionSessionNow(
+                signer,
+                account,
+                signingKey,
+                publicKey,
+                actionType,
+                payloadHash
+            );
+        assertTrue(signOk, "stateless action signing must succeed");
+
+        (
+            ShrincsTypes.StatelessSignature memory signature,
+            bool completeOk
+        ) = ShrincsAccountSigningFacade.completeStatelessSession(
+                signer, sessionId
+            );
+        assertTrue(completeOk, "stateless session completion must succeed");
+
+        bytes32 hash = SHRINCS.statelessActionMessageHash(
+            account.currentShrincsPublicKey(), context
+        );
+        bytes memory envelope =
+            ShrincsAccountSigningFacade.encodeStateless1271Envelope(
+                publicKey, actionType, payloadHash, signature
+            );
+
+        assertEq(
+            account.isValidSignature(hash, envelope),
+            ERC1271_MAGIC_VALUE,
+            "canonical stateless envelope must verify"
+        );
+
+        bytes memory malformed = bytes.concat(envelope, hex"00");
+        assertEq(
+            account.isValidSignature(hash, malformed),
+            INVALID_SIGNATURE,
+            "trailing bytes must invalidate the stateless envelope"
         );
     }
 
