@@ -549,6 +549,9 @@ contract ShrincsCodecTest is Test {
         returns (uint256)
     {
         uint256 byteLength = wordAt(source, offset);
+        // divide-before-multiply is intentional: ((byteLength + 31) / 32)
+        // * 32 rounds byteLength up to the next 32-byte word boundary
+        // forge-lint: disable-next-line(divide-before-multiply)
         return 32 + ((byteLength + 31) / 32) * 32;
     }
 

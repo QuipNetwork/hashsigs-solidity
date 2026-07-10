@@ -339,6 +339,9 @@ library ShrincsToyStatelessProfile {
                 SUBTREE_HEIGHT,
                 0
             );
+            // casting to 'uint32' is safe because leafMask keeps only the
+            // low subtree-height bits
+            // forge-lint: disable-next-line(unsafe-typecast)
             leaf = uint32(tree & leafMask);
             tree >>= SUBTREE_HEIGHT;
             unchecked {
@@ -385,6 +388,9 @@ library ShrincsToyStatelessProfile {
                 layerSig.authPath
             );
             current = root;
+            // casting to 'uint32' is safe because leafMask keeps only the
+            // low subtree-height bits
+            // forge-lint: disable-next-line(unsafe-typecast)
             expectedLeafIndex = uint32(expectedTreeIndex & leafMask);
             expectedTreeIndex >>= SUBTREE_HEIGHT;
             unchecked {
@@ -559,6 +565,9 @@ library ShrincsToyStatelessProfile {
             for (uint256 parentIndex = 0; parentIndex < parents.length;) {
                 uint64 shiftedTree =
                     uint64(forsTree) << (FORS_TREE_HEIGHT - level - 1);
+                // casting to 'uint64' is safe because parentIndex ranges
+                // over a FORS subtree level, well within uint64
+                // forge-lint: disable-next-line(unsafe-typecast)
                 uint64 parentLowIndex = shiftedTree + uint64(parentIndex);
                 bytes32 addressWord = forsAddressWord(
                     treeIndex, leafIndex, level + 1, parentLowIndex
@@ -611,6 +620,9 @@ library ShrincsToyStatelessProfile {
                 index & 1 == 0 ? (node, sibling) : (sibling, node);
             uint64 shiftedTree =
                 uint64(forsTree) << (FORS_TREE_HEIGHT - level - 1);
+            // casting to 'uint64' is safe because index >> 1 is a FORS
+            // subtree node index, well within uint64
+            // forge-lint: disable-next-line(unsafe-typecast)
             uint64 parentLowIndex = shiftedTree + uint64(index >> 1);
             bytes32 parentWord = forsAddressWord(
                 treeIndex, leafIndex, level + 1, parentLowIndex
@@ -649,6 +661,9 @@ library ShrincsToyStatelessProfile {
                 abi.encodePacked(
                     "toy-hypertree-layer-seed",
                     statelessSkSeed,
+                    // casting to 'uint8' is safe: layer is bounded by
+                    // the hypertree layer count
+                    // forge-lint: disable-next-line(unsafe-typecast)
                     bytes1(uint8(layer))
                 )
             );
@@ -737,12 +752,16 @@ library ShrincsToyStatelessProfile {
             bytes32 sibling = authPath[height - 1];
             (bytes32 left, bytes32 right) =
                 index & 1 == 0 ? (node, sibling) : (sibling, node);
+            // casting to 'uint32' is safe because index >> 1 is a subtree
+            // node index within uint32
+            // forge-lint: disable-next-line(unsafe-typecast)
+            uint32 parentNodeIndex = uint32(index >> 1);
             node = keccak256(
                 abi.encodePacked(
                     "toy-hypertree-node",
                     pkSeed,
                     hypertreeAddressWord(
-                        layer, tree, height, uint32(index >> 1)
+                        layer, tree, height, parentNodeIndex
                     ),
                     left,
                     right

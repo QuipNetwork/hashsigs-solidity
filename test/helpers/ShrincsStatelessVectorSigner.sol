@@ -275,8 +275,12 @@ contract ShrincsStatelessVectorSigner {
         uint32 layer = session.nextHypertreeLayer;
         uint64 tree = session.currentHypertreeTreeIndex;
         uint32 leaf = session.currentHypertreeLeafIndex;
+        // casting to 'uint8' is safe because layer is bounded by
+        // NUM_HYPERTREE_LAYERS (8)
+        // forge-lint: disable-next-line(unsafe-typecast)
+        uint8 layerByte = uint8(layer);
         bytes32 layerSeed = hypertreeLayerSeed(
-            session.signingKey.statelessSkSeed, uint8(layer)
+            session.signingKey.statelessSkSeed, layerByte
         );
         bytes32 leafSeed = keccak256(
             abi.encodePacked("hypertree-leaf-seed", layerSeed, tree, leaf)
@@ -455,6 +459,9 @@ contract ShrincsStatelessVectorSigner {
         // subtree-height bits of the current tree index, and the next
         // tree index is the remaining high bits. This must stay in lockstep
         // with ShrincsHypertree.verifyHypertree.
+        // casting to 'uint32' is safe because leafMask keeps only the low
+        // subtree-height bits
+        // forge-lint: disable-next-line(unsafe-typecast)
         session.currentHypertreeLeafIndex = uint32(tree & leafMask);
         session.currentHypertreeTreeIndex = tree >> subtreeHeight;
         session.nextHypertreeLayer = nextLayer;
@@ -702,6 +709,9 @@ contract ShrincsStatelessVectorSigner {
             for (uint256 parentIndex = 0; parentIndex < parents.length;) {
                 uint64 shiftedTree =
                     uint64(forsTree) << (height - nodeHeight);
+                // casting to 'uint64' is safe because parentIndex ranges
+                // over a FORS subtree level, well within uint64
+                // forge-lint: disable-next-line(unsafe-typecast)
                 uint64 parentLowIndex = shiftedTree + uint64(parentIndex);
                 bytes32 addressWord = forsAddressWord(
                     treeIndex, leafIndex, nodeHeight, parentLowIndex
