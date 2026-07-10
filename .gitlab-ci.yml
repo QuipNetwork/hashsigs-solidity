@@ -1,0 +1,22 @@
+# GitLab CI: runs the four CODINGSTANDARDS.md §8 gates (format, lint
+# via build, hard line cap, tests). Image version is pinned; bump it
+# together with local toolchains so fmt output stays canonical.
+
+stages:
+  - verify
+
+variables:
+  GIT_SUBMODULE_STRATEGY: recursive
+
+verify:
+  stage: verify
+  image:
+    name: ghcr.io/foundry-rs/foundry:v1.7.1
+    entrypoint: [""]
+  script:
+    - git config --global --add safe.directory "$CI_PROJECT_DIR"
+    - forge --version
+    - forge fmt --check
+    - forge build
+    - scripts/check-line-length.sh
+    - forge test
