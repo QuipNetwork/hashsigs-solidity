@@ -6,7 +6,9 @@
 - Compile-time profile selection. Per-profile `ShrincsParams` libraries
   under `contracts/profiles/<profile>/`, chosen by a `shrincs-profile/`
   Foundry remapping and re-exported as aliases in `ShrincsTypes`.
-  Profiles: `256s` (default), `128s-q18`, `128s-q20`.
+  Profiles: `256s` (default), `128s-q18`, `128s-q20`. The 256s
+  production build stayed byte-identical to the pre-split verifier
+  (metadata-stripped deployed bytecode compared before/after).
 - `ShrincsUtils.maskHash` high-aligned hash truncation, applied at the
   nine hash-producing sites so a truncated profile emits high-aligned,
   zero-padded node values. All-ones (no-op) for 256s.
@@ -36,22 +38,40 @@
 ## 0.1.0 - 2026-07-10
 
 ### Added
-- SHRINCS verifier library (`contracts/SHRINCS.sol`) with shared `ShrincsTypes` data model,
-  pinned to the Sphincs256sKeccakQ20 profile with a 2^20 stateless-signature budget.
-- Stateful verification path (`ShrincsStateful.sol`) and stateless recovery/rotation path.
-- Example account wrapper (`contracts/examples/ShrincsAccountVerifierExample.sol`) with
-  MonotonicIndex and RecoveryRotation policies and an ERC-1271 view adapter.
-- ERC-7913 raw verifier surface (`ShrincsVerifier.sol`, `ShrincsCodec.sol`) with a
-  CREATE2-deterministic deployment script and pinned `[profile.production]` solc 0.8.35.
-- Test-only Solidity SHRINCS signer, SPHINCS+ cross-check vectors, and gas measurement tests.
+- SHRINCS verifier library (`contracts/SHRINCS.sol`) with shared
+  `ShrincsTypes` data model, pinned to a SPHINCS+-256s-style keccak-256
+  parameter set (`h = 64`, `d = 8`, `a = 14`, `k = 22`) with a 2^20
+  stateless-signature budget.
+- Stateful verification path (`ShrincsStateful.sol`) and stateless
+  recovery/rotation path (`ShrincsForsC.sol`, `ShrincsHypertree.sol`).
+- Example account wrapper
+  (`contracts/examples/ShrincsAccountVerifierExample.sol`) with
+  MonotonicIndex, RecoveryRotation, and LeafBitmap policies and an
+  ERC-1271 view adapter.
+- ERC-1271 envelope canonicity validation: stateful envelopes must
+  re-encode to their exact input bytes; stateless envelopes are checked
+  by a structural calldata walk
+  (`contracts/examples/ShrincsAccountEnvelope.sol`) pinned against the
+  re-encode reference by differential fuzz tests.
+- ERC-7913 raw verifier surface (`ShrincsVerifier.sol`,
+  `ShrincsCodec.sol`) with a CREATE2-deterministic deployment script
+  and pinned `[profile.production]` solc 0.8.35.
+- Test-only Solidity SHRINCS signer, SPHINCS+ cross-check vectors, gas
+  measurement tests, and account-vector export tooling
+  (`dev/export-account-vectors.sh`).
+- `CODINGSTANDARDS.md`, the repo-local `solidity-standards` Claude Code
+  skill, and `scripts/check-line-length.sh`; GitLab CI runs the four
+  standards gates (format, lint-on-build, hard line cap, tests).
 
 ### Changed
-- `via_ir`, optimizer settings, and test-vector `fs_permissions` are now set in `foundry.toml`.
+- `via_ir`, optimizer settings, test-vector `fs_permissions`, and the
+  78-char `forge fmt` width are now set in `foundry.toml`.
 - `contracts/WOTSPlus.sol` reformatted to the repo coding standards; its
-  `internal` helper functions were renamed for clarity (§7 internal-rename).
-  The public API (`verify`, `verifyWithRandomizationElements`, `sign`,
-  `generateKeyPair`, `generateRandomizationElements`, `chain`, and the public
-  constants) is unchanged.
+  `internal` helper functions were renamed for clarity (§7
+  internal-rename). The public API (`verify`,
+  `verifyWithRandomizationElements`, `sign`, `generateKeyPair`,
+  `generateRandomizationElements`, `chain`, and the public constants)
+  is unchanged.
 
 ### Removed
 - `ignition/modules/Lock.ts` sample Hardhat Ignition module.
