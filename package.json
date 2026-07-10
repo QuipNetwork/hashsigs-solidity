@@ -1,6 +1,6 @@
 {
   "name": "@quip.network/hashsigs-solidity",
-  "version": "0.0.2",
+  "version": "0.1.0",
   "private": false,
   "description": "A Solidity implementation of WOTS+ and the SHRINCS verifier-oriented signature construction",
   "license": "AGPL-3.0-or-later",
