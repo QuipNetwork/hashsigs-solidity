@@ -910,19 +910,38 @@ work. They are not a production signer interface.
 
 ## Deployment
 
-Hardhat Ignition deployment is intentionally split by target:
+The canonical SHRINCS verifiers and the WOTS+ library deploy through
+CREATE3 Foundry scripts. Each verifier has its own build profile and
+CREATE3 salt, so the three profiles get distinct, chain-invariant
+addresses. `DEPLOYMENTS.md` is the registry: it holds the salts,
+profile tags, predicted addresses, the deploy commands, and the
+historical CREATE2 (verifier) and Hardhat-Ignition (WOTS+) mechanisms
+these scripts replace.
 
-- `ignition/modules/WOTSPlus.ts`
-  - deploys only `WOTSPlus`
-- `ignition/modules/ShrincsAccountVerifierExample.ts`
-  - deploys only the SHRINCS example wrapper
+- `script/DeployShrincsVerifier256s.s.sol` — 256s verifier (profile
+  `production`)
+- `script/DeployShrincsVerifier128sQ18.s.sol` — 128s-q18 verifier
+  (profile `production-128s-q18`)
+- `script/DeployShrincsVerifier128sQ20.s.sol` — 128s-q20 verifier
+  (profile `production-128s-q20`)
+- `script/DeployWOTSPlus.s.sol` — WOTS+ library (profile `production`)
 
-Example commands:
+Each script asserts its `FOUNDRY_PROFILE` and refuses to run under the
+wrong one. Example:
 
 ```bash
-./node_modules/.bin/hardhat ignition deploy ignition/modules/WOTSPlus.ts
-./node_modules/.bin/hardhat ignition deploy ignition/modules/ShrincsAccountVerifierExample.ts
+FOUNDRY_PROFILE=production forge script \
+    script/DeployShrincsVerifier256s.s.sol \
+    --rpc-url $RPC --private-key $DEPLOYER_PK --broadcast --verify
 ```
+
+SHRINCS is testnet-only. The 128s-q20 stateless budget (2^20) wants
+profile security-analysis backing before production use, and the 128s
+verifiers need the regenerated 128s vectors (T6) before a deploy is
+production-ready. The example wrapper
+(`contracts/examples/ShrincsAccountVerifierExample.sol`) is a reference
+integration, not a canonical deployment; deploy it directly with
+`forge create` when you need one.
 
 ## Notes
 

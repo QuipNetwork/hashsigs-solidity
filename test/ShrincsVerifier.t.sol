@@ -25,6 +25,13 @@ import {ShrincsTypes} from "../contracts/ShrincsTypes.sol";
 import {ShrincsVerifier} from "../contracts/ShrincsVerifier.sol";
 import {ShrincsTestSigner} from "./helpers/ShrincsTestSigner.sol";
 
+/// @dev Minimal concrete instance of the abstract profile base, used to
+/// exercise the profile-agnostic verify/decode logic under whichever
+/// profile the suite runs. Mirrors the empty concrete subclasses
+/// (ShrincsVerifier256s / ShrincsVerifier128sQ18 / ShrincsVerifier128sQ20)
+/// without pinning the test to any one of them.
+contract ShrincsVerifierHarness is ShrincsVerifier {}
+
 contract ShrincsVerifierTest is Test {
     bytes4 internal constant INVALID_SIGNATURE = 0xffffffff;
 
@@ -39,7 +46,7 @@ contract ShrincsVerifierTest is Test {
     bytes internal secondLeafEnvelope;
 
     function setUp() public {
-        verifier = new ShrincsVerifier();
+        verifier = new ShrincsVerifierHarness();
 
         (
             ShrincsTypes.SigningKey memory signingKey,

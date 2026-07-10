@@ -13,6 +13,16 @@ gas_limit = "18446744073709551615" # u64::MAX
 # these per-profile TOML remappings (verified hazard, design §2(d′));
 # the profile-identity test + CI guard (T3) fail closed if one exists.
 remappings = ["shrincs-profile/=contracts/profiles/256s/"]
+# The concrete per-profile verifiers and their deploy scripts each
+# compile only under their own profile (so the artifact carries the
+# right constants). Default is 256s, so skip the 128s verifiers and
+# their deploy scripts here; [profile.production] inherits this skip.
+skip = [
+    "contracts/ShrincsVerifier128sQ18.sol",
+    "contracts/ShrincsVerifier128sQ20.sol",
+    "script/DeployShrincsVerifier128sQ18.s.sol",
+    "script/DeployShrincsVerifier128sQ20.s.sol",
+]
 
 ffi = true
 fs_permissions = [
@@ -20,11 +30,12 @@ fs_permissions = [
 ]
 
 [profile.production]
-# solc is PINNED here because the canonical ShrincsVerifier deployment is
-# CREATE2-deterministic: the deployed address is a function of the init code,
-# so every per-chain deploy must build byte-identically (same solc, via-ir,
-# optimizer runs). Bump deliberately — it changes the predicted address of any
-# NOT-yet-deployed artifact (already-deployed addresses are unaffected).
+# solc is PINNED so the 256s verifier's RUNTIME CODEHASH is chain-
+# invariant (consumers pin the codehash from DEPLOYMENTS.md). Deploys
+# now use CREATE3, so the deployed ADDRESS depends only on (factory,
+# salt) and is independent of the init code — but the pin still fixes
+# the codehash across chains. Inherits the [profile.default] remapping
+# (256s) and skip (128s verifiers/deploys). Bump deliberately.
 solc = "0.8.35"
 via_ir = true
 optimizer = true
@@ -39,10 +50,17 @@ gas_limit = "18446744073709551615" # u64::MAX
 # at 128s (a = 24, d = 1). 128s stateless coverage lands with the
 # regenerated vectors in T6 (design §3.6). Stateful, toy-profile,
 # WOTS+, and profile-invariant tests run under every profile.
+# Each 128s `skip` excludes the non-matching concrete verifiers and
+# deploy scripts (so only this profile's verifier compiles, with this
+# profile's constants) and the 256s-specific tests.
 [profile.128s-q18]
 out = "out-128s-q18"
 remappings = ["shrincs-profile/=contracts/profiles/128s-q18/"]
 skip = [
+    "contracts/ShrincsVerifier256s.sol",
+    "contracts/ShrincsVerifier128sQ20.sol",
+    "script/DeployShrincsVerifier256s.s.sol",
+    "script/DeployShrincsVerifier128sQ20.s.sol",
     "test/ShrincsSphincs256sVectors.t.sol",
     "test/ShrincsStatelessVectorSigner.t.sol",
     "test/ShrincsAccountEnvelopeCanonicity.t.sol",
@@ -58,6 +76,10 @@ skip = [
 out = "out-128s-q20"
 remappings = ["shrincs-profile/=contracts/profiles/128s-q20/"]
 skip = [
+    "contracts/ShrincsVerifier256s.sol",
+    "contracts/ShrincsVerifier128sQ18.sol",
+    "script/DeployShrincsVerifier256s.s.sol",
+    "script/DeployShrincsVerifier128sQ18.s.sol",
     "test/ShrincsSphincs256sVectors.t.sol",
     "test/ShrincsStatelessVectorSigner.t.sol",
     "test/ShrincsAccountEnvelopeCanonicity.t.sol",
@@ -70,8 +92,9 @@ skip = [
 ]
 
 # Production twins of the 128s profiles: same solc/via-ir/runs pin as
-# [profile.production], differing only in remapping and `out` (design
-# §3.4). Used to build each profile's canonical verifier artifact.
+# [profile.production], differing only in remapping, `out`, and skip
+# (design §3.4). Used to build each profile's canonical verifier
+# artifact; each skips the other profiles' verifiers and deploy scripts.
 [profile.production-128s-q18]
 solc = "0.8.35"
 via_ir = true
@@ -80,6 +103,12 @@ optimizer_runs = 1000000
 gas_limit = "18446744073709551615" # u64::MAX
 out = "out-128s-q18-prod"
 remappings = ["shrincs-profile/=contracts/profiles/128s-q18/"]
+skip = [
+    "contracts/ShrincsVerifier256s.sol",
+    "contracts/ShrincsVerifier128sQ20.sol",
+    "script/DeployShrincsVerifier256s.s.sol",
+    "script/DeployShrincsVerifier128sQ20.s.sol",
+]
 
 [profile.production-128s-q20]
 solc = "0.8.35"
@@ -89,6 +118,12 @@ optimizer_runs = 1000000
 gas_limit = "18446744073709551615" # u64::MAX
 out = "out-128s-q20-prod"
 remappings = ["shrincs-profile/=contracts/profiles/128s-q20/"]
+skip = [
+    "contracts/ShrincsVerifier256s.sol",
+    "contracts/ShrincsVerifier128sQ18.sol",
+    "script/DeployShrincsVerifier256s.s.sol",
+    "script/DeployShrincsVerifier128sQ18.s.sol",
+]
 
 [fmt]
 # 78-char cap (CODINGSTANDARDS.md §3). Set to 77 because forge fmt

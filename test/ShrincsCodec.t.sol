@@ -138,6 +138,10 @@ contract CodecNonMagicERC7913Verifier is IERC7913SignatureVerifier {
     }
 }
 
+// Minimal concrete instance of the abstract profile base for the codec
+// integration test (the real per-profile subclasses are empty too).
+contract CodecShrincsVerifierHarness is ShrincsVerifier {}
+
 // Exposes the internal codec library through external functions so tests
 // exercise the real calldata-facing decode paths.
 contract ShrincsCodecHarness {
@@ -627,7 +631,7 @@ contract ShrincsCodecERC7913IntegrationTest is Test {
     bytes internal validEnvelope;
 
     function setUp() public {
-        verifier = new ShrincsVerifier();
+        verifier = new CodecShrincsVerifierHarness();
         consumer = new CodecERC7913ConsumerHarness();
         nonMagicVerifier = new CodecNonMagicERC7913Verifier();
         vectors = vm.readFile(VECTOR_PATH);

@@ -23,27 +23,28 @@ variables:
 # overrides the per-profile TOML remappings, so a profile build could
 # compile with another profile's constants (verified hazard, design
 # §2(d′)/§3.5). Per-profile remappings live only in foundry.toml; fail
-# closed if a remappings.txt exists. `forge lint` runs here under the
-# default profile, which compiles every profile's ShrincsParams library
-# (all three live in src), so style coverage is complete; the
-# ShrincsProfileInvariants identity test is the in-Solidity backstop for
-# the remappings hazard.
-format-and-lint:
+# closed if a remappings.txt exists. The ShrincsProfileInvariants
+# identity test is the in-Solidity backstop for the same hazard.
+format-and-checks:
   extends: .foundry
   script:
     - test ! -f remappings.txt
     - forge fmt --check
     - scripts/check-line-length.sh
-    - forge lint --deny warnings contracts/ test/ script/
 
-# Every profile must build and pass its test set (the 256s-specific
-# vector/stateless tests are skipped under the 128s profiles via
-# foundry.toml until the T6 vector regeneration; design §3.6).
-build-and-test:
+# Every profile must build, lint clean, and pass its test set. Lint runs
+# per profile because each concrete verifier and its deploy script only
+# compile under their own profile (the others are skipped); lint emits a
+# cosmetic "AST source not found" note for the skipped files but exits 0.
+# The 256s-specific vector/stateless tests are skipped under the 128s
+# profiles via foundry.toml until the T6 vector regeneration (design
+# §3.6).
+build-lint-test:
   extends: .foundry
   parallel:
     matrix:
       - FOUNDRY_PROFILE: ["default", "128s-q18", "128s-q20"]
   script:
     - forge build
+    - forge lint --deny warnings contracts/ test/ script/
     - forge test

@@ -36,8 +36,21 @@ import {ShrincsTypes} from "./ShrincsTypes.sol";
 /// 1/64) is caught and returned as 0xffffffff — a valid signature then
 /// reports invalid. Callers MUST forward gas comfortably above ~260k so a
 /// genuine signature is never misreported as invalid.
-contract ShrincsVerifier is IERC7913SignatureVerifier {
+/// @dev Abstract profile base. The verify/decode logic is profile-agnostic
+/// (it takes its parameter tuple from the compile-time-selected
+/// ShrincsParams); each build profile deploys its own concrete subclass
+/// (ShrincsVerifier256s / ShrincsVerifier128sQ18 / ShrincsVerifier128sQ20),
+/// which adds a PROFILE_TAG and is compiled under that profile's constants.
+/// This is `abstract` so the unsuffixed, profile-ambiguous artifact can
+/// never be deployed. No chain has a ShrincsVerifier deployment yet
+/// (pre-release; see DEPLOYMENTS.md), so this is a safe pre-release change:
+/// the ABI surface (verify, VERSION_TAG) is preserved unchanged on every
+/// concrete subclass.
+abstract contract ShrincsVerifier is IERC7913SignatureVerifier {
     // Version tag identifying this verifier's key/envelope format family.
+    // Shared across profiles: it names the ERC-7913 key/envelope format,
+    // not the parameter set. The per-profile parameter identity lives in
+    // each subclass's PROFILE_TAG.
     bytes32 public constant VERSION_TAG =
         keccak256("quip.shrincs-verifier.v1");
     // Any non-magic value denotes signature failure.
