@@ -33,7 +33,9 @@ library ShrincsTypes {
     bytes32 internal constant OP_ROTATE_FULL =
         keccak256("shrincs-rotate-full");
 
-    // Address-type words for the SPHINCS-style keyed hash inputs.
+    // Address-type words for the SPHINCS-style keyed hash inputs. These
+    // are the ADRS type constants [FIPS205 §4.2]: WOTS+ hash (0), tree
+    // (2), and FORS tree (3).
     uint32 internal constant AddressTypeWotsHash = 0;
     uint32 internal constant AddressTypeTree = 2;
     uint32 internal constant AddressTypeForsTree = 3;
@@ -45,17 +47,38 @@ library ShrincsTypes {
     uint16 internal constant WOTS_CHAINS_STATEFUL = 64;
     // Stateful WOTS-C uses base-16 digits for message expansion.
     uint16 internal constant WOTS_BASE_STATEFUL = 16;
-    // The 64 base-16 digits reconstructed from the stateful message digest
-    // must sum to 480.
+    // WOTS_TARGET_SUM_STATEFUL: the WOTS-C constant digit-sum target
+    // = len * (w - 1) / 2
+    // -> WOTS_CHAINS_STATEFUL * (WOTS_BASE_STATEFUL - 1) / 2
+    //    = 64 * (16 - 1) / 2 = 480
+    // Python: 64 * (16 - 1) // 2
     uint32 internal constant WOTS_TARGET_SUM_STATEFUL = 480;
     // Compile-time SHRINCS/SPHINCS constants.
+    // STATELESS_SIGNATURE_LIMIT: the stateless-signature budget for this
+    // profile = 2^20
+    // -> 1 << 20 = 1048576
+    // Python: 2 ** 20
     uint64 internal constant STATELESS_SIGNATURE_LIMIT = 1_048_576;
+    // HASH_LEN: the SPHINCS/WOTS `n` security parameter [FIPS205 §11] —
+    // hash output length in bytes.
     uint16 internal constant HASH_LEN = 32;
+    // HYPERTREE_HEIGHT: the FIPS205 `h` parameter [FIPS205 §7] — total
+    // hypertree height (sum of all subtree heights).
     uint8 internal constant HYPERTREE_HEIGHT = 64;
+    // NUM_HYPERTREE_LAYERS: the FIPS205 `d` parameter [FIPS205 §7] —
+    // number of hypertree layers.
     uint8 internal constant NUM_HYPERTREE_LAYERS = 8;
+    // FORS_TREE_HEIGHT: the SPHINCSPLUS `a` parameter [SPHINCSPLUS §5.5]
+    // — FORS tree height (each FORS tree has 2^a leaves).
     uint8 internal constant FORS_TREE_HEIGHT = 14;
+    // NUM_FORS_TREES: the SPHINCSPLUS `k` parameter [SPHINCSPLUS §5.5] —
+    // number of FORS trees per FORS signature.
     uint8 internal constant NUM_FORS_TREES = 22;
+    // WOTS_CHAIN_LEN: the WOTSPLUS `w` (Winternitz) parameter
+    // [WOTSPLUS §3] — hash-chain length and digit base.
     uint16 internal constant WOTS_CHAIN_LEN = 16;
+    // NUM_WOTS_CHAINS: the WOTSPLUS `len` parameter [WOTSPLUS §3] —
+    // number of hash chains per WOTS signature.
     uint16 internal constant NUM_WOTS_CHAINS = 64;
 
     struct ForsDigest {
