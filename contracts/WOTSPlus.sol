@@ -29,8 +29,8 @@ library WOTSPlus {
     // PublicKeySize: The size of the public key in bytes.
     uint8 public constant PublicKeySize = HashLen * 2;
 
-    // Hash: The WOTS+ `F` hash function.
-    function Hash(bytes memory data) internal pure returns (bytes32) {
+    // hash: the WOTSPLUS `F` hash function [WOTSPLUS §2].
+    function hash(bytes memory data) internal pure returns (bytes32) {
         return keccak256(data);
     }
 
@@ -138,7 +138,7 @@ library WOTSPlus {
         // would it be clearer to compute these together in a subfunction,
         // hiding the checksum details entirely?
         uint8[] memory chainSegments =
-            ComputeMessageHashChainIndexes(message);
+            computeMessageHashChainIndexes(message);
 
         // Compute each public key segment. These are done by taking the
         // signature, which is prevChainOut at chainIdx - 1, and completing
@@ -163,7 +163,7 @@ library WOTSPlus {
 
         // Hash all public key segments together to recreate the original
         // public key.
-        bytes32 computedHash = Hash(publicKeySegments);
+        bytes32 computedHash = hash(publicKeySegments);
 
         // DEBUG: console.log("Computed public key hash:");
         // DEBUG: console.logBytes32(computedHash);
@@ -172,18 +172,20 @@ library WOTSPlus {
         return computedHash == quipAddress.publicKeyHash;
     }
 
-    // verify: Verify a WOTS+ signature.
-    // 1. The first part of the publicKey is a public seed used to regenerate
-    // the randomization elements. (`r` from the paper).
-    // 2. The second part of the publicKey is the hash of the NumMessageChunks
-    // + NumChecksumChunks public key segments.
-    // 3. Convert the Message to "base-w" representation (or base of ChainLen
-    // representation).
+    // verifyWithRandomizationElements: Verify a WOTS+ signature using
+    // caller-supplied randomization elements instead of regenerating
+    // them from the public seed (contrast with verify).
+    // 1. The caller passes the randomization elements (`r` from the
+    // paper) precomputed from the public seed.
+    // 2. The second part of the publicKey is the hash of the
+    // NumMessageChunks + NumChecksumChunks public key segments.
+    // 3. Convert the Message to "base-w" representation (or base of
+    // ChainLen representation).
     // 4. Compute and add the checksum.
-    // 5. Run the chain function on each segment to reproduce each public key
-    // segment.
-    // 6. Hash all public key segments together to recreate the original
-    // public key.
+    // 5. Run the chain function on each segment to reproduce each
+    // public key segment.
+    // 6. Hash all public key segments together to recreate the
+    // original public key.
     function verifyWithRandomizationElements(
         WinternitzAddress calldata quipAddress,
         WinternitzMessage calldata message,
@@ -209,7 +211,7 @@ library WOTSPlus {
         bytes memory publicKeySegments = new bytes(SignatureSize);
 
         uint8[] memory chainSegments =
-            ComputeMessageHashChainIndexes(message);
+            computeMessageHashChainIndexes(message);
 
         // Compute each public key segment. These are done by taking the
         // signature, which is prevChainOut at chainIdx - 1, and completing
@@ -234,7 +236,7 @@ library WOTSPlus {
 
         // Hash all public key segments together to recreate the original
         // public key.
-        bytes32 computedHash = Hash(publicKeySegments);
+        bytes32 computedHash = hash(publicKeySegments);
 
         // DEBUG: console.log("Computed public key hash:");
         // DEBUG: console.logBytes32(computedHash);
@@ -270,12 +272,12 @@ library WOTSPlus {
         bytes32[NumSignatureChunks] memory signature;
 
         uint8[] memory chainSegments =
-            ComputeMessageHashChainIndexes(message);
+            computeMessageHashChainIndexes(message);
 
         for (uint8 i = 0; i < chainSegments.length; i++) {
             uint16 chainIdx = chainSegments[i];
             bytes32 secretKeySegment =
-                Hash(abi.encodePacked(functionKey, prf(privateKey, i + 1)));
+                hash(abi.encodePacked(functionKey, prf(privateKey, i + 1)));
             signature[i] =
                 chain(secretKeySegment, randomizationElements, 0, chainIdx);
         }
@@ -310,7 +312,7 @@ library WOTSPlus {
 
         for (uint8 i = 0; i < NumSignatureChunks; i++) {
             bytes32 secretKeySegment =
-                Hash(abi.encodePacked(functionKey, prf(privateKey, i + 1)));
+                hash(abi.encodePacked(functionKey, prf(privateKey, i + 1)));
             bytes32 segment = chain(
                 secretKeySegment, randomizationElements, 0, ChainLen - 1
             );
@@ -323,7 +325,7 @@ library WOTSPlus {
         // DEBUG: console.log("Public key segments:");
         // DEBUG: console.logBytes(publicKeySegments);
 
-        bytes32 publicKeyHash = Hash(publicKeySegments);
+        bytes32 publicKeyHash = hash(publicKeySegments);
 
         // DEBUG: console.log("Public key hash:");
         // DEBUG: console.logBytes32(publicKeyHash);
@@ -362,7 +364,7 @@ library WOTSPlus {
 
         bytes32 chainOut = prevChainOut;
         for (uint8 i = 1; i <= steps; i++) {
-            chainOut = Hash(
+            chainOut = hash(
                 abi.encodePacked(
                     xor(chainOut, randomizationElements.elements[i + index])
                 )
@@ -405,12 +407,12 @@ library WOTSPlus {
         );
     }
 
-    // ComputeMessageHashChainIndexes: Compute the chain indexes for a
+    // computeMessageHashChainIndexes: Compute the chain indexes for a
     // message. We convert the message to base-w representation (or base of
     // ChainLen representation) We attach the checksum, also in base-w
     // representation, to the end of the hash chain index list.
     // line-length: allow — fmt canonical header exceeds cap
-    function ComputeMessageHashChainIndexes(WinternitzMessage calldata message)
+    function computeMessageHashChainIndexes(WinternitzMessage calldata message)
         internal
         pure
         returns (uint8[] memory)

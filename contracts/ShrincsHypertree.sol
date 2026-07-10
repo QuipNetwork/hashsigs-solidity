@@ -325,7 +325,7 @@ library ShrincsHypertree {
     // 4. Apply one unmasked chain hash per remaining step.
     // 5. Return the reconstructed endpoint for this chain.
     function wotsChain32NoMaskBase(
-        uint16 w,
+        uint16 chainBase,
         bytes32 pkSeed,
         uint256 addressBase,
         uint32 chainIdx,
@@ -337,9 +337,9 @@ library ShrincsHypertree {
             out := calldataload(value.offset)
         }
         uint256 chainAddressBase = addressBase | (uint256(chainIdx) << 32);
-        // The chain must continue from the revealed digit position up to w -
-        // 1.
-        uint256 steps = uint256(w - 1) - digit;
+        // The chain must continue from the revealed digit position up to
+        // chainBase - 1 (the WOTSPLUS `w` parameter).
+        uint256 steps = uint256(chainBase - 1) - digit;
         for (uint256 j = 0; j < steps;) {
             // Encode the current position within that chain.
             uint256 chainStep = uint256(digit) + j;

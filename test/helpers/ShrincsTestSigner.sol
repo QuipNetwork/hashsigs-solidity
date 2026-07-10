@@ -578,7 +578,10 @@ library ShrincsTestSigner {
         pure
         returns (uint32 digit)
     {
-        uint8 b = uint8(digest[index >> 1]);
-        return index & 1 == 0 ? uint32(b >> 4) : uint32(b & 0x0f);
+        uint8 packedByte = uint8(digest[index >> 1]);
+        return
+            index & 1 == 0
+                ? uint32(packedByte >> 4)
+                : uint32(packedByte & 0x0f);
     }
 }

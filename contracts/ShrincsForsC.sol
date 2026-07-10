@@ -56,13 +56,15 @@ library ShrincsForsC {
         ShrincsTypes.ForsDigest memory digest = forsDigest(
             publicKey, message, signature.randomizer, signature.counter
         );
-        uint256 a = uint256(ShrincsTypes.FORS_TREE_HEIGHT);
+        // forsHeight: the SPHINCSPLUS `a` parameter [SPHINCSPLUS §5.5]
+        // — FORS tree height.
+        uint256 forsHeight = uint256(ShrincsTypes.FORS_TREE_HEIGHT);
         // The omitted final FORS tree must always select leaf 0 in the
         // compressed FORS-C layout.
         if (
             ShrincsUtils.readBits32(
                     digest.digest,
-                    signedTrees * a,
+                    signedTrees * forsHeight,
                     ShrincsTypes.FORS_TREE_HEIGHT
                 ) != 0
         ) {
@@ -99,15 +101,19 @@ library ShrincsForsC {
             if (entry.secretLeaf.length != 32) return (bytes32(0), false);
             // Every revealed auth path must have exactly one node per FORS
             // tree level.
-            if (entry.authPath.length != a) return (bytes32(0), false);
+            if (entry.authPath.length != forsHeight) {
+                return (bytes32(0), false);
+            }
             // Read the digest-selected leaf for this FORS tree.
             uint32 entryLeafIndex = ShrincsUtils.readBits32(
-                digest.digest, tree * a, ShrincsTypes.FORS_TREE_HEIGHT
+                digest.digest,
+                tree * forsHeight,
+                ShrincsTypes.FORS_TREE_HEIGHT
             );
             // casting to 'uint32' is safe because the supported FORS tree
             // height is 14 bits
             // forge-lint: disable-next-line(unsafe-typecast)
-            uint32 treeHeight = uint32(a);
+            uint32 treeHeight = uint32(forsHeight);
             // casting to 'uint32' is safe because tree ranges over the fixed
             // 21 signed FORS trees
             // forge-lint: disable-next-line(unsafe-typecast)

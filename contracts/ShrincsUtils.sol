@@ -224,20 +224,22 @@ library ShrincsUtils {
 
     // baseWDigit: Read one base-w digit from a digest, supporting both
     // byte-wide and base-16 forms.
-    // 1. Return one whole byte when w = 256.
+    // chainBase: the WOTSPLUS `w` (Winternitz) parameter [WOTSPLUS §3]
+    // — the base of the digit representation.
+    // 1. Return one whole byte when chainBase = 256.
     // 2. Otherwise select the byte that contains the requested base-16 digit.
     // 3. Return the high nibble for even indices.
     // 4. Return the low nibble for odd indices.
-    function baseWDigit(uint16 w, bytes memory digest, uint256 index)
+    function baseWDigit(uint16 chainBase, bytes memory digest, uint256 index)
         internal
         pure
         returns (uint32)
     {
         // Byte-wide base-w uses one full digest byte per digit.
-        if (w == 256) return uint8(digest[index]);
+        if (chainBase == 256) return uint8(digest[index]);
         // Base-16 uses two digits per digest byte.
-        uint8 b = uint8(digest[index >> 1]);
-        return index & 1 == 0 ? b >> 4 : b & 0x0f;
+        uint8 packedByte = uint8(digest[index >> 1]);
+        return index & 1 == 0 ? packedByte >> 4 : packedByte & 0x0f;
     }
 
     // setHashChunk: Copy up to one 32-byte hash chunk into a mutable output
