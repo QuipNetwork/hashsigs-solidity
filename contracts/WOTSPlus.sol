@@ -387,8 +387,8 @@ library WOTSPlus {
         }
     }
 
-    // prf: Generate randomization elements from seed and index Similar to
-    // XMSS RFC 8391 section 5.1 NOTE: while sha256 and ripemd160 are
+    // prf: Generate randomization elements from seed and index. Similar to
+    // XMSS, RFC 8391 section 5.1. NOTE: while sha256 and ripemd160 are
     // available in solidity, they are implemented as precompiled contracts
     // and are more expensive for gas.
     function prf(bytes32 seed, uint16 index)
@@ -407,7 +407,7 @@ library WOTSPlus {
 
     // computeMessageHashChainIndexes: Compute the chain indexes for a
     // message. We convert the message to base-w representation (or base of
-    // ChainLen representation) We attach the checksum, also in base-w
+    // ChainLen representation). We attach the checksum, also in base-w
     // representation, to the end of the hash chain index list.
     // line-length: allow — fmt canonical header exceeds cap
     function computeMessageHashChainIndexes(WinternitzMessage calldata message)
