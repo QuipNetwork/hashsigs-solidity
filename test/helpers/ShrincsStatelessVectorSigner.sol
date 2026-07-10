@@ -449,6 +449,12 @@ contract ShrincsStatelessVectorSigner {
         );
 
         session.currentHypertreeRoot = nextRoot;
+        // Deviates from [FIPS205 §8.2]: SHRINCS chains the hypertree
+        // coordinates sequentially per layer instead of the FIPS-205 index
+        // recurrence. The next layer's leaf index is the low
+        // subtree-height bits of the current tree index, and the next
+        // tree index is the remaining high bits. This must stay in lockstep
+        // with ShrincsHypertree.verifyHypertree.
         session.currentHypertreeLeafIndex = uint32(tree & leafMask);
         session.currentHypertreeTreeIndex = tree >> subtreeHeight;
         session.nextHypertreeLayer = nextLayer;

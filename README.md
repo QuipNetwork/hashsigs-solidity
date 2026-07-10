@@ -201,6 +201,8 @@ Both forms verify:
 - stateless `WOTS-C`
 - final hypertree root against the public key
 
+**Design note — hypertree coordinate derivation.** SHRINCS derives the hypertree tree/leaf coordinates sequentially per layer rather than following the FIPS-205 §8.2 index recurrence. The FORS digest fixes layer 0's coordinate; each upper layer's leaf index is the low `hypertreeHeight / numHypertreeLayers` bits of the layer below's tree index, and its tree index is the remaining high bits. `ShrincsHypertree.verifyHypertree` and the test signer enforce this chaining in lockstep, so a signature cannot choose independent upper-layer addresses. This is a deliberate departure from FIPS-205; do not change either side toward the FIPS recurrence without regenerating all vectors.
+
 ### 3. Stateful-key rotation authorization
 
 ```solidity

@@ -62,11 +62,14 @@ library ShrincsHypertree {
         for (uint256 layer = 0; layer < layers.length;) {
             ShrincsTypes.HypertreeLayerSignature calldata layerSig =
                 layers[layer];
-            // Layer 0 starts from the FORS-derived coordinate. Each upper
-            // layer's coordinate is then derived from the lower layer's tree
-            // index, so the signature cannot freely choose independent
-            // upper-layer addresses. Enforce the expected subtree coordinate
-            // for this layer.
+            // Deviates from [FIPS205 §8.2]: SHRINCS chains the hypertree
+            // coordinates sequentially per layer instead of following the
+            // FIPS-205 tree/leaf index recurrence. Layer 0 starts from the
+            // FORS-derived coordinate; each upper layer's coordinate is
+            // then derived from the lower layer's tree index (see the
+            // right-shift below), so the signature cannot freely choose
+            // independent upper-layer addresses. Enforce the expected
+            // subtree coordinate for this layer.
             if (layerSig.treeIndex != expectedTreeIndex) return false;
             if (layerSig.leafIndex != expectedLeafIndex) return false;
             // Reject leaf indices that fall outside the subtree width.
