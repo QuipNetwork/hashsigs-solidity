@@ -372,8 +372,12 @@ library WOTSPlus {
     }
 
     // xor: XOR two bytes32 values
-    function xor(bytes32 a, bytes32 b) internal pure returns (bytes32) {
-        return bytes32(uint256(a) ^ uint256(b));
+    function xor(bytes32 left, bytes32 right)
+        internal
+        pure
+        returns (bytes32)
+    {
+        return bytes32(uint256(left) ^ uint256(right));
     }
 
     // There's no built-in x[a:b] semantic for bytes or bytes32 unless it's
