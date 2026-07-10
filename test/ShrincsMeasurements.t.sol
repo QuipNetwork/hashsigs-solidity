@@ -220,9 +220,11 @@ contract ShrincsMeasurementsTest is Test {
         ) = ShrincsAccountSigningFacade.keygen(seedMaterial, 4);
         assertTrue(ok, "stateless keygen must succeed");
 
-        ShrincsAccountVerifierExample account = new ShrincsAccountVerifierExample(
-            publicKeyCommitmentWord(publicKey)
-        );
+        // forgefmt: disable-next-line
+        ShrincsAccountVerifierExample account =
+            new ShrincsAccountVerifierExample(
+                publicKeyCommitmentWord(publicKey)
+            );
         bytes32 sessionId;
         (, sessionId, ok) =
             ShrincsAccountSigningFacade.beginStatelessActionSessionNow(

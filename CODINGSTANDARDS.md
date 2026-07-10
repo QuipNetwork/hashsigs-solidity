@@ -85,6 +85,20 @@ Rules:
 - **Maximum line length: 78 characters.** Applies to every line of
   every `.sol` file, comments included. `forge fmt` wraps code;
   comments are wrapped by hand (see §8 for the checker).
+  `foundry.toml` sets `line_length = 77` to compensate for fmt's
+  width accounting (it excludes the trailing token); the enforced
+  cap stays 78.
+- **Line-cap escape hatches**, both rare and justified inline:
+  - fmt re-joins a manual wrap it should keep: put
+    `// forgefmt: disable-next-line` directly above and wrap by
+    hand. Safe only on simple declarations — fmt 1.7.1 corrupts
+    tuple destructures, `using` directives, and struct fields
+    under this directive; use the `allow` form for those.
+  - A single unbreakable token (long name, string, or `hex`
+    literal) or fmt's own canonical output exceeds 78: exempt
+    exactly one line with `// line-length: allow — <reason>` on
+    the line directly above it. Reserved for unbreakable tokens
+    and fmt-canonical overflow, never convenience.
 - `forge fmt` settings in `foundry.toml` are authoritative for
   everything else: 4-space indent, double quotes, long int types,
   `attributes_first` function headers, no bracket spacing.
@@ -196,7 +210,8 @@ Rules:
 - **Lint** — `forge build` (lint runs on build) or `forge lint`:
   unsafe casts, naming lints, unused imports.
 - **Hard line cap** — `scripts/check-line-length.sh`: any line over
-  78 characters, comments included.
+  78 characters, comments included. Honors the
+  `// line-length: allow` directive (§3) on the preceding line.
 - **Tests** — `forge test`: behavior.
 
 Note: `forge` on some dev machines is shadowed by an unrelated

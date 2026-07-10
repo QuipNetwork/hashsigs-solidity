@@ -120,6 +120,7 @@ contract ShrincsAccountVerifierExampleHarness is
         installFreshFullKey(nextCompositePublicKey);
     }
 
+    // line-length: allow — fmt canonical header exceeds cap
     function applySuccessfulStatefulRotationForTest(bytes32 nextCompositePublicKey)
         external
     {
@@ -127,6 +128,7 @@ contract ShrincsAccountVerifierExampleHarness is
         installFreshStatefulKey(nextCompositePublicKey);
     }
 
+    // line-length: allow — fmt canonical header exceeds cap
     function applySuccessfulFullRotationForTest(bytes32 nextCompositePublicKey)
         external
     {
@@ -157,12 +159,14 @@ contract ExampleNonOwnerCaller {
         return ok;
     }
 
+    // line-length: allow — fmt canonical header exceeds cap
     function setStatefulPolicyRecoveryRotation(ShrincsAccountVerifierExample target)
         external
     {
         target.setStatefulPolicyRecoveryRotation();
     }
 
+    // line-length: allow — fmt canonical header exceeds cap
     function trySetStatefulPolicyRecoveryRotation(ShrincsAccountVerifierExample target)
         external
         returns (bool)
@@ -180,6 +184,7 @@ contract ExampleNonOwnerCaller {
         target.setStatefulPolicyLeafBitmap();
     }
 
+    // line-length: allow — fmt canonical header exceeds cap
     function trySetStatefulPolicyLeafBitmap(ShrincsAccountVerifierExample target)
         external
         returns (bool)
@@ -324,6 +329,7 @@ contract ShrincsAccountVerifierExampleTest is Test {
         );
     }
 
+    // line-length: allow — test name is one unbreakable token
     function testExampleVerifyStatefulActionMatchesLibraryAndPreservesStateOnFailure()
         public
     {
@@ -365,6 +371,7 @@ contract ShrincsAccountVerifierExampleTest is Test {
         );
     }
 
+    // line-length: allow — test name is one unbreakable token
     function testExampleVerifyStatelessActionMatchesLibraryAndPreservesStateOnFailure()
         public
     {
@@ -406,6 +413,7 @@ contract ShrincsAccountVerifierExampleTest is Test {
         );
     }
 
+    // line-length: allow — test name is one unbreakable token
     function testExampleIsValidSignatureRejectsMalformedEnvelopeAndPreservesState()
         public
     {
@@ -456,6 +464,7 @@ contract ShrincsAccountVerifierExampleTest is Test {
         assertEq(account.statelessSignaturesUsed(), 0);
     }
 
+    // line-length: allow — test name is one unbreakable token
     function testExampleIsValidSignatureRejectsMalformedStatefulEnvelopeWithoutReverting()
         public
     {
@@ -484,6 +493,7 @@ contract ShrincsAccountVerifierExampleTest is Test {
         assertEq(account.statelessSignaturesUsed(), 0);
     }
 
+    // line-length: allow — test name is one unbreakable token
     function testExampleIsValidSignatureRejectsMalformedStatelessEnvelopeWithoutReverting()
         public
     {
@@ -512,6 +522,7 @@ contract ShrincsAccountVerifierExampleTest is Test {
         assertEq(account.statelessSignaturesUsed(), 0);
     }
 
+    // line-length: allow — test name is one unbreakable token
     function testExampleIsValidSignatureRejectsLegacyStatefulVectorThroughCanonicalEnvelope()
         public
     {
@@ -549,6 +560,7 @@ contract ShrincsAccountVerifierExampleTest is Test {
         assertEq(
             actual,
             INVALID_SIGNATURE,
+            // line-length: allow — one unbreakable string literal token
             "legacy raw stateful vector must not validate through canonical 1271 path"
         );
         assertEq(
@@ -559,6 +571,7 @@ contract ShrincsAccountVerifierExampleTest is Test {
         assertEq(account.statelessSignaturesUsed(), 0);
     }
 
+    // line-length: allow — test name is one unbreakable token
     function testExampleIsValidSignatureRejectsLegacyStatelessVectorThroughCanonicalEnvelope()
         public
     {
@@ -596,6 +609,7 @@ contract ShrincsAccountVerifierExampleTest is Test {
         assertEq(
             actual,
             INVALID_SIGNATURE,
+            // line-length: allow — one unbreakable string literal token
             "legacy raw stateless vector must not validate through canonical 1271 path"
         );
         assertEq(
@@ -606,6 +620,7 @@ contract ShrincsAccountVerifierExampleTest is Test {
         assertEq(account.statelessSignaturesUsed(), 0);
     }
 
+    // line-length: allow — test name is one unbreakable token
     function testExampleRotateFullKeyMatchesLibraryAndPreservesStateOnFailure()
         public
     {
@@ -660,6 +675,7 @@ contract ShrincsAccountVerifierExampleTest is Test {
         );
     }
 
+    // line-length: allow — test name is one unbreakable token
     function testExampleRotateToFreshKeyMatchesLibraryAndPreservesStateOnFailure()
         public
     {
@@ -695,6 +711,7 @@ contract ShrincsAccountVerifierExampleTest is Test {
         assertEq(
             actual,
             false,
+            // line-length: allow — one unbreakable string literal token
             "legacy raw vector must not authorize canonical stateful-only rotation"
         );
         assertEq(
@@ -763,9 +780,11 @@ contract ShrincsAccountVerifierExampleTest is Test {
         ) = decodeStatelessVector(".stateless.cases.valid.calldata");
         bytes32 expectedCompositePublicKey =
             compositePublicKeyWord(publicKey);
-        ShrincsAccountVerifierExampleHarness account = new ShrincsAccountVerifierExampleHarness(
-            expectedCompositePublicKey
-        );
+        // forgefmt: disable-next-line
+        ShrincsAccountVerifierExampleHarness account =
+            new ShrincsAccountVerifierExampleHarness(
+                expectedCompositePublicKey
+            );
         uint64 limit = ShrincsTypes.STATELESS_SIGNATURE_LIMIT;
         ShrincsTypes.ActionContext memory context =
             actionContext(address(account), 0, 0);
@@ -796,9 +815,11 @@ contract ShrincsAccountVerifierExampleTest is Test {
         ) = decodeStatelessVector(".stateless.cases.valid.calldata");
         bytes32 expectedCompositePublicKey =
             compositePublicKeyWord(publicKey);
-        ShrincsAccountVerifierExampleHarness account = new ShrincsAccountVerifierExampleHarness(
-            expectedCompositePublicKey
-        );
+        // forgefmt: disable-next-line
+        ShrincsAccountVerifierExampleHarness account =
+            new ShrincsAccountVerifierExampleHarness(
+                expectedCompositePublicKey
+            );
         uint64 limit = ShrincsTypes.STATELESS_SIGNATURE_LIMIT;
         ShrincsTypes.RotationTarget memory target = rotationTargetFromParts(
             publicKey.statefulPublicKey,
@@ -838,9 +859,11 @@ contract ShrincsAccountVerifierExampleTest is Test {
         ) = decodeStatelessVector(".stateless.cases.valid.calldata");
         bytes32 expectedCompositePublicKey =
             compositePublicKeyWord(publicKey);
-        ShrincsAccountVerifierExampleHarness account = new ShrincsAccountVerifierExampleHarness(
-            expectedCompositePublicKey
-        );
+        // forgefmt: disable-next-line
+        ShrincsAccountVerifierExampleHarness account =
+            new ShrincsAccountVerifierExampleHarness(
+                expectedCompositePublicKey
+            );
         uint64 limit = ShrincsTypes.STATELESS_SIGNATURE_LIMIT;
         ShrincsTypes.StatefulRotationTarget memory target =
             statefulRotationTargetFromParts(
@@ -864,6 +887,7 @@ contract ShrincsAccountVerifierExampleTest is Test {
         );
         assertTrue(
             account.keyVersion() == 0,
+            // line-length: allow — one unbreakable string literal token
             "key version must stay unchanged at stateful-only rotation usage limit"
         );
         assertTrue(
@@ -1048,6 +1072,7 @@ contract ShrincsAccountVerifierExampleTest is Test {
         nonOwnerCaller.enterRecoveryMode(account);
     }
 
+    // line-length: allow — test name is one unbreakable token
     function testExampleEnterRecoveryModeRevertsOutsideRecoveryRotationPolicy()
         public
     {
@@ -1088,9 +1113,11 @@ contract ShrincsAccountVerifierExampleTest is Test {
         ) = decodeStatefulVector(".stateful.cases.valid.calldata");
         bytes32 expectedCompositePublicKey =
             compositePublicKeyWord(publicKey);
-        ShrincsAccountVerifierExampleHarness account = new ShrincsAccountVerifierExampleHarness(
-            expectedCompositePublicKey
-        );
+        // forgefmt: disable-next-line
+        ShrincsAccountVerifierExampleHarness account =
+            new ShrincsAccountVerifierExampleHarness(
+                expectedCompositePublicKey
+            );
 
         bool ok = account.verifyStatefulUncheckedForTest(
             publicKey, message, signature
@@ -1116,9 +1143,11 @@ contract ShrincsAccountVerifierExampleTest is Test {
         ) = decodeStatefulVector(".stateful.cases.valid.calldata");
         bytes32 expectedCompositePublicKey =
             compositePublicKeyWord(publicKey);
-        ShrincsAccountVerifierExampleHarness account = new ShrincsAccountVerifierExampleHarness(
-            expectedCompositePublicKey
-        );
+        // forgefmt: disable-next-line
+        ShrincsAccountVerifierExampleHarness account =
+            new ShrincsAccountVerifierExampleHarness(
+                expectedCompositePublicKey
+            );
 
         bool ok = account.verifyStatefulUncheckedForTest(
             publicKey, message, signature
@@ -1154,9 +1183,11 @@ contract ShrincsAccountVerifierExampleTest is Test {
             decodeStatelessVector(".stateless.cases.valid.calldata");
         bytes32 expectedCompositePublicKey =
             compositePublicKeyWord(publicKey);
-        ShrincsAccountVerifierExampleHarness account = new ShrincsAccountVerifierExampleHarness(
-            expectedCompositePublicKey
-        );
+        // forgefmt: disable-next-line
+        ShrincsAccountVerifierExampleHarness account =
+            new ShrincsAccountVerifierExampleHarness(
+                expectedCompositePublicKey
+            );
 
         account.setStatefulPolicyRecoveryRotation();
         account.enterRecoveryMode();
@@ -1199,9 +1230,11 @@ contract ShrincsAccountVerifierExampleTest is Test {
         ) = decodeStatefulVector(".stateful.cases.valid.calldata");
         bytes32 expectedCompositePublicKey =
             compositePublicKeyWord(publicKey);
-        ShrincsAccountVerifierExampleHarness account = new ShrincsAccountVerifierExampleHarness(
-            expectedCompositePublicKey
-        );
+        // forgefmt: disable-next-line
+        ShrincsAccountVerifierExampleHarness account =
+            new ShrincsAccountVerifierExampleHarness(
+                expectedCompositePublicKey
+            );
         uint32 leafIndex = uint32(signature.authPath.length);
 
         account.setStatefulPolicyLeafBitmap();
@@ -1240,9 +1273,11 @@ contract ShrincsAccountVerifierExampleTest is Test {
             decodeStatelessVector(".stateless.cases.valid.calldata");
         bytes32 expectedCompositePublicKey =
             compositePublicKeyWord(publicKey);
-        ShrincsAccountVerifierExampleHarness account = new ShrincsAccountVerifierExampleHarness(
-            expectedCompositePublicKey
-        );
+        // forgefmt: disable-next-line
+        ShrincsAccountVerifierExampleHarness account =
+            new ShrincsAccountVerifierExampleHarness(
+                expectedCompositePublicKey
+            );
 
         account.setStatelessSignaturesUsed(123);
 
@@ -1257,6 +1292,7 @@ contract ShrincsAccountVerifierExampleTest is Test {
         );
     }
 
+    // line-length: allow — test name is one unbreakable token
     function testExampleSuccessfulStatefulOnlyRotationPreservesAndIncrementsStatelessUsage()
         public
     {
@@ -1264,9 +1300,11 @@ contract ShrincsAccountVerifierExampleTest is Test {
             decodeStatelessVector(".stateless.cases.valid.calldata");
         bytes32 expectedCompositePublicKey =
             compositePublicKeyWord(publicKey);
-        ShrincsAccountVerifierExampleHarness account = new ShrincsAccountVerifierExampleHarness(
-            expectedCompositePublicKey
-        );
+        // forgefmt: disable-next-line
+        ShrincsAccountVerifierExampleHarness account =
+            new ShrincsAccountVerifierExampleHarness(
+                expectedCompositePublicKey
+            );
 
         account.setStatelessSignaturesUsed(123);
 
@@ -1280,6 +1318,7 @@ contract ShrincsAccountVerifierExampleTest is Test {
         assertEq(
             account.statelessSignaturesUsed(),
             124,
+            // line-length: allow — one unbreakable string literal token
             "stateful-only rotation must carry forward prior usage plus the recovery signature"
         );
         assertEq(
@@ -1308,6 +1347,7 @@ contract ShrincsAccountVerifierExampleTest is Test {
         );
     }
 
+    // line-length: allow — test name is one unbreakable token
     function testExampleSuccessfulStatefulOnlyRotationEmitsDedicatedStatelessUsageEvent()
         public
     {
@@ -1315,9 +1355,11 @@ contract ShrincsAccountVerifierExampleTest is Test {
             decodeStatelessVector(".stateless.cases.valid.calldata");
         bytes32 expectedCompositePublicKey =
             compositePublicKeyWord(publicKey);
-        ShrincsAccountVerifierExampleHarness account = new ShrincsAccountVerifierExampleHarness(
-            expectedCompositePublicKey
-        );
+        // forgefmt: disable-next-line
+        ShrincsAccountVerifierExampleHarness account =
+            new ShrincsAccountVerifierExampleHarness(
+                expectedCompositePublicKey
+            );
 
         account.setStatelessSignaturesUsed(123);
 
@@ -1332,6 +1374,7 @@ contract ShrincsAccountVerifierExampleTest is Test {
         );
     }
 
+    // line-length: allow — test name is one unbreakable token
     function testExampleRepeatedStatefulOnlyRotationDoesNotMintFreshStatelessBudget()
         public
     {
@@ -1339,9 +1382,11 @@ contract ShrincsAccountVerifierExampleTest is Test {
             decodeStatelessVector(".stateless.cases.valid.calldata");
         bytes32 expectedCompositePublicKey =
             compositePublicKeyWord(publicKey);
-        ShrincsAccountVerifierExampleHarness account = new ShrincsAccountVerifierExampleHarness(
-            expectedCompositePublicKey
-        );
+        // forgefmt: disable-next-line
+        ShrincsAccountVerifierExampleHarness account =
+            new ShrincsAccountVerifierExampleHarness(
+                expectedCompositePublicKey
+            );
 
         account.setStatelessSignaturesUsed(7);
 
@@ -1360,6 +1405,7 @@ contract ShrincsAccountVerifierExampleTest is Test {
         assertEq(
             account.statelessSignaturesUsed(),
             9,
+            // line-length: allow — one unbreakable string literal token
             "repeated stateful-only rotation must continue consuming one stateless use each time"
         );
         assertEq(
@@ -1374,6 +1420,7 @@ contract ShrincsAccountVerifierExampleTest is Test {
         );
     }
 
+    // line-length: allow — test name is one unbreakable token
     function testExampleStatefulOnlyRotationAtLimitMinusOneConsumesFinalStatelessUse()
         public
     {
@@ -1383,9 +1430,11 @@ contract ShrincsAccountVerifierExampleTest is Test {
         ) = decodeStatelessVector(".stateless.cases.valid.calldata");
         bytes32 expectedCompositePublicKey =
             compositePublicKeyWord(publicKey);
-        ShrincsAccountVerifierExampleHarness account = new ShrincsAccountVerifierExampleHarness(
-            expectedCompositePublicKey
-        );
+        // forgefmt: disable-next-line
+        ShrincsAccountVerifierExampleHarness account =
+            new ShrincsAccountVerifierExampleHarness(
+                expectedCompositePublicKey
+            );
         uint64 limit = ShrincsTypes.STATELESS_SIGNATURE_LIMIT;
         ShrincsTypes.ActionContext memory context =
             actionContext(address(account), 1, 1);
@@ -1402,6 +1451,7 @@ contract ShrincsAccountVerifierExampleTest is Test {
         assertEq(
             account.statelessSignaturesUsed(),
             limit,
+            // line-length: allow — one unbreakable string literal token
             "stateful-only rotation must consume the final available stateless use"
         );
         assertEq(
@@ -1420,6 +1470,7 @@ contract ShrincsAccountVerifierExampleTest is Test {
         assertEq(
             statelessActionOk,
             false,
+            // line-length: allow — one unbreakable string literal token
             "the next stateless use must be rejected once the limit is reached"
         );
         assertEq(
@@ -1436,9 +1487,11 @@ contract ShrincsAccountVerifierExampleTest is Test {
             decodeStatelessVector(".stateless.cases.valid.calldata");
         bytes32 expectedCompositePublicKey =
             compositePublicKeyWord(publicKey);
-        ShrincsAccountVerifierExampleHarness account = new ShrincsAccountVerifierExampleHarness(
-            expectedCompositePublicKey
-        );
+        // forgefmt: disable-next-line
+        ShrincsAccountVerifierExampleHarness account =
+            new ShrincsAccountVerifierExampleHarness(
+                expectedCompositePublicKey
+            );
 
         account.setStatelessSignaturesUsed(123);
 
@@ -1450,6 +1503,7 @@ contract ShrincsAccountVerifierExampleTest is Test {
         assertEq(
             account.statelessSignaturesUsed(),
             0,
+            // line-length: allow — one unbreakable string literal token
             "full rotation must reset stateless usage for the new stateless key"
         );
         assertEq(account.nonce(), 1, "full rotation must advance nonce");
@@ -1474,6 +1528,7 @@ contract ShrincsAccountVerifierExampleTest is Test {
         );
     }
 
+    // line-length: allow — test name is one unbreakable token
     function testExampleSuccessfulFullRotationEmitsDedicatedStatelessUsageEvent()
         public
     {
@@ -1481,9 +1536,11 @@ contract ShrincsAccountVerifierExampleTest is Test {
             decodeStatelessVector(".stateless.cases.valid.calldata");
         bytes32 expectedCompositePublicKey =
             compositePublicKeyWord(publicKey);
-        ShrincsAccountVerifierExampleHarness account = new ShrincsAccountVerifierExampleHarness(
-            expectedCompositePublicKey
-        );
+        // forgefmt: disable-next-line
+        ShrincsAccountVerifierExampleHarness account =
+            new ShrincsAccountVerifierExampleHarness(
+                expectedCompositePublicKey
+            );
 
         account.setStatelessSignaturesUsed(123);
 
@@ -1606,6 +1663,7 @@ contract ShrincsAccountVerifierExampleTest is Test {
         signature = convertLegacyStatelessSignature(legacySignature);
     }
 
+    // line-length: allow — fmt canonical header exceeds cap
     function convertLegacyStatelessSignature(LegacyStatelessSignature memory legacy)
         internal
         pure
@@ -1620,8 +1678,10 @@ contract ShrincsAccountVerifierExampleTest is Test {
             });
         }
 
-        ShrincsTypes.HypertreeLayerSignature[] memory layers = new ShrincsTypes
-            .HypertreeLayerSignature[](legacy.hypertree.length);
+        // forgefmt: disable-next-line
+        ShrincsTypes.HypertreeLayerSignature[] memory layers =
+            new ShrincsTypes
+                .HypertreeLayerSignature[](legacy.hypertree.length);
         for (uint256 i = 0; i < layers.length; ++i) {
             layers[i] = ShrincsTypes.HypertreeLayerSignature({
                 treeIndex: legacy.hypertree[i].treeIndex,

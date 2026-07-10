@@ -121,10 +121,12 @@ contract ShrincsStatefulPolicyExamplesTest is Test {
         assertEq(
             second,
             false,
+            // line-length: allow — one unbreakable string literal token
             "default monotonic policy must reject repeated raw stateful verification"
         );
     }
 
+    // line-length: allow — test name is one unbreakable token
     function testMonotonicIndexExampleAcceptsExpectedLeafAndThenRejectsReplay()
         public
     {
@@ -181,6 +183,7 @@ contract ShrincsStatefulPolicyExamplesTest is Test {
         );
     }
 
+    // line-length: allow — test name is one unbreakable token
     function testRecoveryRotationExampleBlocksStatefulPathBeforeAndDuringRecoveryMode()
         public
     {
@@ -200,6 +203,7 @@ contract ShrincsStatefulPolicyExamplesTest is Test {
                 publicKey, message, signature
             ),
             false,
+            // line-length: allow — one unbreakable string literal token
             "stateful raw path must be blocked as soon as recovery-rotation policy is selected"
         );
         account.enterRecoveryMode();
@@ -212,6 +216,7 @@ contract ShrincsStatefulPolicyExamplesTest is Test {
         );
     }
 
+    // line-length: allow — test name is one unbreakable token
     function testRecoveryRotationExampleKeepsLegacyRawStatelessVectorOutOfCanonicalWrapper()
         public
     {
@@ -244,6 +249,7 @@ contract ShrincsStatefulPolicyExamplesTest is Test {
         assertEq(
             ok,
             false,
+            // line-length: allow — one unbreakable string literal token
             "legacy raw vector must not verify through canonical stateless wrapper path"
         );
         assertTrue(
@@ -252,6 +258,7 @@ contract ShrincsStatefulPolicyExamplesTest is Test {
         );
     }
 
+    // line-length: allow — test name is one unbreakable token
     function testRecoveryRotationExampleRejectsLegacyRotationAuthorizationAndKeepsRecoveryMode()
         public
     {
@@ -276,6 +283,7 @@ contract ShrincsStatefulPolicyExamplesTest is Test {
         assertEq(
             ok,
             false,
+            // line-length: allow — one unbreakable string literal token
             "legacy raw stateless vector must not authorize canonical rotation"
         );
         assertEq(
@@ -411,6 +419,7 @@ contract ShrincsStatefulPolicyExamplesTest is Test {
         signature = convertLegacyStatelessSignature(legacySignature);
     }
 
+    // line-length: allow — fmt canonical header exceeds cap
     function convertLegacyStatelessSignature(LegacyStatelessSignature memory legacy)
         internal
         pure
@@ -425,8 +434,10 @@ contract ShrincsStatefulPolicyExamplesTest is Test {
             });
         }
 
-        ShrincsTypes.HypertreeLayerSignature[] memory layers = new ShrincsTypes
-            .HypertreeLayerSignature[](legacy.hypertree.length);
+        // forgefmt: disable-next-line
+        ShrincsTypes.HypertreeLayerSignature[] memory layers =
+            new ShrincsTypes
+                .HypertreeLayerSignature[](legacy.hypertree.length);
         for (uint256 i = 0; i < layers.length; ++i) {
             layers[i] = ShrincsTypes.HypertreeLayerSignature({
                 treeIndex: legacy.hypertree[i].treeIndex,

@@ -82,13 +82,15 @@ contract ShrincsSignerStatefulActionTest is Test {
         ) = harness.keygen(bytes("solidity stateful action signer seed"), 4);
         assertTrue(keygenOk, "keygen must succeed");
 
-        ShrincsTypes.ActionContext memory context = ShrincsTypes.ActionContext({
-            domainSeparator: keccak256("domain"),
-            nonce: 7,
-            keyVersion: 3,
-            actionType: keccak256("transfer"),
-            payloadHash: keccak256("payload")
-        });
+        // forgefmt: disable-next-line
+        ShrincsTypes.ActionContext memory context =
+            ShrincsTypes.ActionContext({
+                domainSeparator: keccak256("domain"),
+                nonce: 7,
+                keyVersion: 3,
+                actionType: keccak256("transfer"),
+                payloadHash: keccak256("payload")
+            });
 
         (
             ShrincsTypes.SigningKey memory nextSigningKey,
@@ -117,6 +119,7 @@ contract ShrincsSignerStatefulActionTest is Test {
         );
     }
 
+    // line-length: allow — test name is one unbreakable token
     function testStatefulActionSignerRejectsMalformedPublicKeyCommitmentField()
         public
         view
@@ -130,13 +133,15 @@ contract ShrincsSignerStatefulActionTest is Test {
 
         publicKey.publicKeyCommitment = hex"1234";
 
-        ShrincsTypes.ActionContext memory context = ShrincsTypes.ActionContext({
-            domainSeparator: keccak256("domain"),
-            nonce: 1,
-            keyVersion: 1,
-            actionType: keccak256("action"),
-            payloadHash: keccak256("payload")
-        });
+        // forgefmt: disable-next-line
+        ShrincsTypes.ActionContext memory context =
+            ShrincsTypes.ActionContext({
+                domainSeparator: keccak256("domain"),
+                nonce: 1,
+                keyVersion: 1,
+                actionType: keccak256("action"),
+                payloadHash: keccak256("payload")
+            });
 
         (,, bool signOk) =
             harness.signStatefulAction(signingKey, publicKey, context);

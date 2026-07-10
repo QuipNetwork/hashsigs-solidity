@@ -52,9 +52,13 @@ contract ShrincsAccountVectorExportTest is Test {
         );
         assertTrue(keygenOk, "keygen must succeed");
 
-        ShrincsAccountVerifierExample account = new ShrincsAccountVerifierExample(
-            ShrincsAccountSigningFacade.publicKeyCommitmentWord(publicKey)
-        );
+        // forgefmt: disable-next-line
+        ShrincsAccountVerifierExample account =
+            new ShrincsAccountVerifierExample(
+                ShrincsAccountSigningFacade.publicKeyCommitmentWord(
+                    publicKey
+                )
+            );
 
         (
             ShrincsTypes.SigningKey memory nextSigningKey,
@@ -109,9 +113,13 @@ contract ShrincsAccountVectorExportTest is Test {
         );
         assertTrue(keygenOk, "keygen must succeed");
 
-        ShrincsAccountVerifierExample account = new ShrincsAccountVerifierExample(
-            ShrincsAccountSigningFacade.publicKeyCommitmentWord(publicKey)
-        );
+        // forgefmt: disable-next-line
+        ShrincsAccountVerifierExample account =
+            new ShrincsAccountVerifierExample(
+                ShrincsAccountSigningFacade.publicKeyCommitmentWord(
+                    publicKey
+                )
+            );
 
         (
             ShrincsTypes.ActionContext memory context,
@@ -171,14 +179,17 @@ contract ShrincsAccountVectorExportTest is Test {
         );
         assertTrue(currentOk, "current keygen must succeed");
 
-        ShrincsAccountVerifierExample account = new ShrincsAccountVerifierExample(
-            ShrincsAccountSigningFacade.publicKeyCommitmentWord(
-                currentPublicKey
-            )
-        );
+        // forgefmt: disable-next-line
+        ShrincsAccountVerifierExample account =
+            new ShrincsAccountVerifierExample(
+                ShrincsAccountSigningFacade.publicKeyCommitmentWord(
+                    currentPublicKey
+                )
+            );
         account.setStatefulPolicyRecoveryRotation();
         account.enterRecoveryMode();
 
+        // line-length: allow — fmt canonical tuple head exceeds cap
         (, ShrincsTypes.PublicKey memory nextPublicKey, bool nextOk) = ShrincsAccountSigningFacade.keygen(
             bytes("export-rotation-next-key"), 4
         );
@@ -242,14 +253,17 @@ contract ShrincsAccountVectorExportTest is Test {
         );
         assertTrue(currentOk, "current keygen must succeed");
 
-        ShrincsAccountVerifierExample account = new ShrincsAccountVerifierExample(
-            ShrincsAccountSigningFacade.publicKeyCommitmentWord(
-                currentPublicKey
-            )
-        );
+        // forgefmt: disable-next-line
+        ShrincsAccountVerifierExample account =
+            new ShrincsAccountVerifierExample(
+                ShrincsAccountSigningFacade.publicKeyCommitmentWord(
+                    currentPublicKey
+                )
+            );
         account.setStatefulPolicyRecoveryRotation();
         account.enterRecoveryMode();
 
+        // line-length: allow — fmt canonical tuple head exceeds cap
         (, ShrincsTypes.PublicKey memory nextPublicKey, bool nextOk) = ShrincsAccountSigningFacade.keygen(
             bytes("account-aware full rotation next key"), 4
         );

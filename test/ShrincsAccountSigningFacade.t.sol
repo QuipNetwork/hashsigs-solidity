@@ -53,9 +53,13 @@ contract ShrincsAccountSigningFacadeTest is Test {
         );
         assertTrue(keygenOk, "keygen must succeed");
 
-        ShrincsAccountVerifierExample account = new ShrincsAccountVerifierExample(
-            ShrincsAccountSigningFacade.publicKeyCommitmentWord(publicKey)
-        );
+        // forgefmt: disable-next-line
+        ShrincsAccountVerifierExample account =
+            new ShrincsAccountVerifierExample(
+                ShrincsAccountSigningFacade.publicKeyCommitmentWord(
+                    publicKey
+                )
+            );
         bytes32 actionType = keccak256("execute");
         bytes32 payloadHash = keccak256("payload");
 
@@ -92,6 +96,7 @@ contract ShrincsAccountSigningFacadeTest is Test {
 
     // Checks that a stateful ERC-1271 signature works now, then fails after
     // the nonce is used.
+    // line-length: allow — test name is one unbreakable token
     function testAccountAwareStateful1271SnapshotIsValidBeforeNonceUseAndInvalidAfter()
         public
     {
@@ -104,9 +109,13 @@ contract ShrincsAccountSigningFacadeTest is Test {
         );
         assertTrue(keygenOk, "keygen must succeed");
 
-        ShrincsAccountVerifierExample account = new ShrincsAccountVerifierExample(
-            ShrincsAccountSigningFacade.publicKeyCommitmentWord(publicKey)
-        );
+        // forgefmt: disable-next-line
+        ShrincsAccountVerifierExample account =
+            new ShrincsAccountVerifierExample(
+                ShrincsAccountSigningFacade.publicKeyCommitmentWord(
+                    publicKey
+                )
+            );
         bytes32 actionType = keccak256("execute");
         bytes32 payloadHash = keccak256("payload");
 
@@ -155,9 +164,13 @@ contract ShrincsAccountSigningFacadeTest is Test {
         );
         assertTrue(keygenOk, "keygen must succeed");
 
-        ShrincsAccountVerifierExample account = new ShrincsAccountVerifierExample(
-            ShrincsAccountSigningFacade.publicKeyCommitmentWord(publicKey)
-        );
+        // forgefmt: disable-next-line
+        ShrincsAccountVerifierExample account =
+            new ShrincsAccountVerifierExample(
+                ShrincsAccountSigningFacade.publicKeyCommitmentWord(
+                    publicKey
+                )
+            );
         bytes32 actionType = keccak256("execute");
         bytes32 payloadHash = keccak256("payload");
 
@@ -206,6 +219,7 @@ contract ShrincsAccountSigningFacadeTest is Test {
 
     // Checks that a stateless ERC-1271 signature works now, then fails after
     // the nonce is used.
+    // line-length: allow — test name is one unbreakable token
     function testAccountAwareStateless1271SnapshotIsValidBeforeNonceUseAndInvalidAfter()
         public
     {
@@ -218,9 +232,13 @@ contract ShrincsAccountSigningFacadeTest is Test {
         );
         assertTrue(keygenOk, "keygen must succeed");
 
-        ShrincsAccountVerifierExample account = new ShrincsAccountVerifierExample(
-            ShrincsAccountSigningFacade.publicKeyCommitmentWord(publicKey)
-        );
+        // forgefmt: disable-next-line
+        ShrincsAccountVerifierExample account =
+            new ShrincsAccountVerifierExample(
+                ShrincsAccountSigningFacade.publicKeyCommitmentWord(
+                    publicKey
+                )
+            );
         bytes32 actionType = keccak256("execute");
         bytes32 payloadHash = keccak256("payload");
 
@@ -283,14 +301,17 @@ contract ShrincsAccountSigningFacadeTest is Test {
         );
         assertTrue(currentOk, "current keygen must succeed");
 
-        ShrincsAccountVerifierExample account = new ShrincsAccountVerifierExample(
-            ShrincsAccountSigningFacade.publicKeyCommitmentWord(
-                currentPublicKey
-            )
-        );
+        // forgefmt: disable-next-line
+        ShrincsAccountVerifierExample account =
+            new ShrincsAccountVerifierExample(
+                ShrincsAccountSigningFacade.publicKeyCommitmentWord(
+                    currentPublicKey
+                )
+            );
         account.setStatefulPolicyRecoveryRotation();
         account.enterRecoveryMode();
 
+        // line-length: allow — fmt canonical tuple head exceeds cap
         (, ShrincsTypes.PublicKey memory nextPublicKey, bool nextOk) = ShrincsAccountSigningFacade.keygen(
             bytes("account-aware rotation next key"), 4
         );
@@ -359,14 +380,17 @@ contract ShrincsAccountSigningFacadeTest is Test {
         );
         assertTrue(currentOk, "current keygen must succeed");
 
-        ShrincsAccountVerifierExample account = new ShrincsAccountVerifierExample(
-            ShrincsAccountSigningFacade.publicKeyCommitmentWord(
-                currentPublicKey
-            )
-        );
+        // forgefmt: disable-next-line
+        ShrincsAccountVerifierExample account =
+            new ShrincsAccountVerifierExample(
+                ShrincsAccountSigningFacade.publicKeyCommitmentWord(
+                    currentPublicKey
+                )
+            );
         account.setStatefulPolicyRecoveryRotation();
         account.enterRecoveryMode();
 
+        // line-length: allow — fmt canonical tuple head exceeds cap
         (, ShrincsTypes.PublicKey memory nextPublicKey, bool nextOk) = ShrincsAccountSigningFacade.keygen(
             bytes("account-aware full rotation next key"), 4
         );

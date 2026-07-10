@@ -42,6 +42,7 @@ contract ShrincsStatelessVectorSignerHarness is
 }
 
 contract ShrincsStatelessVectorSignerTest is Test {
+    // line-length: allow — fmt cannot wrap a using-for directive
     using ShrincsStatelessVectorSigningFacade for ShrincsStatelessVectorSignerHarness;
 
     ShrincsStatelessVectorSignerHarness internal signer;

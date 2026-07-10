@@ -69,6 +69,7 @@ library ShrincsStateful {
 
         // Reconstruct the compact WOTS-C public-key hash from the signature
         // and message.
+        // line-length: allow — fmt canonical tuple head exceeds cap
         (bytes32 pkHash, bool validWots) = compactStatefulWotsPublicKeyFromSignature(
             statefulKey.pkSeed, leafIndex, message, signature
         );

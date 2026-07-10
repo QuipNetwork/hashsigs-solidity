@@ -96,6 +96,7 @@ library ShrincsAccountVectorExport {
                 account.verifyStatefulAction,
                 (publicKey, actionType, payloadHash, signature)
             ),
+            // line-length: allow — fmt canonical field head exceeds cap
             erc1271Envelope: ShrincsAccountSigningFacade.encodeStateful1271Envelope(
                 publicKey, actionType, payloadHash, signature
             )
@@ -126,6 +127,7 @@ library ShrincsAccountVectorExport {
                 account.verifyStatelessAction,
                 (publicKey, actionType, payloadHash, signature)
             ),
+            // line-length: allow — fmt canonical field head exceeds cap
             erc1271Envelope: ShrincsAccountSigningFacade.encodeStateless1271Envelope(
                 publicKey, actionType, payloadHash, signature
             )

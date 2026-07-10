@@ -409,6 +409,7 @@ library WOTSPlus {
     // message. We convert the message to base-w representation (or base of
     // ChainLen representation) We attach the checksum, also in base-w
     // representation, to the end of the hash chain index list.
+    // line-length: allow — fmt canonical header exceeds cap
     function ComputeMessageHashChainIndexes(WinternitzMessage calldata message)
         internal
         pure

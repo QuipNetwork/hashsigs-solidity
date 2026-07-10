@@ -294,13 +294,15 @@ contract ShrincsAccountVerifierExample {
         if (!precheckStatefulLeafUse(leafIndex)) return false;
 
         // Bind the action to this contract instance, nonce, and key epoch.
-        ShrincsTypes.ActionContext memory context = ShrincsTypes.ActionContext({
-            domainSeparator: domainSeparator(),
-            nonce: nonce,
-            keyVersion: keyVersion,
-            actionType: actionType,
-            payloadHash: payloadHash
-        });
+        // forgefmt: disable-next-line
+        ShrincsTypes.ActionContext memory context =
+            ShrincsTypes.ActionContext({
+                domainSeparator: domainSeparator(),
+                nonce: nonce,
+                keyVersion: keyVersion,
+                actionType: actionType,
+                payloadHash: payloadHash
+            });
 
         // Verify the canonical typed action under the installed key
         // commitment.
@@ -345,13 +347,15 @@ contract ShrincsAccountVerifierExample {
         if (statelessSignaturesUsed >= limit) return false;
 
         // Bind the action to this contract instance, nonce, and key epoch.
-        ShrincsTypes.ActionContext memory context = ShrincsTypes.ActionContext({
-            domainSeparator: domainSeparator(),
-            nonce: nonce,
-            keyVersion: keyVersion,
-            actionType: actionType,
-            payloadHash: payloadHash
-        });
+        // forgefmt: disable-next-line
+        ShrincsTypes.ActionContext memory context =
+            ShrincsTypes.ActionContext({
+                domainSeparator: domainSeparator(),
+                nonce: nonce,
+                keyVersion: keyVersion,
+                actionType: actionType,
+                payloadHash: payloadHash
+            });
 
         // Verify the canonical typed action under the installed key
         // commitment.
@@ -648,13 +652,15 @@ contract ShrincsAccountVerifierExample {
         uint32 leafIndex = uint32(signature.authPath.length);
         if (!precheckStatefulLeafUse(leafIndex)) return false;
 
-        ShrincsTypes.ActionContext memory context = ShrincsTypes.ActionContext({
-            domainSeparator: domainSeparator(),
-            nonce: nonce,
-            keyVersion: keyVersion,
-            actionType: actionType,
-            payloadHash: payloadHash
-        });
+        // forgefmt: disable-next-line
+        ShrincsTypes.ActionContext memory context =
+            ShrincsTypes.ActionContext({
+                domainSeparator: domainSeparator(),
+                nonce: nonce,
+                keyVersion: keyVersion,
+                actionType: actionType,
+                payloadHash: payloadHash
+            });
 
         if (
             SHRINCS.statefulActionMessageHash(
@@ -690,13 +696,15 @@ contract ShrincsAccountVerifierExample {
             statelessSignaturesUsed >= ShrincsTypes.STATELESS_SIGNATURE_LIMIT
         ) return false;
 
-        ShrincsTypes.ActionContext memory context = ShrincsTypes.ActionContext({
-            domainSeparator: domainSeparator(),
-            nonce: nonce,
-            keyVersion: keyVersion,
-            actionType: actionType,
-            payloadHash: payloadHash
-        });
+        // forgefmt: disable-next-line
+        ShrincsTypes.ActionContext memory context =
+            ShrincsTypes.ActionContext({
+                domainSeparator: domainSeparator(),
+                nonce: nonce,
+                keyVersion: keyVersion,
+                actionType: actionType,
+                payloadHash: payloadHash
+            });
 
         if (
             SHRINCS.statelessActionMessageHash(

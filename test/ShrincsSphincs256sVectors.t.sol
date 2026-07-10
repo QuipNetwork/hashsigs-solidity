@@ -633,6 +633,7 @@ contract ShrincsSphincs256sVectorsTest is Test {
         );
     }
 
+    // line-length: allow — test name is one unbreakable token
     function testStatelessSphincs256sRejectsMalformedHypertreeRootAsPublicRootLength()
         public
     {
@@ -777,8 +778,10 @@ contract ShrincsSphincs256sVectorsTest is Test {
             bytes memory message,
             ShrincsTypes.StatelessSignature memory signature
         ) = decodeStatelessVector(".stateless.cases.valid.calldata");
-        ShrincsTypes.HypertreeLayerSignature[] memory shortened = new ShrincsTypes
-            .HypertreeLayerSignature[](signature.hypertree.length - 1);
+        // forgefmt: disable-next-line
+        ShrincsTypes.HypertreeLayerSignature[] memory shortened =
+            new ShrincsTypes
+                .HypertreeLayerSignature[](signature.hypertree.length - 1);
         for (uint256 i = 0; i < shortened.length; ++i) {
             shortened[i] = signature.hypertree[i];
         }
@@ -912,6 +915,7 @@ contract ShrincsSphincs256sVectorsTest is Test {
         );
     }
 
+    // line-length: allow — test name is one unbreakable token
     function testStatelessSphincs256sRejectsMalformedHypertreeWotsChainLength()
         public
     {
@@ -967,13 +971,15 @@ contract ShrincsSphincs256sVectorsTest is Test {
             actionType: keccak256("execute"),
             payloadHash: keccak256("payload-a")
         });
-        ShrincsTypes.ActionContext memory second = ShrincsTypes.ActionContext({
-            domainSeparator: first.domainSeparator,
-            nonce: first.nonce,
-            keyVersion: first.keyVersion,
-            actionType: first.actionType,
-            payloadHash: keccak256("payload-b")
-        });
+        // forgefmt: disable-next-line
+        ShrincsTypes.ActionContext memory second =
+            ShrincsTypes.ActionContext({
+                domainSeparator: first.domainSeparator,
+                nonce: first.nonce,
+                keyVersion: first.keyVersion,
+                actionType: first.actionType,
+                payloadHash: keccak256("payload-b")
+            });
 
         assertTrue(
             stateful.actionMessageHash(expectedCompositePublicKey, first)
@@ -992,13 +998,15 @@ contract ShrincsSphincs256sVectorsTest is Test {
         ) = decodeStatefulVector(".stateful.cases.valid.calldata");
         bytes32 expectedCompositePublicKey =
             compositePublicKeyWord(publicKey);
-        ShrincsTypes.ActionContext memory context = ShrincsTypes.ActionContext({
-            domainSeparator: bytes32(0),
-            nonce: 1,
-            keyVersion: 1,
-            actionType: keccak256("execute"),
-            payloadHash: keccak256("payload")
-        });
+        // forgefmt: disable-next-line
+        ShrincsTypes.ActionContext memory context =
+            ShrincsTypes.ActionContext({
+                domainSeparator: bytes32(0),
+                nonce: 1,
+                keyVersion: 1,
+                actionType: keccak256("execute"),
+                payloadHash: keccak256("payload")
+            });
         message;
         assertEq(
             stateful.verify(
@@ -1016,13 +1024,15 @@ contract ShrincsSphincs256sVectorsTest is Test {
         ) = decodeStatefulVector(".stateful.cases.valid.calldata");
         bytes32 expectedCompositePublicKey =
             compositePublicKeyWord(publicKey);
-        ShrincsTypes.ActionContext memory context = ShrincsTypes.ActionContext({
-            domainSeparator: keccak256("shrincs-account"),
-            nonce: 1,
-            keyVersion: 1,
-            actionType: bytes32(0),
-            payloadHash: keccak256("payload")
-        });
+        // forgefmt: disable-next-line
+        ShrincsTypes.ActionContext memory context =
+            ShrincsTypes.ActionContext({
+                domainSeparator: keccak256("shrincs-account"),
+                nonce: 1,
+                keyVersion: 1,
+                actionType: bytes32(0),
+                payloadHash: keccak256("payload")
+            });
         assertEq(
             stateful.verify(
                 expectedCompositePublicKey, publicKey, context, signature
@@ -1039,13 +1049,15 @@ contract ShrincsSphincs256sVectorsTest is Test {
         ) = decodeStatefulVector(".stateful.cases.valid.calldata");
         bytes32 expectedCompositePublicKey =
             compositePublicKeyWord(publicKey);
-        ShrincsTypes.ActionContext memory context = ShrincsTypes.ActionContext({
-            domainSeparator: keccak256("shrincs-account"),
-            nonce: 1,
-            keyVersion: 1,
-            actionType: keccak256("execute"),
-            payloadHash: bytes32(0)
-        });
+        // forgefmt: disable-next-line
+        ShrincsTypes.ActionContext memory context =
+            ShrincsTypes.ActionContext({
+                domainSeparator: keccak256("shrincs-account"),
+                nonce: 1,
+                keyVersion: 1,
+                actionType: keccak256("execute"),
+                payloadHash: bytes32(0)
+            });
         assertEq(
             stateful.verify(
                 expectedCompositePublicKey, publicKey, context, signature
@@ -1067,13 +1079,15 @@ contract ShrincsSphincs256sVectorsTest is Test {
             actionType: keccak256("rotate"),
             payloadHash: keccak256("payload")
         });
-        ShrincsTypes.ActionContext memory second = ShrincsTypes.ActionContext({
-            domainSeparator: first.domainSeparator,
-            nonce: 10,
-            keyVersion: first.keyVersion,
-            actionType: first.actionType,
-            payloadHash: first.payloadHash
-        });
+        // forgefmt: disable-next-line
+        ShrincsTypes.ActionContext memory second =
+            ShrincsTypes.ActionContext({
+                domainSeparator: first.domainSeparator,
+                nonce: 10,
+                keyVersion: first.keyVersion,
+                actionType: first.actionType,
+                payloadHash: first.payloadHash
+            });
 
         assertTrue(
             stateless.actionMessageHash(expectedCompositePublicKey, first)
@@ -1091,13 +1105,15 @@ contract ShrincsSphincs256sVectorsTest is Test {
         ) = decodeStatelessVector(".stateless.cases.valid.calldata");
         bytes32 expectedCompositePublicKey =
             compositePublicKeyWord(publicKey);
-        ShrincsTypes.ActionContext memory context = ShrincsTypes.ActionContext({
-            domainSeparator: bytes32(0),
-            nonce: 1,
-            keyVersion: 1,
-            actionType: keccak256("execute"),
-            payloadHash: keccak256("payload")
-        });
+        // forgefmt: disable-next-line
+        ShrincsTypes.ActionContext memory context =
+            ShrincsTypes.ActionContext({
+                domainSeparator: bytes32(0),
+                nonce: 1,
+                keyVersion: 1,
+                actionType: keccak256("execute"),
+                payloadHash: keccak256("payload")
+            });
         assertEq(
             stateless.verify(
                 expectedCompositePublicKey, publicKey, context, signature
@@ -1114,13 +1130,15 @@ contract ShrincsSphincs256sVectorsTest is Test {
         ) = decodeStatelessVector(".stateless.cases.valid.calldata");
         bytes32 expectedCompositePublicKey =
             compositePublicKeyWord(publicKey);
-        ShrincsTypes.ActionContext memory context = ShrincsTypes.ActionContext({
-            domainSeparator: keccak256("shrincs-account"),
-            nonce: 1,
-            keyVersion: 1,
-            actionType: bytes32(0),
-            payloadHash: keccak256("payload")
-        });
+        // forgefmt: disable-next-line
+        ShrincsTypes.ActionContext memory context =
+            ShrincsTypes.ActionContext({
+                domainSeparator: keccak256("shrincs-account"),
+                nonce: 1,
+                keyVersion: 1,
+                actionType: bytes32(0),
+                payloadHash: keccak256("payload")
+            });
         assertEq(
             stateless.verify(
                 expectedCompositePublicKey, publicKey, context, signature
@@ -1137,13 +1155,15 @@ contract ShrincsSphincs256sVectorsTest is Test {
         ) = decodeStatelessVector(".stateless.cases.valid.calldata");
         bytes32 expectedCompositePublicKey =
             compositePublicKeyWord(publicKey);
-        ShrincsTypes.ActionContext memory context = ShrincsTypes.ActionContext({
-            domainSeparator: keccak256("shrincs-account"),
-            nonce: 1,
-            keyVersion: 1,
-            actionType: keccak256("execute"),
-            payloadHash: bytes32(0)
-        });
+        // forgefmt: disable-next-line
+        ShrincsTypes.ActionContext memory context =
+            ShrincsTypes.ActionContext({
+                domainSeparator: keccak256("shrincs-account"),
+                nonce: 1,
+                keyVersion: 1,
+                actionType: keccak256("execute"),
+                payloadHash: bytes32(0)
+            });
         assertEq(
             stateless.verify(
                 expectedCompositePublicKey, publicKey, context, signature
@@ -1271,6 +1291,7 @@ contract ShrincsSphincs256sVectorsTest is Test {
         assertEq(result, bytes32(0));
     }
 
+    // line-length: allow — test name is one unbreakable token
     function testRotateStatefulViaStatelessRejectsZeroMaxSignaturesNextStatefulKey()
         public
     {
@@ -1551,6 +1572,7 @@ contract ShrincsSphincs256sVectorsTest is Test {
         signature = convertLegacyStatelessSignature(legacySignature);
     }
 
+    // line-length: allow — fmt canonical header exceeds cap
     function convertLegacyStatelessSignature(LegacyStatelessSignature memory legacy)
         internal
         pure
@@ -1565,8 +1587,10 @@ contract ShrincsSphincs256sVectorsTest is Test {
             });
         }
 
-        ShrincsTypes.HypertreeLayerSignature[] memory layers = new ShrincsTypes
-            .HypertreeLayerSignature[](legacy.hypertree.length);
+        // forgefmt: disable-next-line
+        ShrincsTypes.HypertreeLayerSignature[] memory layers =
+            new ShrincsTypes
+                .HypertreeLayerSignature[](legacy.hypertree.length);
         for (uint256 i = 0; i < layers.length; ++i) {
             layers[i] = ShrincsTypes.HypertreeLayerSignature({
                 treeIndex: legacy.hypertree[i].treeIndex,

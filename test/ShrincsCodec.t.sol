@@ -38,6 +38,7 @@ contract CodecERC7913ConsumerHarness {
         address verifierAddress = verifierFromSigner(signer);
         if (signer.length == 20) {
             if (verifierAddress.code.length > 0) {
+                // line-length: allow — fmt canonical tuple head exceeds cap
                 (bool ok, bytes memory returnData) = verifierAddress.staticcall(
                     abi.encodeWithSignature(
                         "isValidSignature(bytes32,bytes)", hash, signature
@@ -119,7 +120,10 @@ contract CodecMockERC1271Signer {
         view
         returns (bytes4)
     {
-        if (hash == validHash && keccak256(signature) == validSignatureHash) return MAGIC_VALUE;
+        if (hash == validHash && keccak256(signature) == validSignatureHash)
+        {
+            return MAGIC_VALUE;
+        }
         return INVALID_SIGNATURE;
     }
 }
@@ -324,6 +328,7 @@ contract ShrincsCodecTest is Test {
     }
 
     // Checks that unused bytes inside the public key part are rejected.
+    // line-length: allow — test name is one unbreakable token
     function testDecodeStatefulEnvelopeRejectsNestedTrailingBytesInsidePublicKey()
         public
     {
@@ -358,6 +363,7 @@ contract ShrincsCodecTest is Test {
 
     // Checks that out-of-order ABI pointers are rejected even if abi.decode
     // could read them.
+    // line-length: allow — test name is one unbreakable token
     function testDecodeStatefulEnvelopeRejectsOutOfOrderOffsetsThatStillDecode()
         public
     {
@@ -667,6 +673,7 @@ contract ShrincsCodecERC7913IntegrationTest is Test {
         assertEq(
             verifier.verify(publicKey.publicKeyCommitment, hash, envelope),
             IERC7913SignatureVerifier.verify.selector,
+            // line-length: allow — one unbreakable string literal token
             "Rust-generated stateful vector must verify through the ERC-7913 envelope"
         );
     }
@@ -715,6 +722,7 @@ contract ShrincsCodecERC7913IntegrationTest is Test {
                 signedHash,
                 validEnvelope
             ),
+            // line-length: allow — one unbreakable string literal token
             "20-byte ERC-7913 verifier address must not be called with an empty key"
         );
     }

@@ -152,6 +152,7 @@ contract ShrincsStatelessVectorSigner {
                 uint256(forsTree) * ShrincsTypes.FORS_TREE_HEIGHT,
                 ShrincsTypes.FORS_TREE_HEIGHT
             );
+            // line-length: allow — fmt canonical tuple head exceeds cap
             (bytes32 root, bytes32[] memory authPath) = forsTreeRootAndAuthPath(
                 session.signingKey.pkSeed,
                 session.signingKey.statelessSkSeed,
@@ -340,6 +341,7 @@ contract ShrincsStatelessVectorSigner {
                     session.currentHypertreeRoot
                 )
             );
+            // line-length: allow — fmt canonical tuple head exceeds cap
             (bytes32[] memory chains, uint32 digitSum) = buildStatelessWotsChains(
                 session.signingKey.pkSeed,
                 session.currentLayerSkSeed,

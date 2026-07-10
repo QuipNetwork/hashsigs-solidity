@@ -181,6 +181,7 @@ library ShrincsToyStatelessProfile {
                     uint256(forsTree) * FORS_TREE_HEIGHT,
                     FORS_TREE_HEIGHT
                 );
+                // line-length: allow — fmt canonical tuple head exceeds cap
                 (bytes32 root, bytes32[] memory authPath) = forsTreeRootAndAuthPath(
                     signingKey.pkSeed,
                     signingKey.statelessSkSeed,
@@ -417,6 +418,7 @@ library ShrincsToyStatelessProfile {
                     message
                 )
             );
+            // line-length: allow — fmt canonical tuple head exceeds cap
             (bytes32[] memory chains, uint32 digitSum) = buildSignedWotsChains(
                 pkSeed, skSeed, layer, tree, keypair, fullDigest
             );

@@ -64,7 +64,8 @@ contract ShrincsSignerKeygenTest is Test {
     bytes32 internal constant EXPECTED_PUBLIC_KEY_COMMITMENT =
         0x4c986311f84e2931b0b8589f317ef88defe4640143e573b8e85ee5bf9c4ed068;
     bytes internal constant EXPECTED_STATEFUL_PUBLIC_KEY =
-        hex"a4a372b30187a5bf20d242a6e0a87206cf281bc0fdbbc44c835b3811f800587e59255b6f0e6ee44c1957d1d48bd7edfa936b7a8a073a13a2eb973b3ab87860f600000004";
+    // line-length: allow — one unbreakable test vector literal token
+    hex"a4a372b30187a5bf20d242a6e0a87206cf281bc0fdbbc44c835b3811f800587e59255b6f0e6ee44c1957d1d48bd7edfa936b7a8a073a13a2eb973b3ab87860f600000004";
 
     function setUp() public {
         harness = new ShrincsSignerHarness();
@@ -145,6 +146,7 @@ contract ShrincsSignerKeygenTest is Test {
         assertEq(publicKey.pkSeed.length, 32);
         assertEq(publicKey.hypertreeRoot.length, 32);
 
+        // line-length: allow — fmt canonical call head exceeds cap
         bytes32 expectedCommitment = ShrincsUtils.publicKeyCommitmentFromParts(
             publicKey.statefulPublicKey,
             publicKey.pkSeed,
