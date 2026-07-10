@@ -1,12 +1,44 @@
-# SHRINCS Solidity Verifier
+# Hash-Based Solidity Verifier Implementations
 
-A Solidity verifier-oriented implementation of the SHRINCS signature
-construction.
+Verifier-oriented Solidity implementations of hash-based signature
+schemes: the WOTS+ one-time signature scheme and the SHRINCS hybrid
+stateful/stateless construction.
 
 The production contracts in [`contracts/`](./contracts/) cover on-chain
-verification only. Signer-side recovery state, seed restore logic, and wallet
-lifecycle management are out of scope; test-only Solidity signer helpers live
-under [`test/helpers/`](./test/helpers/) and are not deployable.
+verification only. Signer-side recovery state, seed restore logic, and
+wallet lifecycle management are out of scope; test-only Solidity signer
+helpers live under [`test/helpers/`](./test/helpers/) and are not
+deployable.
+
+## Implementations
+
+Citation keys follow [CODINGSTANDARDS.md §1](./CODINGSTANDARDS.md).
+
+- **WOTS+** ([contracts/WOTSPlus.sol](./contracts/WOTSPlus.sol)) — the
+  Winternitz one-time signature scheme `[WOTSPLUS]` (A. Hülsing,
+  *W-OTS+: Shorter Signatures for Hash-Based Signature Schemes*,
+  AFRICACRYPT 2013; <https://eprint.iacr.org/2017/965>). Keccak-256,
+  32-byte hashes and messages, Winternitz parameter `w = 16`, 67 chains
+  (64 message + 3 checksum). Standalone, with no SHRINCS dependency.
+  The public API (`verify`, `verifyWithRandomizationElements`, `sign`,
+  `generateKeyPair`, `generateRandomizationElements`, `chain`, and the
+  public constants) is stable and vector-tested; the signer-side
+  helpers are reference code, documented "do not use on-chain."
+- **SHRINCS** ([contracts/SHRINCS.sol](./contracts/SHRINCS.sol) and its
+  component libraries) — the hybrid stateful/stateless hash-based
+  construction by Kudinov and Nick `[SHRINCS]`, specified in the
+  appendix of *Hash-based Signature Schemes for Bitcoin*, Cryptology
+  ePrint Archive 2025/2203 (<https://eprint.iacr.org/2025/2203>).
+  Compiled per profile (see [Profiles](#profiles)):
+  - `256s` (default) — keccak-256, 32-byte hashes, `h = 64`, `d = 8`,
+    `a = 14`, `k = 22`, 64 WOTS-C chains, 2^20 stateless budget.
+    Reviewed and anchored to Rust-generated signature vectors.
+  - `128s-q18` — 16-byte truncated hashes, single-layer `h = 18`
+    hypertree, `a = 24`, `k = 6`, 32 WOTS-C chains, 2^18 stateless
+    budget. Compiles and passes the structural test set; signature
+    vectors pending Rust regeneration.
+  - `128s-q20` — as `128s-q18` with a 2^20 stateless budget; same
+    status.
 
 ## What SHRINCS Is
 
@@ -56,8 +88,8 @@ Main contracts:
 - [contracts/interfaces/IERC7913SignatureVerifier.sol](./contracts/interfaces/IERC7913SignatureVerifier.sol)
   - ERC-7913 verifier interface
 - [contracts/WOTSPlus.sol](./contracts/WOTSPlus.sol)
-  - standalone `WOTS+` implementation retained alongside the SHRINCS
-    verifier
+  - the standalone `WOTS+` verifier (see
+    [Implementations](#implementations))
   - not used by the SHRINCS paths or the ERC-7913 raw verifier
 - [contracts/examples/ShrincsAccountVerifierExample.sol](./contracts/examples/ShrincsAccountVerifierExample.sol)
   - example account wrapper that owns nonce, rotation, and policy state
@@ -958,10 +990,9 @@ comfortably above them or a valid signature is reported invalid.
 ## Development
 
 This project uses Foundry for Solidity build and test work. Coding rules,
-citation conventions, and the enforcement gates (`forge fmt --check`,
-`forge build` lint, `scripts/check-line-length.sh`, `forge test`) are
-defined in [CODINGSTANDARDS.md](./CODINGSTANDARDS.md); GitLab CI runs all
-four.
+citation conventions, and the enforcement gates (format, lint, line cap,
+tests, static analysis, and fuzz/invariant properties) are defined in
+[CODINGSTANDARDS.md](./CODINGSTANDARDS.md) §8; GitLab CI runs them all.
 
 ### Prerequisites
 

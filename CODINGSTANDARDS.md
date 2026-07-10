@@ -21,6 +21,10 @@ Canonical citation keys:
   <https://sphincs.org/data/sphincs+-r3.1-specification.pdf>
 - `FIPS205` — NIST FIPS 205, *Stateless Hash-Based Digital Signature
   Standard (SLH-DSA)*, 2024. <https://doi.org/10.6028/NIST.FIPS.205>
+- `SHRINCS` — M. Kudinov, J. Nick, *Hash-based Signature Schemes for
+  Bitcoin*, Cryptology ePrint Archive 2025/2203, 2025; SHRINCS is
+  specified in the appendix.
+  <https://eprint.iacr.org/2025/2203>
 
 Cite as `[KEY §x.y]`, `[KEY Alg n]`, `[KEY Eq n]`, `[KEY p. n]`.
 Examples: `[RFC8391 §5.1]`, `[FIPS205 Alg 19]`, `[WOTSPLUS §3]`.
