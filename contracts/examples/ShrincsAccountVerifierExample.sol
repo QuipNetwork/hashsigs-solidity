@@ -18,6 +18,7 @@ pragma solidity ^0.8.28;
 
 import {SHRINCS} from "../SHRINCS.sol";
 import {ShrincsTypes} from "../ShrincsTypes.sol";
+import {ShrincsAccountEnvelope} from "./ShrincsAccountEnvelope.sol";
 
 contract ShrincsAccountVerifierExample {
     // ERC-1271 success return value.
@@ -244,19 +245,14 @@ contract ShrincsAccountVerifierExample {
             )
         );
 
-        // Reject non-canonical encodings: re-encoding the decoded fields
-        // must reproduce the exact envelope bytes (mirrors
-        // ShrincsCodec.decodeStatefulEnvelope). Trailing bytes or padded
-        // heads are rejected. The onlySelf revert is converted to
-        // INVALID_SIGNATURE by isValidSignature.
-        if (
-            keccak256(payload)
-                != keccak256(
-                    abi.encode(
-                        publicKey, actionType, payloadHash, shrincsSignature
-                    )
-                )
-        ) {
+        // Reject non-canonical encodings: the payload must be the exact
+        // canonical ABI encoding of the decoded fields. Trailing bytes,
+        // non-minimal offsets, gap bytes, and dirty tail padding are
+        // rejected. The structural walk is equivalent to re-encode equality
+        // for this envelope's type shape but avoids re-materializing the
+        // ~90 KB structure (see ShrincsAccountEnvelope). The onlySelf revert
+        // is converted to INVALID_SIGNATURE by isValidSignature.
+        if (!ShrincsAccountEnvelope.isCanonicalStatelessEnvelope(payload)) {
             revert NonCanonicalEnvelope();
         }
 
