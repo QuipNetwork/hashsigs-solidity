@@ -150,6 +150,9 @@ abstract contract SHRINCS is IERC7913SignatureVerifier {
     /// with key = abi.encode(pkSeed, hypertreeRoot) and the stateless
     /// signature envelope, returning that verifier's selector or 0xffffffff.
     /// No try/catch: an execution failure in the delegate reverts.
+    /// This is a high-level bytes4-returning call, so solc's extcodesize and
+    /// return-data-length checks make a call to an undeployed or
+    /// short-returning sibling revert, never a false 0xffffffff.
     /// @param key The 32-byte SHRINCS publicKeyCommitment.
     /// @param hash The 32-byte message hash to verify.
     /// @param signature The SHRINCSCodec stateless envelope.

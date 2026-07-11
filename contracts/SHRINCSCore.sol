@@ -21,6 +21,18 @@ import {SHRINCSCodec} from "./SHRINCSCodec.sol";
 import {UXMSS} from "./UXMSS.sol";
 import {SPHINCSPlusCCore} from "./SPHINCSPlusCCore.sol";
 
+/// @title SHRINCSCore
+/// @notice Pure verification core for the hybrid SHRINCS scheme: builds the
+/// canonical action and rotation hashes and runs the stateful/stateless
+/// verify-and-decode logic the ERC-7913 SHRINCS adapter calls into.
+/// @dev Caller obligations. Every function in this library is `pure` and the
+/// library never reverts; it returns fail-closed booleans, and the revert
+/// policy belongs to the calling contract. All statefulness is the WRAPPER
+/// contract's job: single-use tracking of stateful leaves, nonce and
+/// keyVersion replay scoping, and installing the commitment a rotation
+/// returns. SHRINCSAccountVerifierExample is the reference wrapper. Any
+/// future storage-needing helper belongs in a separate wrapper/base contract
+/// at the top of the inheritance chain, never in these libraries.
 library SHRINCSCore {
     // Hash-suite identifiers bound into canonical action and rotation hashes.
     uint32 internal constant HASH_SUITE_KECCAK_256 = 1;

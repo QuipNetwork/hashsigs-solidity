@@ -43,8 +43,8 @@ contract SHRINCS128sQ20Keccak is SHRINCS {
     //     keccak256(type(Create3Factory).creationCode))
     //   address = CREATE3 child of (
     //     factory, keccak256("QUIP:SPHINCSPlusC128sQ20Keccak:V1.0"))
-    // Pinned by SHRINCSPinnedAddresses.t.sol (profile-gated) so C8's deploy
-    // scripts cannot drift from this constant.
+    // Pinned by test/SHRINCSPinned128sQ20.t.sol (profile-gated) so C8's
+    // deploy scripts cannot drift from this constant.
     address internal constant SPHINCS_PLUS_C_VERIFIER =
         0x1aa7137009a539dE69b148d57dE6712e58c62bab;
 

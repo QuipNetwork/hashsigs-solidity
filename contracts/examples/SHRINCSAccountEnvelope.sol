@@ -93,6 +93,14 @@ library SHRINCSAccountEnvelope {
         //           out-of-bounds zero would fail OPEN, so it must NOT use
         //           the framing-read exception; only its range is checked,
         //           its value (real leaf data) is unconstrained.
+        //   dirty-bit reject - word in a zero-compare (shr(N, word)) on a
+        //           uint32/uint64 field, rejecting the dirty high bits
+        //           abi.decode would revert on. An OOB read yields zero and
+        //           passes locally, so this is not fail-closed alone; it is
+        //           safe only because a bounds-checked read (rdLen/rdPad)
+        //           follows on every accepting path before the
+        //           full-consumption anchor (in `layer` the two dirty checks
+        //           precede the first checked read).
         assembly {
             let poff := payload.offset
             let plen := payload.length
