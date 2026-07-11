@@ -294,6 +294,9 @@ library ShrincsForsC {
         uint256 messageLen = message.length;
         // "fors-digest" || pkSeed || hypertreeRoot || randomizer || counter || message
         uint256 baseLen = 111 + messageLen;
+        // The scratch copy loop writes whole words, so reserve the rounded-up write extent.
+        uint256 copiedMessageLen = (messageLen + 31) & ~uint256(31);
+        uint256 scratchLen = 111 + copiedMessageLen;
         uint256 ptr;
         assembly {
             // Set the visible bytes length of the output buffer.
@@ -331,12 +334,13 @@ library ShrincsForsC {
                 // Store that single digest block into the output bytes payload.
                 mstore(add(out, 32), digestWord)
                 // Bump the free-memory pointer past the scratch buffer.
-                mstore(0x40, add(ptr, and(add(baseLen, 31), not(31))))
+                mstore(0x40, add(ptr, and(add(scratchLen, 31), not(31))))
             }
             return out;
         }
         // Add a 4-byte block counter suffix for multi-block expansion.
         uint256 totalLen = baseLen + 4;
+        uint256 scratchLenWithCounter = scratchLen + 4;
         uint256 offset;
         uint32 blockCounter;
         while (offset < digestBytes) {
@@ -359,7 +363,7 @@ library ShrincsForsC {
         }
         assembly {
             // Bump the free-memory pointer past the scratch buffer with counter suffix space.
-            mstore(0x40, add(ptr, and(add(totalLen, 31), not(31))))
+            mstore(0x40, add(ptr, and(add(scratchLenWithCounter, 31), not(31))))
         }
     }
 }
