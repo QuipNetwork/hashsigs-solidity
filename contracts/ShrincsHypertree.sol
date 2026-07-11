@@ -312,6 +312,8 @@ library ShrincsHypertree {
             mstore(add(ptr, 76), segment)
             // Hash the complete WOTS-C chain-step preimage.
             out := keccak256(ptr, 108)
+            // Reserve the rounded-up scratch region used by this preimage.
+            mstore(0x40, add(ptr, 128))
         }
     }
 
@@ -414,6 +416,8 @@ library ShrincsHypertree {
             mstore(add(ptr, 110), right)
             // Hash the complete hypertree internal-node preimage.
             out := keccak256(ptr, 142)
+            // Reserve the rounded-up scratch region used by this preimage.
+            mstore(0x40, add(ptr, 160))
         }
     }
 }

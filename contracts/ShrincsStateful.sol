@@ -162,6 +162,8 @@ library ShrincsStateful {
             mstore(add(ptr, 78), right)
             // Hash the complete parent-node preimage.
             out := keccak256(ptr, 110)
+            // Reserve the rounded-up scratch region used by this preimage.
+            mstore(0x40, add(ptr, 128))
         }
     }
 
@@ -215,6 +217,8 @@ library ShrincsStateful {
             mstore(add(ptr, 76), segment)
             // Hash the complete WOTS-C chain-step preimage.
             out := keccak256(ptr, 108)
+            // Reserve the rounded-up scratch region used by this preimage.
+            mstore(0x40, add(ptr, 128))
         }
     }
 
