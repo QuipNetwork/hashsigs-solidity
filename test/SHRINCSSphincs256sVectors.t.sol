@@ -149,7 +149,7 @@ contract RotationHarness {
     }
 }
 
-contract ShrincsSphincs256sVectorsTest is Test {
+contract SHRINCSSphincs256sVectorsTest is Test {
     string internal constant VECTOR_PATH =
         "test/test_vectors/shrincs_sphincs_256s_keccak.json";
 
@@ -657,27 +657,6 @@ contract ShrincsSphincs256sVectorsTest is Test {
     }
 
     function testStatelessSphincs256sRejectsMalformedPkSeedLength() public {
-        (
-            SHRINCSCore.PublicKey memory publicKey,
-            bytes memory message,
-            SPHINCSPlusCCore.StatelessSignature memory signature
-        ) = decodeStatelessVector(".stateless.cases.valid.calldata");
-        publicKey.pkSeed = hex"1234";
-        assertEq(
-            stateless.verifyUnsafeRaw(
-                compositePublicKeyWord(publicKey),
-                publicKey,
-                message,
-                signature
-            ),
-            false,
-            "stateless malformed pkSeed length"
-        );
-    }
-
-    function testStatelessSphincs256sRejectsMalformedDuplicatePkSeedLength()
-        public
-    {
         (
             SHRINCSCore.PublicKey memory publicKey,
             bytes memory message,
@@ -1329,7 +1308,7 @@ contract ShrincsSphincs256sVectorsTest is Test {
         assertEq(result, bytes32(0));
     }
 
-    function testRotateFullShrincsKeyMessageHashBindsNextKeyBundle() public {
+    function testRotateFullSHRINCSKeyMessageHashBindsNextKeyBundle() public {
         (SHRINCSCore.PublicKey memory publicKey,,) =
             decodeStatelessVector(".stateless.cases.valid.calldata");
 
@@ -1367,7 +1346,7 @@ contract ShrincsSphincs256sVectorsTest is Test {
         );
     }
 
-    function testRotateFullShrincsKeyRejectsLegacyVectorAuthorization()
+    function testRotateFullSHRINCSKeyRejectsLegacyVectorAuthorization()
         public
     {
         (
@@ -1397,7 +1376,7 @@ contract ShrincsSphincs256sVectorsTest is Test {
         assertEq(result, bytes32(0));
     }
 
-    function testRotateFullShrincsKeyRejectsMismatchedCompositeCommitment()
+    function testRotateFullSHRINCSKeyRejectsMismatchedCompositeCommitment()
         public
     {
         (
@@ -1427,7 +1406,7 @@ contract ShrincsSphincs256sVectorsTest is Test {
         assertEq(result, bytes32(0));
     }
 
-    function testRotateFullShrincsKeyRejectsZeroDomainSeparator() public {
+    function testRotateFullSHRINCSKeyRejectsZeroDomainSeparator() public {
         (
             SHRINCSCore.PublicKey memory publicKey,,
             SPHINCSPlusCCore.StatelessSignature memory signature
@@ -1453,7 +1432,7 @@ contract ShrincsSphincs256sVectorsTest is Test {
         assertEq(result, bytes32(0));
     }
 
-    function testRotateFullShrincsKeyRejectsZeroMaxSignaturesNextStatefulKey()
+    function testRotateFullSHRINCSKeyRejectsZeroMaxSignaturesNextStatefulKey()
         public
     {
         (

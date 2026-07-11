@@ -7,8 +7,8 @@
     "callSequenceLength": 100,
     "corpusDirectory": "medusa-corpus",
     "coverageEnabled": true,
-    "targetContracts": ["ShrincsMedusaHarness"],
-    "deploymentOrder": ["ShrincsMedusaHarness"],
+    "targetContracts": ["SHRINCSMedusaHarness"],
+    "deploymentOrder": ["SHRINCSMedusaHarness"],
     "testAllContracts": false,
     "transactionGasLimit": 12500000
   },

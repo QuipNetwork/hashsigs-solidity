@@ -39,6 +39,16 @@ Citation keys follow [CODINGSTANDARDS.md §1](./CODINGSTANDARDS.md).
     vectors pending Rust regeneration.
   - `128s-q20` — as `128s-q18` with a 2^20 stateless budget; same
     status.
+- **SPHINCS+C** ([contracts/SPHINCSPlusC.sol](./contracts/SPHINCSPlusC.sol))
+  — the stateless SPHINCS+C construction `[SPHINCSPLUSC]` (M. Kudinov,
+  A. Hülsing, E. Ronen, E. Yogev, *SPHINCS+C: Compressing SPHINCS+ With
+  (Almost) No Cost*, Cryptology ePrint Archive 2022/778, IEEE S&P 2023;
+  <https://eprint.iacr.org/2022/778>). SHRINCS uses it as the stateless
+  recovery path: a `FORS-C` few-time signature carried up a hypertree of
+  `WOTS-C` layers to the public root. Deployed per profile as
+  `SPHINCSPlusC256sKeccak`, `SPHINCSPlusC128sQ18Keccak`, and
+  `SPHINCSPlusC128sQ20Keccak`; each SHRINCS verifier delegates its
+  stateless path to the matching profile sibling.
 
 ## What SHRINCS Is
 
@@ -53,52 +63,64 @@ SHRINCS is a two-path signature design:
 
 Normal operation uses the cheaper stateful path. A restored or degraded
 signer falls back to the stateless path. The verifier only checks signatures
-and rotation authorizations; it does not track signer state. The standalone
-ERC-7913 verifier included here supports only the raw **stateful** path, not
-the stateless recovery path.
+and rotation authorizations; it does not track signer state. The ERC-7913
+verifiers here cover both paths: each SHRINCS verifier exposes the stateful
+`verify` plus a `verifyStateless` that delegates to a pinned SPHINCS+C
+sibling, and the standalone SPHINCS+C verifiers check the stateless recovery
+path directly.
 
 ## Repository Layout
 
 Main contracts:
 
 - [contracts/SHRINCS.sol](./contracts/SHRINCS.sol)
-  - main verifier library (facade over the component libraries)
-- [contracts/ShrincsTypes.sol](./contracts/ShrincsTypes.sol)
-  - shared structs and compile-time constants
-- [contracts/ShrincsUtils.sol](./contracts/ShrincsUtils.sol)
-  - shared public-key checks, bit reads, and address packing helpers
+  - abstract ERC-7913 verifier for the hybrid scheme: stateful `verify`
+    plus `verifyStateless`
+- [contracts/SHRINCSCore.sol](./contracts/SHRINCSCore.sol)
+  - pure verification core (facade over the component libraries): builds
+    the canonical action and rotation hashes and runs the stateful and
+    stateless verify-and-decode logic
+- [contracts/SHRINCSCodec.sol](./contracts/SHRINCSCodec.sol)
+  - key and envelope codec bridging ERC-7913 opaque bytes to typed
+    SHRINCS structures
+- [contracts/SHRINCSHash.sol](./contracts/SHRINCSHash.sol)
+  - profile-independent hash and bit primitives (address packing, hash
+    masking, base-w digits, bit readers); the compile-time hash-suite seam
 - [contracts/UXMSS.sol](./contracts/UXMSS.sol)
   - stateful `WOTS-C` reconstruction and unbalanced XMSS-style path
     verification
-- [contracts/ShrincsForsC.sol](./contracts/ShrincsForsC.sol)
+- [contracts/FORSMinusC.sol](./contracts/FORSMinusC.sol)
   - `FORS-C` digest extraction and root reconstruction
-- [contracts/ShrincsHypertree.sol](./contracts/ShrincsHypertree.sol)
+- [contracts/Hypertree.sol](./contracts/Hypertree.sol)
   - stateless `WOTS-C` and hypertree layer verification
-- [contracts/ShrincsVerifier.sol](./contracts/ShrincsVerifier.sol)
-  - abstract ERC-7913 raw-verifier base for the stateful path
+- [contracts/WOTSPlusC.sol](./contracts/WOTSPlusC.sol)
+  - shared `WOTS+C` chain machinery used by the hypertree and UXMSS
+- [contracts/SPHINCSPlusC.sol](./contracts/SPHINCSPlusC.sol)
+  - abstract ERC-7913 verifier for the stateless recovery path
+- [contracts/SPHINCSPlusCCore.sol](./contracts/SPHINCSPlusCCore.sol)
+  - stateless SPHINCS+C verification core (`FORS-C` + hypertree +
+    `WOTS-C` to the public root)
 - [contracts/SHRINCS256sKeccak.sol](./contracts/SHRINCS256sKeccak.sol),
   [contracts/SHRINCS128sQ18Keccak.sol](./contracts/SHRINCS128sQ18Keccak.sol),
   [contracts/SHRINCS128sQ20Keccak.sol](./contracts/SHRINCS128sQ20Keccak.sol)
-  - deployable per-profile verifiers, each with a `PROFILE_TAG`
+  - deployable per-profile stateful verifiers, each with a `PROFILE_TAG`;
+    each pins its SPHINCS+C sibling for the stateless path
 - [contracts/SPHINCSPlusC256sKeccak.sol](./contracts/SPHINCSPlusC256sKeccak.sol),
   [contracts/SPHINCSPlusC128sQ18Keccak.sol](./contracts/SPHINCSPlusC128sQ18Keccak.sol),
   [contracts/SPHINCSPlusC128sQ20Keccak.sol](./contracts/SPHINCSPlusC128sQ20Keccak.sol)
-  - deployable per-profile stateless SPHINCSPlusC verifiers; each SHRINCS
-    verifier delegates its stateless path to the profile's sibling
+  - deployable per-profile stateless verifiers, each with a `PROFILE_TAG`
 - [contracts/profiles/](./contracts/profiles/)
-  - per-profile `ShrincsParams` constant libraries (see
+  - per-profile `SHRINCSParams` constant libraries (see
     [Profiles](#profiles))
-- [contracts/ShrincsCodec.sol](./contracts/ShrincsCodec.sol)
-  - key and stateful-envelope codec for the ERC-7913 verifier
 - [contracts/interfaces/IERC7913SignatureVerifier.sol](./contracts/interfaces/IERC7913SignatureVerifier.sol)
   - ERC-7913 verifier interface
 - [contracts/WOTSPlus.sol](./contracts/WOTSPlus.sol)
   - the standalone `WOTS+` verifier (see
     [Implementations](#implementations))
-  - not used by the SHRINCS paths or the ERC-7913 raw verifier
-- [contracts/examples/ShrincsAccountVerifierExample.sol](./contracts/examples/ShrincsAccountVerifierExample.sol)
+  - not used by the SHRINCS paths or the ERC-7913 verifiers
+- [contracts/examples/SHRINCSAccountVerifierExample.sol](./contracts/examples/SHRINCSAccountVerifierExample.sol)
   - example account wrapper that owns nonce, rotation, and policy state
-- [contracts/examples/ShrincsAccountEnvelope.sol](./contracts/examples/ShrincsAccountEnvelope.sol)
+- [contracts/examples/SHRINCSAccountEnvelope.sol](./contracts/examples/SHRINCSAccountEnvelope.sol)
   - structural canonicity validation for the wrapper's ERC-1271 stateless
     envelopes
 
@@ -127,72 +149,75 @@ Architecture:
 ```mermaid
 graph TD
     subgraph "Integrator layer (example)"
-        EX["ShrincsAccountVerifierExample.sol<br/>(contract — owner, policies, nonce,<br/>keyVersion, q_s budget, stateful-use tracking)"]
-        EN["ShrincsAccountEnvelope.sol<br/>(ERC-1271 stateless envelope<br/>canonicity walk)"]
+        EX["SHRINCSAccountVerifierExample.sol<br/>(contract — owner, policies, nonce,<br/>keyVersion, q_s budget, stateful-use tracking)"]
+        EN["SHRINCSAccountEnvelope.sol<br/>(ERC-1271 stateless envelope<br/>canonicity walk)"]
     end
 
-    subgraph "ERC-7913 raw verifier"
-        VF["ShrincsVerifier.sol (abstract base)<br/>+ ShrincsVerifier256s / 128sQ18 / 128sQ20<br/>(stateful raw path only)"]
-        CO["ShrincsCodec.sol<br/>(key + stateful envelope codec)"]
+    subgraph "ERC-7913 verifiers"
+        VF["SHRINCS.sol (abstract base)<br/>+ SHRINCS256sKeccak / 128sQ18Keccak / 128sQ20Keccak<br/>(stateful verify + verifyStateless)"]
+        SP["SPHINCSPlusC.sol (abstract base)<br/>+ SPHINCSPlusC256sKeccak / 128sQ18Keccak / 128sQ20Keccak<br/>(stateless recovery path)"]
+        CO["SHRINCSCodec.sol<br/>(key + envelope codec)"]
     end
 
-    subgraph "Public API layer"
-        FA["SHRINCS.sol (facade)<br/>canonical: verifyStateful / verifyStateless,<br/>statelessRotate, rotateStatefulViaStateless,<br/>4 canonical message hashes"]
+    subgraph "Verification core libraries"
+        FA["SHRINCSCore.sol<br/>stateful + stateless verify-and-decode,<br/>canonical action + rotation hashes"]
+        SC["SPHINCSPlusCCore.sol<br/>stateless FORS-C + hypertree<br/>-> public root"]
     end
 
     subgraph "Crypto component libraries"
         ST["UXMSS.sol<br/>compact WOTS-C digits +<br/>unbalanced-XMSS auth path<br/>(cheap normal-case path)"]
-        FO["ShrincsForsC.sol<br/>FORS-C digest, grind checks,<br/>k−1 tree-root rebuild -> forsRoot"]
-        HY["ShrincsHypertree.sol<br/>d=8 XMSS layers, stateless WOTS-C,<br/>Merkle paths -> hypertreeRoot"]
+        FO["FORSMinusC.sol<br/>FORS-C digest, grind checks,<br/>k−1 tree-root rebuild -> forsRoot"]
+        HY["Hypertree.sol<br/>d=8 XMSS layers, stateless WOTS-C,<br/>Merkle paths -> hypertreeRoot"]
+        WC["WOTSPlusC.sol<br/>shared WOTS+C chain machinery"]
     end
 
     subgraph "Foundation"
-        UT["ShrincsUtils.sol<br/>public-key checks,<br/>bit readers,<br/>address-word packing"]
-        TY["ShrincsTypes.sol<br/>structs + constant aliases"]
-        PA["profiles/&lt;profile&gt;/ShrincsParams.sol<br/>(profile-selected constants)"]
+        HH["SHRINCSHash.sol<br/>hash + bit primitives,<br/>address-word packing,<br/>hash-suite seam"]
+        PA["profiles/&lt;profile&gt;/SHRINCSParams.sol<br/>(profile-selected constants)"]
     end
 
     WP["WOTSPlus.sol<br/>(standalone library —<br/>no SHRINCS dependency)"]
 
-    EX --> FA
+    EX --> VF
     EX --> EN
     VF --> CO
     VF --> FA
+    VF -. stateless delegate .-> SP
+    SP --> SC
     FA --> ST
-    FA --> FO
-    FA --> HY
-    FA --> UT
-    ST --> UT
-    FO --> UT
-    HY --> UT
-    UT --> TY
-    ST --> TY
-    FO --> TY
-    HY --> TY
-    FA --> TY
-    EX --> TY
-    CO --> TY
-    TY --> PA
+    FA --> SC
+    SC --> FO
+    SC --> HY
+    ST --> WC
+    HY --> WC
+    ST --> HH
+    FO --> HH
+    HY --> HH
+    WC --> HH
+    FA --> PA
+    ST --> PA
+    FO --> PA
+    HY --> PA
 ```
 
-Tests (17 suites, 196 tests as of 2026-07-10, default profile):
+Tests (24 suites, 232 tests as of 2026-07-11, default profile):
 
-- [test/ShrincsSphincs256sVectors.t.sol](./test/ShrincsSphincs256sVectors.t.sol)
+- [test/SHRINCSSphincs256sVectors.t.sol](./test/SHRINCSSphincs256sVectors.t.sol)
   - vector-backed verification and rotation-authorization tests
-- [test/ShrincsAccountVerifierExample.t.sol](./test/ShrincsAccountVerifierExample.t.sol)
+- [test/SHRINCSAccountVerifierExample.t.sol](./test/SHRINCSAccountVerifierExample.t.sol)
   - wrapper integration and state-transition tests
-- [test/ShrincsStatefulPolicyExamples.t.sol](./test/ShrincsStatefulPolicyExamples.t.sol)
+- [test/SHRINCSStatefulPolicyExamples.t.sol](./test/SHRINCSStatefulPolicyExamples.t.sol)
   - stateful-use policy tests
-- [test/ShrincsAccountEnvelopeCanonicity.t.sol](./test/ShrincsAccountEnvelopeCanonicity.t.sol)
+- [test/SHRINCSAccountEnvelopeCanonicity.t.sol](./test/SHRINCSAccountEnvelopeCanonicity.t.sol)
   - negative and differential-fuzz tests for the ERC-1271 stateless
     envelope canonicity walk
-- [test/ShrincsVerifier.t.sol](./test/ShrincsVerifier.t.sol) and
-  [test/ShrincsCodec.t.sol](./test/ShrincsCodec.t.sol)
+- [test/SHRINCSVerifier.t.sol](./test/SHRINCSVerifier.t.sol) and
+  [test/SHRINCSCodec.t.sol](./test/SHRINCSCodec.t.sol)
   - ERC-7913 raw verifier and codec tests
-- [test/ShrincsProfileInvariants.t.sol](./test/ShrincsProfileInvariants.t.sol)
+- [test/SHRINCSProfileInvariants.t.sol](./test/SHRINCSProfileInvariants.t.sol)
   - structural invariants and the profile-identity guard for the active
-    `ShrincsParams` profile
-- [test/ShrincsMeasurements.t.sol](./test/ShrincsMeasurements.t.sol)
+    `SHRINCSParams` profile
+- [test/SHRINCSMeasurements.t.sol](./test/SHRINCSMeasurements.t.sol)
   - gas measurement tests (figures below)
 - [test/WOTSPlus.t.sol](./test/WOTSPlus.t.sol)
   - standalone `WOTS+` tests
@@ -207,7 +232,7 @@ Test vectors:
 
 ## Public-Key Shape
 
-The SHRINCS public key (`ShrincsTypes.PublicKey`) contains:
+The SHRINCS public key (`SHRINCSCore.PublicKey`) contains:
 
 - `statefulPublicKey`
 - `publicKeyCommitment`
@@ -318,7 +343,7 @@ the [FIPS205 §8.2] index recurrence. The FORS digest fixes layer 0's
 coordinate; each upper layer's leaf index is the low
 `HYPERTREE_HEIGHT / NUM_HYPERTREE_LAYERS` bits of the layer below's tree
 index, and its tree index is the remaining high bits.
-`ShrincsHypertree.verifyHypertree` and the test signer enforce this chaining
+`Hypertree.verifyHypertree` and the test signer enforce this chaining
 in lockstep, so a signature cannot choose independent upper-layer addresses.
 This is a deliberate, documented departure from FIPS 205 (marked
 `Deviates from [FIPS205 §8.2]:` in the code); do not change either side
@@ -408,7 +433,7 @@ The adapter:
 - rejects non-canonical envelope encodings
   - the stateful envelope must re-encode to its exact input bytes
   - the stateless envelope is checked by a structural canonicity walk
-    ([`ShrincsAccountEnvelope`](./contracts/examples/ShrincsAccountEnvelope.sol))
+    ([`SHRINCSAccountEnvelope`](./contracts/examples/SHRINCSAccountEnvelope.sol))
     that proves the same property without re-materializing the ~90 KB
     structure; a differential fuzz test pins the walk against the re-encode
     reference
@@ -432,11 +457,13 @@ Important semantics:
   this path
 - stateless/key-rotation authorizations are not part of this ERC-1271
   surface
-- **minimum gas:** each envelope is verified behind a `try/catch` self-call.
-  An inner out-of-gas (the EIP-150 63/64 rule strands the hop while the
-  outer frame keeps 1/64) is caught and reported as `0xffffffff`, so a valid
-  signature can be misreported as invalid if the caller forwards too little
-  gas. Callers must forward gas comfortably above the measured figures in
+- **minimum gas:** malformed envelopes return `0xffffffff` through
+  non-reverting canonicity validators, but verification itself runs through
+  one untried self-call hop. An inner out-of-gas (the EIP-150 63/64 rule
+  strands the hop while the outer frame keeps 1/64) reverts with empty
+  returndata rather than being reported as `0xffffffff`, so a valid
+  signature is never reported invalid. Callers must forward gas
+  comfortably above the measured figures in
   [Gas measurements](#gas-measurements).
 
 ### 6. ERC-7913 raw verifier
@@ -451,7 +478,7 @@ stateful SHRINCS path.
 - **hash** — the 32-byte message the signature is verified against; the
   caller constructs it (typically a domain-separated digest).
 - **signature** — `abi.encode(PublicKey, StatefulSignature)`, the
-  `ShrincsCodec` stateful envelope.
+  `SHRINCSCodec` stateful envelope.
 - For ABI-valid `verify(...)` calls, returns `0x024ad318` on success and
   `0xffffffff` on verification failure, malformed key bytes, or malformed
   SHRINCS envelope bytes. The public `verify(...)` entrypoint catches
@@ -476,26 +503,26 @@ The ERC-7913 verifier is intentionally narrow:
   family, and each deployable subclass adds a `PROFILE_TAG` identifying
   its compiled parameter set
 
-`ShrincsVerifier` itself is an abstract base; the deployable contracts are
-the per-profile subclasses (`ShrincsVerifier256s`, `ShrincsVerifier128sQ18`,
-`ShrincsVerifier128sQ20`), each compiled under its own build profile.
+`SHRINCS` itself is an abstract base; the deployable contracts are
+the per-profile subclasses (`SHRINCS256sKeccak`, `SHRINCS128sQ18Keccak`,
+`SHRINCS128sQ20Keccak`), each compiled under its own build profile.
 
 #### Verification semantics
 
-At a high level, [`ShrincsVerifier.verify(...)`](./contracts/ShrincsVerifier.sol):
+At a high level, [`SHRINCS.verify(...)`](./contracts/SHRINCS.sol):
 
 1. decodes `key` as the expected bundle commitment
 2. decodes `signature` as a stateful SHRINCS envelope
 3. converts the ERC-7913 `bytes32 hash` into the 32-byte SHRINCS message
-4. calls `SHRINCS.verifyStatefulUncheckedMessage(...)`
+4. calls `SHRINCSCore.verifyStatefulUncheckedMessage(...)`
 5. returns the ERC-7913 magic value on success, or `0xffffffff` on failure
 
-Malformed signature envelopes passed through `ShrincsVerifier.verify(...)`
+Malformed signature envelopes passed through `SHRINCS.verify(...)`
 are treated as signature failure, not bubbled as verifier reverts.
 
-Like the ERC-1271 adapter, `verify(...)` isolates the check behind a
-`try/catch` self-call, so callers must forward gas comfortably above the
-measured stateful figure or a valid signature is reported invalid.
+Like the ERC-1271 adapter, `verify(...)` runs the check through one untried
+self-call hop, so callers must forward gas comfortably above the measured
+stateful figure or a valid signature reverts with empty returndata.
 
 #### Security scope
 
@@ -540,8 +567,8 @@ Each build compiles the verifier for exactly one SHRINCS configuration.
 Callers do not supply selectors or arbitrary numeric tuples.
 
 The constants live in the profile-selected
-`contracts/profiles/<profile>/ShrincsParams.sol` library and are
-re-exported as `ShrincsTypes` aliases, so reference sites stay
+`contracts/profiles/<profile>/SHRINCSParams.sol` library, imported
+through the `shrincs-profile/` remapping so reference sites stay
 profile-agnostic (see [Profiles](#profiles)). The default `256s` profile
 pins these values (citation keys per
 [CODINGSTANDARDS.md §1](./CODINGSTANDARDS.md)):
@@ -604,7 +631,7 @@ Foundry remapping in `foundry.toml` (each build profile also gets its own
 `out` directory):
 
 - **`256s` (default).** The SPHINCS+-256s-style parameter set listed
-  above. The split into `ShrincsParams` kept the 256s production build
+  above. The split into `SHRINCSParams` kept the 256s production build
   byte-identical to the pre-split verifier (metadata-stripped deployed
   bytecode compared before/after).
 - **`128s-q18` and `128s-q20`.** 16-byte truncated-hash profiles
@@ -623,7 +650,7 @@ FOUNDRY_PROFILE=128s-q18 forge build
 FOUNDRY_PROFILE=128s-q18 forge test
 ```
 
-`test/ShrincsProfileInvariants.t.sol` checks the active profile's
+`test/SHRINCSProfileInvariants.t.sol` checks the active profile's
 structural invariants and carries a profile-identity guard: a build whose
 `shrincs-profile/` remapping was shadowed (say, by a top-level
 `remappings.txt`) fails closed. CI builds, lints, and tests all three
@@ -646,7 +673,7 @@ It manages none of the surrounding account or protocol state:
 A real on-chain verifier or account contract needs an initialization step
 that stores at least:
 
-- `currentShrincsPublicKey`
+- `currentSHRINCSPublicKey`
 
 and usually also:
 
@@ -657,7 +684,7 @@ This is outside the SHRINCS library itself. The library only checks whether
 the provided signature or rotation authorization is valid for the provided
 inputs.
 
-The integrating contract should pass its stored `currentShrincsPublicKey`
+The integrating contract should pass its stored `currentSHRINCSPublicKey`
 into the library as `expectedPublicKeyCommitment`. The library enforces that
 the provided `publicKey` bundle is pinned to that expected key.
 
@@ -679,9 +706,9 @@ every call.
 
 Reference implementation:
 
-- [contracts/examples/ShrincsAccountVerifierExample.sol](./contracts/examples/ShrincsAccountVerifierExample.sol)
-- [test/ShrincsAccountVerifierExample.t.sol](./test/ShrincsAccountVerifierExample.t.sol)
-- [test/ShrincsStatefulPolicyExamples.t.sol](./test/ShrincsStatefulPolicyExamples.t.sol)
+- [contracts/examples/SHRINCSAccountVerifierExample.sol](./contracts/examples/SHRINCSAccountVerifierExample.sol)
+- [test/SHRINCSAccountVerifierExample.t.sol](./test/SHRINCSAccountVerifierExample.t.sol)
+- [test/SHRINCSStatefulPolicyExamples.t.sol](./test/SHRINCSStatefulPolicyExamples.t.sol)
 
 The example contract is intentionally small. It shows how wrapper-owned
 state should interact with the library for:
@@ -793,7 +820,7 @@ wrapper, policy-changing functions are owner-gated.
 
 What the wrapper must handle:
 
-- store `currentShrincsPublicKey`
+- store `currentSHRINCSPublicKey`
 - store and increment `nonce`
 - store and increment `keyVersion`
 - store and enforce `statelessSignaturesUsed < STATELESS_SIGNATURE_LIMIT`
@@ -940,11 +967,11 @@ Current tests cover:
 - fuzzed ABI-valid `verify(...)` inputs return the failure value instead of
   reverting
 - direct lower-level self-call helpers reject non-self callers by reverting
-- `ShrincsCodec.decodeKey(...)` accepts exactly 32-byte keys and rejects
+- `SHRINCSCodec.decodeKey(...)` accepts exactly 32-byte keys and rejects
   other lengths without reverting
-- `ShrincsCodec.decodeStatefulEnvelope(...)` round-trips canonical envelopes
+- `SHRINCSCodec.decodeStatefulEnvelope(...)` round-trips canonical envelopes
   and rejects non-canonical ABI encodings
-- `ShrincsCodec.toMessage(...)` maps the ERC-7913 `bytes32 hash` to exactly
+- `SHRINCSCodec.toMessage(...)` maps the ERC-7913 `bytes32 hash` to exactly
   those 32 packed bytes
 - ERC-7913 consumer examples accept `verifier || key` signers and reject
   no-code, wrong-verifier, short-signer, and non-magic-return cases
@@ -973,27 +1000,30 @@ Current tests cover:
 
 ## Gas Measurements
 
-Measured 2026-07-10 at this repository's default profile settings
+Measured 2026-07-11 at this repository's default profile settings
 (`via_ir = true`, optimizer runs 200) by
-[test/ShrincsMeasurements.t.sol](./test/ShrincsMeasurements.t.sol). The
-ERC-1271 figures include envelope canonicity validation.
+[test/SHRINCSMeasurements.t.sol](./test/SHRINCSMeasurements.t.sol). The
+ERC-1271 figures include envelope canonicity validation; the ERC-7913
+delegation figure is `verifyStateless` calling its SPHINCS+C sibling.
 
 | Path                              | Gas       |
 |-----------------------------------|-----------|
-| stateful, canonical wrapper call  | 231,653   |
-| stateful, ERC-1271                | 235,486   |
-| stateless, canonical wrapper call | 1,878,497 |
-| stateless, ERC-1271               | 3,027,206 |
+| stateful, canonical wrapper call  | 205,841   |
+| stateful, ERC-1271                | 200,578   |
+| stateless, canonical wrapper call | 1,855,613 |
+| stateless, ERC-1271               | 2,970,497 |
+| stateless delegation, ERC-7913    | 4,014,578 |
 
 Reproduce with:
 
 ```bash
-forge test --match-contract ShrincsMeasurements -vv
+forge test --match-contract SHRINCSMeasurements -vv
 ```
 
-These figures also set the minimum-gas floor for the `try/catch` self-call
-paths (see the ERC-1271 and ERC-7913 sections above): forward gas
-comfortably above them or a valid signature is reported invalid.
+These figures also set the minimum-gas floor for the untried self-call hop
+in each entrypoint (see the ERC-1271 and ERC-7913 sections above): forward
+gas comfortably above them or a valid signature reverts with empty
+returndata.
 
 ## Development
 
@@ -1069,8 +1099,8 @@ cp /path/to/hashsigs-rs/tests/test_vectors/shrincs_sphincs_256s_keccak.json \
 Then run the SHRINCS-only Solidity tests:
 
 ```bash
-forge test --match-contract ShrincsSphincs256sVectorsTest -vv
-forge test --match-contract ShrincsAccountVerifierExampleTest -vv
+forge test --match-contract SHRINCSSphincs256sVectorsTest -vv
+forge test --match-contract SHRINCSAccountVerifierExampleTest -vv
 ```
 
 The vector JSON contains the Rust-generated public keys, messages,
@@ -1083,23 +1113,23 @@ This repository also contains test-only Solidity signer helpers under
 [`test/helpers/`](./test/helpers/). These are not part of the production
 verifier surface in [`contracts/`](./contracts/).
 
-- [`test/helpers/ShrincsTestSigner.sol`](./test/helpers/ShrincsTestSigner.sol)
+- [`test/helpers/SHRINCSTestSigner.sol`](./test/helpers/SHRINCSTestSigner.sol)
   - deterministic Solidity keygen plus stateful signing helpers
   - used to mirror Rust signer behavior in tests
-- [`test/helpers/ShrincsStatelessVectorSigner.sol`](./test/helpers/ShrincsStatelessVectorSigner.sol)
+- [`test/helpers/SHRINCSStatelessVectorSigner.sol`](./test/helpers/SHRINCSStatelessVectorSigner.sol)
   - staged storage-backed stateless signer for exact production-profile
     vector generation
   - splits FORS and hypertree work across multiple calls to avoid EVM memory
     blowups
-- [`test/helpers/ShrincsStatelessVectorSigningFacade.sol`](./test/helpers/ShrincsStatelessVectorSigningFacade.sol)
+- [`test/helpers/SHRINCSStatelessVectorSigningFacade.sol`](./test/helpers/SHRINCSStatelessVectorSigningFacade.sol)
   - thin test facade that drives the staged stateless signer through a
     simpler `signFromSeed(...)` / `completeSession(...)` API
-- [`test/helpers/ShrincsAccountSigningFacade.sol`](./test/helpers/ShrincsAccountSigningFacade.sol)
+- [`test/helpers/SHRINCSAccountSigningFacade.sol`](./test/helpers/SHRINCSAccountSigningFacade.sol)
   - test-only account-aware signer facade for canonical wrapper flows
   - rebuilds the live wrapper-owned `domainSeparator`, `nonce`, and
     `keyVersion` before signing stateful actions, stateless actions, and
     both rotation messages
-- [`test/helpers/ShrincsAccountVectorExport.sol`](./test/helpers/ShrincsAccountVectorExport.sol)
+- [`test/helpers/SHRINCSAccountVectorExport.sol`](./test/helpers/SHRINCSAccountVectorExport.sol)
   - packages account-aware signatures into wrapper-feedable bundles
   - exports canonical message bytes, `abi.encodeCall(...)` payloads, and
     ERC-1271 envelopes
@@ -1122,21 +1152,21 @@ for action flows, and the wrapper-owned rotation context for recovery flows.
 
 The test-only account-aware path is:
 
-- [`test/helpers/ShrincsAccountSigningFacade.sol`](./test/helpers/ShrincsAccountSigningFacade.sol)
+- [`test/helpers/SHRINCSAccountSigningFacade.sol`](./test/helpers/SHRINCSAccountSigningFacade.sol)
   - creates wrapper-bound stateful action signatures
   - creates wrapper-bound stateless action signatures
   - creates wrapper-bound stateless recovery signatures for
     `rotateToFreshKey(...)` and `rotateFullKey(...)`
-- [`test/helpers/ShrincsAccountVectorExport.sol`](./test/helpers/ShrincsAccountVectorExport.sol)
+- [`test/helpers/SHRINCSAccountVectorExport.sol`](./test/helpers/SHRINCSAccountVectorExport.sol)
   - converts those signatures into exportable bundles that can be fed
     directly into the live wrapper
-- [`test/ShrincsAccountVectorExport.t.sol`](./test/ShrincsAccountVectorExport.t.sol)
+- [`test/SHRINCSAccountVectorExport.t.sol`](./test/SHRINCSAccountVectorExport.t.sol)
   - emits the bundle bytes and immediately proves the wrapper accepts them
 
 Run the export suite directly:
 
 ```bash
-forge test --match-path test/ShrincsAccountVectorExport.t.sol -vv
+forge test --match-path test/SHRINCSAccountVectorExport.t.sol -vv
 ```
 
 Or generate a JSON artifact from the emitted bundle bytes:
@@ -1239,7 +1269,7 @@ SHRINCS is testnet-only. The 128s-q20 stateless budget (2^20) wants
 profile security-analysis backing before production use, and the 128s
 verifiers need the regenerated 128s vectors before a deploy is
 production-ready. The example wrapper
-(`contracts/examples/ShrincsAccountVerifierExample.sol`) is a reference
+(`contracts/examples/SHRINCSAccountVerifierExample.sol`) is a reference
 integration, not a canonical deployment; deploy it directly with
 `forge create` when you need one.
 

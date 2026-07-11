@@ -34,7 +34,7 @@ variables:
 # compile with another profile's constants (verified hazard,
 # [DESIGN §2(d′)/§3.5]). Per-profile remappings live only in
 # foundry.toml; fail closed if a remappings.txt exists. The
-# ShrincsProfileInvariants identity test is the in-Solidity backstop
+# SHRINCSProfileInvariants identity test is the in-Solidity backstop
 # for the same hazard.
 format-and-checks:
   extends: .foundry
@@ -150,7 +150,7 @@ fuzz-deep:
       - cache/invariant
 
 # Medusa v1.5.1 coverage-guided campaign over the state-machine harness
-# (ShrincsMedusaHarness). eth-security-toolbox bundles medusa + crytic-compile
+# (SHRINCSMedusaHarness). eth-security-toolbox bundles medusa + crytic-compile
 # + foundry + solc; foundryup pins forge to v1.7.1 for a via-ir-honest build.
 # medusa ships an x86_64 binary, so this job is pinned to an x86_64 runner.
 medusa:
@@ -179,7 +179,7 @@ medusa:
       - medusa-corpus
 
 # Advisory hevm 0.58.0 symbolic checks over the base-w/readBits bounds slice
-# (ShrincsSymbolic prove_ functions). hevm ships an x86_64-only static binary
+# (SHRINCSSymbolic prove_ functions). hevm ships an x86_64-only static binary
 # and needs an SMT solver (z3), so this job installs both on an x86_64 runner
 # and is allow_failure (upstream is advisory here). The release asset URL
 # below was verified against the argotorg/hevm release/0.58.0 assets on

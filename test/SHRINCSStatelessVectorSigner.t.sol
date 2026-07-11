@@ -21,14 +21,14 @@ import {SHRINCSCore} from "../contracts/SHRINCSCore.sol";
 import {SPHINCSPlusCCore} from "../contracts/SPHINCSPlusCCore.sol";
 import {SHRINCSParams} from "shrincs-profile/SHRINCSParams.sol";
 import {
-    ShrincsStatelessVectorSigner
-} from "./helpers/ShrincsStatelessVectorSigner.sol";
+    SHRINCSStatelessVectorSigner
+} from "./helpers/SHRINCSStatelessVectorSigner.sol";
 import {
-    ShrincsStatelessVectorSigningFacade
-} from "./helpers/ShrincsStatelessVectorSigningFacade.sol";
+    SHRINCSStatelessVectorSigningFacade
+} from "./helpers/SHRINCSStatelessVectorSigningFacade.sol";
 
-contract ShrincsStatelessVectorSignerHarness is
-    ShrincsStatelessVectorSigner
+contract SHRINCSStatelessVectorSignerHarness is
+    SHRINCSStatelessVectorSigner
 {
     function verifyUnsafeRaw(
         bytes32 expectedPublicKeyCommitment,
@@ -42,14 +42,14 @@ contract ShrincsStatelessVectorSignerHarness is
     }
 }
 
-contract ShrincsStatelessVectorSignerTest is Test {
+contract SHRINCSStatelessVectorSignerTest is Test {
     // line-length: allow — fmt cannot wrap a using-for directive
-    using ShrincsStatelessVectorSigningFacade for ShrincsStatelessVectorSignerHarness;
+    using SHRINCSStatelessVectorSigningFacade for SHRINCSStatelessVectorSignerHarness;
 
-    ShrincsStatelessVectorSignerHarness internal signer;
+    SHRINCSStatelessVectorSignerHarness internal signer;
 
     function setUp() public {
-        signer = new ShrincsStatelessVectorSignerHarness();
+        signer = new SHRINCSStatelessVectorSignerHarness();
     }
 
     function testStagedStatelessVectorSignerProducesVerifyingSignature()

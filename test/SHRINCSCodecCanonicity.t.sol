@@ -24,15 +24,15 @@ import {UXMSS} from "../contracts/UXMSS.sol";
 import {
     SHRINCSAccountVerifierExample
 } from "../contracts/examples/SHRINCSAccountVerifierExample.sol";
-import {ShrincsTestSigner} from "./helpers/ShrincsTestSigner.sol";
+import {SHRINCSTestSigner} from "./helpers/SHRINCSTestSigner.sol";
 import {
-    ShrincsAccountSigningFacade
-} from "./helpers/ShrincsAccountSigningFacade.sol";
+    SHRINCSAccountSigningFacade
+} from "./helpers/SHRINCSAccountSigningFacade.sol";
 import {
-    ShrincsStatelessVectorSigner
-} from "./helpers/ShrincsStatelessVectorSigner.sol";
+    SHRINCSStatelessVectorSigner
+} from "./helpers/SHRINCSStatelessVectorSigner.sol";
 
-contract CodecCanonicitySigner is ShrincsStatelessVectorSigner {}
+contract CodecCanonicitySigner is SHRINCSStatelessVectorSigner {}
 
 /// @notice Exposes each codec walk-B validator (the production `ok` flag)
 /// and a re-encode-equality reference over calldata, so the differential
@@ -288,12 +288,12 @@ contract SHRINCSCodecCanonicityTest is Test {
             SHRINCSCore.SigningKey memory signingKey,
             SHRINCSCore.PublicKey memory publicKey,
             bool ok
-        ) = ShrincsTestSigner.keygen(bytes("codec stateful fixture"), 4);
+        ) = SHRINCSTestSigner.keygen(bytes("codec stateful fixture"), 4);
         require(ok, "stateful keygen");
         bytes memory message =
             abi.encodePacked(keccak256("codec stateful message"));
         (UXMSS.StatefulSignature memory signature, bool signOk) =
-            ShrincsTestSigner.signStatefulRawAtLeaf(signingKey, 1, message);
+            SHRINCSTestSigner.signStatefulRawAtLeaf(signingKey, 1, message);
         require(signOk, "stateful sign");
         return abi.encode(publicKey, signature);
     }
@@ -306,20 +306,20 @@ contract SHRINCSCodecCanonicityTest is Test {
             SHRINCSCore.SigningKey memory signingKey,
             SHRINCSCore.PublicKey memory publicKey,
             bool ok
-        ) = ShrincsAccountSigningFacade.keygen(
+        ) = SHRINCSAccountSigningFacade.keygen(
             bytes("codec stateless fixture"), 4
         );
         require(ok, "stateless keygen");
         // forgefmt: disable-next-line
         SHRINCSAccountVerifierExample account =
             new SHRINCSAccountVerifierExample(
-                ShrincsAccountSigningFacade.publicKeyCommitmentWord(
+                SHRINCSAccountSigningFacade.publicKeyCommitmentWord(
                     publicKey
                 )
             );
         bytes32 sessionId;
         (, sessionId, ok) =
-            ShrincsAccountSigningFacade.beginStatelessActionSessionNow(
+            SHRINCSAccountSigningFacade.beginStatelessActionSessionNow(
                 signer,
                 account,
                 signingKey,
@@ -331,7 +331,7 @@ contract SHRINCSCodecCanonicityTest is Test {
         (
             SPHINCSPlusCCore.StatelessSignature memory signature,
             bool completeOk
-        ) = ShrincsAccountSigningFacade.completeStatelessSession(
+        ) = SHRINCSAccountSigningFacade.completeStatelessSession(
             signer, sessionId
         );
         require(completeOk, "complete stateless");

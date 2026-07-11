@@ -22,7 +22,7 @@ import {SHRINCSParams} from "shrincs-profile/SHRINCSParams.sol";
 import {
     SHRINCSAccountVerifierExample
 } from "../../contracts/examples/SHRINCSAccountVerifierExample.sol";
-import {ShrincsTestSigner} from "../helpers/ShrincsTestSigner.sol";
+import {SHRINCSTestSigner} from "../helpers/SHRINCSTestSigner.sol";
 
 /// @notice Medusa-compatible wrapper subclass exposing the internal state
 /// helpers the harness drives. Mirrors the forge invariant harness.
@@ -49,7 +49,7 @@ contract MedusaAccountHarness is SHRINCSAccountVerifierExample {
     }
 }
 
-/// @title ShrincsMedusaHarness
+/// @title SHRINCSMedusaHarness
 /// @notice Property-mode harness for the nightly Medusa campaign
 /// (security-testing plan Task 5). It re-runs the wrapper state-machine
 /// properties under Medusa's coverage-guided fuzzer using only plain asserts
@@ -61,8 +61,8 @@ contract MedusaAccountHarness is SHRINCSAccountVerifierExample {
 /// @dev property_* functions must always return true; a false return or a
 /// revert is a Medusa finding. State-mutating act* functions supply the
 /// coverage. This complements the per-MR forge invariant suite
-/// (ShrincsAccountInvariants) with longer randomized campaigns.
-contract ShrincsMedusaHarness {
+/// (SHRINCSAccountInvariants) with longer randomized campaigns.
+contract SHRINCSMedusaHarness {
     bytes32 internal constant FIXED_MESSAGE =
         keccak256("shrincs-invariant-fixed-stateful-message");
     uint32 internal constant MAX_LEAF = 4;
@@ -81,12 +81,12 @@ contract ShrincsMedusaHarness {
         SHRINCSCore.SigningKey memory signingKey;
         bool keygenOk;
         (signingKey, publicKey, keygenOk) =
-            ShrincsTestSigner.keygen(bytes("shrincs-medusa-key"), MAX_LEAF);
+            SHRINCSTestSigner.keygen(bytes("shrincs-medusa-key"), MAX_LEAF);
         require(keygenOk, "medusa keygen");
         for (uint32 leaf = 1; leaf <= MAX_LEAF; leaf++) {
             UXMSS.StatefulSignature memory signature;
             bool signOk;
-            (signature, signOk) = ShrincsTestSigner.signStatefulRawAtLeaf(
+            (signature, signOk) = SHRINCSTestSigner.signStatefulRawAtLeaf(
                 signingKey, leaf, abi.encodePacked(FIXED_MESSAGE)
             );
             require(signOk, "medusa sign");

@@ -24,7 +24,7 @@ gas_limit = "18446744073709551615" # u64::MAX
 bytecode_hash = "none"
 cbor_metadata = false
 # Profile selection ([DESIGN §3.4]): the `shrincs-profile/` prefix
-# resolves to the active profile's ShrincsParams library. Default is
+# resolves to the active profile's SHRINCSParams library. Default is
 # the 256s profile. Other profiles override this remapping AND the
 # `out` dir. WARNING: a top-level remappings.txt silently overrides
 # these per-profile TOML remappings (verified hazard, [DESIGN §2(d′)]);
@@ -91,15 +91,15 @@ skip = [
     "script/DeploySHRINCS128sQ20Keccak.s.sol",
     "script/DeploySPHINCSPlusC256sKeccak.s.sol",
     "script/DeploySPHINCSPlusC128sQ20Keccak.s.sol",
-    "test/ShrincsSphincs256sVectors.t.sol",
-    "test/ShrincsStatelessVectorSigner.t.sol",
-    "test/ShrincsAccountEnvelopeCanonicity.t.sol",
-    "test/ShrincsAccountSigningFacade.t.sol",
-    "test/ShrincsAccountVectorExport.t.sol",
-    "test/ShrincsMeasurements.t.sol",
-    "test/ShrincsAccountVerifierExample.t.sol",
-    "test/ShrincsCodec.t.sol",
-    "test/ShrincsStatefulPolicyExamples.t.sol",
+    "test/SHRINCSSphincs256sVectors.t.sol",
+    "test/SHRINCSStatelessVectorSigner.t.sol",
+    "test/SHRINCSAccountEnvelopeCanonicity.t.sol",
+    "test/SHRINCSAccountSigningFacade.t.sol",
+    "test/SHRINCSAccountVectorExport.t.sol",
+    "test/SHRINCSMeasurements.t.sol",
+    "test/SHRINCSAccountVerifierExample.t.sol",
+    "test/SHRINCSCodec.t.sol",
+    "test/SHRINCSStatefulPolicyExamples.t.sol",
     "test/SHRINCSStatelessDelegation.t.sol",
     "test/SHRINCSCodecCanonicity.t.sol",
     "test/SHRINCSPinned256s.t.sol",
@@ -118,15 +118,15 @@ skip = [
     "script/DeploySHRINCS128sQ18Keccak.s.sol",
     "script/DeploySPHINCSPlusC256sKeccak.s.sol",
     "script/DeploySPHINCSPlusC128sQ18Keccak.s.sol",
-    "test/ShrincsSphincs256sVectors.t.sol",
-    "test/ShrincsStatelessVectorSigner.t.sol",
-    "test/ShrincsAccountEnvelopeCanonicity.t.sol",
-    "test/ShrincsAccountSigningFacade.t.sol",
-    "test/ShrincsAccountVectorExport.t.sol",
-    "test/ShrincsMeasurements.t.sol",
-    "test/ShrincsAccountVerifierExample.t.sol",
-    "test/ShrincsCodec.t.sol",
-    "test/ShrincsStatefulPolicyExamples.t.sol",
+    "test/SHRINCSSphincs256sVectors.t.sol",
+    "test/SHRINCSStatelessVectorSigner.t.sol",
+    "test/SHRINCSAccountEnvelopeCanonicity.t.sol",
+    "test/SHRINCSAccountSigningFacade.t.sol",
+    "test/SHRINCSAccountVectorExport.t.sol",
+    "test/SHRINCSMeasurements.t.sol",
+    "test/SHRINCSAccountVerifierExample.t.sol",
+    "test/SHRINCSCodec.t.sol",
+    "test/SHRINCSStatefulPolicyExamples.t.sol",
     "test/SHRINCSStatelessDelegation.t.sol",
     "test/SHRINCSCodecCanonicity.t.sol",
     "test/SHRINCSPinned256s.t.sol",

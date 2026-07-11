@@ -412,7 +412,7 @@ library SHRINCSCodec {
         pure
         returns (bool ok)
     {
-        // The walk reads calldata directly. Three read primitives encode the
+        // The walk reads calldata directly. Four read primitives encode the
         // CODINGSTANDARDS §5 boundary:
         //   word  - unchecked calldataload, used ONLY as an operand of an
         //           equality against a constant or the running cursor. Under

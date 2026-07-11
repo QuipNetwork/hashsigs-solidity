@@ -27,7 +27,7 @@ import {
     SHRINCSAccountVerifierExample
 } from "../contracts/examples/SHRINCSAccountVerifierExample.sol";
 
-contract ShrincsStatefulPolicyHarness is SHRINCSAccountVerifierExample {
+contract SHRINCSStatefulPolicyHarness is SHRINCSAccountVerifierExample {
     constructor(bytes32 initialSHRINCSPublicKey)
         SHRINCSAccountVerifierExample(initialSHRINCSPublicKey)
     {}
@@ -41,7 +41,7 @@ contract ShrincsStatefulPolicyHarness is SHRINCSAccountVerifierExample {
     }
 }
 
-contract ShrincsStatefulPolicyExamplesTest is Test {
+contract SHRINCSStatefulPolicyExamplesTest is Test {
     string internal constant VECTOR_PATH =
         "test/test_vectors/shrincs_sphincs_256s_keccak.json";
 
@@ -110,8 +110,8 @@ contract ShrincsStatefulPolicyExamplesTest is Test {
         ) = decodeStatefulVector(".stateful.cases.valid.calldata");
         bytes32 expectedCompositePublicKey =
             compositePublicKeyWord(publicKey);
-        ShrincsStatefulPolicyHarness account =
-            new ShrincsStatefulPolicyHarness(expectedCompositePublicKey);
+        SHRINCSStatefulPolicyHarness account =
+            new SHRINCSStatefulPolicyHarness(expectedCompositePublicKey);
 
         bool first = account.verifyStatefulUncheckedForTest(
             publicKey, message, signature
@@ -143,8 +143,8 @@ contract ShrincsStatefulPolicyExamplesTest is Test {
         bytes32 expectedCompositePublicKey =
             compositePublicKeyWord(publicKey);
         uint32 leafIndex = uint32(signature.authPath.length);
-        ShrincsStatefulPolicyHarness account =
-            new ShrincsStatefulPolicyHarness(expectedCompositePublicKey);
+        SHRINCSStatefulPolicyHarness account =
+            new SHRINCSStatefulPolicyHarness(expectedCompositePublicKey);
         account.setStatefulPolicyMonotonicIndex(leafIndex);
 
         bool first = account.verifyStatefulUncheckedForTest(
@@ -173,8 +173,8 @@ contract ShrincsStatefulPolicyExamplesTest is Test {
         bytes32 expectedCompositePublicKey =
             compositePublicKeyWord(publicKey);
         uint32 leafIndex = uint32(signature.authPath.length);
-        ShrincsStatefulPolicyHarness account =
-            new ShrincsStatefulPolicyHarness(expectedCompositePublicKey);
+        SHRINCSStatefulPolicyHarness account =
+            new SHRINCSStatefulPolicyHarness(expectedCompositePublicKey);
         account.setStatefulPolicyMonotonicIndex(leafIndex + 1);
 
         bool ok = account.verifyStatefulUncheckedForTest(
@@ -199,8 +199,8 @@ contract ShrincsStatefulPolicyExamplesTest is Test {
         ) = decodeStatefulVector(".stateful.cases.valid.calldata");
         bytes32 expectedCompositePublicKey =
             compositePublicKeyWord(publicKey);
-        ShrincsStatefulPolicyHarness account =
-            new ShrincsStatefulPolicyHarness(expectedCompositePublicKey);
+        SHRINCSStatefulPolicyHarness account =
+            new SHRINCSStatefulPolicyHarness(expectedCompositePublicKey);
         account.setStatefulPolicyRecoveryRotation();
 
         assertEq(
@@ -310,8 +310,8 @@ contract ShrincsStatefulPolicyExamplesTest is Test {
         bytes32 expectedCompositePublicKey =
             compositePublicKeyWord(publicKey);
         uint32 leafIndex = uint32(signature.authPath.length);
-        ShrincsStatefulPolicyHarness account =
-            new ShrincsStatefulPolicyHarness(expectedCompositePublicKey);
+        SHRINCSStatefulPolicyHarness account =
+            new SHRINCSStatefulPolicyHarness(expectedCompositePublicKey);
         account.setStatefulPolicyLeafBitmap();
 
         bool first = account.verifyStatefulUncheckedForTest(

@@ -18,7 +18,7 @@ pragma solidity ^0.8.28;
 
 import {Test} from "../lib/forge-std/src/Test.sol";
 
-library ShrincsToyStatelessProfile {
+library SHRINCSToyStatelessProfile {
     uint32 internal constant HYPERTREE_HEIGHT = 4;
     uint32 internal constant NUM_HYPERTREE_LAYERS = 2;
     uint32 internal constant SUBTREE_HEIGHT = 2;
@@ -991,68 +991,68 @@ library ShrincsToyStatelessProfile {
     }
 }
 
-contract ShrincsToyStatelessHarness {
+contract SHRINCSToyStatelessHarness {
     function keygen(bytes memory seedMaterial)
         external
         pure
         returns (
-            ShrincsToyStatelessProfile.SigningKey memory,
-            ShrincsToyStatelessProfile.PublicKey memory
+            SHRINCSToyStatelessProfile.SigningKey memory,
+            SHRINCSToyStatelessProfile.PublicKey memory
         )
     {
-        return ShrincsToyStatelessProfile.keygen(seedMaterial);
+        return SHRINCSToyStatelessProfile.keygen(seedMaterial);
     }
 
     function sign(
-        ShrincsToyStatelessProfile.SigningKey memory signingKey,
+        SHRINCSToyStatelessProfile.SigningKey memory signingKey,
         bytes memory message
     )
         external
         pure
-        returns (ShrincsToyStatelessProfile.StatelessSignature memory, bool)
+        returns (SHRINCSToyStatelessProfile.StatelessSignature memory, bool)
     {
-        return ShrincsToyStatelessProfile.sign(signingKey, message);
+        return SHRINCSToyStatelessProfile.sign(signingKey, message);
     }
 
     function verify(
-        ShrincsToyStatelessProfile.PublicKey memory publicKey,
+        SHRINCSToyStatelessProfile.PublicKey memory publicKey,
         bytes memory message,
-        ShrincsToyStatelessProfile.StatelessSignature memory signature
+        SHRINCSToyStatelessProfile.StatelessSignature memory signature
     ) external pure returns (bool) {
         return
-            ShrincsToyStatelessProfile.verify(publicKey, message, signature);
+            SHRINCSToyStatelessProfile.verify(publicKey, message, signature);
     }
 }
 
-contract ShrincsToyStatelessProfileTest is Test {
-    ShrincsToyStatelessHarness internal harness;
+contract SHRINCSToyStatelessProfileTest is Test {
+    SHRINCSToyStatelessHarness internal harness;
 
     function setUp() public {
-        harness = new ShrincsToyStatelessHarness();
+        harness = new SHRINCSToyStatelessHarness();
     }
 
     function testToyProfileStatelessSignAndVerify() public view {
         (
-            ShrincsToyStatelessProfile.SigningKey memory signingKey,
-            ShrincsToyStatelessProfile.PublicKey memory publicKey
+            SHRINCSToyStatelessProfile.SigningKey memory signingKey,
+            SHRINCSToyStatelessProfile.PublicKey memory publicKey
         ) = harness.keygen(bytes("toy stateless seed"));
 
         bytes memory message =
             abi.encodePacked(keccak256("toy stateless message"));
         (
-            ShrincsToyStatelessProfile.StatelessSignature memory signature,
+            SHRINCSToyStatelessProfile.StatelessSignature memory signature,
             bool ok
         ) = harness.sign(signingKey, message);
 
         assertTrue(ok, "toy stateless signing must succeed");
         assertEq(
             signature.fors.entries.length,
-            ShrincsToyStatelessProfile.SIGNED_FORS_TREES,
+            SHRINCSToyStatelessProfile.SIGNED_FORS_TREES,
             "toy FORS-C must omit the final tree"
         );
         assertEq(
             signature.hypertree.length,
-            ShrincsToyStatelessProfile.NUM_HYPERTREE_LAYERS,
+            SHRINCSToyStatelessProfile.NUM_HYPERTREE_LAYERS,
             "toy hypertree must include all layers"
         );
         assertTrue(
@@ -1062,17 +1062,17 @@ contract ShrincsToyStatelessProfileTest is Test {
     }
 
     function testToyProfileStatelessSignIsDeterministic() public view {
-        (ShrincsToyStatelessProfile.SigningKey memory signingKey,) =
+        (SHRINCSToyStatelessProfile.SigningKey memory signingKey,) =
             harness.keygen(bytes("toy deterministic seed"));
 
         bytes memory message =
             abi.encodePacked(keccak256("toy deterministic message"));
         (
-            ShrincsToyStatelessProfile.StatelessSignature memory signatureA,
+            SHRINCSToyStatelessProfile.StatelessSignature memory signatureA,
             bool okA
         ) = harness.sign(signingKey, message);
         (
-            ShrincsToyStatelessProfile.StatelessSignature memory signatureB,
+            SHRINCSToyStatelessProfile.StatelessSignature memory signatureB,
             bool okB
         ) = harness.sign(signingKey, message);
 

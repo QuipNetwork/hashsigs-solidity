@@ -16,7 +16,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 pragma solidity ^0.8.28;
 
-import {ShrincsTestSigner} from "./ShrincsTestSigner.sol";
+import {SHRINCSTestSigner} from "./SHRINCSTestSigner.sol";
 import {SHRINCSCore} from "../../contracts/SHRINCSCore.sol";
 import {SPHINCSPlusCCore} from "../../contracts/SPHINCSPlusCCore.sol";
 import {FORSMinusC} from "../../contracts/FORSMinusC.sol";
@@ -31,7 +31,7 @@ import {SHRINCSHash} from "../../contracts/SHRINCSHash.sol";
 /// not enter the production Solidity surface. It keeps the exact production
 /// math and final signature layout, but splits stateless signing into
 /// storage-backed phases.
-contract ShrincsStatelessVectorSigner {
+contract SHRINCSStatelessVectorSigner {
     uint32 internal constant MAX_GRIND_COUNTER = 1 << 24;
     uint8 internal constant NUM_HYPERTREE_LAYERS = 8;
 
@@ -75,7 +75,7 @@ contract ShrincsStatelessVectorSigner {
         SHRINCSCore.SigningKey memory signingKey;
         SHRINCSCore.PublicKey memory publicKey;
         (signingKey, publicKey, ok) =
-            ShrincsTestSigner.keygen(seedMaterial, maxStatefulSignatures);
+            SHRINCSTestSigner.keygen(seedMaterial, maxStatefulSignatures);
         if (!ok) return (bytes32(0), false);
         return beginSession(signingKey, publicKey, message);
     }

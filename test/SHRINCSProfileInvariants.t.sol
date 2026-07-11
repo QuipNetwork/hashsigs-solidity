@@ -20,7 +20,7 @@ import {Test} from "../lib/forge-std/src/Test.sol";
 import {Hypertree} from "../contracts/Hypertree.sol";
 import {SHRINCSParams} from "shrincs-profile/SHRINCSParams.sol";
 
-/// @title ShrincsProfileInvariants
+/// @title SHRINCSProfileInvariants
 /// @notice Profile-agnostic structural invariants plus the profile
 /// identity guard ([DESIGN §3.5]). Compiled and run under every build
 /// profile.
@@ -30,7 +30,7 @@ import {SHRINCSParams} from "shrincs-profile/SHRINCSParams.sol";
 /// silently compiles one profile's name with another's constants
 /// (verified hazard, [DESIGN §2(d′)]). CI additionally rejects any
 /// remappings.txt at the shell level.
-contract ShrincsProfileInvariantsTest is Test {
+contract SHRINCSProfileInvariantsTest is Test {
     // Expected parameter tuple for one profile, keyed by profile name.
     struct ProfileExpectation {
         bytes32 profileId;

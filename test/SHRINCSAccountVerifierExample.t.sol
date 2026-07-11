@@ -88,7 +88,7 @@ contract ExampleRotationHarness {
     }
 }
 
-contract ShrincsAccountVerifierExampleHarness is
+contract SHRINCSAccountVerifierExampleHarness is
     SHRINCSAccountVerifierExample
 {
     constructor(bytes32 initialSHRINCSPublicKey)
@@ -215,7 +215,7 @@ contract ExampleNonOwnerCaller {
     }
 }
 
-contract ShrincsAccountVerifierExampleTest is Test {
+contract SHRINCSAccountVerifierExampleTest is Test {
     bytes4 internal constant MAGIC_VALUE = 0x1626ba7e;
     bytes4 internal constant INVALID_SIGNATURE = 0xffffffff;
     uint8 internal constant ERC1271_MODE_STATEFUL_ACTION = 1;
@@ -786,8 +786,8 @@ contract ShrincsAccountVerifierExampleTest is Test {
         bytes32 expectedCompositePublicKey =
             compositePublicKeyWord(publicKey);
         // forgefmt: disable-next-line
-        ShrincsAccountVerifierExampleHarness account =
-            new ShrincsAccountVerifierExampleHarness(
+        SHRINCSAccountVerifierExampleHarness account =
+            new SHRINCSAccountVerifierExampleHarness(
                 expectedCompositePublicKey
             );
         uint64 limit = SHRINCSParams.STATELESS_SIGNATURE_LIMIT;
@@ -821,8 +821,8 @@ contract ShrincsAccountVerifierExampleTest is Test {
         bytes32 expectedCompositePublicKey =
             compositePublicKeyWord(publicKey);
         // forgefmt: disable-next-line
-        ShrincsAccountVerifierExampleHarness account =
-            new ShrincsAccountVerifierExampleHarness(
+        SHRINCSAccountVerifierExampleHarness account =
+            new SHRINCSAccountVerifierExampleHarness(
                 expectedCompositePublicKey
             );
         uint64 limit = SHRINCSParams.STATELESS_SIGNATURE_LIMIT;
@@ -865,8 +865,8 @@ contract ShrincsAccountVerifierExampleTest is Test {
         bytes32 expectedCompositePublicKey =
             compositePublicKeyWord(publicKey);
         // forgefmt: disable-next-line
-        ShrincsAccountVerifierExampleHarness account =
-            new ShrincsAccountVerifierExampleHarness(
+        SHRINCSAccountVerifierExampleHarness account =
+            new SHRINCSAccountVerifierExampleHarness(
                 expectedCompositePublicKey
             );
         uint64 limit = SHRINCSParams.STATELESS_SIGNATURE_LIMIT;
@@ -1119,8 +1119,8 @@ contract ShrincsAccountVerifierExampleTest is Test {
         bytes32 expectedCompositePublicKey =
             compositePublicKeyWord(publicKey);
         // forgefmt: disable-next-line
-        ShrincsAccountVerifierExampleHarness account =
-            new ShrincsAccountVerifierExampleHarness(
+        SHRINCSAccountVerifierExampleHarness account =
+            new SHRINCSAccountVerifierExampleHarness(
                 expectedCompositePublicKey
             );
 
@@ -1149,8 +1149,8 @@ contract ShrincsAccountVerifierExampleTest is Test {
         bytes32 expectedCompositePublicKey =
             compositePublicKeyWord(publicKey);
         // forgefmt: disable-next-line
-        ShrincsAccountVerifierExampleHarness account =
-            new ShrincsAccountVerifierExampleHarness(
+        SHRINCSAccountVerifierExampleHarness account =
+            new SHRINCSAccountVerifierExampleHarness(
                 expectedCompositePublicKey
             );
 
@@ -1189,8 +1189,8 @@ contract ShrincsAccountVerifierExampleTest is Test {
         bytes32 expectedCompositePublicKey =
             compositePublicKeyWord(publicKey);
         // forgefmt: disable-next-line
-        ShrincsAccountVerifierExampleHarness account =
-            new ShrincsAccountVerifierExampleHarness(
+        SHRINCSAccountVerifierExampleHarness account =
+            new SHRINCSAccountVerifierExampleHarness(
                 expectedCompositePublicKey
             );
 
@@ -1236,8 +1236,8 @@ contract ShrincsAccountVerifierExampleTest is Test {
         bytes32 expectedCompositePublicKey =
             compositePublicKeyWord(publicKey);
         // forgefmt: disable-next-line
-        ShrincsAccountVerifierExampleHarness account =
-            new ShrincsAccountVerifierExampleHarness(
+        SHRINCSAccountVerifierExampleHarness account =
+            new SHRINCSAccountVerifierExampleHarness(
                 expectedCompositePublicKey
             );
         uint32 leafIndex = uint32(signature.authPath.length);
@@ -1279,8 +1279,8 @@ contract ShrincsAccountVerifierExampleTest is Test {
         bytes32 expectedCompositePublicKey =
             compositePublicKeyWord(publicKey);
         // forgefmt: disable-next-line
-        ShrincsAccountVerifierExampleHarness account =
-            new ShrincsAccountVerifierExampleHarness(
+        SHRINCSAccountVerifierExampleHarness account =
+            new SHRINCSAccountVerifierExampleHarness(
                 expectedCompositePublicKey
             );
 
@@ -1306,8 +1306,8 @@ contract ShrincsAccountVerifierExampleTest is Test {
         bytes32 expectedCompositePublicKey =
             compositePublicKeyWord(publicKey);
         // forgefmt: disable-next-line
-        ShrincsAccountVerifierExampleHarness account =
-            new ShrincsAccountVerifierExampleHarness(
+        SHRINCSAccountVerifierExampleHarness account =
+            new SHRINCSAccountVerifierExampleHarness(
                 expectedCompositePublicKey
             );
 
@@ -1361,8 +1361,8 @@ contract ShrincsAccountVerifierExampleTest is Test {
         bytes32 expectedCompositePublicKey =
             compositePublicKeyWord(publicKey);
         // forgefmt: disable-next-line
-        ShrincsAccountVerifierExampleHarness account =
-            new ShrincsAccountVerifierExampleHarness(
+        SHRINCSAccountVerifierExampleHarness account =
+            new SHRINCSAccountVerifierExampleHarness(
                 expectedCompositePublicKey
             );
 
@@ -1388,8 +1388,8 @@ contract ShrincsAccountVerifierExampleTest is Test {
         bytes32 expectedCompositePublicKey =
             compositePublicKeyWord(publicKey);
         // forgefmt: disable-next-line
-        ShrincsAccountVerifierExampleHarness account =
-            new ShrincsAccountVerifierExampleHarness(
+        SHRINCSAccountVerifierExampleHarness account =
+            new SHRINCSAccountVerifierExampleHarness(
                 expectedCompositePublicKey
             );
 
@@ -1436,8 +1436,8 @@ contract ShrincsAccountVerifierExampleTest is Test {
         bytes32 expectedCompositePublicKey =
             compositePublicKeyWord(publicKey);
         // forgefmt: disable-next-line
-        ShrincsAccountVerifierExampleHarness account =
-            new ShrincsAccountVerifierExampleHarness(
+        SHRINCSAccountVerifierExampleHarness account =
+            new SHRINCSAccountVerifierExampleHarness(
                 expectedCompositePublicKey
             );
         uint64 limit = SHRINCSParams.STATELESS_SIGNATURE_LIMIT;
@@ -1493,8 +1493,8 @@ contract ShrincsAccountVerifierExampleTest is Test {
         bytes32 expectedCompositePublicKey =
             compositePublicKeyWord(publicKey);
         // forgefmt: disable-next-line
-        ShrincsAccountVerifierExampleHarness account =
-            new ShrincsAccountVerifierExampleHarness(
+        SHRINCSAccountVerifierExampleHarness account =
+            new SHRINCSAccountVerifierExampleHarness(
                 expectedCompositePublicKey
             );
 
@@ -1542,8 +1542,8 @@ contract ShrincsAccountVerifierExampleTest is Test {
         bytes32 expectedCompositePublicKey =
             compositePublicKeyWord(publicKey);
         // forgefmt: disable-next-line
-        ShrincsAccountVerifierExampleHarness account =
-            new ShrincsAccountVerifierExampleHarness(
+        SHRINCSAccountVerifierExampleHarness account =
+            new SHRINCSAccountVerifierExampleHarness(
                 expectedCompositePublicKey
             );
 

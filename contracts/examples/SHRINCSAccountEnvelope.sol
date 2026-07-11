@@ -75,7 +75,7 @@ library SHRINCSAccountEnvelope {
         pure
         returns (bool ok)
     {
-        // The walk reads calldata directly. Three read primitives encode the
+        // The walk reads calldata directly. Four read primitives encode the
         // CODINGSTANDARDS §5 boundary:
         //   word  - unchecked calldataload, used ONLY as an operand of an
         //           equality against a constant or the running cursor. Under
@@ -345,7 +345,11 @@ library SHRINCSAccountEnvelope {
         // Read primitives follow the same CODINGSTANDARDS §5 boundary as
         // isCanonicalStatelessEnvelope: `word` is an unchecked framing read
         // used only in an equality against a constant or the running cursor
-        // (out-of-bounds zero fails closed); `rdLen` and `rdPad` are checked.
+        // (out-of-bounds zero fails closed); `rdLen` and `rdPad` are checked;
+        // and a `dirty-bit reject` shr(N, word) rejects the dirty high bits
+        // abi.decode would revert on (here the StatefulSignature.counter
+        // uint32), safe only because a checked read follows before the
+        // full-consumption anchor.
         assembly {
             let poff := payload.offset
             let plen := payload.length

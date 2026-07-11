@@ -23,8 +23,8 @@ Hybrid of options (d′) and (b):
   CREATE2 salt and production profile.
 
 All 34 hand-verified assembly blocks keep their preimage offsets,
-lengths, and §6 offset-table comments. The whole-core diff is ~30
-functional lines plus one constants-file split.
+lengths, and CODINGSTANDARDS §6 offset-table comments. The
+whole-core diff is ~30 functional lines plus one constants-file split.
 
 ## 1. Requirements extracted from MR !7
 
@@ -121,8 +121,9 @@ low 16 bytes of each hash slot are zero for 128s).
 - **Mask cost for 256s**: the all-ones mask folds away under via-ir
   1000000-runs (measured: 344,291 vs 344,352 gas, bytecode delta 2
   bytes of metadata). The 256s artifact is behaviorally unchanged.
-- **Review evidence**: all preimage offsets, lengths, and §6 offset
-  tables unchanged. The diff per assembly block is at most one
+- **Review evidence**: all preimage offsets, lengths, and
+  CODINGSTANDARDS §6 offset tables unchanged. The diff per assembly
+  block is at most one
   trailing `out = out & HASH_MASK;` (or `and(...)` on the existing
   keccak line) — 9 sites total (§3.3).
 - **Fail-closed property**: high-aligned truncation makes profile
@@ -489,4 +490,8 @@ Rust-coordination window:
   addresses) must be documented in committed docs (DEPLOYMENTS.md or
   README section) as part of T5, extracted from git history, before the
   CREATE2 path is removed. Update T5/deploy script to match.
+  (T-labels index the phased tasks that build this design: T5
+  documents the historical WOTS+ CREATE2 deployment before the CREATE2
+  path is removed; T6 is the single Rust-signer vector-regeneration
+  event.)
 - Q6: default confirmed — stateful side follows n (32 chains, target 240).

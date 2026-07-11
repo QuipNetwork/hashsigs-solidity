@@ -88,7 +88,7 @@ Rules:
   unprefixed — in an `internal` library they are the API.
 - **Structs, enums, libraries, contracts:** `CapWords`.
 - **Imports:** explicit named imports only:
-  `import {ShrincsTypes} from "./ShrincsTypes.sol";`
+  `import {SHRINCSCore} from "./SHRINCSCore.sol";`
 
 ## 3. Layout and formatting
 

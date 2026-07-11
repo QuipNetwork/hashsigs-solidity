@@ -17,8 +17,8 @@
 pragma solidity ^0.8.28;
 
 import {
-    ShrincsStatelessVectorSigner
-} from "./ShrincsStatelessVectorSigner.sol";
+    SHRINCSStatelessVectorSigner
+} from "./SHRINCSStatelessVectorSigner.sol";
 import {SHRINCSCore} from "../../contracts/SHRINCSCore.sol";
 import {SPHINCSPlusCCore} from "../../contracts/SPHINCSPlusCCore.sol";
 
@@ -26,9 +26,9 @@ import {SPHINCSPlusCCore} from "../../contracts/SPHINCSPlusCCore.sol";
 /// @dev This library keeps the actual signing work in the storage-backed
 /// staged signer, but hides the manual FORS / hypertree loops from tests and
 /// vector generators.
-library ShrincsStatelessVectorSigningFacade {
+library SHRINCSStatelessVectorSigningFacade {
     function signFromSeed(
-        ShrincsStatelessVectorSigner signer,
+        SHRINCSStatelessVectorSigner signer,
         bytes memory seedMaterial,
         uint32 maxStatefulSignatures,
         bytes memory message
@@ -49,7 +49,7 @@ library ShrincsStatelessVectorSigningFacade {
     }
 
     function completeSession(
-        ShrincsStatelessVectorSigner signer,
+        SHRINCSStatelessVectorSigner signer,
         bytes32 sessionId
     )
         internal

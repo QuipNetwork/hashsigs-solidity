@@ -25,13 +25,13 @@ import {SHRINCSCore} from "../contracts/SHRINCSCore.sol";
 import {SPHINCSPlusCCore} from "../contracts/SPHINCSPlusCCore.sol";
 import {SHRINCS256sKeccak} from "../contracts/SHRINCS256sKeccak.sol";
 import {
-    ShrincsAccountSigningFacade
-} from "./helpers/ShrincsAccountSigningFacade.sol";
+    SHRINCSAccountSigningFacade
+} from "./helpers/SHRINCSAccountSigningFacade.sol";
 import {
-    ShrincsStatelessVectorSigner
-} from "./helpers/ShrincsStatelessVectorSigner.sol";
+    SHRINCSStatelessVectorSigner
+} from "./helpers/SHRINCSStatelessVectorSigner.sol";
 
-contract DelegationSigner is ShrincsStatelessVectorSigner {}
+contract DelegationSigner is SHRINCSStatelessVectorSigner {}
 
 /// @dev Exposes the internal pinned SPHINCSPlusC address so the test can
 /// deploy the sibling verifier exactly where verifyStateless delegates.
@@ -131,7 +131,7 @@ contract SHRINCSStatelessDelegationTest is Test {
             SHRINCSCore.SigningKey memory signingKey,
             SHRINCSCore.PublicKey memory publicKey,
             bool ok
-        ) = ShrincsAccountSigningFacade.keygen(
+        ) = SHRINCSAccountSigningFacade.keygen(
             bytes("stateless delegation fixture"), 4
         );
         require(ok, "keygen");
@@ -144,13 +144,13 @@ contract SHRINCSStatelessDelegationTest is Test {
         (
             SPHINCSPlusCCore.StatelessSignature memory signature,
             bool completeOk
-        ) = ShrincsAccountSigningFacade.completeStatelessSession(
+        ) = SHRINCSAccountSigningFacade.completeStatelessSession(
             signer, sessionId
         );
         require(completeOk, "complete");
 
         key = abi.encodePacked(
-            ShrincsAccountSigningFacade.publicKeyCommitmentWord(publicKey)
+            SHRINCSAccountSigningFacade.publicKeyCommitmentWord(publicKey)
         );
         envelope = SHRINCSCodec.encodeStatelessEnvelope(publicKey, signature);
     }

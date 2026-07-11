@@ -27,7 +27,7 @@ import {SHRINCSHash} from "../../contracts/SHRINCSHash.sol";
 /// @dev This library is kept under `test/helpers` so it does not become part
 /// of the production Solidity surface. It is used for deterministic keygen
 /// and stateful-signing tests.
-library ShrincsTestSigner {
+library SHRINCSTestSigner {
     uint32 internal constant INITIAL_STATEFUL_LEAF_INDEX = 1;
     uint32 internal constant MAX_STATEFUL_SIGNATURES_LIMIT = 4096;
     uint32 internal constant WOTS_C_MAX_GRIND_COUNTER = 1 << 24;

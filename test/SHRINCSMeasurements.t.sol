@@ -30,13 +30,13 @@ import {
     SHRINCSAccountVerifierExample
 } from "../contracts/examples/SHRINCSAccountVerifierExample.sol";
 import {
-    ShrincsAccountSigningFacade
-} from "./helpers/ShrincsAccountSigningFacade.sol";
+    SHRINCSAccountSigningFacade
+} from "./helpers/SHRINCSAccountSigningFacade.sol";
 import {
-    ShrincsStatelessVectorSigner
-} from "./helpers/ShrincsStatelessVectorSigner.sol";
+    SHRINCSStatelessVectorSigner
+} from "./helpers/SHRINCSStatelessVectorSigner.sol";
 
-contract MeasurementAccountSigningHarness is ShrincsStatelessVectorSigner {}
+contract MeasurementAccountSigningHarness is SHRINCSStatelessVectorSigner {}
 
 /// @dev Exposes the internal pinned SPHINCSPlusC address so the delegation
 /// measurement can deploy the sibling where verifyStateless delegates.
@@ -46,7 +46,7 @@ contract MeasurementDelegationHarness is SHRINCS256sKeccak {
     }
 }
 
-contract ShrincsMeasurementsTest is Test {
+contract SHRINCSMeasurementsTest is Test {
     address internal constant STATEFUL_VECTOR_ACCOUNT =
         address(uint160(0xCAFE));
     bytes4 internal constant ERC1271_MAGIC_VALUE = 0x1626ba7e;
@@ -184,7 +184,7 @@ contract ShrincsMeasurementsTest is Test {
             SHRINCSCore.SigningKey memory signingKey,
             SHRINCSCore.PublicKey memory publicKey,
             bool keygenOk
-        ) = ShrincsAccountSigningFacade.keygen(seedMaterial, 4);
+        ) = SHRINCSAccountSigningFacade.keygen(seedMaterial, 4);
         assertTrue(keygenOk, "stateful keygen must succeed");
         deployCodeTo(
             "SHRINCSAccountVerifierExample.sol:SHRINCSAccountVerifierExample",
@@ -199,7 +199,7 @@ contract ShrincsMeasurementsTest is Test {
             SHRINCSCore.ActionContext memory context,
             UXMSS.StatefulSignature memory signature,
             bool signOk
-        ) = ShrincsAccountSigningFacade.signStatefulActionNow(
+        ) = SHRINCSAccountSigningFacade.signStatefulActionNow(
             account, signingKey, ACTION_TYPE, PAYLOAD_HASH
         );
         assertTrue(signOk, "stateful signing must succeed");
@@ -218,7 +218,7 @@ contract ShrincsMeasurementsTest is Test {
         c.account = account;
         c.message = message;
         c.hash = hash;
-        c.envelope = ShrincsAccountSigningFacade.encodeStateful1271Envelope(
+        c.envelope = SHRINCSAccountSigningFacade.encodeStateful1271Envelope(
             publicKey, ACTION_TYPE, PAYLOAD_HASH, signature
         );
     }
@@ -231,7 +231,7 @@ contract ShrincsMeasurementsTest is Test {
             SHRINCSCore.SigningKey memory signingKey,
             SHRINCSCore.PublicKey memory publicKey,
             bool ok
-        ) = ShrincsAccountSigningFacade.keygen(seedMaterial, 4);
+        ) = SHRINCSAccountSigningFacade.keygen(seedMaterial, 4);
         assertTrue(ok, "stateless keygen must succeed");
 
         // forgefmt: disable-next-line
@@ -241,7 +241,7 @@ contract ShrincsMeasurementsTest is Test {
             );
         bytes32 sessionId;
         (, sessionId, ok) =
-            ShrincsAccountSigningFacade.beginStatelessActionSessionNow(
+            SHRINCSAccountSigningFacade.beginStatelessActionSessionNow(
                 accountSigner,
                 account,
                 signingKey,
@@ -255,13 +255,13 @@ contract ShrincsMeasurementsTest is Test {
         (
             SPHINCSPlusCCore.StatelessSignature memory signature,
             bool completeOk
-        ) = ShrincsAccountSigningFacade.completeStatelessSession(
+        ) = SHRINCSAccountSigningFacade.completeStatelessSession(
             accountSigner, sessionId
         );
         assertTrue(completeOk, "stateless signing must complete");
 
         SHRINCSCore.ActionContext memory context =
-            ShrincsAccountSigningFacade.actionContext(
+            SHRINCSAccountSigningFacade.actionContext(
                 account, ACTION_TYPE, PAYLOAD_HASH
             );
         bytes32 hash = SHRINCSCore.statelessActionMessageHash(
@@ -275,7 +275,7 @@ contract ShrincsMeasurementsTest is Test {
         c.account = account;
         c.message = message;
         c.hash = hash;
-        c.envelope = ShrincsAccountSigningFacade.encodeStateless1271Envelope(
+        c.envelope = SHRINCSAccountSigningFacade.encodeStateless1271Envelope(
             publicKey, ACTION_TYPE, PAYLOAD_HASH, signature
         );
     }
@@ -323,7 +323,7 @@ contract ShrincsMeasurementsTest is Test {
             SHRINCSCore.SigningKey memory signingKey,
             SHRINCSCore.PublicKey memory publicKey,
             bool ok
-        ) = ShrincsAccountSigningFacade.keygen(seedMaterial, 4);
+        ) = SHRINCSAccountSigningFacade.keygen(seedMaterial, 4);
         assertTrue(ok, "delegation keygen must succeed");
 
         hash = keccak256("verifyStateless delegation message");
@@ -336,7 +336,7 @@ contract ShrincsMeasurementsTest is Test {
         (
             SPHINCSPlusCCore.StatelessSignature memory signature,
             bool completeOk
-        ) = ShrincsAccountSigningFacade.completeStatelessSession(
+        ) = SHRINCSAccountSigningFacade.completeStatelessSession(
             accountSigner, sessionId
         );
         assertTrue(completeOk, "delegation signing must complete");

@@ -18,10 +18,10 @@ pragma solidity ^0.8.28;
 
 import {Test} from "../lib/forge-std/src/Test.sol";
 import {SHRINCSCore} from "../contracts/SHRINCSCore.sol";
-import {ShrincsTestSigner} from "./helpers/ShrincsTestSigner.sol";
+import {SHRINCSTestSigner} from "./helpers/SHRINCSTestSigner.sol";
 import {UXMSS} from "../contracts/UXMSS.sol";
 
-contract ShrincsStatefulActionSignerHarness {
+contract SHRINCSStatefulActionSignerHarness {
     function keygen(bytes memory seedMaterial, uint32 maxStatefulSignatures)
         external
         pure
@@ -31,7 +31,7 @@ contract ShrincsStatefulActionSignerHarness {
             bool
         )
     {
-        return ShrincsTestSigner.keygen(seedMaterial, maxStatefulSignatures);
+        return SHRINCSTestSigner.keygen(seedMaterial, maxStatefulSignatures);
     }
 
     function signStatefulAction(
@@ -47,7 +47,7 @@ contract ShrincsStatefulActionSignerHarness {
             bool
         )
     {
-        return ShrincsTestSigner.signStatefulAction(
+        return SHRINCSTestSigner.signStatefulAction(
                 signingKey, publicKey, context
             );
     }
@@ -64,11 +64,11 @@ contract ShrincsStatefulActionSignerHarness {
     }
 }
 
-contract ShrincsSignerStatefulActionTest is Test {
-    ShrincsStatefulActionSignerHarness internal harness;
+contract SHRINCSSignerStatefulActionTest is Test {
+    SHRINCSStatefulActionSignerHarness internal harness;
 
     function setUp() public {
-        harness = new ShrincsStatefulActionSignerHarness();
+        harness = new SHRINCSStatefulActionSignerHarness();
     }
 
     function testStatefulActionSignerProducesCanonicalVerifyingSignature()

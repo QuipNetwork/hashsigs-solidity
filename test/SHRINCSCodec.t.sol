@@ -25,7 +25,7 @@ import {SHRINCSCore} from "../contracts/SHRINCSCore.sol";
 import {UXMSS} from "../contracts/UXMSS.sol";
 import {SHRINCSParams} from "shrincs-profile/SHRINCSParams.sol";
 import {SHRINCS} from "../contracts/SHRINCS.sol";
-import {ShrincsTestSigner} from "./helpers/ShrincsTestSigner.sol";
+import {SHRINCSTestSigner} from "./helpers/SHRINCSTestSigner.sol";
 
 contract CodecERC7913ConsumerHarness {
     bytes4 internal constant ERC1271_MAGIC_VALUE = 0x1626ba7e;
@@ -144,7 +144,7 @@ contract CodecNonMagicERC7913Verifier is IERC7913SignatureVerifier {
 // integration test (the real per-profile subclasses are empty too). The
 // pinned SPHINCSPlusC address is unused on the stateful path exercised
 // here, so it returns the zero address.
-contract CodecShrincsVerifierHarness is SHRINCS {
+contract CodecSHRINCSVerifierHarness is SHRINCS {
     function _pinnedSphincsPlusC() internal pure override returns (address) {
         return address(0);
     }
@@ -152,7 +152,7 @@ contract CodecShrincsVerifierHarness is SHRINCS {
 
 // Exposes the internal codec library through external functions so tests
 // exercise the real calldata-facing decode paths.
-contract ShrincsCodecHarness {
+contract SHRINCSCodecHarness {
     function decodeKey(bytes calldata key)
         external
         pure
@@ -189,11 +189,11 @@ contract ShrincsCodecHarness {
     }
 }
 
-contract ShrincsCodecTest is Test {
-    ShrincsCodecHarness internal codec;
+contract SHRINCSCodecTest is Test {
+    SHRINCSCodecHarness internal codec;
 
     function setUp() public {
-        codec = new ShrincsCodecHarness();
+        codec = new SHRINCSCodecHarness();
     }
 
     // buildSamplePublicKey: Construct a fully populated synthetic key bundle
@@ -633,7 +633,7 @@ contract ShrincsCodecTest is Test {
     }
 }
 
-contract ShrincsCodecERC7913IntegrationTest is Test {
+contract SHRINCSCodecERC7913IntegrationTest is Test {
     bytes4 internal constant INVALID_SIGNATURE = 0xffffffff;
     string internal constant VECTOR_PATH =
         "test/test_vectors/shrincs_sphincs_256s_keccak.json";
@@ -662,7 +662,7 @@ contract ShrincsCodecERC7913IntegrationTest is Test {
     bytes internal validEnvelope;
 
     function setUp() public {
-        verifier = new CodecShrincsVerifierHarness();
+        verifier = new CodecSHRINCSVerifierHarness();
         consumer = new CodecERC7913ConsumerHarness();
         nonMagicVerifier = new CodecNonMagicERC7913Verifier();
         vectors = vm.readFile(VECTOR_PATH);
@@ -671,7 +671,7 @@ contract ShrincsCodecERC7913IntegrationTest is Test {
             SHRINCSCore.SigningKey memory signingKey,
             SHRINCSCore.PublicKey memory publicKey,
             bool keygenOk
-        ) = ShrincsTestSigner.keygen(
+        ) = SHRINCSTestSigner.keygen(
             bytes("shrincs erc7913 stateful verifier seed"), 4
         );
         assertTrue(keygenOk, "in-test keygen must succeed");
@@ -680,7 +680,7 @@ contract ShrincsCodecERC7913IntegrationTest is Test {
         bytes memory message = abi.encodePacked(signedHash);
 
         (UXMSS.StatefulSignature memory signature, bool signOk) =
-            ShrincsTestSigner.signStatefulRawAtLeaf(signingKey, 1, message);
+            SHRINCSTestSigner.signStatefulRawAtLeaf(signingKey, 1, message);
         assertTrue(signOk, "leaf-1 signing must succeed");
 
         bytes memory commitmentBytes = publicKey.publicKeyCommitment;

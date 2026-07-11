@@ -10,7 +10,7 @@ TMP_OUTPUT="$(mktemp)"
 trap 'rm -f "$TMP_OUTPUT"' EXIT
 
 cd "$ROOT_DIR"
-forge test --match-path test/ShrincsAccountVectorExport.t.sol -vv > "$TMP_OUTPUT"
+forge test --match-path test/SHRINCSAccountVectorExport.t.sol -vv > "$TMP_OUTPUT"
 
 awk '
 function flush_test() {

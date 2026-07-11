@@ -24,7 +24,7 @@ import {SHRINCSCodec} from "../contracts/SHRINCSCodec.sol";
 import {SHRINCSCore} from "../contracts/SHRINCSCore.sol";
 import {UXMSS} from "../contracts/UXMSS.sol";
 import {SHRINCS} from "../contracts/SHRINCS.sol";
-import {ShrincsTestSigner} from "./helpers/ShrincsTestSigner.sol";
+import {SHRINCSTestSigner} from "./helpers/SHRINCSTestSigner.sol";
 
 /// @dev Minimal concrete instance of the abstract profile base, used to
 /// exercise the profile-agnostic stateful verify/decode logic under
@@ -34,13 +34,13 @@ import {ShrincsTestSigner} from "./helpers/ShrincsTestSigner.sol";
 /// address is irrelevant here (the stateful path never reads it), so it
 /// returns the zero address; verifyStateless delegation is covered by the
 /// profile-gated SHRINCSStatelessDelegation suite against a real deployable.
-contract ShrincsVerifierHarness is SHRINCS {
+contract SHRINCSVerifierHarness is SHRINCS {
     function _pinnedSphincsPlusC() internal pure override returns (address) {
         return address(0);
     }
 }
 
-contract ShrincsVerifierTest is Test {
+contract SHRINCSVerifierTest is Test {
     bytes4 internal constant INVALID_SIGNATURE = 0xffffffff;
 
     SHRINCS internal verifier;
@@ -54,13 +54,13 @@ contract ShrincsVerifierTest is Test {
     bytes internal secondLeafEnvelope;
 
     function setUp() public {
-        verifier = new ShrincsVerifierHarness();
+        verifier = new SHRINCSVerifierHarness();
 
         (
             SHRINCSCore.SigningKey memory signingKey,
             SHRINCSCore.PublicKey memory publicKey,
             bool keygenOk
-        ) = ShrincsTestSigner.keygen(
+        ) = SHRINCSTestSigner.keygen(
             bytes("shrincs erc7913 stateful verifier seed"), 4
         );
         assertTrue(keygenOk, "in-test keygen must succeed");
@@ -71,10 +71,10 @@ contract ShrincsVerifierTest is Test {
         bytes memory message = abi.encodePacked(signedHash);
 
         (UXMSS.StatefulSignature memory leafOneSignature, bool leafOneOk) =
-            ShrincsTestSigner.signStatefulRawAtLeaf(signingKey, 1, message);
+            SHRINCSTestSigner.signStatefulRawAtLeaf(signingKey, 1, message);
         assertTrue(leafOneOk, "leaf-1 signing must succeed");
         (UXMSS.StatefulSignature memory leafTwoSignature, bool leafTwoOk) =
-            ShrincsTestSigner.signStatefulRawAtLeaf(signingKey, 2, message);
+            SHRINCSTestSigner.signStatefulRawAtLeaf(signingKey, 2, message);
         assertTrue(leafTwoOk, "leaf-2 signing must succeed");
 
         // The ERC-7913 key is the 32-byte bundle commitment word.

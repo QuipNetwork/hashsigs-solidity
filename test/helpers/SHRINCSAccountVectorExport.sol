@@ -23,12 +23,12 @@ import {
     SHRINCSAccountVerifierExample
 } from "../../contracts/examples/SHRINCSAccountVerifierExample.sol";
 import {
-    ShrincsAccountSigningFacade
-} from "./ShrincsAccountSigningFacade.sol";
+    SHRINCSAccountSigningFacade
+} from "./SHRINCSAccountSigningFacade.sol";
 
 /// @notice TEST-ONLY wrapper-feedable vector export helpers for canonical
 /// account flows.
-library ShrincsAccountVectorExport {
+library SHRINCSAccountVectorExport {
     struct StatefulActionVector {
         bytes32 currentSHRINCSPublicKey;
         SHRINCSCore.PublicKey publicKey;
@@ -98,7 +98,7 @@ library ShrincsAccountVectorExport {
                 (publicKey, actionType, payloadHash, signature)
             ),
             // line-length: allow — fmt canonical field head exceeds cap
-            erc1271Envelope: ShrincsAccountSigningFacade.encodeStateful1271Envelope(
+            erc1271Envelope: SHRINCSAccountSigningFacade.encodeStateful1271Envelope(
                 publicKey, actionType, payloadHash, signature
             )
         });
@@ -129,7 +129,7 @@ library ShrincsAccountVectorExport {
                 (publicKey, actionType, payloadHash, signature)
             ),
             // line-length: allow — fmt canonical field head exceeds cap
-            erc1271Envelope: ShrincsAccountSigningFacade.encodeStateless1271Envelope(
+            erc1271Envelope: SHRINCSAccountSigningFacade.encodeStateless1271Envelope(
                 publicKey, actionType, payloadHash, signature
             )
         });

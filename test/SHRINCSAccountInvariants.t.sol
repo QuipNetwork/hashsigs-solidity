@@ -24,7 +24,7 @@ import {SHRINCSParams} from "shrincs-profile/SHRINCSParams.sol";
 import {
     SHRINCSAccountVerifierExample
 } from "../contracts/examples/SHRINCSAccountVerifierExample.sol";
-import {ShrincsTestSigner} from "./helpers/ShrincsTestSigner.sol";
+import {SHRINCSTestSigner} from "./helpers/SHRINCSTestSigner.sol";
 
 /// @notice Minimal wrapper subclass exposing the internal state-transition
 /// helpers the invariant handler drives directly. Stateful actions run
@@ -67,7 +67,7 @@ contract InvariantAccountHarness is SHRINCSAccountVerifierExample {
 /// (replayed from setUp-signed material), adversarial/garbage calls, owner
 /// policy changes, and simulated rotations. Ghost booleans latch any
 /// violation of invariants I1-I7 for the invariant contract to assert.
-contract ShrincsAccountHandler is Test {
+contract SHRINCSAccountHandler is Test {
     // Fixed 32-byte message signed once per (key, leaf) in setUp and replayed
     // through the raw stateful path for the whole campaign.
     bytes32 internal constant FIXED_MESSAGE =
@@ -126,14 +126,14 @@ contract ShrincsAccountHandler is Test {
             SHRINCSCore.SigningKey memory signingKey,
             SHRINCSCore.PublicKey memory publicKey,
             bool keygenOk
-        ) = ShrincsTestSigner.keygen(seed, MAX_LEAF);
+        ) = SHRINCSTestSigner.keygen(seed, MAX_LEAF);
         require(keygenOk, "handler keygen");
         publicKeyOf[keyIndex] = publicKey;
         commitmentOf[keyIndex] = _commitmentWord(publicKey);
         for (uint32 leaf = 1; leaf <= MAX_LEAF; leaf++) {
             UXMSS.StatefulSignature memory signature;
             bool signOk;
-            (signature, signOk) = ShrincsTestSigner.signStatefulRawAtLeaf(
+            (signature, signOk) = SHRINCSTestSigner.signStatefulRawAtLeaf(
                 signingKey, leaf, abi.encodePacked(FIXED_MESSAGE)
             );
             require(signOk, "handler sign");
@@ -463,7 +463,7 @@ contract ShrincsAccountHandler is Test {
     }
 }
 
-/// @title ShrincsAccountInvariantsTest
+/// @title SHRINCSAccountInvariantsTest
 /// @notice Wrapper state-machine invariants I1-I7 (security-testing plan
 /// Part 2, P3/P10). A fuzz handler drives valid actions, adversarial calls,
 /// owner policy changes, and simulated rotations; each invariant asserts a
@@ -476,11 +476,11 @@ contract ShrincsAccountHandler is Test {
 /// SHRINCSAccountVerifierExample.t.sol; this suite covers the monotonicity,
 /// freeze, budget-reset, and fail-closed-purity properties under random
 /// operation sequences.
-contract ShrincsAccountInvariantsTest is Test {
-    ShrincsAccountHandler internal handler;
+contract SHRINCSAccountInvariantsTest is Test {
+    SHRINCSAccountHandler internal handler;
 
     function setUp() public {
-        handler = new ShrincsAccountHandler();
+        handler = new SHRINCSAccountHandler();
         handler.prepareKey(0);
         handler.prepareKey(1);
         handler.deployAccount();

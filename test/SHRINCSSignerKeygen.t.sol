@@ -17,13 +17,13 @@
 pragma solidity ^0.8.28;
 
 import {Test} from "../lib/forge-std/src/Test.sol";
-import {ShrincsTestSigner} from "./helpers/ShrincsTestSigner.sol";
+import {SHRINCSTestSigner} from "./helpers/SHRINCSTestSigner.sol";
 import {SHRINCSCore} from "../contracts/SHRINCSCore.sol";
 import {UXMSS} from "../contracts/UXMSS.sol";
 import {SHRINCSParams} from "shrincs-profile/SHRINCSParams.sol";
 import {SHRINCSCodec} from "../contracts/SHRINCSCodec.sol";
 
-contract ShrincsSignerHarness {
+contract SHRINCSSignerHarness {
     function keygen(bytes memory seedMaterial, uint32 maxStatefulSignatures)
         external
         pure
@@ -33,7 +33,7 @@ contract ShrincsSignerHarness {
             bool
         )
     {
-        return ShrincsTestSigner.keygen(seedMaterial, maxStatefulSignatures);
+        return SHRINCSTestSigner.keygen(seedMaterial, maxStatefulSignatures);
     }
 
     function decodeStatefulPublicKey(bytes calldata encoded)
@@ -45,8 +45,8 @@ contract ShrincsSignerHarness {
     }
 }
 
-contract ShrincsSignerKeygenTest is Test {
-    ShrincsSignerHarness internal harness;
+contract SHRINCSSignerKeygenTest is Test {
+    SHRINCSSignerHarness internal harness;
     bytes32 internal constant EXPECTED_STATEFUL_SK_SEED =
         0xd8016f4be6e7a5c7bcd60e9552d8aa678437377d79258c830d9fc77a06aeaccb;
     bytes32 internal constant EXPECTED_STATEFUL_PRF_SEED =
@@ -70,7 +70,7 @@ contract ShrincsSignerKeygenTest is Test {
     hex"a4a372b30187a5bf20d242a6e0a87206cf281bc0fdbbc44c835b3811f800587e59255b6f0e6ee44c1957d1d48bd7edfa936b7a8a073a13a2eb973b3ab87860f600000004";
 
     function setUp() public {
-        harness = new ShrincsSignerHarness();
+        harness = new SHRINCSSignerHarness();
     }
 
     function testKeygenRejectsZeroStatefulBudget() public view {

@@ -26,13 +26,13 @@ import {
     SHRINCSAccountVerifierExample
 } from "../contracts/examples/SHRINCSAccountVerifierExample.sol";
 import {
-    ShrincsAccountSigningFacade
-} from "./helpers/ShrincsAccountSigningFacade.sol";
+    SHRINCSAccountSigningFacade
+} from "./helpers/SHRINCSAccountSigningFacade.sol";
 import {
-    ShrincsStatelessVectorSigner
-} from "./helpers/ShrincsStatelessVectorSigner.sol";
+    SHRINCSStatelessVectorSigner
+} from "./helpers/SHRINCSStatelessVectorSigner.sol";
 
-contract CanonicitySigner is ShrincsStatelessVectorSigner {}
+contract CanonicitySigner is SHRINCSStatelessVectorSigner {}
 
 /// @notice Exposes both canonicity checks over calldata so tests can pass a
 /// memory payload through an external boundary (mirrors production, where the
@@ -76,7 +76,7 @@ contract CanonicityHarness {
     }
 }
 
-contract ShrincsAccountEnvelopeCanonicityTest is Test {
+contract SHRINCSAccountEnvelopeCanonicityTest is Test {
     bytes32 internal constant ACTION_TYPE = keccak256("measure");
     bytes32 internal constant PAYLOAD_HASH =
         keccak256("measurement payload");
@@ -246,20 +246,20 @@ contract ShrincsAccountEnvelopeCanonicityTest is Test {
             SHRINCSCore.SigningKey memory signingKey,
             SHRINCSCore.PublicKey memory publicKey,
             bool ok
-        ) = ShrincsAccountSigningFacade.keygen(
+        ) = SHRINCSAccountSigningFacade.keygen(
             bytes("canonicity stateless fixture seed"), 4
         );
         require(ok, "keygen");
         // forgefmt: disable-next-line
         SHRINCSAccountVerifierExample account =
             new SHRINCSAccountVerifierExample(
-                ShrincsAccountSigningFacade.publicKeyCommitmentWord(
+                SHRINCSAccountSigningFacade.publicKeyCommitmentWord(
                     publicKey
                 )
             );
         bytes32 sessionId;
         (, sessionId, ok) =
-            ShrincsAccountSigningFacade.beginStatelessActionSessionNow(
+            SHRINCSAccountSigningFacade.beginStatelessActionSessionNow(
                 signer,
                 account,
                 signingKey,
@@ -272,7 +272,7 @@ contract ShrincsAccountEnvelopeCanonicityTest is Test {
         (
             SPHINCSPlusCCore.StatelessSignature memory signature,
             bool completeOk
-        ) = ShrincsAccountSigningFacade.completeStatelessSession(
+        ) = SHRINCSAccountSigningFacade.completeStatelessSession(
             signer, sessionId
         );
         require(completeOk, "complete");

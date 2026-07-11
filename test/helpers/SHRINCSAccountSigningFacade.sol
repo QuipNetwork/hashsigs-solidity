@@ -24,12 +24,12 @@ import {
     SHRINCSAccountVerifierExample
 } from "../../contracts/examples/SHRINCSAccountVerifierExample.sol";
 import {
-    ShrincsStatelessVectorSigner
-} from "./ShrincsStatelessVectorSigner.sol";
+    SHRINCSStatelessVectorSigner
+} from "./SHRINCSStatelessVectorSigner.sol";
 import {
-    ShrincsStatelessVectorSigningFacade
-} from "./ShrincsStatelessVectorSigningFacade.sol";
-import {ShrincsTestSigner} from "./ShrincsTestSigner.sol";
+    SHRINCSStatelessVectorSigningFacade
+} from "./SHRINCSStatelessVectorSigningFacade.sol";
+import {SHRINCSTestSigner} from "./SHRINCSTestSigner.sol";
 
 /// @notice TEST-ONLY account-aware signing facade for the canonical wrapper
 /// flows.
@@ -37,7 +37,7 @@ import {ShrincsTestSigner} from "./ShrincsTestSigner.sol";
 /// builds the exact canonical account messages the on-chain verifier expects,
 /// and signs them with the test-only SHRINCS signer helpers. It is intended
 /// for tests and local vector generation only.
-library ShrincsAccountSigningFacade {
+library SHRINCSAccountSigningFacade {
     uint8 internal constant ERC1271_MODE_STATEFUL_ACTION = 1;
     uint8 internal constant ERC1271_MODE_STATELESS_ACTION = 2;
     bytes32 internal constant DOMAIN_TAG = keccak256("shrincs-account-v1");
@@ -51,7 +51,7 @@ library ShrincsAccountSigningFacade {
             bool ok
         )
     {
-        return ShrincsTestSigner.keygen(seedMaterial, maxStatefulSignatures);
+        return SHRINCSTestSigner.keygen(seedMaterial, maxStatefulSignatures);
     }
 
     function actionContext(
@@ -102,11 +102,11 @@ library ShrincsAccountSigningFacade {
             )
         );
         (nextSigningKey, signature, ok) =
-            ShrincsTestSigner.signStatefulRaw(signingKey, message);
+            SHRINCSTestSigner.signStatefulRaw(signingKey, message);
     }
 
     function beginStatelessActionSessionNow(
-        ShrincsStatelessVectorSigner signer,
+        SHRINCSStatelessVectorSigner signer,
         SHRINCSAccountVerifierExample account,
         SHRINCSCore.SigningKey memory signingKey,
         SHRINCSCore.PublicKey memory publicKey,
@@ -130,7 +130,7 @@ library ShrincsAccountSigningFacade {
     }
 
     function beginStatefulOnlyRotationSessionNow(
-        ShrincsStatelessVectorSigner signer,
+        SHRINCSStatelessVectorSigner signer,
         SHRINCSAccountVerifierExample account,
         SHRINCSCore.SigningKey memory signingKey,
         SHRINCSCore.PublicKey memory currentPublicKey,
@@ -163,7 +163,7 @@ library ShrincsAccountSigningFacade {
     }
 
     function beginFullRotationSessionNow(
-        ShrincsStatelessVectorSigner signer,
+        SHRINCSStatelessVectorSigner signer,
         SHRINCSAccountVerifierExample account,
         SHRINCSCore.SigningKey memory signingKey,
         SHRINCSCore.PublicKey memory currentPublicKey,
@@ -280,7 +280,7 @@ library ShrincsAccountSigningFacade {
     }
 
     function completeStatelessSession(
-        ShrincsStatelessVectorSigner signer,
+        SHRINCSStatelessVectorSigner signer,
         bytes32 sessionId
     )
         internal
@@ -291,7 +291,7 @@ library ShrincsAccountSigningFacade {
     {
         (
             , signature, ok
-        ) = ShrincsStatelessVectorSigningFacade.completeSession(
+        ) = SHRINCSStatelessVectorSigningFacade.completeSession(
             signer, sessionId
         );
     }

@@ -18,10 +18,10 @@ pragma solidity ^0.8.28;
 
 import {SHRINCSHash} from "../../contracts/SHRINCSHash.sol";
 
-/// @title ShrincsSymbolic
+/// @title SHRINCSSymbolic
 /// @notice hevm symbolic-execution properties for the pure bit-arithmetic
 /// helpers (security-testing plan Task 6, advisory). These are the same
-/// bounds the forge fuzz suite ShrincsArithmeticFuzz checks over concrete
+/// bounds the forge fuzz suite SHRINCSArithmeticFuzz checks over concrete
 /// inputs; hevm proves them over fully symbolic inputs.
 /// @dev hevm 0.58 runs `prove_`-prefixed functions symbolically
 /// (`hevm test --root . --match prove_`). Properties are loop-free so no
@@ -29,7 +29,7 @@ import {SHRINCSHash} from "../../contracts/SHRINCSHash.sol";
 /// pure arithmetic. Plain `assert` marks the property; `require` constrains
 /// the symbolic inputs to each reader's documented contract. Fallback if
 /// hevm rots: keep the forge fuzz mirror as the source of truth.
-contract ShrincsSymbolic {
+contract SHRINCSSymbolic {
     // A base-16 digit read from any 32-byte word at any valid index is in
     // [0, 15], so the WOTS-C chain-step count (15 - digit) never underflows.
     function prove_baseW16DigitBounded(bytes32 word, uint256 index)

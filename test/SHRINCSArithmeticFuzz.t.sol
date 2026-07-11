@@ -19,7 +19,7 @@ pragma solidity ^0.8.28;
 import {Test} from "../lib/forge-std/src/Test.sol";
 import {SHRINCSHash} from "../contracts/SHRINCSHash.sol";
 
-/// @title ShrincsArithmeticFuzzTest
+/// @title SHRINCSArithmeticFuzzTest
 /// @notice Differential and bounds fuzz for the pure bit-arithmetic helpers
 /// (security-testing plan P5, P8). readBits32/64 are checked against an
 /// independent shift-free reference reader; base-w digits are checked to stay
@@ -28,8 +28,8 @@ import {SHRINCSHash} from "../contracts/SHRINCSHash.sol";
 /// with the production assembly. The buffers carry the 32-byte read slack
 /// SHRINCSHash.readBits32/64 document, so the fuzz respects the caller
 /// contract (F-07). The same properties are proved symbolically by Task 6's
-/// hevm job over ShrincsSymbolic.
-contract ShrincsArithmeticFuzzTest is Test {
+/// hevm job over SHRINCSSymbolic.
+contract SHRINCSArithmeticFuzzTest is Test {
     // WOTS `w` for the 256s/128s profiles is 16 (base-16 digits). Named for
     // the bound the digits must respect.
     uint16 internal constant CHAIN_BASE_16 = 16;
