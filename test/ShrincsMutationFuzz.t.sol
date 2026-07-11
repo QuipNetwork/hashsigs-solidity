@@ -22,7 +22,7 @@ import {
 } from "../contracts/interfaces/IERC7913SignatureVerifier.sol";
 import {SHRINCS} from "../contracts/SHRINCS.sol";
 import {ShrincsCodec} from "../contracts/ShrincsCodec.sol";
-import {ShrincsTypes} from "../contracts/ShrincsTypes.sol";
+import {ShrincsStateful} from "../contracts/ShrincsStateful.sol";
 import {ShrincsVerifier} from "../contracts/ShrincsVerifier.sol";
 import {
     ShrincsAccountVerifierExample
@@ -65,8 +65,8 @@ contract ShrincsMutationFuzzTest is Test {
     function setUp() public {
         rawVerifier = new MutationVerifierHarness();
         (
-            ShrincsTypes.SigningKey memory signingKey,
-            ShrincsTypes.PublicKey memory publicKey,
+            SHRINCS.SigningKey memory signingKey,
+            SHRINCS.PublicKey memory publicKey,
             bool keygenOk
         ) = ShrincsTestSigner.keygen(bytes("shrincs mutation fuzz seed"), 4);
         assertTrue(keygenOk, "keygen");
@@ -134,11 +134,11 @@ contract ShrincsMutationFuzzTest is Test {
         bytes32 flip
     ) public view {
         (
-            ShrincsTypes.PublicKey memory publicKey,
-            ShrincsTypes.StatefulSignature memory signature
+            SHRINCS.PublicKey memory publicKey,
+            ShrincsStateful.StatefulSignature memory signature
         ) = abi.decode(
             rawEnvelope,
-            (ShrincsTypes.PublicKey, ShrincsTypes.StatefulSignature)
+            (SHRINCS.PublicKey, ShrincsStateful.StatefulSignature)
         );
         uint256 index = bound(chainSelector, 0, signature.chains.length - 1);
         signature.chains[index] =
@@ -155,11 +155,11 @@ contract ShrincsMutationFuzzTest is Test {
     // Perturbing the WOTS-C grind counter breaks the target-sum digest.
     function testFuzz_rawCounterMutationRejected(uint32 delta) public view {
         (
-            ShrincsTypes.PublicKey memory publicKey,
-            ShrincsTypes.StatefulSignature memory signature
+            SHRINCS.PublicKey memory publicKey,
+            ShrincsStateful.StatefulSignature memory signature
         ) = abi.decode(
             rawEnvelope,
-            (ShrincsTypes.PublicKey, ShrincsTypes.StatefulSignature)
+            (SHRINCS.PublicKey, ShrincsStateful.StatefulSignature)
         );
         uint32 bump = delta == 0 ? 1 : delta;
         // XOR flips at least one counter bit without overflowing uint32.
@@ -176,15 +176,15 @@ contract ShrincsMutationFuzzTest is Test {
     // _buildWrapperEnvelope: sign the first stateful action against the fresh
     // wrapper and encode the canonical mode-1 ERC-1271 envelope.
     function _buildWrapperEnvelope(
-        ShrincsTypes.SigningKey memory signingKey,
-        ShrincsTypes.PublicKey memory publicKey
+        SHRINCS.SigningKey memory signingKey,
+        SHRINCS.PublicKey memory publicKey
     ) internal {
         bytes32 actionType = keccak256("shrincs-mutation-action");
         bytes32 payloadHash = keccak256("shrincs-mutation-payload");
         (
             ,
-            ShrincsTypes.ActionContext memory context,
-            ShrincsTypes.StatefulSignature memory signature,
+            SHRINCS.ActionContext memory context,
+            ShrincsStateful.StatefulSignature memory signature,
             bool ok
         ) = ShrincsAccountSigningFacade.signStatefulActionNow(
             account, signingKey, actionType, payloadHash
@@ -202,12 +202,12 @@ contract ShrincsMutationFuzzTest is Test {
     // _buildRawEnvelope: sign the fixed hash at leaf 1 and encode the raw
     // ERC-7913 stateful envelope.
     function _buildRawEnvelope(
-        ShrincsTypes.SigningKey memory signingKey,
-        ShrincsTypes.PublicKey memory publicKey,
+        SHRINCS.SigningKey memory signingKey,
+        SHRINCS.PublicKey memory publicKey,
         bytes32 commitment
     ) internal {
         rawHash = keccak256("shrincs mutation raw vector");
-        ShrincsTypes.StatefulSignature memory signature;
+        ShrincsStateful.StatefulSignature memory signature;
         bool ok;
         (signature, ok) = ShrincsTestSigner.signStatefulRawAtLeaf(
             signingKey, 1, abi.encodePacked(rawHash)

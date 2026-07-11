@@ -16,10 +16,41 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 pragma solidity ^0.8.28;
 
-import {ShrincsTypes} from "./ShrincsTypes.sol";
+import {SHRINCS} from "./SHRINCS.sol";
+import {ShrincsParams} from "shrincs-profile/ShrincsParams.sol";
 import {SHRINCSHash} from "./SHRINCSHash.sol";
 
 library ShrincsForsC {
+    // Address-type words for the SPHINCS-style keyed hash inputs. These
+    // are the ADRS type constants [FIPS205 §4.2]: WOTS+ hash (0), tree
+    // (2), and FORS tree (3).
+    uint32 internal constant AddressTypeForsTree = 3;
+
+    struct ForsDigest {
+        // Hypertree subtree selected for this stateless signature.
+        uint64 treeIndex;
+        // Leaf inside that subtree.
+        uint32 leafIndex;
+        // Message-derived FORS digest bits used to choose revealed leaves.
+        bytes digest;
+    }
+
+    struct ForsEntry {
+        // Revealed secret leaf for one FORS tree.
+        bytes secretLeaf;
+        // Authentication path from that leaf to the tree root.
+        bytes[] authPath;
+    }
+
+    struct ForsSignature {
+        // Per-signature randomizer used in FORS message hashing.
+        bytes randomizer;
+        // Grinding counter for the FORS-C constrained digest.
+        uint32 counter;
+        // Revealed FORS leaves and authentication paths.
+        ForsEntry[] entries;
+    }
+
     // verifyForsCAndReturnRoot: Verify the FORS-C portion of a stateless
     // SHRINCS signature.
     // FORS-C (FORS+C in [SPHINCSPLUSC §4]): the omitted final tree is
@@ -35,9 +66,9 @@ library ShrincsForsC {
     // 6. Return the FORS root for hypertree verification together with a
     // success flag.
     function verifyForsCAndReturnRoot(
-        ShrincsTypes.PublicKey calldata publicKey,
+        SHRINCS.PublicKey calldata publicKey,
         bytes memory message,
-        ShrincsTypes.ForsSignature calldata signature,
+        ShrincsForsC.ForsSignature calldata signature,
         uint64 treeIndex,
         uint32 leafIndex
     ) internal pure returns (bytes32 forsRoot, bool ok) {
@@ -45,7 +76,7 @@ library ShrincsForsC {
         // leaf index to zero. Verification therefore expects only k - 1
         // revealed entries and rejects any digest whose omitted final tree
         // would require a nonzero leaf.
-        uint256 signedTrees = uint256(ShrincsTypes.NUM_FORS_TREES) - 1;
+        uint256 signedTrees = uint256(ShrincsParams.NUM_FORS_TREES) - 1;
         // The randomizer is always one hash output wide.
         if (signature.randomizer.length != 32) return (bytes32(0), false);
         // FORS-C reveals only the signedTrees entries, never the omitted
@@ -56,19 +87,19 @@ library ShrincsForsC {
 
         // Recompute the FORS digest and the hypertree coordinates that the
         // signer committed to.
-        ShrincsTypes.ForsDigest memory digest = forsDigest(
+        ShrincsForsC.ForsDigest memory digest = forsDigest(
             publicKey, message, signature.randomizer, signature.counter
         );
         // forsHeight: the SPHINCSPLUS `a` parameter [SPHINCSPLUS §5.5]
         // — FORS tree height.
-        uint256 forsHeight = uint256(ShrincsTypes.FORS_TREE_HEIGHT);
+        uint256 forsHeight = uint256(ShrincsParams.FORS_TREE_HEIGHT);
         // The omitted final FORS tree must always select leaf 0 in the
         // compressed FORS-C layout.
         if (
             SHRINCSHash.readBits32(
                     digest.digest,
                     signedTrees * forsHeight,
-                    ShrincsTypes.FORS_TREE_HEIGHT
+                    ShrincsParams.FORS_TREE_HEIGHT
                 ) != 0
         ) {
             return (bytes32(0), false);
@@ -108,7 +139,7 @@ library ShrincsForsC {
 
         for (uint256 tree = 0; tree < signedTrees;) {
             // Read one revealed FORS entry for this tree.
-            ShrincsTypes.ForsEntry calldata entry = signature.entries[tree];
+            ShrincsForsC.ForsEntry calldata entry = signature.entries[tree];
             // Every revealed secret leaf is a single 32-byte hash input.
             if (entry.secretLeaf.length != 32) return (bytes32(0), false);
             // Every revealed auth path must have exactly one node per FORS
@@ -120,7 +151,7 @@ library ShrincsForsC {
             uint32 entryLeafIndex = SHRINCSHash.readBits32(
                 digest.digest,
                 tree * forsHeight,
-                ShrincsTypes.FORS_TREE_HEIGHT
+                ShrincsParams.FORS_TREE_HEIGHT
             );
             // casting to 'uint32' is safe because the supported FORS tree
             // height is 14 bits
@@ -183,7 +214,7 @@ library ShrincsForsC {
         uint32 leafIndex,
         uint32 forsTreeIndex,
         uint32 entryLeafIndex,
-        ShrincsTypes.ForsEntry calldata entry
+        ShrincsForsC.ForsEntry calldata entry
     ) internal pure returns (bytes32 node) {
         // Build the shared address prefix used by all nodes in this FORS tree
         // location.
@@ -260,7 +291,7 @@ library ShrincsForsC {
         uint256 shiftedTreeIndex = uint256(treeIndex) << 128;
         // Mark this address as belonging to the FORS tree domain.
         uint256 shiftedAddressType =
-            uint256(ShrincsTypes.AddressTypeForsTree) << 96;
+            uint256(ShrincsForsC.AddressTypeForsTree) << 96;
         // Bind the FORS instance to the bottom-layer hypertree leaf.
         uint256 shiftedLeafIndex = uint256(leafIndex) << 64;
         uint256 addressBase = shiftedTreeIndex;
@@ -363,26 +394,28 @@ library ShrincsForsC {
     // 5. Return both coordinates together with the digest bytes used for FORS
     // leaf selection.
     function forsDigest(
-        ShrincsTypes.PublicKey calldata publicKey,
+        SHRINCS.PublicKey calldata publicKey,
         bytes memory message,
         bytes calldata randomizer,
         uint32 counter
-    ) internal pure returns (ShrincsTypes.ForsDigest memory out) {
+    ) internal pure returns (ShrincsForsC.ForsDigest memory out) {
         // Reserve bits for all signed FORS tree leaf choices.
-        uint32 indexBits = uint32(ShrincsTypes.NUM_FORS_TREES)
-            * uint32(ShrincsTypes.FORS_TREE_HEIGHT);
+        uint32 indexBits = uint32(ShrincsParams.NUM_FORS_TREES)
+            * uint32(ShrincsParams.FORS_TREE_HEIGHT);
         // Each hypertree layer shares this many leaf-index bits.
         uint32 subtreeHeight = uint32(
-            ShrincsTypes.HYPERTREE_HEIGHT / ShrincsTypes.NUM_HYPERTREE_LAYERS
+            ShrincsParams.HYPERTREE_HEIGHT
+                / ShrincsParams.NUM_HYPERTREE_LAYERS
         );
         // The remaining hypertree bits identify the subtree itself.
         uint32 treeBits =
-            uint32(ShrincsTypes.HYPERTREE_HEIGHT) - subtreeHeight;
+            uint32(ShrincsParams.HYPERTREE_HEIGHT) - subtreeHeight;
         // Expand enough bytes to cover FORS choices plus hypertree
         // coordinates.
         uint256 digestBytes =
-            (uint256(indexBits) + uint256(ShrincsTypes.HYPERTREE_HEIGHT) + 7)
-                / 8;
+            (uint256(indexBits)
+                    + uint256(ShrincsParams.HYPERTREE_HEIGHT)
+                    + 7) / 8;
         // Derive the digest stream from the public seed/root, signature
         // randomizer, counter, and message.
         bytes memory digest = forsDigestBytes(

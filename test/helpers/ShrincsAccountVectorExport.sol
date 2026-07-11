@@ -17,7 +17,7 @@
 pragma solidity ^0.8.28;
 
 import {SHRINCS} from "../../contracts/SHRINCS.sol";
-import {ShrincsTypes} from "../../contracts/ShrincsTypes.sol";
+import {ShrincsStateful} from "../../contracts/ShrincsStateful.sol";
 import {
     ShrincsAccountVerifierExample
 } from "../../contracts/examples/ShrincsAccountVerifierExample.sol";
@@ -30,11 +30,11 @@ import {
 library ShrincsAccountVectorExport {
     struct StatefulActionVector {
         bytes32 currentShrincsPublicKey;
-        ShrincsTypes.PublicKey publicKey;
-        ShrincsTypes.ActionContext context;
+        SHRINCS.PublicKey publicKey;
+        SHRINCS.ActionContext context;
         bytes32 actionType;
         bytes32 payloadHash;
-        ShrincsTypes.StatefulSignature signature;
+        ShrincsStateful.StatefulSignature signature;
         bytes message;
         bytes verifyCalldata;
         bytes erc1271Envelope;
@@ -42,11 +42,11 @@ library ShrincsAccountVectorExport {
 
     struct StatelessActionVector {
         bytes32 currentShrincsPublicKey;
-        ShrincsTypes.PublicKey publicKey;
-        ShrincsTypes.ActionContext context;
+        SHRINCS.PublicKey publicKey;
+        SHRINCS.ActionContext context;
         bytes32 actionType;
         bytes32 payloadHash;
-        ShrincsTypes.StatelessSignature signature;
+        SHRINCS.StatelessSignature signature;
         bytes message;
         bytes verifyCalldata;
         bytes erc1271Envelope;
@@ -54,31 +54,31 @@ library ShrincsAccountVectorExport {
 
     struct StatefulOnlyRotationVector {
         bytes32 currentShrincsPublicKey;
-        ShrincsTypes.PublicKey currentPublicKey;
-        ShrincsTypes.RotationContext context;
-        ShrincsTypes.StatefulRotationTarget nextKey;
-        ShrincsTypes.StatelessSignature recoverySignature;
+        SHRINCS.PublicKey currentPublicKey;
+        SHRINCS.RotationContext context;
+        SHRINCS.StatefulRotationTarget nextKey;
+        SHRINCS.StatelessSignature recoverySignature;
         bytes message;
         bytes rotateCalldata;
     }
 
     struct FullRotationVector {
         bytes32 currentShrincsPublicKey;
-        ShrincsTypes.PublicKey currentPublicKey;
-        ShrincsTypes.RotationContext context;
-        ShrincsTypes.RotationTarget nextKey;
-        ShrincsTypes.StatelessSignature recoverySignature;
+        SHRINCS.PublicKey currentPublicKey;
+        SHRINCS.RotationContext context;
+        SHRINCS.RotationTarget nextKey;
+        SHRINCS.StatelessSignature recoverySignature;
         bytes message;
         bytes rotateCalldata;
     }
 
     function statefulActionVector(
         ShrincsAccountVerifierExample account,
-        ShrincsTypes.PublicKey memory publicKey,
-        ShrincsTypes.ActionContext memory context,
+        SHRINCS.PublicKey memory publicKey,
+        SHRINCS.ActionContext memory context,
         bytes32 actionType,
         bytes32 payloadHash,
-        ShrincsTypes.StatefulSignature memory signature
+        ShrincsStateful.StatefulSignature memory signature
     ) internal view returns (StatefulActionVector memory vector_) {
         bytes32 current = account.currentShrincsPublicKey();
         bytes memory message = abi.encodePacked(
@@ -105,11 +105,11 @@ library ShrincsAccountVectorExport {
 
     function statelessActionVector(
         ShrincsAccountVerifierExample account,
-        ShrincsTypes.PublicKey memory publicKey,
-        ShrincsTypes.ActionContext memory context,
+        SHRINCS.PublicKey memory publicKey,
+        SHRINCS.ActionContext memory context,
         bytes32 actionType,
         bytes32 payloadHash,
-        ShrincsTypes.StatelessSignature memory signature
+        SHRINCS.StatelessSignature memory signature
     ) internal view returns (StatelessActionVector memory vector_) {
         bytes32 current = account.currentShrincsPublicKey();
         bytes memory message = abi.encodePacked(
@@ -136,17 +136,17 @@ library ShrincsAccountVectorExport {
 
     function statefulOnlyRotationVector(
         ShrincsAccountVerifierExample account,
-        ShrincsTypes.PublicKey memory currentPublicKey,
-        ShrincsTypes.RotationContext memory context,
-        ShrincsTypes.StatefulRotationTarget memory nextKey,
-        ShrincsTypes.StatelessSignature memory recoverySignature
+        SHRINCS.PublicKey memory currentPublicKey,
+        SHRINCS.RotationContext memory context,
+        SHRINCS.StatefulRotationTarget memory nextKey,
+        SHRINCS.StatelessSignature memory recoverySignature
     ) internal view returns (StatefulOnlyRotationVector memory vector_) {
         bytes32 current = account.currentShrincsPublicKey();
         bytes memory message = abi.encodePacked(
             keccak256(
                 abi.encodePacked(
-                    ShrincsTypes.OP_ROTATE_STATEFUL,
-                    ShrincsTypes.HASH_SUITE_KECCAK_256,
+                    SHRINCS.OP_ROTATE_STATEFUL,
+                    SHRINCS.HASH_SUITE_KECCAK_256,
                     current,
                     context.domainSeparator,
                     context.nonce,
@@ -172,17 +172,17 @@ library ShrincsAccountVectorExport {
 
     function fullRotationVector(
         ShrincsAccountVerifierExample account,
-        ShrincsTypes.PublicKey memory currentPublicKey,
-        ShrincsTypes.RotationContext memory context,
-        ShrincsTypes.RotationTarget memory nextKey,
-        ShrincsTypes.StatelessSignature memory recoverySignature
+        SHRINCS.PublicKey memory currentPublicKey,
+        SHRINCS.RotationContext memory context,
+        SHRINCS.RotationTarget memory nextKey,
+        SHRINCS.StatelessSignature memory recoverySignature
     ) internal view returns (FullRotationVector memory vector_) {
         bytes32 current = account.currentShrincsPublicKey();
         bytes memory message = abi.encodePacked(
             keccak256(
                 abi.encodePacked(
-                    ShrincsTypes.OP_ROTATE_FULL,
-                    ShrincsTypes.HASH_SUITE_KECCAK_256,
+                    SHRINCS.OP_ROTATE_FULL,
+                    SHRINCS.HASH_SUITE_KECCAK_256,
                     current,
                     context.domainSeparator,
                     context.nonce,

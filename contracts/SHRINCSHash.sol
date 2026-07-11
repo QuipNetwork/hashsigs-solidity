@@ -16,7 +16,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 pragma solidity ^0.8.28;
 
-import {ShrincsTypes} from "./ShrincsTypes.sol";
+import {ShrincsParams} from "shrincs-profile/ShrincsParams.sol";
 
 /// @title SHRINCSHash
 /// @notice Profile-independent hash and bit primitives shared by every
@@ -73,7 +73,7 @@ library SHRINCSHash {
     // For the 256s profile HASH_MASK is all-ones, so this folds to a
     // no-op under via-ir.
     function maskHash(bytes32 hashValue) internal pure returns (bytes32) {
-        return hashValue & ShrincsTypes.HASH_MASK;
+        return hashValue & ShrincsParams.HASH_MASK;
     }
 
     // baseWDigit: Read one base-w digit from a digest, supporting both

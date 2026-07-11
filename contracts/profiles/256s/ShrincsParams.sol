@@ -20,9 +20,9 @@ pragma solidity ^0.8.28;
 /// @notice Compile-time SHRINCS/SPHINCS parameter tuple for the 256s
 /// profile. One `ShrincsParams` library exists per build profile under
 /// contracts/profiles/<profile>/; the active one is selected by the
-/// `shrincs-profile/` Foundry remapping (foundry.toml). ShrincsTypes
-/// re-exports each constant as an alias so the ~113 `ShrincsTypes.X`
-/// reference sites compile unchanged across profiles.
+/// `shrincs-profile/` Foundry remapping (foundry.toml). Every module
+/// imports this library directly through that remapping, so each
+/// parameter reference site stays profile-agnostic.
 /// @dev Every count here sizes arrays and bounds loops, so it must be a
 /// compile-time constant (not a runtime value): via-ir does not
 /// constant-fold struct-passed params. See

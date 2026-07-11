@@ -19,7 +19,7 @@ pragma solidity ^0.8.28;
 import {Test} from "../lib/forge-std/src/Test.sol";
 import {Vm} from "../lib/forge-std/src/Vm.sol";
 import {SHRINCS} from "../contracts/SHRINCS.sol";
-import {ShrincsTypes} from "../contracts/ShrincsTypes.sol";
+import {ShrincsStateful} from "../contracts/ShrincsStateful.sol";
 import {
     ShrincsAccountVerifierExample
 } from "../contracts/examples/ShrincsAccountVerifierExample.sol";
@@ -41,9 +41,9 @@ contract ShrincsMeasurementsTest is Test {
         keccak256("measurement payload");
 
     struct StatefulCase {
-        ShrincsTypes.PublicKey publicKey;
-        ShrincsTypes.ActionContext context;
-        ShrincsTypes.StatefulSignature signature;
+        SHRINCS.PublicKey publicKey;
+        SHRINCS.ActionContext context;
+        ShrincsStateful.StatefulSignature signature;
         ShrincsAccountVerifierExample account;
         bytes message;
         bytes32 hash;
@@ -51,9 +51,9 @@ contract ShrincsMeasurementsTest is Test {
     }
 
     struct StatelessCase {
-        ShrincsTypes.PublicKey publicKey;
-        ShrincsTypes.ActionContext context;
-        ShrincsTypes.StatelessSignature signature;
+        SHRINCS.PublicKey publicKey;
+        SHRINCS.ActionContext context;
+        SHRINCS.StatelessSignature signature;
         ShrincsAccountVerifierExample account;
         bytes message;
         bytes32 hash;
@@ -167,8 +167,8 @@ contract ShrincsMeasurementsTest is Test {
         returns (StatefulCase memory c)
     {
         (
-            ShrincsTypes.SigningKey memory signingKey,
-            ShrincsTypes.PublicKey memory publicKey,
+            SHRINCS.SigningKey memory signingKey,
+            SHRINCS.PublicKey memory publicKey,
             bool keygenOk
         ) = ShrincsAccountSigningFacade.keygen(seedMaterial, 4);
         assertTrue(keygenOk, "stateful keygen must succeed");
@@ -182,8 +182,8 @@ contract ShrincsMeasurementsTest is Test {
 
         (
             ,
-            ShrincsTypes.ActionContext memory context,
-            ShrincsTypes.StatefulSignature memory signature,
+            SHRINCS.ActionContext memory context,
+            ShrincsStateful.StatefulSignature memory signature,
             bool signOk
         ) = ShrincsAccountSigningFacade.signStatefulActionNow(
             account, signingKey, ACTION_TYPE, PAYLOAD_HASH
@@ -214,8 +214,8 @@ contract ShrincsMeasurementsTest is Test {
         returns (StatelessCase memory c)
     {
         (
-            ShrincsTypes.SigningKey memory signingKey,
-            ShrincsTypes.PublicKey memory publicKey,
+            SHRINCS.SigningKey memory signingKey,
+            SHRINCS.PublicKey memory publicKey,
             bool ok
         ) = ShrincsAccountSigningFacade.keygen(seedMaterial, 4);
         assertTrue(ok, "stateless keygen must succeed");
@@ -237,15 +237,13 @@ contract ShrincsMeasurementsTest is Test {
             );
         assertTrue(ok, "stateless session must begin");
 
-        (
-            ShrincsTypes.StatelessSignature memory signature,
-            bool completeOk
-        ) = ShrincsAccountSigningFacade.completeStatelessSession(
-                accountSigner, sessionId
-            );
+        // line-length: allow — fmt canonical tuple head exceeds cap
+        (SHRINCS.StatelessSignature memory signature, bool completeOk) = ShrincsAccountSigningFacade.completeStatelessSession(
+            accountSigner, sessionId
+        );
         assertTrue(completeOk, "stateless signing must complete");
 
-        ShrincsTypes.ActionContext memory context =
+        SHRINCS.ActionContext memory context =
             ShrincsAccountSigningFacade.actionContext(
                 account, ACTION_TYPE, PAYLOAD_HASH
             );
@@ -265,7 +263,7 @@ contract ShrincsMeasurementsTest is Test {
         );
     }
 
-    function publicKeyCommitmentWord(ShrincsTypes.PublicKey memory publicKey)
+    function publicKeyCommitmentWord(SHRINCS.PublicKey memory publicKey)
         internal
         pure
         returns (bytes32 out)

@@ -18,7 +18,7 @@ pragma solidity ^0.8.28;
 
 import {Test} from "../lib/forge-std/src/Test.sol";
 import {SHRINCS} from "../contracts/SHRINCS.sol";
-import {ShrincsTypes} from "../contracts/ShrincsTypes.sol";
+import {ShrincsStateful} from "../contracts/ShrincsStateful.sol";
 import {
     ShrincsAccountVerifierExample
 } from "../contracts/examples/ShrincsAccountVerifierExample.sol";
@@ -45,8 +45,8 @@ contract ShrincsAccountSigningFacadeTest is Test {
 
     function testAccountAwareStatefulActionSignerFeedsWrapper() public {
         (
-            ShrincsTypes.SigningKey memory signingKey,
-            ShrincsTypes.PublicKey memory publicKey,
+            SHRINCS.SigningKey memory signingKey,
+            SHRINCS.PublicKey memory publicKey,
             bool keygenOk
         ) = ShrincsAccountSigningFacade.keygen(
             bytes("account-aware current key"), 4
@@ -64,9 +64,9 @@ contract ShrincsAccountSigningFacadeTest is Test {
         bytes32 payloadHash = keccak256("payload");
 
         (
-            ShrincsTypes.SigningKey memory nextSigningKey,
-            ShrincsTypes.ActionContext memory context,
-            ShrincsTypes.StatefulSignature memory signature,
+            SHRINCS.SigningKey memory nextSigningKey,
+            SHRINCS.ActionContext memory context,
+            ShrincsStateful.StatefulSignature memory signature,
             bool signOk
         ) = ShrincsAccountSigningFacade.signStatefulActionNow(
             account, signingKey, actionType, payloadHash
@@ -96,13 +96,13 @@ contract ShrincsAccountSigningFacadeTest is Test {
 
     // Checks that a stateful ERC-1271 signature works now, then fails after
     // the nonce is used.
-    // line-length: allow — test name is one unbreakable token
+    // line-length: allow â test name is one unbreakable token
     function testAccountAwareStateful1271SnapshotIsValidBeforeNonceUseAndInvalidAfter()
         public
     {
         (
-            ShrincsTypes.SigningKey memory signingKey,
-            ShrincsTypes.PublicKey memory publicKey,
+            SHRINCS.SigningKey memory signingKey,
+            SHRINCS.PublicKey memory publicKey,
             bool keygenOk
         ) = ShrincsAccountSigningFacade.keygen(
             bytes("account-aware 1271 stateful current key"), 4
@@ -121,8 +121,8 @@ contract ShrincsAccountSigningFacadeTest is Test {
 
         (
             ,
-            ShrincsTypes.ActionContext memory context,
-            ShrincsTypes.StatefulSignature memory signature,
+            SHRINCS.ActionContext memory context,
+            ShrincsStateful.StatefulSignature memory signature,
             bool signOk
         ) = ShrincsAccountSigningFacade.signStatefulActionNow(
             account, signingKey, actionType, payloadHash
@@ -156,13 +156,13 @@ contract ShrincsAccountSigningFacadeTest is Test {
 
     // Checks that trailing bytes appended to a stateful ERC-1271 envelope
     // are rejected by the re-encode canonicity check.
-    // line-length: allow — test name is one unbreakable token
+    // line-length: allow â test name is one unbreakable token
     function testAccountAwareStateful1271EnvelopeRejectsTrailingBytes()
         public
     {
         (
-            ShrincsTypes.SigningKey memory signingKey,
-            ShrincsTypes.PublicKey memory publicKey,
+            SHRINCS.SigningKey memory signingKey,
+            SHRINCS.PublicKey memory publicKey,
             bool keygenOk
         ) = ShrincsAccountSigningFacade.keygen(
             bytes("account-aware 1271 stateful trailing key"), 4
@@ -181,8 +181,8 @@ contract ShrincsAccountSigningFacadeTest is Test {
 
         (
             ,
-            ShrincsTypes.ActionContext memory context,
-            ShrincsTypes.StatefulSignature memory signature,
+            SHRINCS.ActionContext memory context,
+            ShrincsStateful.StatefulSignature memory signature,
             bool signOk
         ) = ShrincsAccountSigningFacade.signStatefulActionNow(
             account, signingKey, actionType, payloadHash
@@ -213,8 +213,8 @@ contract ShrincsAccountSigningFacadeTest is Test {
 
     function testAccountAwareStatelessActionSignerFeedsWrapper() public {
         (
-            ShrincsTypes.SigningKey memory signingKey,
-            ShrincsTypes.PublicKey memory publicKey,
+            SHRINCS.SigningKey memory signingKey,
+            SHRINCS.PublicKey memory publicKey,
             bool keygenOk
         ) = ShrincsAccountSigningFacade.keygen(
             bytes("account-aware stateless current key"), 4
@@ -232,7 +232,7 @@ contract ShrincsAccountSigningFacadeTest is Test {
         bytes32 payloadHash = keccak256("payload");
 
         (
-            ShrincsTypes.ActionContext memory context,
+            SHRINCS.ActionContext memory context,
             bytes32 sessionId,
             bool signOk
         ) = ShrincsAccountSigningFacade.beginStatelessActionSessionNow(
@@ -251,12 +251,10 @@ contract ShrincsAccountSigningFacadeTest is Test {
             "stateless action should sign the current wrapper nonce"
         );
 
-        (
-            ShrincsTypes.StatelessSignature memory signature,
-            bool completeOk
-        ) = ShrincsAccountSigningFacade.completeStatelessSession(
-                signer, sessionId
-            );
+        // line-length: allow — fmt canonical tuple head exceeds cap
+        (SHRINCS.StatelessSignature memory signature, bool completeOk) = ShrincsAccountSigningFacade.completeStatelessSession(
+            signer, sessionId
+        );
         assertTrue(completeOk, "stateless session completion must succeed");
 
         bool verifyOk = account.verifyStatelessAction(
@@ -276,13 +274,13 @@ contract ShrincsAccountSigningFacadeTest is Test {
 
     // Checks that a stateless ERC-1271 signature works now, then fails after
     // the nonce is used.
-    // line-length: allow — test name is one unbreakable token
+    // line-length: allow â test name is one unbreakable token
     function testAccountAwareStateless1271SnapshotIsValidBeforeNonceUseAndInvalidAfter()
         public
     {
         (
-            ShrincsTypes.SigningKey memory signingKey,
-            ShrincsTypes.PublicKey memory publicKey,
+            SHRINCS.SigningKey memory signingKey,
+            SHRINCS.PublicKey memory publicKey,
             bool keygenOk
         ) = ShrincsAccountSigningFacade.keygen(
             bytes("account-aware 1271 stateless current key"), 4
@@ -300,7 +298,7 @@ contract ShrincsAccountSigningFacadeTest is Test {
         bytes32 payloadHash = keccak256("payload");
 
         (
-            ShrincsTypes.ActionContext memory context,
+            SHRINCS.ActionContext memory context,
             bytes32 sessionId,
             bool signOk
         ) = ShrincsAccountSigningFacade.beginStatelessActionSessionNow(
@@ -313,12 +311,10 @@ contract ShrincsAccountSigningFacadeTest is Test {
             );
         assertTrue(signOk, "stateless action signing must succeed");
 
-        (
-            ShrincsTypes.StatelessSignature memory signature,
-            bool completeOk
-        ) = ShrincsAccountSigningFacade.completeStatelessSession(
-                signer, sessionId
-            );
+        // line-length: allow — fmt canonical tuple head exceeds cap
+        (SHRINCS.StatelessSignature memory signature, bool completeOk) = ShrincsAccountSigningFacade.completeStatelessSession(
+            signer, sessionId
+        );
         assertTrue(completeOk, "stateless session completion must succeed");
 
         bytes32 hash = SHRINCS.statelessActionMessageHash(
@@ -348,13 +344,13 @@ contract ShrincsAccountSigningFacadeTest is Test {
 
     // Checks that trailing bytes appended to a stateless ERC-1271 envelope
     // are rejected by the re-encode canonicity check.
-    // line-length: allow — test name is one unbreakable token
+    // line-length: allow â test name is one unbreakable token
     function testAccountAwareStateless1271EnvelopeRejectsTrailingBytes()
         public
     {
         (
-            ShrincsTypes.SigningKey memory signingKey,
-            ShrincsTypes.PublicKey memory publicKey,
+            SHRINCS.SigningKey memory signingKey,
+            SHRINCS.PublicKey memory publicKey,
             bool keygenOk
         ) = ShrincsAccountSigningFacade.keygen(
             bytes("account-aware 1271 stateless trailing key"), 4
@@ -372,7 +368,7 @@ contract ShrincsAccountSigningFacadeTest is Test {
         bytes32 payloadHash = keccak256("payload");
 
         (
-            ShrincsTypes.ActionContext memory context,
+            SHRINCS.ActionContext memory context,
             bytes32 sessionId,
             bool signOk
         ) = ShrincsAccountSigningFacade.beginStatelessActionSessionNow(
@@ -385,12 +381,10 @@ contract ShrincsAccountSigningFacadeTest is Test {
             );
         assertTrue(signOk, "stateless action signing must succeed");
 
-        (
-            ShrincsTypes.StatelessSignature memory signature,
-            bool completeOk
-        ) = ShrincsAccountSigningFacade.completeStatelessSession(
-                signer, sessionId
-            );
+        // line-length: allow — fmt canonical tuple head exceeds cap
+        (SHRINCS.StatelessSignature memory signature, bool completeOk) = ShrincsAccountSigningFacade.completeStatelessSession(
+            signer, sessionId
+        );
         assertTrue(completeOk, "stateless session completion must succeed");
 
         bytes32 hash = SHRINCS.statelessActionMessageHash(
@@ -419,8 +413,8 @@ contract ShrincsAccountSigningFacadeTest is Test {
         public
     {
         (
-            ShrincsTypes.SigningKey memory currentSigningKey,
-            ShrincsTypes.PublicKey memory currentPublicKey,
+            SHRINCS.SigningKey memory currentSigningKey,
+            SHRINCS.PublicKey memory currentPublicKey,
             bool currentOk
         ) = ShrincsAccountSigningFacade.keygen(
             bytes("account-aware rotation current key"), 4
@@ -437,19 +431,19 @@ contract ShrincsAccountSigningFacadeTest is Test {
         account.setStatefulPolicyRecoveryRotation();
         account.enterRecoveryMode();
 
-        // line-length: allow — fmt canonical tuple head exceeds cap
-        (, ShrincsTypes.PublicKey memory nextPublicKey, bool nextOk) = ShrincsAccountSigningFacade.keygen(
+        // line-length: allow â fmt canonical tuple head exceeds cap
+        (, SHRINCS.PublicKey memory nextPublicKey, bool nextOk) = ShrincsAccountSigningFacade.keygen(
             bytes("account-aware rotation next key"), 4
         );
         assertTrue(nextOk, "next keygen must succeed");
 
-        ShrincsTypes.StatefulRotationTarget memory nextKey =
+        SHRINCS.StatefulRotationTarget memory nextKey =
             ShrincsAccountSigningFacade.statefulRotationTarget(
                 currentPublicKey, nextPublicKey.statefulPublicKey
             );
 
         (
-            ShrincsTypes.RotationContext memory context,
+            SHRINCS.RotationContext memory context,
             bytes32 sessionId,
             bool signOk
         ) = ShrincsAccountSigningFacade.beginStatefulOnlyRotationSessionNow(
@@ -464,11 +458,11 @@ contract ShrincsAccountSigningFacadeTest is Test {
         );
 
         (
-            ShrincsTypes.StatelessSignature memory recoverySignature,
+            SHRINCS.StatelessSignature memory recoverySignature,
             bool completeOk
         ) = ShrincsAccountSigningFacade.completeStatelessSession(
-            signer, sessionId
-        );
+                signer, sessionId
+            );
         assertTrue(
             completeOk,
             "stateful-only rotation session completion must succeed"
@@ -498,8 +492,8 @@ contract ShrincsAccountSigningFacadeTest is Test {
 
     function testAccountAwareFullRotationSignerFeedsWrapper() public {
         (
-            ShrincsTypes.SigningKey memory currentSigningKey,
-            ShrincsTypes.PublicKey memory currentPublicKey,
+            SHRINCS.SigningKey memory currentSigningKey,
+            SHRINCS.PublicKey memory currentPublicKey,
             bool currentOk
         ) = ShrincsAccountSigningFacade.keygen(
             bytes("account-aware full rotation current key"), 4
@@ -516,17 +510,17 @@ contract ShrincsAccountSigningFacadeTest is Test {
         account.setStatefulPolicyRecoveryRotation();
         account.enterRecoveryMode();
 
-        // line-length: allow — fmt canonical tuple head exceeds cap
-        (, ShrincsTypes.PublicKey memory nextPublicKey, bool nextOk) = ShrincsAccountSigningFacade.keygen(
+        // line-length: allow â fmt canonical tuple head exceeds cap
+        (, SHRINCS.PublicKey memory nextPublicKey, bool nextOk) = ShrincsAccountSigningFacade.keygen(
             bytes("account-aware full rotation next key"), 4
         );
         assertTrue(nextOk, "next keygen must succeed");
 
-        ShrincsTypes.RotationTarget memory nextKey =
+        SHRINCS.RotationTarget memory nextKey =
             ShrincsAccountSigningFacade.fullRotationTarget(nextPublicKey);
 
         (
-            ShrincsTypes.RotationContext memory context,
+            SHRINCS.RotationContext memory context,
             bytes32 sessionId,
             bool signOk
         ) = ShrincsAccountSigningFacade.beginFullRotationSessionNow(
@@ -541,11 +535,11 @@ contract ShrincsAccountSigningFacadeTest is Test {
         );
 
         (
-            ShrincsTypes.StatelessSignature memory recoverySignature,
+            SHRINCS.StatelessSignature memory recoverySignature,
             bool completeOk
         ) = ShrincsAccountSigningFacade.completeStatelessSession(
-            signer, sessionId
-        );
+                signer, sessionId
+            );
         assertTrue(
             completeOk, "full rotation session completion must succeed"
         );

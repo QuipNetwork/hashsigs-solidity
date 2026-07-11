@@ -19,31 +19,27 @@ pragma solidity ^0.8.28;
 import {Test} from "../lib/forge-std/src/Test.sol";
 import {SHRINCS} from "../contracts/SHRINCS.sol";
 import {ShrincsTestSigner} from "./helpers/ShrincsTestSigner.sol";
-import {ShrincsTypes} from "../contracts/ShrincsTypes.sol";
+import {ShrincsStateful} from "../contracts/ShrincsStateful.sol";
 
 contract ShrincsStatefulActionSignerHarness {
     function keygen(bytes memory seedMaterial, uint32 maxStatefulSignatures)
         external
         pure
-        returns (
-            ShrincsTypes.SigningKey memory,
-            ShrincsTypes.PublicKey memory,
-            bool
-        )
+        returns (SHRINCS.SigningKey memory, SHRINCS.PublicKey memory, bool)
     {
         return ShrincsTestSigner.keygen(seedMaterial, maxStatefulSignatures);
     }
 
     function signStatefulAction(
-        ShrincsTypes.SigningKey memory signingKey,
-        ShrincsTypes.PublicKey memory publicKey,
-        ShrincsTypes.ActionContext memory context
+        SHRINCS.SigningKey memory signingKey,
+        SHRINCS.PublicKey memory publicKey,
+        SHRINCS.ActionContext memory context
     )
         external
         pure
         returns (
-            ShrincsTypes.SigningKey memory,
-            ShrincsTypes.StatefulSignature memory,
+            SHRINCS.SigningKey memory,
+            ShrincsStateful.StatefulSignature memory,
             bool
         )
     {
@@ -54,9 +50,9 @@ contract ShrincsStatefulActionSignerHarness {
 
     function verify(
         bytes32 expectedPublicKeyCommitment,
-        ShrincsTypes.PublicKey calldata publicKey,
-        ShrincsTypes.ActionContext calldata context,
-        ShrincsTypes.StatefulSignature calldata signature
+        SHRINCS.PublicKey calldata publicKey,
+        SHRINCS.ActionContext calldata context,
+        ShrincsStateful.StatefulSignature calldata signature
     ) external pure returns (bool) {
         return SHRINCS.verifyStateful(
             expectedPublicKeyCommitment, publicKey, context, signature
@@ -76,15 +72,15 @@ contract ShrincsSignerStatefulActionTest is Test {
         view
     {
         (
-            ShrincsTypes.SigningKey memory signingKey,
-            ShrincsTypes.PublicKey memory publicKey,
+            SHRINCS.SigningKey memory signingKey,
+            SHRINCS.PublicKey memory publicKey,
             bool keygenOk
         ) = harness.keygen(bytes("solidity stateful action signer seed"), 4);
         assertTrue(keygenOk, "keygen must succeed");
 
         // forgefmt: disable-next-line
-        ShrincsTypes.ActionContext memory context =
-            ShrincsTypes.ActionContext({
+        SHRINCS.ActionContext memory context =
+            SHRINCS.ActionContext({
                 domainSeparator: keccak256("domain"),
                 nonce: 7,
                 keyVersion: 3,
@@ -93,8 +89,8 @@ contract ShrincsSignerStatefulActionTest is Test {
             });
 
         (
-            ShrincsTypes.SigningKey memory nextSigningKey,
-            ShrincsTypes.StatefulSignature memory signature,
+            SHRINCS.SigningKey memory nextSigningKey,
+            ShrincsStateful.StatefulSignature memory signature,
             bool signOk
         ) = harness.signStatefulAction(signingKey, publicKey, context);
 
@@ -125,8 +121,8 @@ contract ShrincsSignerStatefulActionTest is Test {
         view
     {
         (
-            ShrincsTypes.SigningKey memory signingKey,
-            ShrincsTypes.PublicKey memory publicKey,
+            SHRINCS.SigningKey memory signingKey,
+            SHRINCS.PublicKey memory publicKey,
             bool keygenOk
         ) = harness.keygen(bytes("stateful malformed public key seed"), 4);
         assertTrue(keygenOk, "keygen must succeed");
@@ -134,8 +130,8 @@ contract ShrincsSignerStatefulActionTest is Test {
         publicKey.publicKeyCommitment = hex"1234";
 
         // forgefmt: disable-next-line
-        ShrincsTypes.ActionContext memory context =
-            ShrincsTypes.ActionContext({
+        SHRINCS.ActionContext memory context =
+            SHRINCS.ActionContext({
                 domainSeparator: keccak256("domain"),
                 nonce: 1,
                 keyVersion: 1,

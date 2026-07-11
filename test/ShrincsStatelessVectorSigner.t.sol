@@ -18,7 +18,7 @@ pragma solidity ^0.8.28;
 
 import {Test} from "../lib/forge-std/src/Test.sol";
 import {SHRINCS} from "../contracts/SHRINCS.sol";
-import {ShrincsTypes} from "../contracts/ShrincsTypes.sol";
+import {ShrincsParams} from "shrincs-profile/ShrincsParams.sol";
 import {
     ShrincsStatelessVectorSigner
 } from "./helpers/ShrincsStatelessVectorSigner.sol";
@@ -31,9 +31,9 @@ contract ShrincsStatelessVectorSignerHarness is
 {
     function verifyUnsafeRaw(
         bytes32 expectedPublicKeyCommitment,
-        ShrincsTypes.PublicKey calldata publicKey,
+        SHRINCS.PublicKey calldata publicKey,
         bytes calldata message,
-        ShrincsTypes.StatelessSignature calldata signature
+        SHRINCS.StatelessSignature calldata signature
     ) external pure returns (bool) {
         return SHRINCS.verifyStatelessUncheckedMessage(
             expectedPublicKeyCommitment, publicKey, message, signature
@@ -89,7 +89,7 @@ contract ShrincsStatelessVectorSignerTest is Test {
         }
         assertEq(
             totalForsProcessed,
-            ShrincsTypes.NUM_FORS_TREES - 1,
+            ShrincsParams.NUM_FORS_TREES - 1,
             "all signed FORS trees must be processed"
         );
 
@@ -111,25 +111,25 @@ contract ShrincsStatelessVectorSignerTest is Test {
         }
         assertEq(
             totalLayersProcessed,
-            ShrincsTypes.NUM_HYPERTREE_LAYERS,
+            ShrincsParams.NUM_HYPERTREE_LAYERS,
             "all hypertree layers must be processed"
         );
 
         bytes memory encodedSignature = signer.finalizeSignature(sessionId);
-        ShrincsTypes.StatelessSignature memory signature =
-            abi.decode(encodedSignature, (ShrincsTypes.StatelessSignature));
-        ShrincsTypes.PublicKey memory publicKey =
+        SHRINCS.StatelessSignature memory signature =
+            abi.decode(encodedSignature, (SHRINCS.StatelessSignature));
+        SHRINCS.PublicKey memory publicKey =
             signer.sessionPublicKey(sessionId);
         bytes memory signedMessage = signer.sessionMessage(sessionId);
 
         assertEq(
             signature.fors.entries.length,
-            ShrincsTypes.NUM_FORS_TREES - 1,
+            ShrincsParams.NUM_FORS_TREES - 1,
             "FORS-C entry count"
         );
         assertEq(
             signature.hypertree.length,
-            ShrincsTypes.NUM_HYPERTREE_LAYERS,
+            ShrincsParams.NUM_HYPERTREE_LAYERS,
             "hypertree layer count"
         );
 
@@ -157,8 +157,8 @@ contract ShrincsStatelessVectorSignerTest is Test {
             keccak256("high level stateless vector message")
         );
         (
-            ShrincsTypes.PublicKey memory publicKey,
-            ShrincsTypes.StatelessSignature memory signature,
+            SHRINCS.PublicKey memory publicKey,
+            SHRINCS.StatelessSignature memory signature,
             bool ok
         ) = signer.signFromSeed(
             bytes("high level stateless vector seed"), 4, message
@@ -167,12 +167,12 @@ contract ShrincsStatelessVectorSignerTest is Test {
         assertTrue(ok, "high-level signing must succeed");
         assertEq(
             signature.fors.entries.length,
-            ShrincsTypes.NUM_FORS_TREES - 1,
+            ShrincsParams.NUM_FORS_TREES - 1,
             "FORS-C entry count"
         );
         assertEq(
             signature.hypertree.length,
-            ShrincsTypes.NUM_HYPERTREE_LAYERS,
+            ShrincsParams.NUM_HYPERTREE_LAYERS,
             "hypertree layer count"
         );
 
@@ -204,8 +204,8 @@ contract ShrincsStatelessVectorSignerTest is Test {
             }
         }
         (
-            ShrincsTypes.PublicKey memory publicKey,
-            ShrincsTypes.StatelessSignature memory signature,
+            SHRINCS.PublicKey memory publicKey,
+            SHRINCS.StatelessSignature memory signature,
             bool ok
         ) = signer.signFromSeed(
             bytes("forsDigestBytes overhang regression seed"), 4, message

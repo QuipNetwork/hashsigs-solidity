@@ -17,7 +17,10 @@
 pragma solidity ^0.8.28;
 
 import {Test} from "../lib/forge-std/src/Test.sol";
-import {ShrincsTypes} from "../contracts/ShrincsTypes.sol";
+import {SHRINCS} from "../contracts/SHRINCS.sol";
+import {ShrincsForsC} from "../contracts/ShrincsForsC.sol";
+import {ShrincsHypertree} from "../contracts/ShrincsHypertree.sol";
+import {ShrincsStateful} from "../contracts/ShrincsStateful.sol";
 import {
     ShrincsAccountVerifierExample
 } from "../contracts/examples/ShrincsAccountVerifierExample.sol";
@@ -28,9 +31,9 @@ contract ShrincsStatefulPolicyHarness is ShrincsAccountVerifierExample {
     {}
 
     function verifyStatefulUncheckedForTest(
-        ShrincsTypes.PublicKey calldata publicKey,
+        SHRINCS.PublicKey calldata publicKey,
         bytes calldata message,
-        ShrincsTypes.StatefulSignature calldata signature
+        ShrincsStateful.StatefulSignature calldata signature
     ) external returns (bool) {
         return verifyStatefulUncheckedMessage(publicKey, message, signature);
     }
@@ -99,9 +102,9 @@ contract ShrincsStatefulPolicyExamplesTest is Test {
         public
     {
         (
-            ShrincsTypes.PublicKey memory publicKey,
+            SHRINCS.PublicKey memory publicKey,
             bytes memory message,
-            ShrincsTypes.StatefulSignature memory signature
+            ShrincsStateful.StatefulSignature memory signature
         ) = decodeStatefulVector(".stateful.cases.valid.calldata");
         bytes32 expectedCompositePublicKey =
             compositePublicKeyWord(publicKey);
@@ -131,9 +134,9 @@ contract ShrincsStatefulPolicyExamplesTest is Test {
         public
     {
         (
-            ShrincsTypes.PublicKey memory publicKey,
+            SHRINCS.PublicKey memory publicKey,
             bytes memory message,
-            ShrincsTypes.StatefulSignature memory signature
+            ShrincsStateful.StatefulSignature memory signature
         ) = decodeStatefulVector(".stateful.cases.valid.calldata");
         bytes32 expectedCompositePublicKey =
             compositePublicKeyWord(publicKey);
@@ -161,9 +164,9 @@ contract ShrincsStatefulPolicyExamplesTest is Test {
 
     function testMonotonicIndexExampleRejectsUnexpectedLeafIndex() public {
         (
-            ShrincsTypes.PublicKey memory publicKey,
+            SHRINCS.PublicKey memory publicKey,
             bytes memory message,
-            ShrincsTypes.StatefulSignature memory signature
+            ShrincsStateful.StatefulSignature memory signature
         ) = decodeStatefulVector(".stateful.cases.valid.calldata");
         bytes32 expectedCompositePublicKey =
             compositePublicKeyWord(publicKey);
@@ -188,9 +191,9 @@ contract ShrincsStatefulPolicyExamplesTest is Test {
         public
     {
         (
-            ShrincsTypes.PublicKey memory publicKey,
+            SHRINCS.PublicKey memory publicKey,
             bytes memory message,
-            ShrincsTypes.StatefulSignature memory signature
+            ShrincsStateful.StatefulSignature memory signature
         ) = decodeStatefulVector(".stateful.cases.valid.calldata");
         bytes32 expectedCompositePublicKey =
             compositePublicKeyWord(publicKey);
@@ -221,8 +224,8 @@ contract ShrincsStatefulPolicyExamplesTest is Test {
         public
     {
         (
-            ShrincsTypes.PublicKey memory publicKey,,
-            ShrincsTypes.StatelessSignature memory signature
+            SHRINCS.PublicKey memory publicKey,,
+            SHRINCS.StatelessSignature memory signature
         ) = decodeStatelessVector(".stateless.cases.valid.calldata");
         bytes32 expectedCompositePublicKey =
             compositePublicKeyWord(publicKey);
@@ -263,8 +266,8 @@ contract ShrincsStatefulPolicyExamplesTest is Test {
         public
     {
         (
-            ShrincsTypes.PublicKey memory publicKey,,
-            ShrincsTypes.StatelessSignature memory signature
+            SHRINCS.PublicKey memory publicKey,,
+            SHRINCS.StatelessSignature memory signature
         ) = decodeStatelessVector(".stateless.cases.valid.calldata");
         bytes32 expectedCompositePublicKey =
             compositePublicKeyWord(publicKey);
@@ -273,7 +276,7 @@ contract ShrincsStatefulPolicyExamplesTest is Test {
         account.setStatefulPolicyRecoveryRotation();
         account.enterRecoveryMode();
 
-        ShrincsTypes.StatefulRotationTarget memory target =
+        SHRINCS.StatefulRotationTarget memory target =
             statefulRotationTargetFromParts(
                 publicKey, publicKey.statefulPublicKey
             );
@@ -298,9 +301,9 @@ contract ShrincsStatefulPolicyExamplesTest is Test {
 
     function testLeafBitmapExampleRejectsReuseOfSameLeaf() public {
         (
-            ShrincsTypes.PublicKey memory publicKey,
+            SHRINCS.PublicKey memory publicKey,
             bytes memory message,
-            ShrincsTypes.StatefulSignature memory signature
+            ShrincsStateful.StatefulSignature memory signature
         ) = decodeStatefulVector(".stateful.cases.valid.calldata");
         bytes32 expectedCompositePublicKey =
             compositePublicKeyWord(publicKey);
@@ -331,7 +334,7 @@ contract ShrincsStatefulPolicyExamplesTest is Test {
         );
     }
 
-    function compositePublicKeyWord(ShrincsTypes.PublicKey memory publicKey)
+    function compositePublicKeyWord(SHRINCS.PublicKey memory publicKey)
         internal
         pure
         returns (bytes32 word)
@@ -349,9 +352,9 @@ contract ShrincsStatefulPolicyExamplesTest is Test {
     function decodeStatefulVector(string memory vectorKey)
         internal
         returns (
-            ShrincsTypes.PublicKey memory publicKey,
+            SHRINCS.PublicKey memory publicKey,
             bytes memory message,
-            ShrincsTypes.StatefulSignature memory signature
+            ShrincsStateful.StatefulSignature memory signature
         )
     {
         bytes memory args = vectorArgs(vectorKey);
@@ -363,7 +366,7 @@ contract ShrincsStatefulPolicyExamplesTest is Test {
             args, (LegacyStatefulPublicKey, bytes, LegacyStatefulSignature)
         );
 
-        (ShrincsTypes.PublicKey memory statelessPublicKey,,) =
+        (SHRINCS.PublicKey memory statelessPublicKey,,) =
             decodeStatelessVector(".stateless.cases.valid.calldata");
 
         bytes memory encodedStatefulKey = abi.encodePacked(
@@ -377,7 +380,7 @@ contract ShrincsStatefulPolicyExamplesTest is Test {
         );
 
         message = legacyMessage;
-        signature = ShrincsTypes.StatefulSignature({
+        signature = ShrincsStateful.StatefulSignature({
             randomizer: legacySignature.randomizer,
             counter: legacySignature.counter,
             chains: fixedToDynamicChains(legacySignature.chains),
@@ -388,9 +391,9 @@ contract ShrincsStatefulPolicyExamplesTest is Test {
     function decodeStatelessVector(string memory vectorKey)
         internal
         returns (
-            ShrincsTypes.PublicKey memory publicKey,
+            SHRINCS.PublicKey memory publicKey,
             bytes memory message,
-            ShrincsTypes.StatelessSignature memory signature
+            SHRINCS.StatelessSignature memory signature
         )
     {
         bytes memory args = vectorArgs(vectorKey);
@@ -423,27 +426,27 @@ contract ShrincsStatefulPolicyExamplesTest is Test {
     function convertLegacyStatelessSignature(LegacyStatelessSignature memory legacy)
         internal
         pure
-        returns (ShrincsTypes.StatelessSignature memory signature)
+        returns (SHRINCS.StatelessSignature memory signature)
     {
-        ShrincsTypes.ForsEntry[] memory entries =
-            new ShrincsTypes.ForsEntry[](legacy.fors.entries.length);
+        ShrincsForsC.ForsEntry[] memory entries =
+            new ShrincsForsC.ForsEntry[](legacy.fors.entries.length);
         for (uint256 i = 0; i < entries.length; ++i) {
-            entries[i] = ShrincsTypes.ForsEntry({
+            entries[i] = ShrincsForsC.ForsEntry({
                 secretLeaf: legacy.fors.entries[i].secretLeaf,
                 authPath: legacy.fors.entries[i].authPath
             });
         }
 
         // forgefmt: disable-next-line
-        ShrincsTypes.HypertreeLayerSignature[] memory layers =
-            new ShrincsTypes
+        ShrincsHypertree.HypertreeLayerSignature[] memory layers =
+            new ShrincsHypertree
                 .HypertreeLayerSignature[](legacy.hypertree.length);
         for (uint256 i = 0; i < layers.length; ++i) {
-            layers[i] = ShrincsTypes.HypertreeLayerSignature({
+            layers[i] = ShrincsHypertree.HypertreeLayerSignature({
                 treeIndex: legacy.hypertree[i].treeIndex,
                 leafIndex: legacy.hypertree[i].leafIndex,
                 wotsCPkHash: legacy.hypertree[i].wotsCPkHash,
-                wotsCSignature: ShrincsTypes.WotsCSignature({
+                wotsCSignature: ShrincsHypertree.WotsCSignature({
                     randomizer: legacy.hypertree[i].wotsCSignature
                     .randomizer,
                     counter: legacy.hypertree[i].wotsCSignature.counter,
@@ -453,8 +456,8 @@ contract ShrincsStatefulPolicyExamplesTest is Test {
             });
         }
 
-        signature = ShrincsTypes.StatelessSignature({
-            fors: ShrincsTypes.ForsSignature({
+        signature = SHRINCS.StatelessSignature({
+            fors: ShrincsForsC.ForsSignature({
                 randomizer: legacy.fors.randomizer,
                 counter: legacy.fors.counter,
                 entries: entries
@@ -467,7 +470,7 @@ contract ShrincsStatefulPolicyExamplesTest is Test {
         bytes memory statefulPublicKey,
         bytes memory pkSeed,
         bytes memory hypertreeRoot
-    ) internal pure returns (ShrincsTypes.PublicKey memory) {
+    ) internal pure returns (SHRINCS.PublicKey memory) {
         bytes32 commitment = keccak256(
             abi.encodePacked(
                 "shrincs-public-key",
@@ -476,7 +479,7 @@ contract ShrincsStatefulPolicyExamplesTest is Test {
                 hypertreeRoot
             )
         );
-        return ShrincsTypes.PublicKey({
+        return SHRINCS.PublicKey({
             statefulPublicKey: statefulPublicKey,
             publicKeyCommitment: abi.encodePacked(commitment),
             pkSeed: pkSeed,
@@ -488,7 +491,7 @@ contract ShrincsStatefulPolicyExamplesTest is Test {
         bytes memory statefulPublicKey,
         bytes memory pkSeed,
         bytes memory hypertreeRoot
-    ) internal pure returns (ShrincsTypes.RotationTarget memory) {
+    ) internal pure returns (SHRINCS.RotationTarget memory) {
         bytes32 commitment = keccak256(
             abi.encodePacked(
                 "shrincs-public-key",
@@ -497,7 +500,7 @@ contract ShrincsStatefulPolicyExamplesTest is Test {
                 hypertreeRoot
             )
         );
-        return ShrincsTypes.RotationTarget({
+        return SHRINCS.RotationTarget({
             statefulPublicKey: statefulPublicKey,
             publicKeyCommitment: abi.encodePacked(commitment),
             pkSeed: pkSeed,
@@ -506,9 +509,9 @@ contract ShrincsStatefulPolicyExamplesTest is Test {
     }
 
     function statefulRotationTargetFromParts(
-        ShrincsTypes.PublicKey memory currentPublicKey,
+        SHRINCS.PublicKey memory currentPublicKey,
         bytes memory statefulPublicKey
-    ) internal pure returns (ShrincsTypes.StatefulRotationTarget memory) {
+    ) internal pure returns (SHRINCS.StatefulRotationTarget memory) {
         bytes32 commitment = keccak256(
             abi.encodePacked(
                 "shrincs-public-key",
@@ -517,7 +520,7 @@ contract ShrincsStatefulPolicyExamplesTest is Test {
                 currentPublicKey.hypertreeRoot
             )
         );
-        return ShrincsTypes.StatefulRotationTarget({
+        return SHRINCS.StatefulRotationTarget({
             statefulPublicKey: statefulPublicKey,
             publicKeyCommitment: abi.encodePacked(commitment)
         });

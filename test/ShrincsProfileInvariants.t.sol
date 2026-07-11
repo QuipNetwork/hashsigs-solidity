@@ -17,7 +17,6 @@
 pragma solidity ^0.8.28;
 
 import {Test} from "../lib/forge-std/src/Test.sol";
-import {ShrincsTypes} from "../contracts/ShrincsTypes.sol";
 import {ShrincsHypertree} from "../contracts/ShrincsHypertree.sol";
 import {ShrincsParams} from "shrincs-profile/ShrincsParams.sol";
 
@@ -121,36 +120,38 @@ contract ShrincsProfileInvariantsTest is Test {
         string memory profile = vm.envOr("FOUNDRY_PROFILE", string(""));
         ProfileExpectation memory want = expectedFor(profile);
         assertEq(ShrincsParams.PROFILE_ID, want.profileId, "PROFILE_ID");
-        assertEq(uint256(ShrincsTypes.HASH_LEN), want.hashLen, "n");
+        assertEq(uint256(ShrincsParams.HASH_LEN), want.hashLen, "n");
         assertEq(
-            uint256(ShrincsTypes.HYPERTREE_HEIGHT), want.hypertreeHeight, "h"
+            uint256(ShrincsParams.HYPERTREE_HEIGHT),
+            want.hypertreeHeight,
+            "h"
         );
         assertEq(
-            uint256(ShrincsTypes.NUM_HYPERTREE_LAYERS),
+            uint256(ShrincsParams.NUM_HYPERTREE_LAYERS),
             want.numHypertreeLayers,
             "d"
         );
         assertEq(
-            uint256(ShrincsTypes.FORS_TREE_HEIGHT), want.forsTreeHeight, "a"
+            uint256(ShrincsParams.FORS_TREE_HEIGHT), want.forsTreeHeight, "a"
         );
         assertEq(
-            uint256(ShrincsTypes.NUM_FORS_TREES), want.numForsTrees, "k"
+            uint256(ShrincsParams.NUM_FORS_TREES), want.numForsTrees, "k"
         );
         assertEq(
-            uint256(ShrincsTypes.NUM_WOTS_CHAINS), want.numWotsChains, "len"
+            uint256(ShrincsParams.NUM_WOTS_CHAINS), want.numWotsChains, "len"
         );
         assertEq(
-            uint256(ShrincsTypes.STATELESS_SIGNATURE_LIMIT),
+            uint256(ShrincsParams.STATELESS_SIGNATURE_LIMIT),
             want.statelessLimit,
             "limit"
         );
         assertEq(
-            uint256(ShrincsTypes.WOTS_CHAINS_STATEFUL),
+            uint256(ShrincsParams.WOTS_CHAINS_STATEFUL),
             want.wotsChainsStateful,
             "chains_stateful"
         );
         assertEq(
-            uint256(ShrincsTypes.WOTS_TARGET_SUM_STATEFUL),
+            uint256(ShrincsParams.WOTS_TARGET_SUM_STATEFUL),
             want.wotsTargetSumStateful,
             "target_sum"
         );
@@ -159,8 +160,8 @@ contract ShrincsProfileInvariantsTest is Test {
     // The hypertree must split into whole balanced subtrees: h % d == 0.
     function testHypertreeHeightDividesByLayers() public pure {
         assertEq(
-            uint256(ShrincsTypes.HYPERTREE_HEIGHT)
-                % uint256(ShrincsTypes.NUM_HYPERTREE_LAYERS),
+            uint256(ShrincsParams.HYPERTREE_HEIGHT)
+                % uint256(ShrincsParams.NUM_HYPERTREE_LAYERS),
             0,
             "h % d"
         );
@@ -169,18 +170,18 @@ contract ShrincsProfileInvariantsTest is Test {
     // WOTS-C carries no checksum chains, so len == 2n for w = 16.
     function testWotsChainCountIsTwiceHashLen() public pure {
         assertEq(
-            uint256(ShrincsTypes.NUM_WOTS_CHAINS),
-            2 * uint256(ShrincsTypes.HASH_LEN),
+            uint256(ShrincsParams.NUM_WOTS_CHAINS),
+            2 * uint256(ShrincsParams.HASH_LEN),
             "len == 2n"
         );
     }
 
     // WOTS-C target sum equals len * (w - 1) / 2 on the stateful side.
     function testWotsTargetSumMatchesChainCount() public pure {
-        uint256 base = uint256(ShrincsTypes.WOTS_BASE_STATEFUL);
+        uint256 base = uint256(ShrincsParams.WOTS_BASE_STATEFUL);
         assertEq(
-            uint256(ShrincsTypes.WOTS_TARGET_SUM_STATEFUL),
-            uint256(ShrincsTypes.WOTS_CHAINS_STATEFUL) * (base - 1) / 2,
+            uint256(ShrincsParams.WOTS_TARGET_SUM_STATEFUL),
+            uint256(ShrincsParams.WOTS_CHAINS_STATEFUL) * (base - 1) / 2,
             "target_sum == len*(w-1)/2"
         );
     }
@@ -195,11 +196,11 @@ contract ShrincsProfileInvariantsTest is Test {
     // height a and the subtree height use readBits32 (<= 32); the tree
     // index uses readBits64 (<= 64).
     function testDigestBitReadsWithinReaderWidths() public pure {
-        uint256 height = uint256(ShrincsTypes.HYPERTREE_HEIGHT);
-        uint256 layers = uint256(ShrincsTypes.NUM_HYPERTREE_LAYERS);
+        uint256 height = uint256(ShrincsParams.HYPERTREE_HEIGHT);
+        uint256 layers = uint256(ShrincsParams.NUM_HYPERTREE_LAYERS);
         uint256 subtreeHeight = height / layers;
         uint256 treeBits = height - subtreeHeight;
-        assertLe(uint256(ShrincsTypes.FORS_TREE_HEIGHT), 32, "a <= 32");
+        assertLe(uint256(ShrincsParams.FORS_TREE_HEIGHT), 32, "a <= 32");
         assertLe(subtreeHeight, 32, "h/d <= 32");
         assertLe(treeBits, 64, "treeBits <= 64");
     }
@@ -208,10 +209,10 @@ contract ShrincsProfileInvariantsTest is Test {
     // nonempty and small enough that forsDigestBytes + 32 slack stays a
     // sane allocation.
     function testForsDigestByteCountSane() public pure {
-        uint256 forsBits = uint256(ShrincsTypes.NUM_FORS_TREES)
-            * uint256(ShrincsTypes.FORS_TREE_HEIGHT);
+        uint256 forsBits = uint256(ShrincsParams.NUM_FORS_TREES)
+            * uint256(ShrincsParams.FORS_TREE_HEIGHT);
         uint256 digestBytes =
-            (forsBits + uint256(ShrincsTypes.HYPERTREE_HEIGHT) + 7) / 8;
+            (forsBits + uint256(ShrincsParams.HYPERTREE_HEIGHT) + 7) / 8;
         assertGe(digestBytes, 1, "digestBytes >= 1");
         assertLt(digestBytes, 1024, "digestBytes < 1024");
     }
@@ -219,21 +220,21 @@ contract ShrincsProfileInvariantsTest is Test {
     // The FORS low-index address field (forsTreeIndex << a + leaf) must
     // fit the 32-bit low-index slot: (k << a) bounds it.
     function testForsLowIndexFits32Bits() public pure {
-        uint256 bound = uint256(ShrincsTypes.NUM_FORS_TREES)
-            << uint256(ShrincsTypes.FORS_TREE_HEIGHT);
+        uint256 bound = uint256(ShrincsParams.NUM_FORS_TREES)
+            << uint256(ShrincsParams.FORS_TREE_HEIGHT);
         assertLt(bound, uint256(type(uint32).max), "k<<a < 2^32");
     }
 
     // HASH_MASK must be exactly the high HASH_LEN bytes of ones (the
     // high-aligned truncation mask, [DESIGN §3.3]).
     function testHashMaskIsHighAlignedOnes() public pure {
-        uint256 hashLen = uint256(ShrincsTypes.HASH_LEN);
+        uint256 hashLen = uint256(ShrincsParams.HASH_LEN);
         uint256 hashBits = 8 * hashLen;
         uint256 lowOnes = hashBits >= 256
             ? type(uint256).max
             : (uint256(1) << hashBits) - 1;
         uint256 shiftUp = 8 * (32 - hashLen);
         uint256 expectedMask = shiftUp >= 256 ? 0 : lowOnes << shiftUp;
-        assertEq(ShrincsTypes.HASH_MASK, bytes32(expectedMask), "HASH_MASK");
+        assertEq(ShrincsParams.HASH_MASK, bytes32(expectedMask), "HASH_MASK");
     }
 }

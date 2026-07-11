@@ -21,8 +21,9 @@ pragma solidity ^0.8.28;
 /// 128s-q18 profile (n = 16, single-layer hypertree). One
 /// `ShrincsParams` library exists per build profile under
 /// contracts/profiles/<profile>/; the active one is selected by the
-/// `shrincs-profile/` Foundry remapping. ShrincsTypes re-exports each
-/// constant as an alias so reference sites are profile-agnostic.
+/// `shrincs-profile/` Foundry remapping. Every module imports this
+/// library directly through that remapping, so reference sites are
+/// profile-agnostic.
 /// @dev q18 fixes STATELESS_SIGNATURE_LIMIT = 2^18 (= the h = 18
 /// hypertree leaf count). Its q20 sibling shares every other constant
 /// and differs only in the limit. Node values are truncated to

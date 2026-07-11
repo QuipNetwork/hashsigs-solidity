@@ -17,7 +17,7 @@
 pragma solidity ^0.8.28;
 
 import {Test} from "../lib/forge-std/src/Test.sol";
-import {ShrincsTypes} from "../contracts/ShrincsTypes.sol";
+import {SHRINCS} from "../contracts/SHRINCS.sol";
 import {
     ShrincsAccountEnvelope
 } from "../contracts/examples/ShrincsAccountEnvelope.sol";
@@ -55,18 +55,13 @@ contract CanonicityHarness {
         returns (bool)
     {
         (
-            ShrincsTypes.PublicKey memory publicKey,
+            SHRINCS.PublicKey memory publicKey,
             bytes32 actionType,
             bytes32 payloadHash,
-            ShrincsTypes.StatelessSignature memory signature
+            SHRINCS.StatelessSignature memory signature
         ) = abi.decode(
             payload,
-            (
-                ShrincsTypes.PublicKey,
-                bytes32,
-                bytes32,
-                ShrincsTypes.StatelessSignature
-            )
+            (SHRINCS.PublicKey, bytes32, bytes32, SHRINCS.StatelessSignature)
         );
         return keccak256(payload)
             == keccak256(
@@ -237,8 +232,8 @@ contract ShrincsAccountEnvelopeCanonicityTest is Test {
 
     function _buildEnvelope() internal returns (bytes memory) {
         (
-            ShrincsTypes.SigningKey memory signingKey,
-            ShrincsTypes.PublicKey memory publicKey,
+            SHRINCS.SigningKey memory signingKey,
+            SHRINCS.PublicKey memory publicKey,
             bool ok
         ) = ShrincsAccountSigningFacade.keygen(
             bytes("canonicity stateless fixture seed"), 4
@@ -262,12 +257,10 @@ contract ShrincsAccountEnvelopeCanonicityTest is Test {
                 PAYLOAD_HASH
             );
         require(ok, "begin");
-        (
-            ShrincsTypes.StatelessSignature memory signature,
-            bool completeOk
-        ) = ShrincsAccountSigningFacade.completeStatelessSession(
-                signer, sessionId
-            );
+        // line-length: allow — fmt canonical tuple head exceeds cap
+        (SHRINCS.StatelessSignature memory signature, bool completeOk) = ShrincsAccountSigningFacade.completeStatelessSession(
+            signer, sessionId
+        );
         require(completeOk, "complete");
         return abi.encode(publicKey, ACTION_TYPE, PAYLOAD_HASH, signature);
     }

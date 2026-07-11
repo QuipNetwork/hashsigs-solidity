@@ -16,7 +16,9 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 pragma solidity ^0.8.28;
 
-import {ShrincsTypes} from "./ShrincsTypes.sol";
+import {SHRINCS} from "./SHRINCS.sol";
+import {ShrincsStateful} from "./ShrincsStateful.sol";
+import {ShrincsParams} from "shrincs-profile/ShrincsParams.sol";
 
 /// @notice Byte-format definitions bridging ERC-7913 opaque bytes to typed
 /// SHRINCS structs.
@@ -64,13 +66,12 @@ library ShrincsCodec {
         internal
         pure
         returns (
-            ShrincsTypes.PublicKey memory publicKey,
-            ShrincsTypes.StatefulSignature memory signature
+            SHRINCS.PublicKey memory publicKey,
+            ShrincsStateful.StatefulSignature memory signature
         )
     {
         (publicKey, signature) = abi.decode(
-            envelope,
-            (ShrincsTypes.PublicKey, ShrincsTypes.StatefulSignature)
+            envelope, (SHRINCS.PublicKey, ShrincsStateful.StatefulSignature)
         );
 
         if (
@@ -91,8 +92,8 @@ library ShrincsCodec {
     /// @param signature The stateful signature.
     /// @return envelope The abi-encoded stateful envelope bytes.
     function encodeStatefulEnvelope(
-        ShrincsTypes.PublicKey memory publicKey,
-        ShrincsTypes.StatefulSignature memory signature
+        SHRINCS.PublicKey memory publicKey,
+        ShrincsStateful.StatefulSignature memory signature
     ) internal pure returns (bytes memory envelope) {
         return abi.encode(publicKey, signature);
     }
@@ -117,7 +118,7 @@ library ShrincsCodec {
     // 2. Bind the stateful public key, stateless public seed, and hypertree
     // root.
     // 3. Return the installed public-key commitment.
-    function publicKeyCommitment(ShrincsTypes.PublicKey calldata publicKey)
+    function publicKeyCommitment(SHRINCS.PublicKey calldata publicKey)
         internal
         pure
         returns (bytes32)
@@ -161,7 +162,7 @@ library ShrincsCodec {
     // 4. Check it against the caller-supplied expected commitment.
     // 5. Recompute the bundle commitment and require it to match too.
     function matchesExpectedPublicKeyCommitment(
-        ShrincsTypes.PublicKey calldata publicKey,
+        SHRINCS.PublicKey calldata publicKey,
         bytes32 expectedPublicKeyCommitment
     ) internal pure returns (bool) {
         // A missing installed-key commitment is always invalid.
@@ -191,7 +192,7 @@ library ShrincsCodec {
     // 3. Load the embedded commitment from calldata.
     // 4. Recompute the bundle commitment and require it to match the embedded
     // field.
-    function validPublicKey(ShrincsTypes.PublicKey calldata publicKey)
+    function validPublicKey(SHRINCS.PublicKey calldata publicKey)
         internal
         pure
         returns (bool)
@@ -199,7 +200,7 @@ library ShrincsCodec {
         // The stateful public key has a fixed packed byte width.
         if (
             publicKey.statefulPublicKey.length
-                != ShrincsTypes.STATEFUL_PUBLIC_KEY_BYTES
+                != ShrincsParams.STATEFUL_PUBLIC_KEY_BYTES
         ) return false;
         // The embedded commitment field is always one hash output wide.
         if (publicKey.publicKeyCommitment.length != 32) return false;
@@ -228,9 +229,9 @@ library ShrincsCodec {
     function decodeStatefulPublicKey(bytes calldata encoded)
         internal
         pure
-        returns (ShrincsTypes.StatefulPublicKey memory publicKey, bool ok)
+        returns (ShrincsStateful.StatefulPublicKey memory publicKey, bool ok)
     {
-        if (encoded.length != ShrincsTypes.STATEFUL_PUBLIC_KEY_BYTES) {
+        if (encoded.length != ShrincsParams.STATEFUL_PUBLIC_KEY_BYTES) {
             return (publicKey, false);
         }
         // Decoded StatefulPublicKey layout (0x60 bytes) written at the

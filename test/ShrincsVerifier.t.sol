@@ -21,7 +21,8 @@ import {
     IERC7913SignatureVerifier
 } from "../contracts/interfaces/IERC7913SignatureVerifier.sol";
 import {ShrincsCodec} from "../contracts/ShrincsCodec.sol";
-import {ShrincsTypes} from "../contracts/ShrincsTypes.sol";
+import {SHRINCS} from "../contracts/SHRINCS.sol";
+import {ShrincsStateful} from "../contracts/ShrincsStateful.sol";
 import {ShrincsVerifier} from "../contracts/ShrincsVerifier.sol";
 import {ShrincsTestSigner} from "./helpers/ShrincsTestSigner.sol";
 
@@ -49,8 +50,8 @@ contract ShrincsVerifierTest is Test {
         verifier = new ShrincsVerifierHarness();
 
         (
-            ShrincsTypes.SigningKey memory signingKey,
-            ShrincsTypes.PublicKey memory publicKey,
+            SHRINCS.SigningKey memory signingKey,
+            SHRINCS.PublicKey memory publicKey,
             bool keygenOk
         ) = ShrincsTestSigner.keygen(
             bytes("shrincs erc7913 stateful verifier seed"), 4
@@ -63,12 +64,12 @@ contract ShrincsVerifierTest is Test {
         bytes memory message = abi.encodePacked(signedHash);
 
         (
-            ShrincsTypes.StatefulSignature memory leafOneSignature,
+            ShrincsStateful.StatefulSignature memory leafOneSignature,
             bool leafOneOk
         ) = ShrincsTestSigner.signStatefulRawAtLeaf(signingKey, 1, message);
         assertTrue(leafOneOk, "leaf-1 signing must succeed");
         (
-            ShrincsTypes.StatefulSignature memory leafTwoSignature,
+            ShrincsStateful.StatefulSignature memory leafTwoSignature,
             bool leafTwoOk
         ) = ShrincsTestSigner.signStatefulRawAtLeaf(signingKey, 2, message);
         assertTrue(leafTwoOk, "leaf-2 signing must succeed");
@@ -96,13 +97,13 @@ contract ShrincsVerifierTest is Test {
         internal
         view
         returns (
-            ShrincsTypes.PublicKey memory publicKey,
-            ShrincsTypes.StatefulSignature memory signature
+            SHRINCS.PublicKey memory publicKey,
+            ShrincsStateful.StatefulSignature memory signature
         )
     {
         return abi.decode(
             validEnvelope,
-            (ShrincsTypes.PublicKey, ShrincsTypes.StatefulSignature)
+            (SHRINCS.PublicKey, ShrincsStateful.StatefulSignature)
         );
     }
 
@@ -177,8 +178,8 @@ contract ShrincsVerifierTest is Test {
 
     function testRejectsTamperedChainValue() public view {
         (
-            ShrincsTypes.PublicKey memory publicKey,
-            ShrincsTypes.StatefulSignature memory signature
+            SHRINCS.PublicKey memory publicKey,
+            ShrincsStateful.StatefulSignature memory signature
         ) = decodeStoredEnvelope();
         signature.chains[0] = bytes32(uint256(signature.chains[0]) ^ 1);
         bytes memory envelope =
@@ -192,8 +193,8 @@ contract ShrincsVerifierTest is Test {
 
     function testRejectsTamperedAuthPath() public view {
         (
-            ShrincsTypes.PublicKey memory publicKey,
-            ShrincsTypes.StatefulSignature memory signature
+            SHRINCS.PublicKey memory publicKey,
+            ShrincsStateful.StatefulSignature memory signature
         ) = decodeStoredEnvelope();
         signature.authPath[0] = bytes32(uint256(signature.authPath[0]) ^ 1);
         bytes memory envelope =
@@ -245,8 +246,8 @@ contract ShrincsVerifierTest is Test {
         // field DOES match the key, but the bundle no longer recomputes to
         // that commitment.
         (
-            ShrincsTypes.PublicKey memory publicKey,
-            ShrincsTypes.StatefulSignature memory signature
+            SHRINCS.PublicKey memory publicKey,
+            ShrincsStateful.StatefulSignature memory signature
         ) = decodeStoredEnvelope();
         bytes32 fakeCommitment = keccak256("mismatched bundle commitment");
         publicKey.publicKeyCommitment = abi.encodePacked(fakeCommitment);
@@ -268,8 +269,8 @@ contract ShrincsVerifierTest is Test {
 
     function testCheckDecodedRejectsNonSelfCaller() public {
         (
-            ShrincsTypes.PublicKey memory publicKey,
-            ShrincsTypes.StatefulSignature memory signature
+            SHRINCS.PublicKey memory publicKey,
+            ShrincsStateful.StatefulSignature memory signature
         ) = decodeStoredEnvelope();
         vm.expectRevert(bytes("only self"));
         verifier.checkDecoded(

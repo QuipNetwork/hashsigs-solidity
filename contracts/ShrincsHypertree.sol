@@ -16,10 +16,38 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 pragma solidity ^0.8.28;
 
-import {ShrincsTypes} from "./ShrincsTypes.sol";
+import {SHRINCS} from "./SHRINCS.sol";
+import {ShrincsParams} from "shrincs-profile/ShrincsParams.sol";
 import {SHRINCSHash} from "./SHRINCSHash.sol";
 
 library ShrincsHypertree {
+    // Address-type words for the SPHINCS-style keyed hash inputs. These
+    // are the ADRS type constants [FIPS205 §4.2]: WOTS+ hash (0), tree
+    // (2), and FORS tree (3).
+    uint32 internal constant AddressTypeTree = 2;
+
+    struct WotsCSignature {
+        // Per-layer randomizer for this WOTS-C signature.
+        bytes randomizer;
+        // Grinding counter for the WOTS-C target-sum constraint.
+        uint32 counter;
+        // Revealed WOTS-C chain values for this layer.
+        bytes[] chains;
+    }
+
+    struct HypertreeLayerSignature {
+        // Subtree index at this hypertree layer.
+        uint64 treeIndex;
+        // Leaf selected inside that subtree.
+        uint32 leafIndex;
+        // Commitment to the reconstructed WOTS-C public key for this layer.
+        bytes wotsCPkHash;
+        // WOTS-C signature carrying the previous layer's root upward.
+        WotsCSignature wotsCSignature;
+        // Authentication path from the WOTS leaf to the next layer root.
+        bytes[] authPath;
+    }
+
     // verifyHypertree: Verify every SHRINCS hypertree layer from the FORS
     // root to the public root.
     // 1. Check that the signature provides exactly one layer signature per
@@ -34,12 +62,12 @@ library ShrincsHypertree {
     // 6. Accept only if the final reconstructed root matches the installed
     // hypertree root.
     function verifyHypertree(
-        ShrincsTypes.PublicKey calldata publicKey,
+        SHRINCS.PublicKey calldata publicKey,
         bytes32 forsRoot,
-        ShrincsTypes.HypertreeLayerSignature[] calldata layers
+        ShrincsHypertree.HypertreeLayerSignature[] calldata layers
     ) internal pure returns (bool) {
         // Every hypertree layer must be present exactly once.
-        if (layers.length != ShrincsTypes.NUM_HYPERTREE_LAYERS) {
+        if (layers.length != ShrincsParams.NUM_HYPERTREE_LAYERS) {
             return false;
         }
         // The hypertree cannot be empty. Unreachable given the exact-count
@@ -49,7 +77,8 @@ library ShrincsHypertree {
         // Each subtree has height h / d in the supported balanced hypertree
         // layout.
         uint32 subtreeHeight = uint32(
-            ShrincsTypes.HYPERTREE_HEIGHT / ShrincsTypes.NUM_HYPERTREE_LAYERS
+            ShrincsParams.HYPERTREE_HEIGHT
+                / ShrincsParams.NUM_HYPERTREE_LAYERS
         );
         // Bound the leaf index range accepted inside each subtree.
         uint32 leafCount = uint32(1) << subtreeHeight;
@@ -62,7 +91,7 @@ library ShrincsHypertree {
         bytes32 current = forsRoot;
 
         for (uint256 layer = 0; layer < layers.length;) {
-            ShrincsTypes.HypertreeLayerSignature calldata layerSig =
+            ShrincsHypertree.HypertreeLayerSignature calldata layerSig =
                 layers[layer];
             // Deviates from [FIPS205 §8.2]: SHRINCS chains the hypertree
             // coordinates sequentially per layer instead of following the
@@ -184,9 +213,9 @@ library ShrincsHypertree {
         uint32 keypair,
         bytes calldata expectedPkHashBytes,
         bytes32 message,
-        ShrincsTypes.WotsCSignature calldata signature
+        ShrincsHypertree.WotsCSignature calldata signature
     ) internal pure returns (bool) {
-        uint256 chainCount = uint256(ShrincsTypes.NUM_WOTS_CHAINS);
+        uint256 chainCount = uint256(ShrincsParams.NUM_WOTS_CHAINS);
         // The WOTS-C randomizer is always one hash output wide.
         if (signature.randomizer.length != 32) return false;
         // One revealed chain value is required per WOTS-C chain.
@@ -266,7 +295,7 @@ library ShrincsHypertree {
             digitSum += digit;
             // Complete the chain from the revealed value to its endpoint.
             bytes32 segment = wotsChain32NoMaskBase(
-                ShrincsTypes.WOTS_CHAIN_LEN,
+                ShrincsParams.WOTS_CHAIN_LEN,
                 pkSeed,
                 addressBase,
                 // casting to 'uint32' is safe because i ranges over the
@@ -290,7 +319,9 @@ library ShrincsHypertree {
         // WOTS-C does not carry an explicit checksum chain suffix. Instead
         // the message expansion is accepted only when the reconstructed
         // base-w digits add up to the fixed target sum ([SHRINCS §5]).
-        if (digitSum != ShrincsTypes.WOTS_TARGET_SUM_STATEFUL) return false;
+        if (digitSum != ShrincsParams.WOTS_TARGET_SUM_STATEFUL) {
+            return false;
+        }
 
         bytes32 computedPkHash;
         // Memory-safe: hashes the pkInput buffer built above; no memory is
@@ -457,8 +488,9 @@ library ShrincsHypertree {
     // 2. Multiply by the number of WOTS chains.
     // 3. Round up to a whole number of bytes.
     function wotsDigestBytes() internal pure returns (uint256) {
-        uint256 bitsPerDigit = ShrincsTypes.WOTS_CHAIN_LEN == 256 ? 8 : 4;
-        return (uint256(ShrincsTypes.NUM_WOTS_CHAINS) * bitsPerDigit + 7) / 8;
+        uint256 bitsPerDigit = ShrincsParams.WOTS_CHAIN_LEN == 256 ? 8 : 4;
+        return
+            (uint256(ShrincsParams.NUM_WOTS_CHAINS) * bitsPerDigit + 7) / 8;
     }
 
     // hypertreeRootFromPath32: Rebuild one XMSS-style subtree root from a
@@ -495,7 +527,7 @@ library ShrincsHypertree {
         uint256 shiftedTree = uint256(treeIndex) << 128;
         // Mark these addresses as belonging to the tree-hash domain.
         uint256 shiftedAddressType =
-            uint256(ShrincsTypes.AddressTypeTree) << 96;
+            uint256(ShrincsHypertree.AddressTypeTree) << 96;
         uint256 addressBase = shiftedLayer;
         addressBase |= shiftedTree;
         addressBase |= shiftedAddressType;

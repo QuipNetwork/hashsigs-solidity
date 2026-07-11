@@ -18,18 +18,16 @@ pragma solidity ^0.8.28;
 
 import {Test} from "../lib/forge-std/src/Test.sol";
 import {ShrincsTestSigner} from "./helpers/ShrincsTestSigner.sol";
-import {ShrincsTypes} from "../contracts/ShrincsTypes.sol";
+import {SHRINCS} from "../contracts/SHRINCS.sol";
+import {ShrincsStateful} from "../contracts/ShrincsStateful.sol";
+import {ShrincsParams} from "shrincs-profile/ShrincsParams.sol";
 import {ShrincsCodec} from "../contracts/ShrincsCodec.sol";
 
 contract ShrincsSignerHarness {
     function keygen(bytes memory seedMaterial, uint32 maxStatefulSignatures)
         external
         pure
-        returns (
-            ShrincsTypes.SigningKey memory,
-            ShrincsTypes.PublicKey memory,
-            bool
-        )
+        returns (SHRINCS.SigningKey memory, SHRINCS.PublicKey memory, bool)
     {
         return ShrincsTestSigner.keygen(seedMaterial, maxStatefulSignatures);
     }
@@ -37,7 +35,7 @@ contract ShrincsSignerHarness {
     function decodeStatefulPublicKey(bytes calldata encoded)
         external
         pure
-        returns (ShrincsTypes.StatefulPublicKey memory, bool)
+        returns (ShrincsStateful.StatefulPublicKey memory, bool)
     {
         return ShrincsCodec.decodeStatefulPublicKey(encoded);
     }
@@ -83,13 +81,13 @@ contract ShrincsSignerKeygenTest is Test {
 
     function testKeygenIsDeterministicForSameSeed() public view {
         (
-            ShrincsTypes.SigningKey memory signingKeyA,
-            ShrincsTypes.PublicKey memory publicKeyA,
+            SHRINCS.SigningKey memory signingKeyA,
+            SHRINCS.PublicKey memory publicKeyA,
             bool okA
         ) = harness.keygen(bytes("solidity keygen seed"), 8);
         (
-            ShrincsTypes.SigningKey memory signingKeyB,
-            ShrincsTypes.PublicKey memory publicKeyB,
+            SHRINCS.SigningKey memory signingKeyB,
+            SHRINCS.PublicKey memory publicKeyB,
             bool okB
         ) = harness.keygen(bytes("solidity keygen seed"), 8);
 
@@ -127,8 +125,8 @@ contract ShrincsSignerKeygenTest is Test {
 
     function testKeygenBuildsConsistentPublicKeyBundle() public view {
         (
-            ShrincsTypes.SigningKey memory signingKey,
-            ShrincsTypes.PublicKey memory publicKey,
+            SHRINCS.SigningKey memory signingKey,
+            SHRINCS.PublicKey memory publicKey,
             bool ok
         ) = harness.keygen(bytes("solidity public key seed"), 4);
 
@@ -140,7 +138,7 @@ contract ShrincsSignerKeygenTest is Test {
         );
         assertEq(
             publicKey.statefulPublicKey.length,
-            ShrincsTypes.STATEFUL_PUBLIC_KEY_BYTES
+            ShrincsParams.STATEFUL_PUBLIC_KEY_BYTES
         );
         assertEq(publicKey.publicKeyCommitment.length, 32);
         assertEq(publicKey.pkSeed.length, 32);
@@ -158,7 +156,7 @@ contract ShrincsSignerKeygenTest is Test {
         );
 
         (
-            ShrincsTypes.StatefulPublicKey memory decodedStateful,
+            ShrincsStateful.StatefulPublicKey memory decodedStateful,
             bool decodedOk
         ) = harness.decodeStatefulPublicKey(publicKey.statefulPublicKey);
         assertTrue(decodedOk, "stateful public key must decode");
@@ -183,10 +181,10 @@ contract ShrincsSignerKeygenTest is Test {
         // ([DESIGN §5]); until then this is pending under any non-256s
         // profile. The other keygen tests here are profile-agnostic and
         // run everywhere.
-        vm.skip(ShrincsTypes.HASH_LEN != 32);
+        vm.skip(ShrincsParams.HASH_LEN != 32);
         (
-            ShrincsTypes.SigningKey memory signingKey,
-            ShrincsTypes.PublicKey memory publicKey,
+            SHRINCS.SigningKey memory signingKey,
+            SHRINCS.PublicKey memory publicKey,
             bool ok
         ) = harness.keygen(bytes("solidity public key seed"), 4);
 

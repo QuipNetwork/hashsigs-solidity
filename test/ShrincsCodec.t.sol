@@ -21,7 +21,9 @@ import {
     IERC7913SignatureVerifier
 } from "../contracts/interfaces/IERC7913SignatureVerifier.sol";
 import {ShrincsCodec} from "../contracts/ShrincsCodec.sol";
-import {ShrincsTypes} from "../contracts/ShrincsTypes.sol";
+import {SHRINCS} from "../contracts/SHRINCS.sol";
+import {ShrincsStateful} from "../contracts/ShrincsStateful.sol";
+import {ShrincsParams} from "shrincs-profile/ShrincsParams.sol";
 import {ShrincsVerifier} from "../contracts/ShrincsVerifier.sol";
 import {ShrincsTestSigner} from "./helpers/ShrincsTestSigner.sol";
 
@@ -157,16 +159,16 @@ contract ShrincsCodecHarness {
         external
         pure
         returns (
-            ShrincsTypes.PublicKey memory publicKey,
-            ShrincsTypes.StatefulSignature memory signature
+            SHRINCS.PublicKey memory publicKey,
+            ShrincsStateful.StatefulSignature memory signature
         )
     {
         return ShrincsCodec.decodeStatefulEnvelope(envelope);
     }
 
     function encodeStatefulEnvelope(
-        ShrincsTypes.PublicKey memory publicKey,
-        ShrincsTypes.StatefulSignature memory signature
+        SHRINCS.PublicKey memory publicKey,
+        ShrincsStateful.StatefulSignature memory signature
     ) external pure returns (bytes memory envelope) {
         return ShrincsCodec.encodeStatefulEnvelope(publicKey, signature);
     }
@@ -192,9 +194,9 @@ contract ShrincsCodecTest is Test {
     function buildSamplePublicKey()
         internal
         pure
-        returns (ShrincsTypes.PublicKey memory publicKey)
+        returns (SHRINCS.PublicKey memory publicKey)
     {
-        publicKey = ShrincsTypes.PublicKey({
+        publicKey = SHRINCS.PublicKey({
             statefulPublicKey: abi.encodePacked(
                 keccak256("codec stateful pk seed"),
                 keccak256("codec stateful root"),
@@ -216,11 +218,11 @@ contract ShrincsCodecTest is Test {
     function buildSampleSignature()
         internal
         pure
-        returns (ShrincsTypes.StatefulSignature memory signature)
+        returns (ShrincsStateful.StatefulSignature memory signature)
     {
         signature.randomizer = keccak256("codec stateful randomizer");
         signature.counter = 42;
-        signature.chains = new bytes32[](ShrincsTypes.WOTS_CHAINS_STATEFUL);
+        signature.chains = new bytes32[](ShrincsParams.WOTS_CHAINS_STATEFUL);
         for (uint256 i = 0; i < signature.chains.length; i++) {
             signature.chains[i] =
                 keccak256(abi.encode("codec stateful chain", i));
@@ -262,15 +264,15 @@ contract ShrincsCodecTest is Test {
     }
 
     function testStatefulEnvelopeRoundTripPreservesEveryField() public view {
-        ShrincsTypes.PublicKey memory publicKey = buildSamplePublicKey();
-        ShrincsTypes.StatefulSignature memory signature =
+        SHRINCS.PublicKey memory publicKey = buildSamplePublicKey();
+        ShrincsStateful.StatefulSignature memory signature =
             buildSampleSignature();
 
         bytes memory envelope =
             codec.encodeStatefulEnvelope(publicKey, signature);
         (
-            ShrincsTypes.PublicKey memory decodedKey,
-            ShrincsTypes.StatefulSignature memory decodedSig
+            SHRINCS.PublicKey memory decodedKey,
+            ShrincsStateful.StatefulSignature memory decodedSig
         ) = codec.decodeStatefulEnvelope(envelope);
 
         // The envelope layout is exactly abi.encode(PublicKey,
@@ -637,8 +639,8 @@ contract ShrincsCodecERC7913IntegrationTest is Test {
         vectors = vm.readFile(VECTOR_PATH);
 
         (
-            ShrincsTypes.SigningKey memory signingKey,
-            ShrincsTypes.PublicKey memory publicKey,
+            SHRINCS.SigningKey memory signingKey,
+            SHRINCS.PublicKey memory publicKey,
             bool keygenOk
         ) = ShrincsTestSigner.keygen(
             bytes("shrincs erc7913 stateful verifier seed"), 4
@@ -648,7 +650,7 @@ contract ShrincsCodecERC7913IntegrationTest is Test {
         signedHash = keccak256("shrincs erc7913 stateful verifier vector");
         bytes memory message = abi.encodePacked(signedHash);
 
-        (ShrincsTypes.StatefulSignature memory signature, bool signOk) =
+        (ShrincsStateful.StatefulSignature memory signature, bool signOk) =
             ShrincsTestSigner.signStatefulRawAtLeaf(signingKey, 1, message);
         assertTrue(signOk, "leaf-1 signing must succeed");
 
@@ -670,9 +672,9 @@ contract ShrincsCodecERC7913IntegrationTest is Test {
         public
     {
         (
-            ShrincsTypes.PublicKey memory publicKey,
+            SHRINCS.PublicKey memory publicKey,
             bytes32 hash,
-            ShrincsTypes.StatefulSignature memory signature
+            ShrincsStateful.StatefulSignature memory signature
         ) = decodeRustStatefulVector();
         bytes memory envelope =
             ShrincsCodec.encodeStatefulEnvelope(publicKey, signature);
@@ -778,9 +780,9 @@ contract ShrincsCodecERC7913IntegrationTest is Test {
     function decodeRustStatefulVector()
         internal
         returns (
-            ShrincsTypes.PublicKey memory publicKey,
+            SHRINCS.PublicKey memory publicKey,
             bytes32 hash,
-            ShrincsTypes.StatefulSignature memory signature
+            ShrincsStateful.StatefulSignature memory signature
         )
     {
         bytes memory args = vectorArgs(".stateful.cases.valid.calldata");
@@ -813,7 +815,7 @@ contract ShrincsCodecERC7913IntegrationTest is Test {
 
         publicKey =
             publicKeyFromParts(statefulPublicKey, pkSeed, hypertreeRoot);
-        signature = ShrincsTypes.StatefulSignature({
+        signature = ShrincsStateful.StatefulSignature({
             randomizer: legacySignature.randomizer,
             counter: legacySignature.counter,
             chains: fixedToDynamicChains(legacySignature.chains),
@@ -825,7 +827,7 @@ contract ShrincsCodecERC7913IntegrationTest is Test {
         bytes memory statefulPublicKey,
         bytes memory pkSeed,
         bytes memory hypertreeRoot
-    ) internal pure returns (ShrincsTypes.PublicKey memory) {
+    ) internal pure returns (SHRINCS.PublicKey memory) {
         bytes32 commitment = keccak256(
             abi.encodePacked(
                 "shrincs-public-key",
@@ -834,7 +836,7 @@ contract ShrincsCodecERC7913IntegrationTest is Test {
                 hypertreeRoot
             )
         );
-        return ShrincsTypes.PublicKey({
+        return SHRINCS.PublicKey({
             statefulPublicKey: statefulPublicKey,
             publicKeyCommitment: abi.encodePacked(commitment),
             pkSeed: pkSeed,

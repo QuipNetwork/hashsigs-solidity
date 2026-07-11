@@ -16,7 +16,9 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 pragma solidity ^0.8.28;
 
-import {ShrincsTypes} from "../../contracts/ShrincsTypes.sol";
+import {SHRINCS} from "../../contracts/SHRINCS.sol";
+import {ShrincsStateful} from "../../contracts/ShrincsStateful.sol";
+import {ShrincsParams} from "shrincs-profile/ShrincsParams.sol";
 import {
     ShrincsAccountVerifierExample
 } from "../../contracts/examples/ShrincsAccountVerifierExample.sol";
@@ -30,9 +32,9 @@ contract MedusaAccountHarness is ShrincsAccountVerifierExample {
     {}
 
     function verifyStatefulUncheckedForTest(
-        ShrincsTypes.PublicKey calldata publicKey,
+        SHRINCS.PublicKey calldata publicKey,
         bytes calldata message,
-        ShrincsTypes.StatefulSignature calldata signature
+        ShrincsStateful.StatefulSignature calldata signature
     ) external returns (bool) {
         return verifyStatefulUncheckedMessage(publicKey, message, signature);
     }
@@ -66,8 +68,9 @@ contract ShrincsMedusaHarness {
     uint32 internal constant MAX_LEAF = 4;
 
     MedusaAccountHarness internal account;
-    ShrincsTypes.PublicKey internal publicKey;
-    mapping(uint32 => ShrincsTypes.StatefulSignature) internal signatureOf;
+    SHRINCS.PublicKey internal publicKey;
+    mapping(uint32 => ShrincsStateful.StatefulSignature) internal
+        signatureOf;
 
     bool internal purityViolated;
     bool internal mutationAccepted;
@@ -76,13 +79,13 @@ contract ShrincsMedusaHarness {
     bool internal keyVersionDecreased;
 
     constructor() {
-        ShrincsTypes.SigningKey memory signingKey;
+        SHRINCS.SigningKey memory signingKey;
         bool keygenOk;
         (signingKey, publicKey, keygenOk) =
             ShrincsTestSigner.keygen(bytes("shrincs-medusa-key"), MAX_LEAF);
         require(keygenOk, "medusa keygen");
         for (uint32 leaf = 1; leaf <= MAX_LEAF; leaf++) {
-            ShrincsTypes.StatefulSignature memory signature;
+            ShrincsStateful.StatefulSignature memory signature;
             bool signOk;
             (signature, signOk) = ShrincsTestSigner.signStatefulRawAtLeaf(
                 signingKey, leaf, abi.encodePacked(FIXED_MESSAGE)
@@ -116,7 +119,8 @@ contract ShrincsMedusaHarness {
         // leafSelector % MAX_LEAF is < MAX_LEAF, so the cast cannot truncate
         // forge-lint: disable-next-line(unsafe-typecast)
         uint32 leaf = uint32(1 + (leafSelector % MAX_LEAF));
-        ShrincsTypes.StatefulSignature memory signature = signatureOf[leaf];
+        ShrincsStateful.StatefulSignature memory signature =
+            signatureOf[leaf];
         signature.chains[0] =
             bytes32(uint256(signature.chains[0]) ^ (uint256(flip) | 1));
         bytes32 digestBefore = _stateDigest();
@@ -129,7 +133,7 @@ contract ShrincsMedusaHarness {
     }
 
     function actConsumeBudget(uint256 amount) external {
-        uint64 limit = ShrincsTypes.STATELESS_SIGNATURE_LIMIT;
+        uint64 limit = ShrincsParams.STATELESS_SIGNATURE_LIMIT;
         // amount is reduced mod (limit + 1) <= uint64 max, so the cast is
         // exact.
         // forge-lint: disable-next-line(unsafe-typecast)
@@ -141,7 +145,7 @@ contract ShrincsMedusaHarness {
     function actSimulateFullRotation() external {
         if (
             account.statelessSignaturesUsed()
-                >= ShrincsTypes.STATELESS_SIGNATURE_LIMIT
+                >= ShrincsParams.STATELESS_SIGNATURE_LIMIT
         ) return;
         account.applyFullRotationForTest(_commitmentWord(publicKey));
         if (account.statelessSignaturesUsed() != 0) resetViolated = true;
@@ -150,7 +154,7 @@ contract ShrincsMedusaHarness {
 
     function property_budgetWithinLimit() external view returns (bool) {
         return account.statelessSignaturesUsed()
-            <= ShrincsTypes.STATELESS_SIGNATURE_LIMIT;
+            <= ShrincsParams.STATELESS_SIGNATURE_LIMIT;
     }
 
     function property_budgetResetOnFullRotation()
@@ -190,7 +194,7 @@ contract ShrincsMedusaHarness {
         );
     }
 
-    function _commitmentWord(ShrincsTypes.PublicKey memory key)
+    function _commitmentWord(SHRINCS.PublicKey memory key)
         internal
         pure
         returns (bytes32 word)

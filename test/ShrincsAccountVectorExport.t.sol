@@ -17,7 +17,8 @@
 pragma solidity ^0.8.28;
 
 import {Test} from "../lib/forge-std/src/Test.sol";
-import {ShrincsTypes} from "../contracts/ShrincsTypes.sol";
+import {SHRINCS} from "../contracts/SHRINCS.sol";
+import {ShrincsStateful} from "../contracts/ShrincsStateful.sol";
 import {
     ShrincsAccountVerifierExample
 } from "../contracts/examples/ShrincsAccountVerifierExample.sol";
@@ -44,8 +45,8 @@ contract ShrincsAccountVectorExportTest is Test {
         bytes32 actionType = keccak256("execute");
         bytes32 payloadHash = keccak256("payload");
         (
-            ShrincsTypes.SigningKey memory signingKey,
-            ShrincsTypes.PublicKey memory publicKey,
+            SHRINCS.SigningKey memory signingKey,
+            SHRINCS.PublicKey memory publicKey,
             bool keygenOk
         ) = ShrincsAccountSigningFacade.keygen(
             bytes("export-stateful-current-key"), 4
@@ -61,9 +62,9 @@ contract ShrincsAccountVectorExportTest is Test {
             );
 
         (
-            ShrincsTypes.SigningKey memory nextSigningKey,
-            ShrincsTypes.ActionContext memory context,
-            ShrincsTypes.StatefulSignature memory signature,
+            SHRINCS.SigningKey memory nextSigningKey,
+            SHRINCS.ActionContext memory context,
+            ShrincsStateful.StatefulSignature memory signature,
             bool signOk
         ) = ShrincsAccountSigningFacade.signStatefulActionNow(
             account, signingKey, actionType, payloadHash
@@ -105,8 +106,8 @@ contract ShrincsAccountVectorExportTest is Test {
         bytes32 actionType = keccak256("execute");
         bytes32 payloadHash = keccak256("payload");
         (
-            ShrincsTypes.SigningKey memory signingKey,
-            ShrincsTypes.PublicKey memory publicKey,
+            SHRINCS.SigningKey memory signingKey,
+            SHRINCS.PublicKey memory publicKey,
             bool keygenOk
         ) = ShrincsAccountSigningFacade.keygen(
             bytes("export-stateless-current-key"), 4
@@ -122,7 +123,7 @@ contract ShrincsAccountVectorExportTest is Test {
             );
 
         (
-            ShrincsTypes.ActionContext memory context,
+            SHRINCS.ActionContext memory context,
             bytes32 sessionId,
             bool signOk
         ) = ShrincsAccountSigningFacade.beginStatelessActionSessionNow(
@@ -135,12 +136,10 @@ contract ShrincsAccountVectorExportTest is Test {
             );
         assertTrue(signOk, "stateless signing must start");
 
-        (
-            ShrincsTypes.StatelessSignature memory signature,
-            bool completeOk
-        ) = ShrincsAccountSigningFacade.completeStatelessSession(
-                signer, sessionId
-            );
+        // line-length: allow — fmt canonical tuple head exceeds cap
+        (SHRINCS.StatelessSignature memory signature, bool completeOk) = ShrincsAccountSigningFacade.completeStatelessSession(
+            signer, sessionId
+        );
         assertTrue(completeOk, "stateless signing must complete");
 
         ShrincsAccountVectorExport.StatelessActionVector memory vector_ =
@@ -171,8 +170,8 @@ contract ShrincsAccountVectorExportTest is Test {
 
     function testExportStatefulOnlyRotationBundle() public {
         (
-            ShrincsTypes.SigningKey memory currentSigningKey,
-            ShrincsTypes.PublicKey memory currentPublicKey,
+            SHRINCS.SigningKey memory currentSigningKey,
+            SHRINCS.PublicKey memory currentPublicKey,
             bool currentOk
         ) = ShrincsAccountSigningFacade.keygen(
             bytes("export-rotation-current-key"), 4
@@ -189,19 +188,19 @@ contract ShrincsAccountVectorExportTest is Test {
         account.setStatefulPolicyRecoveryRotation();
         account.enterRecoveryMode();
 
-        // line-length: allow — fmt canonical tuple head exceeds cap
-        (, ShrincsTypes.PublicKey memory nextPublicKey, bool nextOk) = ShrincsAccountSigningFacade.keygen(
+        // line-length: allow â fmt canonical tuple head exceeds cap
+        (, SHRINCS.PublicKey memory nextPublicKey, bool nextOk) = ShrincsAccountSigningFacade.keygen(
             bytes("export-rotation-next-key"), 4
         );
         assertTrue(nextOk, "next keygen must succeed");
 
-        ShrincsTypes.StatefulRotationTarget memory nextKey =
+        SHRINCS.StatefulRotationTarget memory nextKey =
             ShrincsAccountSigningFacade.statefulRotationTarget(
                 currentPublicKey, nextPublicKey.statefulPublicKey
             );
 
         (
-            ShrincsTypes.RotationContext memory context,
+            SHRINCS.RotationContext memory context,
             bytes32 sessionId,
             bool signOk
         ) = ShrincsAccountSigningFacade.beginStatefulOnlyRotationSessionNow(
@@ -210,11 +209,11 @@ contract ShrincsAccountVectorExportTest is Test {
         assertTrue(signOk, "stateful-only rotation must start");
 
         (
-            ShrincsTypes.StatelessSignature memory recoverySignature,
+            SHRINCS.StatelessSignature memory recoverySignature,
             bool completeOk
         ) = ShrincsAccountSigningFacade.completeStatelessSession(
-            signer, sessionId
-        );
+                signer, sessionId
+            );
         assertTrue(completeOk, "stateful-only rotation must complete");
 
         ShrincsAccountVectorExport.StatefulOnlyRotationVector memory
@@ -245,8 +244,8 @@ contract ShrincsAccountVectorExportTest is Test {
 
     function testExportFullRotationBundle() public {
         (
-            ShrincsTypes.SigningKey memory currentSigningKey,
-            ShrincsTypes.PublicKey memory currentPublicKey,
+            SHRINCS.SigningKey memory currentSigningKey,
+            SHRINCS.PublicKey memory currentPublicKey,
             bool currentOk
         ) = ShrincsAccountSigningFacade.keygen(
             bytes("account-aware full rotation current key"), 4
@@ -263,17 +262,17 @@ contract ShrincsAccountVectorExportTest is Test {
         account.setStatefulPolicyRecoveryRotation();
         account.enterRecoveryMode();
 
-        // line-length: allow — fmt canonical tuple head exceeds cap
-        (, ShrincsTypes.PublicKey memory nextPublicKey, bool nextOk) = ShrincsAccountSigningFacade.keygen(
+        // line-length: allow â fmt canonical tuple head exceeds cap
+        (, SHRINCS.PublicKey memory nextPublicKey, bool nextOk) = ShrincsAccountSigningFacade.keygen(
             bytes("account-aware full rotation next key"), 4
         );
         assertTrue(nextOk, "next keygen must succeed");
 
-        ShrincsTypes.RotationTarget memory nextKey =
+        SHRINCS.RotationTarget memory nextKey =
             ShrincsAccountSigningFacade.fullRotationTarget(nextPublicKey);
 
         (
-            ShrincsTypes.RotationContext memory context,
+            SHRINCS.RotationContext memory context,
             bytes32 sessionId,
             bool signOk
         ) = ShrincsAccountSigningFacade.beginFullRotationSessionNow(
@@ -282,11 +281,11 @@ contract ShrincsAccountVectorExportTest is Test {
         assertTrue(signOk, "full rotation must start");
 
         (
-            ShrincsTypes.StatelessSignature memory recoverySignature,
+            SHRINCS.StatelessSignature memory recoverySignature,
             bool completeOk
         ) = ShrincsAccountSigningFacade.completeStatelessSession(
-            signer, sessionId
-        );
+                signer, sessionId
+            );
         assertTrue(completeOk, "full rotation must complete");
 
         ShrincsAccountVectorExport.FullRotationVector memory vector_ =

@@ -17,7 +17,8 @@
 pragma solidity ^0.8.28;
 
 import {SHRINCS} from "../../contracts/SHRINCS.sol";
-import {ShrincsTypes} from "../../contracts/ShrincsTypes.sol";
+import {ShrincsStateful} from "../../contracts/ShrincsStateful.sol";
+import {ShrincsParams} from "shrincs-profile/ShrincsParams.sol";
 import {ShrincsCodec} from "../../contracts/ShrincsCodec.sol";
 import {SHRINCSHash} from "../../contracts/SHRINCSHash.sol";
 
@@ -36,8 +37,8 @@ library ShrincsTestSigner {
         internal
         pure
         returns (
-            ShrincsTypes.SigningKey memory signingKey,
-            ShrincsTypes.PublicKey memory publicKey,
+            SHRINCS.SigningKey memory signingKey,
+            SHRINCS.PublicKey memory publicKey,
             bool ok
         )
     {
@@ -67,7 +68,7 @@ library ShrincsTestSigner {
         bytes32 pkSeed = derive32("shrincs-pk-seed", seedMaterial, "");
         bytes32 hypertreeRoot = hypertreePublicRoot(statelessSkSeed, pkSeed);
 
-        signingKey = ShrincsTypes.SigningKey({
+        signingKey = SHRINCS.SigningKey({
             statefulSkSeed: statefulSkSeed,
             statefulPrfSeed: statefulPrfSeed,
             statefulPkSeed: statefulPkSeed,
@@ -89,7 +90,7 @@ library ShrincsTestSigner {
                 abi.encodePacked(pkSeed),
                 abi.encodePacked(hypertreeRoot)
             );
-        publicKey = ShrincsTypes.PublicKey({
+        publicKey = SHRINCS.PublicKey({
             statefulPublicKey: statefulPublicKey,
             publicKeyCommitment: abi.encodePacked(publicKeyCommitment),
             pkSeed: abi.encodePacked(pkSeed),
@@ -99,14 +100,14 @@ library ShrincsTestSigner {
     }
 
     function signStatefulRaw(
-        ShrincsTypes.SigningKey memory signingKey,
+        SHRINCS.SigningKey memory signingKey,
         bytes memory message
     )
         internal
         pure
         returns (
-            ShrincsTypes.SigningKey memory nextSigningKey,
-            ShrincsTypes.StatefulSignature memory signature,
+            SHRINCS.SigningKey memory nextSigningKey,
+            ShrincsStateful.StatefulSignature memory signature,
             bool ok
         )
     {
@@ -126,15 +127,15 @@ library ShrincsTestSigner {
     }
 
     function signStatefulAction(
-        ShrincsTypes.SigningKey memory signingKey,
-        ShrincsTypes.PublicKey memory publicKey,
-        ShrincsTypes.ActionContext memory context
+        SHRINCS.SigningKey memory signingKey,
+        SHRINCS.PublicKey memory publicKey,
+        SHRINCS.ActionContext memory context
     )
         internal
         pure
         returns (
-            ShrincsTypes.SigningKey memory nextSigningKey,
-            ShrincsTypes.StatefulSignature memory signature,
+            SHRINCS.SigningKey memory nextSigningKey,
+            ShrincsStateful.StatefulSignature memory signature,
             bool ok
         )
     {
@@ -163,13 +164,13 @@ library ShrincsTestSigner {
     }
 
     function signStatefulRawAtLeaf(
-        ShrincsTypes.SigningKey memory signingKey,
+        SHRINCS.SigningKey memory signingKey,
         uint32 leafIndex,
         bytes memory message
     )
         internal
         pure
-        returns (ShrincsTypes.StatefulSignature memory signature, bool ok)
+        returns (ShrincsStateful.StatefulSignature memory signature, bool ok)
     {
         if (leafIndex == 0) return (signature, false);
         if (leafIndex > signingKey.maxStatefulSignatures) {
@@ -224,11 +225,11 @@ library ShrincsTestSigner {
         uint32 leafIndex
     ) internal pure returns (bytes32) {
         bytes memory endpoints = new bytes(
-            uint256(ShrincsTypes.WOTS_CHAINS_STATEFUL) * 32
+            uint256(ShrincsParams.WOTS_CHAINS_STATEFUL) * 32
         );
         for (
             uint32 chainIndex = 0;
-            chainIndex < ShrincsTypes.WOTS_CHAINS_STATEFUL;
+            chainIndex < ShrincsParams.WOTS_CHAINS_STATEFUL;
 
         ) {
             bytes32 secret =
@@ -239,7 +240,7 @@ library ShrincsTestSigner {
                 chainIndex,
                 secret,
                 0,
-                ShrincsTypes.WOTS_BASE_STATEFUL - 1
+                ShrincsParams.WOTS_BASE_STATEFUL - 1
             );
             setSlice32(endpoints, endpoint, uint256(chainIndex) * 32);
             unchecked {
@@ -267,7 +268,7 @@ library ShrincsTestSigner {
     )
         internal
         pure
-        returns (ShrincsTypes.StatefulSignature memory signature, bool ok)
+        returns (ShrincsStateful.StatefulSignature memory signature, bool ok)
     {
         bytes32 randomizer = keccak256(
             abi.encodePacked(
@@ -288,10 +289,10 @@ library ShrincsTestSigner {
             );
             uint32 digitSum;
             bytes32[] memory chains =
-                new bytes32[](ShrincsTypes.WOTS_CHAINS_STATEFUL);
+                new bytes32[](ShrincsParams.WOTS_CHAINS_STATEFUL);
             for (
                 uint32 chainIndex = 0;
-                chainIndex < ShrincsTypes.WOTS_CHAINS_STATEFUL;
+                chainIndex < ShrincsParams.WOTS_CHAINS_STATEFUL;
 
             ) {
                 uint32 digit = baseW16Digit(digest, chainIndex);
@@ -306,8 +307,8 @@ library ShrincsTestSigner {
                     ++chainIndex;
                 }
             }
-            if (digitSum == ShrincsTypes.WOTS_TARGET_SUM_STATEFUL) {
-                signature = ShrincsTypes.StatefulSignature({
+            if (digitSum == ShrincsParams.WOTS_TARGET_SUM_STATEFUL) {
+                signature = ShrincsStateful.StatefulSignature({
                     randomizer: randomizer,
                     counter: counter,
                     chains: chains,
@@ -352,7 +353,7 @@ library ShrincsTestSigner {
             bytes32 addressWord = SHRINCSHash.addressWord32(
                 0,
                 0,
-                ShrincsTypes.AddressTypeWotsHash,
+                ShrincsStateful.AddressTypeWotsHash,
                 leafIndex,
                 chainIndex,
                 start + stepOffset
@@ -435,7 +436,7 @@ library ShrincsTestSigner {
             hypertreeLayerSeeds(statelessSkSeed);
         uint32 topLayer = NUM_HYPERTREE_LAYERS - 1;
         uint32 subtreeHeight =
-            uint32(ShrincsTypes.HYPERTREE_HEIGHT / NUM_HYPERTREE_LAYERS);
+            uint32(ShrincsParams.HYPERTREE_HEIGHT / NUM_HYPERTREE_LAYERS);
         return hypertreeVirtualNode(
             pkSeed, layerSeeds[topLayer], topLayer, 0, subtreeHeight, 0
         );
@@ -512,9 +513,9 @@ library ShrincsTestSigner {
         uint32 keypair
     ) internal pure returns (bytes32) {
         bytes memory endpoints = new bytes(
-            uint256(ShrincsTypes.NUM_WOTS_CHAINS) * 32
+            uint256(ShrincsParams.NUM_WOTS_CHAINS) * 32
         );
-        for (uint32 chain = 0; chain < ShrincsTypes.NUM_WOTS_CHAINS;) {
+        for (uint32 chain = 0; chain < ShrincsParams.NUM_WOTS_CHAINS;) {
             bytes32 secret = statelessWotsCSecret(skSeed, chain);
             bytes32 endpoint = statelessWotsCChain(
                 pkSeed,
@@ -524,7 +525,7 @@ library ShrincsTestSigner {
                 chain,
                 secret,
                 0,
-                ShrincsTypes.WOTS_CHAIN_LEN - 1
+                ShrincsParams.WOTS_CHAIN_LEN - 1
             );
             setSlice32(endpoints, endpoint, uint256(chain) * 32);
             unchecked {
@@ -561,7 +562,7 @@ library ShrincsTestSigner {
             bytes32 addressWord = SHRINCSHash.addressWord32(
                 layer,
                 tree,
-                ShrincsTypes.AddressTypeWotsHash,
+                ShrincsStateful.AddressTypeWotsHash,
                 keypair,
                 chain,
                 step

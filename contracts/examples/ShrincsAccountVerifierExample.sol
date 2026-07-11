@@ -17,7 +17,8 @@
 pragma solidity ^0.8.28;
 
 import {SHRINCS} from "../SHRINCS.sol";
-import {ShrincsTypes} from "../ShrincsTypes.sol";
+import {ShrincsStateful} from "../ShrincsStateful.sol";
+import {ShrincsParams} from "shrincs-profile/ShrincsParams.sol";
 import {ShrincsAccountEnvelope} from "./ShrincsAccountEnvelope.sol";
 
 contract ShrincsAccountVerifierExample {
@@ -183,17 +184,17 @@ contract ShrincsAccountVerifierExample {
         bytes calldata payload
     ) external view onlySelf returns (bool) {
         (
-            ShrincsTypes.PublicKey memory publicKey,
+            SHRINCS.PublicKey memory publicKey,
             bytes32 actionType,
             bytes32 payloadHash,
-            ShrincsTypes.StatefulSignature memory shrincsSignature
+            ShrincsStateful.StatefulSignature memory shrincsSignature
         ) = abi.decode(
             payload,
             (
-                ShrincsTypes.PublicKey,
+                SHRINCS.PublicKey,
                 bytes32,
                 bytes32,
-                ShrincsTypes.StatefulSignature
+                ShrincsStateful.StatefulSignature
             )
         );
 
@@ -231,18 +232,13 @@ contract ShrincsAccountVerifierExample {
         bytes calldata payload
     ) external view onlySelf returns (bool) {
         (
-            ShrincsTypes.PublicKey memory publicKey,
+            SHRINCS.PublicKey memory publicKey,
             bytes32 actionType,
             bytes32 payloadHash,
-            ShrincsTypes.StatelessSignature memory shrincsSignature
+            SHRINCS.StatelessSignature memory shrincsSignature
         ) = abi.decode(
             payload,
-            (
-                ShrincsTypes.PublicKey,
-                bytes32,
-                bytes32,
-                ShrincsTypes.StatelessSignature
-            )
+            (SHRINCS.PublicKey, bytes32, bytes32, SHRINCS.StatelessSignature)
         );
 
         // Reject non-canonical encodings: the payload must be the exact
@@ -289,9 +285,9 @@ contract ShrincsAccountVerifierExample {
     // 5. Emit the usual stateful verification event without advancing the
     // wrapper nonce.
     function verifyStatefulUncheckedMessage(
-        ShrincsTypes.PublicKey calldata publicKey,
+        SHRINCS.PublicKey calldata publicKey,
         bytes calldata message,
-        ShrincsTypes.StatefulSignature calldata signature
+        ShrincsStateful.StatefulSignature calldata signature
     ) internal returns (bool) {
         // This path bypasses canonical wrapper message construction and
         // therefore remains internal-only. Recover the consumed stateful leaf
@@ -326,10 +322,10 @@ contract ShrincsAccountVerifierExample {
     /// @param signature The stateful signature.
     /// @return True when the action signature verifies and is consumed.
     function verifyStatefulAction(
-        ShrincsTypes.PublicKey calldata publicKey,
+        SHRINCS.PublicKey calldata publicKey,
         bytes32 actionType,
         bytes32 payloadHash,
-        ShrincsTypes.StatefulSignature calldata signature
+        ShrincsStateful.StatefulSignature calldata signature
     ) external returns (bool) {
         // Recover the consumed stateful leaf from the signature layout.
         uint32 leafIndex = uint32(signature.authPath.length);
@@ -338,8 +334,8 @@ contract ShrincsAccountVerifierExample {
 
         // Bind the action to this contract instance, nonce, and key epoch.
         // forgefmt: disable-next-line
-        ShrincsTypes.ActionContext memory context =
-            ShrincsTypes.ActionContext({
+        SHRINCS.ActionContext memory context =
+            SHRINCS.ActionContext({
                 domainSeparator: domainSeparator(),
                 nonce: nonce,
                 keyVersion: keyVersion,
@@ -375,10 +371,10 @@ contract ShrincsAccountVerifierExample {
     /// @param signature The stateless signature.
     /// @return True when the action signature verifies and is consumed.
     function verifyStatelessAction(
-        ShrincsTypes.PublicKey calldata publicKey,
+        SHRINCS.PublicKey calldata publicKey,
         bytes32 actionType,
         bytes32 payloadHash,
-        ShrincsTypes.StatelessSignature calldata signature
+        SHRINCS.StatelessSignature calldata signature
     ) external returns (bool) {
         // Recovery-only policy forbids stateless actions until recovery mode
         // is explicitly entered.
@@ -387,13 +383,13 @@ contract ShrincsAccountVerifierExample {
                 && !recoveryMode
         ) return false;
         // Enforce the per-key stateless usage budget.
-        uint64 limit = ShrincsTypes.STATELESS_SIGNATURE_LIMIT;
+        uint64 limit = ShrincsParams.STATELESS_SIGNATURE_LIMIT;
         if (statelessSignaturesUsed >= limit) return false;
 
         // Bind the action to this contract instance, nonce, and key epoch.
         // forgefmt: disable-next-line
-        ShrincsTypes.ActionContext memory context =
-            ShrincsTypes.ActionContext({
+        SHRINCS.ActionContext memory context =
+            SHRINCS.ActionContext({
                 domainSeparator: domainSeparator(),
                 nonce: nonce,
                 keyVersion: keyVersion,
@@ -430,9 +426,9 @@ contract ShrincsAccountVerifierExample {
     /// @param nextKey The stateful-only rotation target.
     /// @return True when rotation succeeds.
     function rotateToFreshKey(
-        ShrincsTypes.PublicKey calldata currentPublicKey,
-        ShrincsTypes.StatelessSignature calldata recoverySignature,
-        ShrincsTypes.StatefulRotationTarget calldata nextKey
+        SHRINCS.PublicKey calldata currentPublicKey,
+        SHRINCS.StatelessSignature calldata recoverySignature,
+        SHRINCS.StatefulRotationTarget calldata nextKey
     ) external returns (bool) {
         // Fresh-key rotation is available only in the dedicated recovery
         // policy.
@@ -443,16 +439,15 @@ contract ShrincsAccountVerifierExample {
         // recovery is accepted.
         if (!recoveryMode) return false;
         // Enforce the per-key stateless usage budget.
-        uint64 limit = ShrincsTypes.STATELESS_SIGNATURE_LIMIT;
+        uint64 limit = ShrincsParams.STATELESS_SIGNATURE_LIMIT;
         if (statelessSignaturesUsed >= limit) return false;
 
         // Bind the rotation to this contract instance, nonce, and key epoch.
-        ShrincsTypes.RotationContext memory context =
-            ShrincsTypes.RotationContext({
-                domainSeparator: domainSeparator(),
-                nonce: nonce,
-                keyVersion: keyVersion
-            });
+        SHRINCS.RotationContext memory context = SHRINCS.RotationContext({
+            domainSeparator: domainSeparator(),
+            nonce: nonce,
+            keyVersion: keyVersion
+        });
 
         // Verify the stateless recovery signature and derive the next
         // installed commitment.
@@ -486,9 +481,9 @@ contract ShrincsAccountVerifierExample {
     /// @param nextKey The full-key rotation target.
     /// @return True when rotation succeeds.
     function rotateFullKey(
-        ShrincsTypes.PublicKey calldata currentPublicKey,
-        ShrincsTypes.StatelessSignature calldata recoverySignature,
-        ShrincsTypes.RotationTarget calldata nextKey
+        SHRINCS.PublicKey calldata currentPublicKey,
+        SHRINCS.StatelessSignature calldata recoverySignature,
+        SHRINCS.RotationTarget calldata nextKey
     ) external returns (bool) {
         // Full-key rotation is available only in the dedicated recovery
         // policy.
@@ -499,16 +494,15 @@ contract ShrincsAccountVerifierExample {
         // recovery is accepted.
         if (!recoveryMode) return false;
         // Enforce the per-key stateless usage budget.
-        uint64 limit = ShrincsTypes.STATELESS_SIGNATURE_LIMIT;
+        uint64 limit = ShrincsParams.STATELESS_SIGNATURE_LIMIT;
         if (statelessSignaturesUsed >= limit) return false;
 
         // Bind the rotation to this contract instance, nonce, and key epoch.
-        ShrincsTypes.RotationContext memory context =
-            ShrincsTypes.RotationContext({
-                domainSeparator: domainSeparator(),
-                nonce: nonce,
-                keyVersion: keyVersion
-            });
+        SHRINCS.RotationContext memory context = SHRINCS.RotationContext({
+            domainSeparator: domainSeparator(),
+            nonce: nonce,
+            keyVersion: keyVersion
+        });
 
         // Verify the stateless recovery signature and derive the next
         // installed commitment.
@@ -675,17 +669,17 @@ contract ShrincsAccountVerifierExample {
     /// @return True when the stateful signature is valid now.
     function isValidStatefulActionSignatureNow(
         bytes32 hash,
-        ShrincsTypes.PublicKey calldata publicKey,
+        SHRINCS.PublicKey calldata publicKey,
         bytes32 actionType,
         bytes32 payloadHash,
-        ShrincsTypes.StatefulSignature calldata signature
+        ShrincsStateful.StatefulSignature calldata signature
     ) external view onlySelf returns (bool) {
         uint32 leafIndex = uint32(signature.authPath.length);
         if (!precheckStatefulLeafUse(leafIndex)) return false;
 
         // forgefmt: disable-next-line
-        ShrincsTypes.ActionContext memory context =
-            ShrincsTypes.ActionContext({
+        SHRINCS.ActionContext memory context =
+            SHRINCS.ActionContext({
                 domainSeparator: domainSeparator(),
                 nonce: nonce,
                 keyVersion: keyVersion,
@@ -717,22 +711,23 @@ contract ShrincsAccountVerifierExample {
     /// @return True when the stateless signature is valid now.
     function isValidStatelessActionSignatureNow(
         bytes32 hash,
-        ShrincsTypes.PublicKey calldata publicKey,
+        SHRINCS.PublicKey calldata publicKey,
         bytes32 actionType,
         bytes32 payloadHash,
-        ShrincsTypes.StatelessSignature calldata signature
+        SHRINCS.StatelessSignature calldata signature
     ) external view onlySelf returns (bool) {
         if (
             statefulPolicy == StatefulPolicy.RecoveryRotation
                 && !recoveryMode
         ) return false;
         if (
-            statelessSignaturesUsed >= ShrincsTypes.STATELESS_SIGNATURE_LIMIT
+            statelessSignaturesUsed
+                >= ShrincsParams.STATELESS_SIGNATURE_LIMIT
         ) return false;
 
         // forgefmt: disable-next-line
-        ShrincsTypes.ActionContext memory context =
-            ShrincsTypes.ActionContext({
+        SHRINCS.ActionContext memory context =
+            SHRINCS.ActionContext({
                 domainSeparator: domainSeparator(),
                 nonce: nonce,
                 keyVersion: keyVersion,

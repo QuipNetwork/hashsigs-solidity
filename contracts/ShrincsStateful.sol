@@ -16,11 +16,38 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 pragma solidity ^0.8.28;
 
-import {ShrincsTypes} from "./ShrincsTypes.sol";
+import {SHRINCS} from "./SHRINCS.sol";
+import {ShrincsParams} from "shrincs-profile/ShrincsParams.sol";
 import {ShrincsCodec} from "./ShrincsCodec.sol";
 import {SHRINCSHash} from "./SHRINCSHash.sol";
 
 library ShrincsStateful {
+    // Address-type words for the SPHINCS-style keyed hash inputs. These
+    // are the ADRS type constants [FIPS205 §4.2]: WOTS+ hash (0), tree
+    // (2), and FORS tree (3).
+    uint32 internal constant AddressTypeWotsHash = 0;
+
+    struct StatefulPublicKey {
+        // Public seed for stateful WOTS-C and tree hashing.
+        bytes32 pkSeed;
+        // Root of the custom stateful tree.
+        bytes32 root;
+        // Maximum number of stateful leaves/signatures under this key.
+        uint32 maxSignatures;
+    }
+
+    struct StatefulSignature {
+        // Per-signature randomizer committed into the stateful message
+        // digest.
+        bytes32 randomizer;
+        // Grinding counter used to satisfy the WOTS-C target-sum rule.
+        uint32 counter;
+        // Revealed WOTS-C chain values.
+        bytes32[] chains;
+        // Unbalanced authentication path proving the selected stateful leaf.
+        bytes32[] authPath;
+    }
+
     // verifyStatefulUncheckedMessage: Verify a stateful signature against an
     // exact caller-supplied message.
     // 1. Check that the public key uses the compiled fixed layout.
@@ -38,9 +65,9 @@ library ShrincsStateful {
     // public root.
     function verifyStatefulUncheckedMessage(
         bytes32 expectedPublicKeyCommitment,
-        ShrincsTypes.PublicKey calldata publicKey,
+        SHRINCS.PublicKey calldata publicKey,
         bytes memory message,
-        ShrincsTypes.StatefulSignature calldata signature
+        ShrincsStateful.StatefulSignature calldata signature
     ) internal pure returns (bool) {
         // The public key must satisfy the compiled fixed key shape.
         if (!ShrincsCodec.validPublicKey(publicKey)) return false;
@@ -51,7 +78,7 @@ library ShrincsStateful {
             )) return false;
         // Decode the compact stateful public key fields from the public
         // bundle.
-        (ShrincsTypes.StatefulPublicKey memory statefulKey, bool ok) =
+        (ShrincsStateful.StatefulPublicKey memory statefulKey, bool ok) =
             ShrincsCodec.decodeStatefulPublicKey(publicKey.statefulPublicKey);
         if (!ok) return false;
 
@@ -64,7 +91,7 @@ library ShrincsStateful {
         // budget.
         if (leafIndex > statefulKey.maxSignatures) return false;
         // Stateful WOTS-C always reveals a fixed number of chains.
-        if (signature.chains.length != ShrincsTypes.WOTS_CHAINS_STATEFUL) {
+        if (signature.chains.length != ShrincsParams.WOTS_CHAINS_STATEFUL) {
             return false;
         }
 
@@ -101,7 +128,7 @@ library ShrincsStateful {
         bytes32 pkSeed,
         uint32 leafIndex,
         bytes memory message,
-        ShrincsTypes.StatefulSignature calldata signature
+        ShrincsStateful.StatefulSignature calldata signature
     ) internal pure returns (bytes32 pkHash, bool ok) {
         // Bind the stateful WOTS-C digest to the seed, leaf, randomizer,
         // counter, and signed message.
@@ -123,8 +150,8 @@ library ShrincsStateful {
         uint32 digitSum;
         // Reserve one 32-byte slot per reconstructed WOTS chain endpoint.
         bytes memory segments =
-            new bytes(ShrincsTypes.WOTS_CHAINS_STATEFUL * 32);
-        for (uint256 i = 0; i < ShrincsTypes.WOTS_CHAINS_STATEFUL;) {
+            new bytes(ShrincsParams.WOTS_CHAINS_STATEFUL * 32);
+        for (uint256 i = 0; i < ShrincsParams.WOTS_CHAINS_STATEFUL;) {
             // Read the base-16 digit that chooses where this chain stopped
             // during signing.
             uint32 digit = baseW16Digit(digest, i);
@@ -143,7 +170,7 @@ library ShrincsStateful {
                 chainIndex,
                 signature.chains[i],
                 digit,
-                ShrincsTypes.WOTS_BASE_STATEFUL - 1 - digit
+                ShrincsParams.WOTS_BASE_STATEFUL - 1 - digit
             );
             // Store the reconstructed endpoint into the packed segment
             // buffer.
@@ -155,7 +182,7 @@ library ShrincsStateful {
 
         // Reject messages whose reconstructed digit sum does not hit the
         // fixed target.
-        if (digitSum != ShrincsTypes.WOTS_TARGET_SUM_STATEFUL) {
+        if (digitSum != ShrincsParams.WOTS_TARGET_SUM_STATEFUL) {
             return (bytes32(0), false);
         }
         // Hash the reconstructed endpoints into the compact stateful WOTS
@@ -281,7 +308,7 @@ library ShrincsStateful {
             bytes32 addressWord = SHRINCSHash.addressWord32(
                 0,
                 0,
-                ShrincsTypes.AddressTypeWotsHash,
+                ShrincsStateful.AddressTypeWotsHash,
                 leafIndex,
                 chainIdx,
                 start + j

@@ -16,13 +16,114 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 pragma solidity ^0.8.28;
 
-import {ShrincsTypes} from "./ShrincsTypes.sol";
+import {ShrincsParams} from "shrincs-profile/ShrincsParams.sol";
 import {ShrincsCodec} from "./ShrincsCodec.sol";
 import {ShrincsStateful} from "./ShrincsStateful.sol";
 import {ShrincsForsC} from "./ShrincsForsC.sol";
 import {ShrincsHypertree} from "./ShrincsHypertree.sol";
 
 library SHRINCS {
+    // Hash-suite identifiers bound into canonical action and rotation hashes.
+    uint32 internal constant HASH_SUITE_KECCAK_256 = 1;
+    // Sentinel for an unsupported hash suite. Referenced only by tests
+    // today; kept as a named constant so fail-closed suite checks and
+    // negative tests have a stable non-keccak identifier.
+    uint32 internal constant HASH_SUITE_UNSUPPORTED = 2;
+    // Operation tags domain-separating each signed message family.
+    bytes32 internal constant OP_VERIFY_STATEFUL =
+        keccak256("shrincs-verify-stateful");
+    bytes32 internal constant OP_VERIFY_STATELESS =
+        keccak256("shrincs-verify-stateless");
+    bytes32 internal constant OP_ROTATE_STATEFUL =
+        keccak256("shrincs-rotate-stateful");
+    bytes32 internal constant OP_ROTATE_FULL =
+        keccak256("shrincs-rotate-full");
+
+    struct PublicKey {
+        // Encoded stateful fast-path public key.
+        bytes statefulPublicKey;
+        // Commitment binding the full hybrid public-key bundle together.
+        bytes publicKeyCommitment;
+        // Stateless SPHINCS-style public seed.
+        bytes pkSeed;
+        // Stateless SPHINCS-style public root.
+        bytes hypertreeRoot;
+    }
+
+    struct SigningKey {
+        // Secret seed used to derive stateful WOTS-C chain secrets.
+        bytes32 statefulSkSeed;
+        // Secret PRF seed used to derive stateful WOTS-C message randomizers.
+        bytes32 statefulPrfSeed;
+        // Public seed used in stateful WOTS-C and stateful tree hashing.
+        bytes32 statefulPkSeed;
+        // Root of the stateful unbalanced tree committed in the public key.
+        bytes32 statefulRoot;
+        // Highest stateful leaf index this key may sign with.
+        uint32 maxStatefulSignatures;
+        // Next monotonic stateful leaf index to consume.
+        uint32 nextStatefulLeafIndex;
+        // Stateless SK.seed-style material used to derive FORS-C and
+        // hypertree WOTS-C secrets.
+        bytes32 statelessSkSeed;
+        // Stateless SK.prf-style material used to derive stateless message
+        // randomizers.
+        bytes32 statelessPrfSeed;
+        // Global public seed used in FORS-C, hypertree WOTS-C, and Merkle
+        // node hashing.
+        bytes32 pkSeed;
+        // Top hypertree root committed in the public key.
+        bytes32 hypertreeRoot;
+    }
+
+    struct StatelessSignature {
+        // Message-signing few-time signature at the bottom of the stateless
+        // path.
+        ShrincsForsC.ForsSignature fors;
+        // Hypertree layers authenticating the FORS root to the public root.
+        ShrincsHypertree.HypertreeLayerSignature[] hypertree;
+    }
+
+    struct StatefulRotationTarget {
+        // Replacement encoded stateful public key.
+        bytes statefulPublicKey;
+        // Commitment that should identify the next installed bundle.
+        bytes publicKeyCommitment;
+    }
+
+    struct RotationContext {
+        // Contract/application domain binding for the rotation intent.
+        bytes32 domainSeparator;
+        // Replay-protection nonce consumed by the wrapper.
+        uint256 nonce;
+        // Installed-key epoch that this rotation authorizes from.
+        uint256 keyVersion;
+    }
+
+    struct ActionContext {
+        // Contract/application domain binding for the action intent.
+        bytes32 domainSeparator;
+        // Replay-protection nonce consumed by the wrapper.
+        uint256 nonce;
+        // Installed-key epoch that this action is valid under.
+        uint256 keyVersion;
+        // Typed action discriminator chosen by the integrating account logic.
+        bytes32 actionType;
+        // Hash of the typed payload authorized by the signature.
+        bytes32 payloadHash;
+    }
+
+    struct RotationTarget {
+        // Replacement encoded stateful public key.
+        bytes statefulPublicKey;
+        // Commitment that should identify the next installed bundle.
+        bytes publicKeyCommitment;
+        // Replacement stateless public seed.
+        bytes pkSeed;
+        // Replacement stateless public root.
+        bytes hypertreeRoot;
+    }
+
     // verifyStateful: Verify a stateful SHRINCS action signature.
     // 1. Validate the typed action context shape.
     // 2. Build the canonical stateful action hash from the installed key
@@ -31,9 +132,9 @@ library SHRINCS {
     // that message hash.
     function verifyStateful(
         bytes32 expectedPublicKeyCommitment,
-        ShrincsTypes.PublicKey calldata publicKey,
-        ShrincsTypes.ActionContext memory context,
-        ShrincsTypes.StatefulSignature calldata signature
+        SHRINCS.PublicKey calldata publicKey,
+        SHRINCS.ActionContext memory context,
+        ShrincsStateful.StatefulSignature calldata signature
     ) internal pure returns (bool) {
         // Reject malformed or unscoped action contexts before hashing them.
         if (!validActionContext(context)) return false;
@@ -57,9 +158,9 @@ library SHRINCS {
     // to the public root.
     function verifyStateless(
         bytes32 expectedPublicKeyCommitment,
-        ShrincsTypes.PublicKey calldata publicKey,
-        ShrincsTypes.ActionContext memory context,
-        ShrincsTypes.StatelessSignature calldata signature
+        SHRINCS.PublicKey calldata publicKey,
+        SHRINCS.ActionContext memory context,
+        SHRINCS.StatelessSignature calldata signature
     ) internal pure returns (bool) {
         // Reject malformed or unscoped action contexts before hashing them.
         if (!validActionContext(context)) return false;
@@ -88,10 +189,10 @@ library SHRINCS {
     // failure.
     function rotateStatefulViaStateless(
         bytes32 expectedPublicKeyCommitment,
-        ShrincsTypes.PublicKey calldata currentPublicKey,
-        ShrincsTypes.RotationContext memory context,
-        ShrincsTypes.StatelessSignature calldata recoverySignature,
-        ShrincsTypes.StatefulRotationTarget calldata nextStatefulKey
+        SHRINCS.PublicKey calldata currentPublicKey,
+        SHRINCS.RotationContext memory context,
+        SHRINCS.StatelessSignature calldata recoverySignature,
+        SHRINCS.StatefulRotationTarget calldata nextStatefulKey
     ) internal pure returns (bytes32 nextPublicKeyCommitment) {
         if (!ShrincsCodec.validPublicKey(currentPublicKey)) {
             return bytes32(0);
@@ -109,17 +210,18 @@ library SHRINCS {
         // key payload.
         if (
             nextStatefulKey.statefulPublicKey.length
-                != ShrincsTypes.STATEFUL_PUBLIC_KEY_BYTES
+                != ShrincsParams.STATEFUL_PUBLIC_KEY_BYTES
         ) return bytes32(0);
         {
             // Decode the fixed-width stateful key to check operational limits
             // such as maxSignatures.
             (
-                ShrincsTypes.StatefulPublicKey memory decodedNextStatefulKey,
+                ShrincsStateful.StatefulPublicKey memory
+                    decodedNextStatefulKey,
                 bool ok
             ) = ShrincsCodec.decodeStatefulPublicKey(
-                nextStatefulKey.statefulPublicKey
-            );
+                    nextStatefulKey.statefulPublicKey
+                );
             if (!ok) return bytes32(0);
             if (decodedNextStatefulKey.maxSignatures == 0) {
                 return bytes32(0);
@@ -193,10 +295,10 @@ library SHRINCS {
     // failure.
     function statelessRotate(
         bytes32 expectedPublicKeyCommitment,
-        ShrincsTypes.PublicKey calldata currentPublicKey,
-        ShrincsTypes.RotationContext memory context,
-        ShrincsTypes.StatelessSignature calldata recoverySignature,
-        ShrincsTypes.RotationTarget calldata nextKey
+        SHRINCS.PublicKey calldata currentPublicKey,
+        SHRINCS.RotationContext memory context,
+        SHRINCS.StatelessSignature calldata recoverySignature,
+        SHRINCS.RotationTarget calldata nextKey
     ) internal pure returns (bytes32 nextPublicKeyCommitment) {
         if (!ShrincsCodec.validPublicKey(currentPublicKey)) {
             return bytes32(0);
@@ -214,7 +316,7 @@ library SHRINCS {
         // commitment, seed, and root fields.
         if (
             nextKey.statefulPublicKey.length
-                != ShrincsTypes.STATEFUL_PUBLIC_KEY_BYTES
+                != ShrincsParams.STATEFUL_PUBLIC_KEY_BYTES
         ) return bytes32(0);
         if (nextKey.publicKeyCommitment.length != 32) return bytes32(0);
         if (nextKey.pkSeed.length != 32) return bytes32(0);
@@ -223,11 +325,12 @@ library SHRINCS {
             // Decode the replacement stateful key to reject unusable
             // zero-budget keys.
             (
-                ShrincsTypes.StatefulPublicKey memory decodedNextStatefulKey,
+                ShrincsStateful.StatefulPublicKey memory
+                    decodedNextStatefulKey,
                 bool ok
             ) = ShrincsCodec.decodeStatefulPublicKey(
-                nextKey.statefulPublicKey
-            );
+                    nextKey.statefulPublicKey
+                );
             if (!ok) return bytes32(0);
             if (decodedNextStatefulKey.maxSignatures == 0) {
                 return bytes32(0);
@@ -290,9 +393,9 @@ library SHRINCS {
     // library.
     function verifyStatefulUncheckedMessage(
         bytes32 expectedPublicKeyCommitment,
-        ShrincsTypes.PublicKey calldata publicKey,
+        SHRINCS.PublicKey calldata publicKey,
         bytes memory message,
-        ShrincsTypes.StatefulSignature calldata signature
+        ShrincsStateful.StatefulSignature calldata signature
     ) internal pure returns (bool) {
         // The component library owns the stateful WOTS-C and unbalanced-tree
         // verification rules.
@@ -309,15 +412,15 @@ library SHRINCS {
     // 4. Bind the account-layer action context fields.
     function statefulActionMessageHash(
         bytes32 expectedPublicKeyCommitment,
-        ShrincsTypes.ActionContext memory context
+        SHRINCS.ActionContext memory context
     ) internal pure returns (bytes32) {
         // The canonical hash binds an operation tag, hash suite, installed
         // key commitment, and the account-layer action context so signatures
         // cannot be replayed across operation families or account epochs.
         return keccak256(
             abi.encodePacked(
-                ShrincsTypes.OP_VERIFY_STATEFUL,
-                ShrincsTypes.HASH_SUITE_KECCAK_256,
+                SHRINCS.OP_VERIFY_STATEFUL,
+                SHRINCS.HASH_SUITE_KECCAK_256,
                 expectedPublicKeyCommitment,
                 context.domainSeparator,
                 context.nonce,
@@ -336,15 +439,15 @@ library SHRINCS {
     // 4. Bind the account-layer action context fields.
     function statelessActionMessageHash(
         bytes32 expectedPublicKeyCommitment,
-        ShrincsTypes.ActionContext memory context
+        SHRINCS.ActionContext memory context
     ) internal pure returns (bytes32) {
         // The canonical hash binds an operation tag, hash suite, installed
         // key commitment, and the account-layer action context for the
         // stateless path.
         return keccak256(
             abi.encodePacked(
-                ShrincsTypes.OP_VERIFY_STATELESS,
-                ShrincsTypes.HASH_SUITE_KECCAK_256,
+                SHRINCS.OP_VERIFY_STATELESS,
+                SHRINCS.HASH_SUITE_KECCAK_256,
                 expectedPublicKeyCommitment,
                 context.domainSeparator,
                 context.nonce,
@@ -364,17 +467,17 @@ library SHRINCS {
     // 5. Bind the current and next bundle commitments.
     function statefulRotationMessageHash(
         bytes32 expectedPublicKeyCommitment,
-        ShrincsTypes.PublicKey calldata currentPublicKey,
-        ShrincsTypes.RotationContext memory context,
-        ShrincsTypes.StatefulRotationTarget calldata nextStatefulKey
+        SHRINCS.PublicKey calldata currentPublicKey,
+        SHRINCS.RotationContext memory context,
+        SHRINCS.StatefulRotationTarget calldata nextStatefulKey
     ) internal pure returns (bytes32) {
         // The canonical stateful-rotation hash binds an operation tag, hash
         // suite, installed key commitment, rotation context, and both the
         // current and next bundle ids.
         return keccak256(
             abi.encodePacked(
-                ShrincsTypes.OP_ROTATE_STATEFUL,
-                ShrincsTypes.HASH_SUITE_KECCAK_256,
+                SHRINCS.OP_ROTATE_STATEFUL,
+                SHRINCS.HASH_SUITE_KECCAK_256,
                 expectedPublicKeyCommitment,
                 context.domainSeparator,
                 context.nonce,
@@ -394,17 +497,17 @@ library SHRINCS {
     // 5. Bind the current and next bundle commitments.
     function fullRotationMessageHash(
         bytes32 expectedPublicKeyCommitment,
-        ShrincsTypes.PublicKey calldata currentPublicKey,
-        ShrincsTypes.RotationContext memory context,
-        ShrincsTypes.RotationTarget calldata nextKey
+        SHRINCS.PublicKey calldata currentPublicKey,
+        SHRINCS.RotationContext memory context,
+        SHRINCS.RotationTarget calldata nextKey
     ) internal pure returns (bytes32) {
         // The canonical full-rotation hash binds an operation tag, hash
         // suite, installed key commitment, rotation context, and both the
         // current and next bundle ids.
         return keccak256(
             abi.encodePacked(
-                ShrincsTypes.OP_ROTATE_FULL,
-                ShrincsTypes.HASH_SUITE_KECCAK_256,
+                SHRINCS.OP_ROTATE_FULL,
+                SHRINCS.HASH_SUITE_KECCAK_256,
                 expectedPublicKeyCommitment,
                 context.domainSeparator,
                 context.nonce,
@@ -423,9 +526,9 @@ library SHRINCS {
     // 3. Carry that root up the hypertree and compare it to the public root.
     function verifyStatelessUncheckedMessage(
         bytes32 expectedPublicKeyCommitment,
-        ShrincsTypes.PublicKey calldata publicKey,
+        SHRINCS.PublicKey calldata publicKey,
         bytes memory message,
-        ShrincsTypes.StatelessSignature calldata signature
+        SHRINCS.StatelessSignature calldata signature
     ) internal pure returns (bool) {
         // The current public key must match the installed bundle commitment
         // expected by the caller.
@@ -460,7 +563,7 @@ library SHRINCS {
     // 1. Require a nonzero domain separator.
     // 2. Require a nonzero action type.
     // 3. Require a nonzero payload hash.
-    function validActionContext(ShrincsTypes.ActionContext memory context)
+    function validActionContext(SHRINCS.ActionContext memory context)
         internal
         pure
         returns (bool)
@@ -476,9 +579,11 @@ library SHRINCS {
     // validRotationContext: Perform lightweight structural checks for
     // canonical rotation contexts.
     // 1. Require a nonzero domain separator.
-    function validRotationContext(
-        ShrincsTypes.RotationContext memory context
-    ) internal pure returns (bool) {
+    function validRotationContext(SHRINCS.RotationContext memory context)
+        internal
+        pure
+        returns (bool)
+    {
         return context.domainSeparator != bytes32(0);
     }
 }

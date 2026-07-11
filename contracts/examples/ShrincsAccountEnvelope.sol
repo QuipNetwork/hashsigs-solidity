@@ -22,8 +22,8 @@ pragma solidity ^0.8.28;
 /// re-materializes the whole thing (~491k gas). This library instead walks
 /// the ABI framing in place over calldata and proves the input is the
 /// canonical encoding without ever re-encoding it. Integrators copy the
-/// example wrapper; keep this walk readable and auditable against
-/// ShrincsTypes.
+/// example wrapper; keep this walk readable and auditable against the
+/// SHRINCS struct definitions.
 library ShrincsAccountEnvelope {
     /// @notice True iff `payload` is the canonical ABI encoding of a
     /// stateless action envelope `abi.encode(PublicKey, bytes32, bytes32,
