@@ -30,6 +30,9 @@ library ShrincsTypes {
     uint32 internal constant AddressTypeWotsHash = 0;
     uint32 internal constant AddressTypeTree = 2;
     uint32 internal constant AddressTypeForsTree = 3;
+    uint32 internal constant AddressTypeForsRoots = 4;
+    uint32 internal constant AddressTypeForsPrf = 6;
+    uint32 internal constant AddressTypeJardinMerkle = 16;
 
     // Encoded stateful public key layout:
     // 32-byte pkSeed || 32-byte root || 4-byte maxSignatures.
@@ -50,6 +53,12 @@ library ShrincsTypes {
     uint8 internal constant NUM_FORS_TREES = 22;
     uint16 internal constant WOTS_CHAIN_LEN = 16;
     uint16 internal constant NUM_WOTS_CHAINS = 64;
+    // JARDIN-style compact FORS-C parameters for the Type 2 path.
+    uint8 internal constant COMPACT_FORS_TREE_HEIGHT = 5;
+    uint8 internal constant COMPACT_NUM_FORS_TREES = 52;
+    uint8 internal constant COMPACT_OPEN_FORS_TREES = 51;
+    uint8 internal constant COMPACT_MERKLE_HEIGHT = 7;
+    uint8 internal constant COMPACT_Q_MAX = 128;
 
     struct ForsDigest {
         // Hypertree subtree selected for this stateless signature.
