@@ -76,6 +76,33 @@ contract StatelessHarness {
     }
 }
 
+contract CompactHarness {
+    function verify(
+        bytes32 subPkSeed,
+        bytes32 subPkRoot,
+        ShrincsTypes.ActionContext calldata context,
+        bytes calldata signature
+    ) external pure returns (bool) {
+        return SHRINCS.verifyCompact(subPkSeed, subPkRoot, context, signature);
+    }
+
+    function verifyUnsafeRaw(bytes32 subPkSeed, bytes32 subPkRoot, bytes32 message, bytes calldata signature)
+        external
+        pure
+        returns (bool)
+    {
+        return SHRINCS.verifyCompactUncheckedMessage(subPkSeed, subPkRoot, message, signature);
+    }
+
+    function actionMessageHash(ShrincsTypes.ActionContext calldata context) external pure returns (bytes32) {
+        return SHRINCS.compactActionMessageHash(context);
+    }
+
+    function slotId(bytes32 subPkSeed, bytes32 subPkRoot) external pure returns (bytes32) {
+        return SHRINCS.compactSlotId(subPkSeed, subPkRoot);
+    }
+}
+
 contract RotationHarness {
     function statefulRotationMessageHash(
         bytes32 expectedCompositePublicKey,
@@ -124,6 +151,7 @@ contract RotationHarness {
 
 contract ShrincsSphincs256sVectorsTest is Test {
     string internal constant VECTOR_PATH = "test/test_vectors/shrincs_sphincs_256s_keccak.json";
+    uint256 internal constant COMPACT_SIGNATURE_BYTES = 10053;
 
     struct LegacyStatefulPublicKey {
         bytes32 pkSeed;
@@ -176,12 +204,14 @@ contract ShrincsSphincs256sVectorsTest is Test {
 
     StatefulHarness internal stateful;
     StatelessHarness internal stateless;
+    CompactHarness internal compact;
     RotationHarness internal rotation;
     string internal vectors;
 
     function setUp() public {
         stateful = new StatefulHarness();
         stateless = new StatelessHarness();
+        compact = new CompactHarness();
         rotation = new RotationHarness();
         vectors = vm.readFile(VECTOR_PATH);
     }
@@ -819,6 +849,94 @@ contract ShrincsSphincs256sVectorsTest is Test {
                 != stateless.actionMessageHash(expectedCompositePublicKey, second),
             "stateless action hash must bind nonce"
         );
+    }
+
+    function testCompactSlotIdMatchesJardinMappingKey() public view {
+        bytes32 subPkSeed = keccak256("compact seed");
+        bytes32 subPkRoot = keccak256("compact root");
+
+        assertEq(
+            compact.slotId(subPkSeed, subPkRoot),
+            keccak256(abi.encodePacked(subPkSeed, subPkRoot)),
+            "compact slot id must match JARDIN mapping key"
+        );
+    }
+
+    function testCompactActionMessageHashMatchesPackedEncoding() public view {
+        ShrincsTypes.ActionContext memory context = ShrincsTypes.ActionContext({
+            domainSeparator: keccak256("shrincs-account"),
+            nonce: 12,
+            keyVersion: 5,
+            actionType: keccak256("execute"),
+            payloadHash: keccak256("payload")
+        });
+        bytes32 expected = keccak256(
+            abi.encodePacked(
+                ShrincsTypes.OP_VERIFY_COMPACT,
+                ShrincsTypes.HASH_SUITE_KECCAK_256,
+                context.domainSeparator,
+                context.nonce,
+                context.keyVersion,
+                context.actionType,
+                context.payloadHash
+            )
+        );
+
+        assertEq(compact.actionMessageHash(context), expected, "compact action hash packed encoding");
+    }
+
+    function testCompactActionMessageHashBindsContext() public view {
+        ShrincsTypes.ActionContext memory first = ShrincsTypes.ActionContext({
+            domainSeparator: keccak256("shrincs-account"),
+            nonce: 12,
+            keyVersion: 5,
+            actionType: keccak256("execute"),
+            payloadHash: keccak256("payload-a")
+        });
+        ShrincsTypes.ActionContext memory second = ShrincsTypes.ActionContext({
+            domainSeparator: first.domainSeparator,
+            nonce: first.nonce,
+            keyVersion: first.keyVersion,
+            actionType: first.actionType,
+            payloadHash: keccak256("payload-b")
+        });
+
+        assertTrue(
+            compact.actionMessageHash(first) != compact.actionMessageHash(second),
+            "compact action hash must bind payload"
+        );
+    }
+
+    function testCompactVerifyRejectsMalformedRawSignature() public view {
+        bytes32 subPkSeed = keccak256("compact seed");
+        bytes32 subPkRoot = keccak256("compact root");
+        bytes memory malformedSignature = new bytes(COMPACT_SIGNATURE_BYTES - 1);
+        ShrincsTypes.ActionContext memory context = ShrincsTypes.ActionContext({
+            domainSeparator: keccak256("shrincs-account"),
+            nonce: 1,
+            keyVersion: 1,
+            actionType: keccak256("execute"),
+            payloadHash: keccak256("payload")
+        });
+
+        assertEq(
+            compact.verify(subPkSeed, subPkRoot, context, malformedSignature), false, "compact malformed raw signature"
+        );
+    }
+
+    function testCompactVerifyRejectsZeroDomainSeparator() public view {
+        bytes32 subPkSeed = keccak256("compact seed");
+        bytes32 subPkRoot = keccak256("compact root");
+        bytes memory signature = new bytes(COMPACT_SIGNATURE_BYTES);
+        ShrincsTypes.ActionContext memory context = ShrincsTypes.ActionContext({
+            domainSeparator: bytes32(0),
+            nonce: 1,
+            keyVersion: 1,
+            actionType: keccak256("execute"),
+            payloadHash: keccak256("payload")
+        });
+
+        assertEq(compact.verify(subPkSeed, subPkRoot, context, signature), false, "compact zero domain separator");
     }
 
     function testStatelessVerifyRejectsZeroDomainSeparator() public {

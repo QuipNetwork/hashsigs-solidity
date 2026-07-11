@@ -19,6 +19,7 @@ pragma solidity ^0.8.28;
 import {ShrincsTypes} from "./ShrincsTypes.sol";
 import {ShrincsUtils} from "./ShrincsUtils.sol";
 import {ShrincsStateful} from "./ShrincsStateful.sol";
+import {ShrincsCompact} from "./ShrincsCompact.sol";
 import {ShrincsForsC} from "./ShrincsForsC.sol";
 import {ShrincsHypertree} from "./ShrincsHypertree.sol";
 
@@ -59,6 +60,24 @@ library SHRINCS {
         bytes memory message = abi.encodePacked(statelessActionMessageHash(expectedPublicKeyCommitment, context));
         // Delegate FORS-C plus hypertree verification to the lower-level helper.
         return verifyStatelessUncheckedMessage(expectedPublicKeyCommitment, publicKey, message, signature);
+    }
+
+    // verifyCompact: Verify a JARDIN-style compact Type 2 action signature.
+    // 1. Validate the typed action context shape.
+    // 2. Build the canonical compact action hash from the account action context.
+    // 3. Verify the raw compact FORS-C signature and balanced Merkle path.
+    function verifyCompact(
+        bytes32 subPkSeed,
+        bytes32 subPkRoot,
+        ShrincsTypes.ActionContext memory context,
+        bytes calldata signature
+    ) internal pure returns (bool) {
+        // Reject malformed or unscoped action contexts before hashing them.
+        if (!ShrincsUtils.validActionContext(context)) return false;
+        // Build the canonical compact action hash. Slot authorization is an account-layer check.
+        bytes32 message = compactActionMessageHash(context);
+        // Delegate the JARDIN/FIPS raw compact signature equation to ShrincsCompact.
+        return verifyCompactUncheckedMessage(subPkSeed, subPkRoot, message, signature);
     }
 
     // rotateStatefulViaStateless: Authorize replacing only the stateful subkey via a stateless recovery signature.
@@ -193,6 +212,19 @@ library SHRINCS {
             ShrincsStateful.verifyStatefulUncheckedMessage(expectedPublicKeyCommitment, publicKey, message, signature);
     }
 
+    // verifyCompactUncheckedMessage: Verify a compact signature over an already-built message hash.
+    // 1. Treat the supplied bytes32 as the final account/action message hash.
+    // 2. Delegate raw JARDIN Type 2 verification to the compact component library.
+    function verifyCompactUncheckedMessage(
+        bytes32 subPkSeed,
+        bytes32 subPkRoot,
+        bytes32 message,
+        bytes calldata signature
+    ) internal pure returns (bool) {
+        // The component library owns raw FORS-C and balanced Merkle verification.
+        return ShrincsCompact.verifyCompactRaw(subPkSeed, subPkRoot, message, signature);
+    }
+
     // statefulActionMessageHash: Build the canonical stateful action message hash.
     // 1. Bind the stateful operation tag.
     // 2. Bind the hash suite.
@@ -218,6 +250,51 @@ library SHRINCS {
                 context.payloadHash
             )
         );
+    }
+
+    // compactActionMessageHash: Build the canonical compact Type 2 action message hash.
+    // Preimage:
+    //   OP_VERIFY_COMPACT32 || HASH_SUITE_KECCAK_2564 ||
+    //   domainSeparator32 || nonce32 || keyVersion32 || actionType32 || payloadHash32.
+    // The compact verifier then uses this 32-byte result as JARDIN message32 inside:
+    //   H_msg(R32, subPkSeed32, subPkRoot32, counter4 || TYPE2 || subPkSeed32 || subPkRoot32 || q1 || message32).
+    // 1. Bind the compact operation tag.
+    // 2. Bind the hash suite.
+    // 3. Bind the account-layer action context fields.
+    function compactActionMessageHash(ShrincsTypes.ActionContext memory context) internal pure returns (bytes32 out) {
+        // Cache constants so the assembly preimage stays close to abi.encodePacked semantics.
+        bytes32 op = ShrincsTypes.OP_VERIFY_COMPACT;
+        uint32 suite = ShrincsTypes.HASH_SUITE_KECCAK_256;
+        assembly {
+            // Allocate one fixed-size hash preimage.
+            let ptr := mload(0x40)
+            // OP_VERIFY_COMPACT.
+            mstore(ptr, op)
+            // HASH_SUITE_KECCAK_256 as uint32 in abi.encodePacked form.
+            mstore(add(ptr, 32), shl(224, suite))
+            // Copy domainSeparator32 || nonce32 || keyVersion32 || actionType32 || payloadHash32.
+            mcopy(add(ptr, 36), context, 160)
+            // Hash the exact packed preimage length.
+            out := keccak256(ptr, 196)
+            // Bump free memory past the rounded preimage.
+            mstore(0x40, add(ptr, 224))
+        }
+    }
+
+    // compactSlotId: Build the JARDIN compact-slot mapping key.
+    // Preimage: subPkSeed32 || subPkRoot32.
+    // slotId = keccak256(subPkSeed32 || subPkRoot32).
+    function compactSlotId(bytes32 subPkSeed, bytes32 subPkRoot) internal pure returns (bytes32 out) {
+        assembly {
+            // Use transient free-memory scratch for the two-word slot key.
+            let ptr := mload(0x40)
+            // Store subPkSeed.
+            mstore(ptr, subPkSeed)
+            // Store subPkRoot.
+            mstore(add(ptr, 32), subPkRoot)
+            // Hash the packed slot key.
+            out := keccak256(ptr, 64)
+        }
     }
 
     // statelessActionMessageHash: Build the canonical stateless action message hash.

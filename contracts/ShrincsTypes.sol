@@ -23,6 +23,7 @@ library ShrincsTypes {
     // Operation tags domain-separating each signed message family.
     bytes32 internal constant OP_VERIFY_STATEFUL = keccak256("shrincs-verify-stateful");
     bytes32 internal constant OP_VERIFY_STATELESS = keccak256("shrincs-verify-stateless");
+    bytes32 internal constant OP_VERIFY_COMPACT = keccak256("shrincs-verify-compact");
     bytes32 internal constant OP_ROTATE_STATEFUL = keccak256("shrincs-rotate-stateful");
     bytes32 internal constant OP_ROTATE_FULL = keccak256("shrincs-rotate-full");
 
