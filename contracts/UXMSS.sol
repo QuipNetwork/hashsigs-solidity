@@ -20,7 +20,11 @@ import {ShrincsParams} from "shrincs-profile/ShrincsParams.sol";
 import {SHRINCSHash} from "./SHRINCSHash.sol";
 import {WOTSPlusC} from "./WOTSPlusC.sol";
 
-library ShrincsStateful {
+/// @title UXMSS
+/// @notice Unbalanced-XMSS stateful component ([SHRINCS App. B.3]): compact
+/// WOTS-C digit reconstruction and unbalanced authentication-path
+/// verification. Uses the `uxmss-*` keyed-hash tag family.
+library UXMSS {
     // Address-type words for the SPHINCS-style keyed hash inputs. These
     // are the ADRS type constants [FIPS205 §4.2]: WOTS+ hash (0), tree
     // (2), and FORS tree (3).
@@ -62,7 +66,7 @@ library ShrincsStateful {
         bytes32 root,
         uint32 maxSignatures,
         bytes memory message,
-        ShrincsStateful.StatefulSignature calldata signature
+        UXMSS.StatefulSignature calldata signature
     ) internal pure returns (bool) {
         // In this unbalanced stateful tree, the leaf index is encoded by
         // auth-path length.
@@ -110,7 +114,7 @@ library ShrincsStateful {
         bytes32 pkSeed,
         uint32 leafIndex,
         bytes memory message,
-        ShrincsStateful.StatefulSignature calldata signature
+        UXMSS.StatefulSignature calldata signature
     ) internal pure returns (bytes32 pkHash, bool ok) {
         // Bind the stateful WOTS-C digest to the seed, leaf, randomizer,
         // counter, and signed message.

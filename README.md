@@ -67,7 +67,7 @@ Main contracts:
   - shared structs and compile-time constants
 - [contracts/ShrincsUtils.sol](./contracts/ShrincsUtils.sol)
   - shared public-key checks, bit reads, and address packing helpers
-- [contracts/ShrincsStateful.sol](./contracts/ShrincsStateful.sol)
+- [contracts/UXMSS.sol](./contracts/UXMSS.sol)
   - stateful `WOTS-C` reconstruction and unbalanced XMSS-style path
     verification
 - [contracts/ShrincsForsC.sol](./contracts/ShrincsForsC.sol)
@@ -133,7 +133,7 @@ graph TD
     end
 
     subgraph "Crypto component libraries"
-        ST["ShrincsStateful.sol<br/>compact WOTS-C digits +<br/>unbalanced-XMSS auth path<br/>(cheap normal-case path)"]
+        ST["UXMSS.sol<br/>compact WOTS-C digits +<br/>unbalanced-XMSS auth path<br/>(cheap normal-case path)"]
         FO["ShrincsForsC.sol<br/>FORS-C digest, grind checks,<br/>k−1 tree-root rebuild -> forsRoot"]
         HY["ShrincsHypertree.sol<br/>d=8 XMSS layers, stateless WOTS-C,<br/>Merkle paths -> hypertreeRoot"]
     end

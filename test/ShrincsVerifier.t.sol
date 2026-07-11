@@ -22,7 +22,7 @@ import {
 } from "../contracts/interfaces/IERC7913SignatureVerifier.sol";
 import {ShrincsCodec} from "../contracts/ShrincsCodec.sol";
 import {SHRINCS} from "../contracts/SHRINCS.sol";
-import {ShrincsStateful} from "../contracts/ShrincsStateful.sol";
+import {UXMSS} from "../contracts/UXMSS.sol";
 import {ShrincsVerifier} from "../contracts/ShrincsVerifier.sol";
 import {ShrincsTestSigner} from "./helpers/ShrincsTestSigner.sol";
 
@@ -63,15 +63,11 @@ contract ShrincsVerifierTest is Test {
         signedHash = keccak256("shrincs erc7913 stateful verifier vector");
         bytes memory message = abi.encodePacked(signedHash);
 
-        (
-            ShrincsStateful.StatefulSignature memory leafOneSignature,
-            bool leafOneOk
-        ) = ShrincsTestSigner.signStatefulRawAtLeaf(signingKey, 1, message);
+        (UXMSS.StatefulSignature memory leafOneSignature, bool leafOneOk) =
+            ShrincsTestSigner.signStatefulRawAtLeaf(signingKey, 1, message);
         assertTrue(leafOneOk, "leaf-1 signing must succeed");
-        (
-            ShrincsStateful.StatefulSignature memory leafTwoSignature,
-            bool leafTwoOk
-        ) = ShrincsTestSigner.signStatefulRawAtLeaf(signingKey, 2, message);
+        (UXMSS.StatefulSignature memory leafTwoSignature, bool leafTwoOk) =
+            ShrincsTestSigner.signStatefulRawAtLeaf(signingKey, 2, message);
         assertTrue(leafTwoOk, "leaf-2 signing must succeed");
 
         // The ERC-7913 key is the 32-byte bundle commitment word.
@@ -98,12 +94,11 @@ contract ShrincsVerifierTest is Test {
         view
         returns (
             SHRINCS.PublicKey memory publicKey,
-            ShrincsStateful.StatefulSignature memory signature
+            UXMSS.StatefulSignature memory signature
         )
     {
         return abi.decode(
-            validEnvelope,
-            (SHRINCS.PublicKey, ShrincsStateful.StatefulSignature)
+            validEnvelope, (SHRINCS.PublicKey, UXMSS.StatefulSignature)
         );
     }
 
@@ -179,7 +174,7 @@ contract ShrincsVerifierTest is Test {
     function testRejectsTamperedChainValue() public view {
         (
             SHRINCS.PublicKey memory publicKey,
-            ShrincsStateful.StatefulSignature memory signature
+            UXMSS.StatefulSignature memory signature
         ) = decodeStoredEnvelope();
         signature.chains[0] = bytes32(uint256(signature.chains[0]) ^ 1);
         bytes memory envelope =
@@ -194,7 +189,7 @@ contract ShrincsVerifierTest is Test {
     function testRejectsTamperedAuthPath() public view {
         (
             SHRINCS.PublicKey memory publicKey,
-            ShrincsStateful.StatefulSignature memory signature
+            UXMSS.StatefulSignature memory signature
         ) = decodeStoredEnvelope();
         signature.authPath[0] = bytes32(uint256(signature.authPath[0]) ^ 1);
         bytes memory envelope =
@@ -247,7 +242,7 @@ contract ShrincsVerifierTest is Test {
         // that commitment.
         (
             SHRINCS.PublicKey memory publicKey,
-            ShrincsStateful.StatefulSignature memory signature
+            UXMSS.StatefulSignature memory signature
         ) = decodeStoredEnvelope();
         bytes32 fakeCommitment = keccak256("mismatched bundle commitment");
         publicKey.publicKeyCommitment = abi.encodePacked(fakeCommitment);
@@ -270,7 +265,7 @@ contract ShrincsVerifierTest is Test {
     function testCheckDecodedRejectsNonSelfCaller() public {
         (
             SHRINCS.PublicKey memory publicKey,
-            ShrincsStateful.StatefulSignature memory signature
+            UXMSS.StatefulSignature memory signature
         ) = decodeStoredEnvelope();
         vm.expectRevert(bytes("only self"));
         verifier.checkDecoded(

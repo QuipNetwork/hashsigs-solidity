@@ -21,7 +21,7 @@ import {
 } from "./interfaces/IERC7913SignatureVerifier.sol";
 import {SHRINCS} from "./SHRINCS.sol";
 import {ShrincsCodec} from "./ShrincsCodec.sol";
-import {ShrincsStateful} from "./ShrincsStateful.sol";
+import {UXMSS} from "./UXMSS.sol";
 
 /// @title ShrincsVerifier
 /// @notice ERC-7913 signature verifier for stateful SHRINCS signatures.
@@ -104,7 +104,7 @@ abstract contract ShrincsVerifier is IERC7913SignatureVerifier {
     ) external view onlySelf returns (bool) {
         (
             SHRINCS.PublicKey memory publicKey,
-            ShrincsStateful.StatefulSignature memory signature
+            UXMSS.StatefulSignature memory signature
         ) = ShrincsCodec.decodeStatefulEnvelope(envelope);
 
         return this.checkDecoded(commitment, hash, publicKey, signature);
@@ -127,7 +127,7 @@ abstract contract ShrincsVerifier is IERC7913SignatureVerifier {
         bytes32 commitment,
         bytes32 hash,
         SHRINCS.PublicKey calldata publicKey,
-        ShrincsStateful.StatefulSignature calldata signature
+        UXMSS.StatefulSignature calldata signature
     ) external view onlySelf returns (bool) {
         return SHRINCS.verifyStatefulUncheckedMessage(
             commitment, publicKey, ShrincsCodec.toMessage(hash), signature

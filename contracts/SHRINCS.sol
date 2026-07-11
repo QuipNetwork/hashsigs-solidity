@@ -18,7 +18,7 @@ pragma solidity ^0.8.28;
 
 import {ShrincsParams} from "shrincs-profile/ShrincsParams.sol";
 import {ShrincsCodec} from "./ShrincsCodec.sol";
-import {ShrincsStateful} from "./ShrincsStateful.sol";
+import {UXMSS} from "./UXMSS.sol";
 import {SPHINCSPlusCCore} from "./SPHINCSPlusCCore.sol";
 
 library SHRINCS {
@@ -125,7 +125,7 @@ library SHRINCS {
         bytes32 expectedPublicKeyCommitment,
         SHRINCS.PublicKey calldata publicKey,
         SHRINCS.ActionContext memory context,
-        ShrincsStateful.StatefulSignature calldata signature
+        UXMSS.StatefulSignature calldata signature
     ) internal pure returns (bool) {
         // Reject malformed or unscoped action contexts before hashing them.
         if (!validActionContext(context)) return false;
@@ -207,12 +207,11 @@ library SHRINCS {
             // Decode the fixed-width stateful key to check operational limits
             // such as maxSignatures.
             (
-                ShrincsStateful.StatefulPublicKey memory
-                    decodedNextStatefulKey,
+                UXMSS.StatefulPublicKey memory decodedNextStatefulKey,
                 bool ok
             ) = ShrincsCodec.decodeStatefulPublicKey(
-                    nextStatefulKey.statefulPublicKey
-                );
+                nextStatefulKey.statefulPublicKey
+            );
             if (!ok) return bytes32(0);
             if (decodedNextStatefulKey.maxSignatures == 0) {
                 return bytes32(0);
@@ -316,12 +315,11 @@ library SHRINCS {
             // Decode the replacement stateful key to reject unusable
             // zero-budget keys.
             (
-                ShrincsStateful.StatefulPublicKey memory
-                    decodedNextStatefulKey,
+                UXMSS.StatefulPublicKey memory decodedNextStatefulKey,
                 bool ok
             ) = ShrincsCodec.decodeStatefulPublicKey(
-                    nextKey.statefulPublicKey
-                );
+                nextKey.statefulPublicKey
+            );
             if (!ok) return bytes32(0);
             if (decodedNextStatefulKey.maxSignatures == 0) {
                 return bytes32(0);
@@ -390,7 +388,7 @@ library SHRINCS {
         bytes32 expectedPublicKeyCommitment,
         SHRINCS.PublicKey calldata publicKey,
         bytes memory message,
-        ShrincsStateful.StatefulSignature calldata signature
+        UXMSS.StatefulSignature calldata signature
     ) internal pure returns (bool) {
         // The public key must satisfy the compiled fixed key shape.
         if (!ShrincsCodec.validPublicKey(publicKey)) return false;
@@ -401,13 +399,13 @@ library SHRINCS {
             )) return false;
         // Decode the compact stateful public key fields from the public
         // bundle.
-        (ShrincsStateful.StatefulPublicKey memory statefulKey, bool ok) =
+        (UXMSS.StatefulPublicKey memory statefulKey, bool ok) =
             ShrincsCodec.decodeStatefulPublicKey(publicKey.statefulPublicKey);
         if (!ok) return false;
 
         // The component library owns the stateful WOTS-C and unbalanced-tree
         // verification rules.
-        return ShrincsStateful.verify(
+        return UXMSS.verify(
             statefulKey.pkSeed,
             statefulKey.root,
             statefulKey.maxSignatures,

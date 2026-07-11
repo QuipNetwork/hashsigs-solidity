@@ -17,7 +17,7 @@
 pragma solidity ^0.8.28;
 
 import {SHRINCS} from "../../contracts/SHRINCS.sol";
-import {ShrincsStateful} from "../../contracts/ShrincsStateful.sol";
+import {UXMSS} from "../../contracts/UXMSS.sol";
 import {ShrincsParams} from "shrincs-profile/ShrincsParams.sol";
 import {
     ShrincsAccountVerifierExample
@@ -34,7 +34,7 @@ contract MedusaAccountHarness is ShrincsAccountVerifierExample {
     function verifyStatefulUncheckedForTest(
         SHRINCS.PublicKey calldata publicKey,
         bytes calldata message,
-        ShrincsStateful.StatefulSignature calldata signature
+        UXMSS.StatefulSignature calldata signature
     ) external returns (bool) {
         return verifyStatefulUncheckedMessage(publicKey, message, signature);
     }
@@ -69,8 +69,7 @@ contract ShrincsMedusaHarness {
 
     MedusaAccountHarness internal account;
     SHRINCS.PublicKey internal publicKey;
-    mapping(uint32 => ShrincsStateful.StatefulSignature) internal
-        signatureOf;
+    mapping(uint32 => UXMSS.StatefulSignature) internal signatureOf;
 
     bool internal purityViolated;
     bool internal mutationAccepted;
@@ -85,7 +84,7 @@ contract ShrincsMedusaHarness {
             ShrincsTestSigner.keygen(bytes("shrincs-medusa-key"), MAX_LEAF);
         require(keygenOk, "medusa keygen");
         for (uint32 leaf = 1; leaf <= MAX_LEAF; leaf++) {
-            ShrincsStateful.StatefulSignature memory signature;
+            UXMSS.StatefulSignature memory signature;
             bool signOk;
             (signature, signOk) = ShrincsTestSigner.signStatefulRawAtLeaf(
                 signingKey, leaf, abi.encodePacked(FIXED_MESSAGE)
@@ -119,8 +118,7 @@ contract ShrincsMedusaHarness {
         // leafSelector % MAX_LEAF is < MAX_LEAF, so the cast cannot truncate
         // forge-lint: disable-next-line(unsafe-typecast)
         uint32 leaf = uint32(1 + (leafSelector % MAX_LEAF));
-        ShrincsStateful.StatefulSignature memory signature =
-            signatureOf[leaf];
+        UXMSS.StatefulSignature memory signature = signatureOf[leaf];
         signature.chains[0] =
             bytes32(uint256(signature.chains[0]) ^ (uint256(flip) | 1));
         bytes32 digestBefore = _stateDigest();

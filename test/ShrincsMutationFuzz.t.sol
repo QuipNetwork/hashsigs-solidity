@@ -22,7 +22,7 @@ import {
 } from "../contracts/interfaces/IERC7913SignatureVerifier.sol";
 import {SHRINCS} from "../contracts/SHRINCS.sol";
 import {ShrincsCodec} from "../contracts/ShrincsCodec.sol";
-import {ShrincsStateful} from "../contracts/ShrincsStateful.sol";
+import {UXMSS} from "../contracts/UXMSS.sol";
 import {ShrincsVerifier} from "../contracts/ShrincsVerifier.sol";
 import {
     ShrincsAccountVerifierExample
@@ -135,10 +135,9 @@ contract ShrincsMutationFuzzTest is Test {
     ) public view {
         (
             SHRINCS.PublicKey memory publicKey,
-            ShrincsStateful.StatefulSignature memory signature
+            UXMSS.StatefulSignature memory signature
         ) = abi.decode(
-            rawEnvelope,
-            (SHRINCS.PublicKey, ShrincsStateful.StatefulSignature)
+            rawEnvelope, (SHRINCS.PublicKey, UXMSS.StatefulSignature)
         );
         uint256 index = bound(chainSelector, 0, signature.chains.length - 1);
         signature.chains[index] =
@@ -156,10 +155,9 @@ contract ShrincsMutationFuzzTest is Test {
     function testFuzz_rawCounterMutationRejected(uint32 delta) public view {
         (
             SHRINCS.PublicKey memory publicKey,
-            ShrincsStateful.StatefulSignature memory signature
+            UXMSS.StatefulSignature memory signature
         ) = abi.decode(
-            rawEnvelope,
-            (SHRINCS.PublicKey, ShrincsStateful.StatefulSignature)
+            rawEnvelope, (SHRINCS.PublicKey, UXMSS.StatefulSignature)
         );
         uint32 bump = delta == 0 ? 1 : delta;
         // XOR flips at least one counter bit without overflowing uint32.
@@ -184,7 +182,7 @@ contract ShrincsMutationFuzzTest is Test {
         (
             ,
             SHRINCS.ActionContext memory context,
-            ShrincsStateful.StatefulSignature memory signature,
+            UXMSS.StatefulSignature memory signature,
             bool ok
         ) = ShrincsAccountSigningFacade.signStatefulActionNow(
             account, signingKey, actionType, payloadHash
@@ -207,7 +205,7 @@ contract ShrincsMutationFuzzTest is Test {
         bytes32 commitment
     ) internal {
         rawHash = keccak256("shrincs mutation raw vector");
-        ShrincsStateful.StatefulSignature memory signature;
+        UXMSS.StatefulSignature memory signature;
         bool ok;
         (signature, ok) = ShrincsTestSigner.signStatefulRawAtLeaf(
             signingKey, 1, abi.encodePacked(rawHash)

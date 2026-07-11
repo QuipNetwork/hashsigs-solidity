@@ -18,7 +18,7 @@ pragma solidity ^0.8.28;
 
 import {SHRINCS} from "../SHRINCS.sol";
 import {SPHINCSPlusCCore} from "../SPHINCSPlusCCore.sol";
-import {ShrincsStateful} from "../ShrincsStateful.sol";
+import {UXMSS} from "../UXMSS.sol";
 import {ShrincsParams} from "shrincs-profile/ShrincsParams.sol";
 import {ShrincsAccountEnvelope} from "./ShrincsAccountEnvelope.sol";
 
@@ -188,15 +188,10 @@ contract ShrincsAccountVerifierExample {
             SHRINCS.PublicKey memory publicKey,
             bytes32 actionType,
             bytes32 payloadHash,
-            ShrincsStateful.StatefulSignature memory shrincsSignature
+            UXMSS.StatefulSignature memory shrincsSignature
         ) = abi.decode(
             payload,
-            (
-                SHRINCS.PublicKey,
-                bytes32,
-                bytes32,
-                ShrincsStateful.StatefulSignature
-            )
+            (SHRINCS.PublicKey, bytes32, bytes32, UXMSS.StatefulSignature)
         );
 
         // Reject non-canonical encodings: re-encoding the decoded fields
@@ -293,7 +288,7 @@ contract ShrincsAccountVerifierExample {
     function verifyStatefulUncheckedMessage(
         SHRINCS.PublicKey calldata publicKey,
         bytes calldata message,
-        ShrincsStateful.StatefulSignature calldata signature
+        UXMSS.StatefulSignature calldata signature
     ) internal returns (bool) {
         // This path bypasses canonical wrapper message construction and
         // therefore remains internal-only. Recover the consumed stateful leaf
@@ -331,7 +326,7 @@ contract ShrincsAccountVerifierExample {
         SHRINCS.PublicKey calldata publicKey,
         bytes32 actionType,
         bytes32 payloadHash,
-        ShrincsStateful.StatefulSignature calldata signature
+        UXMSS.StatefulSignature calldata signature
     ) external returns (bool) {
         // Recover the consumed stateful leaf from the signature layout.
         uint32 leafIndex = uint32(signature.authPath.length);
@@ -678,7 +673,7 @@ contract ShrincsAccountVerifierExample {
         SHRINCS.PublicKey calldata publicKey,
         bytes32 actionType,
         bytes32 payloadHash,
-        ShrincsStateful.StatefulSignature calldata signature
+        UXMSS.StatefulSignature calldata signature
     ) external view onlySelf returns (bool) {
         uint32 leafIndex = uint32(signature.authPath.length);
         if (!precheckStatefulLeafUse(leafIndex)) return false;

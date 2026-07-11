@@ -21,7 +21,7 @@ import {SHRINCS} from "../contracts/SHRINCS.sol";
 import {SPHINCSPlusCCore} from "../contracts/SPHINCSPlusCCore.sol";
 import {FORSMinusC} from "../contracts/FORSMinusC.sol";
 import {Hypertree} from "../contracts/Hypertree.sol";
-import {ShrincsStateful} from "../contracts/ShrincsStateful.sol";
+import {UXMSS} from "../contracts/UXMSS.sol";
 import {WOTSPlusC} from "../contracts/WOTSPlusC.sol";
 import {ShrincsParams} from "shrincs-profile/ShrincsParams.sol";
 import {
@@ -33,7 +33,7 @@ contract ExampleStatefulHarness {
         bytes32 expectedCompositePublicKey,
         SHRINCS.PublicKey calldata publicKey,
         SHRINCS.ActionContext calldata context,
-        ShrincsStateful.StatefulSignature calldata signature
+        UXMSS.StatefulSignature calldata signature
     ) external pure returns (bool) {
         return SHRINCS.verifyStateful(
             expectedCompositePublicKey, publicKey, context, signature
@@ -98,7 +98,7 @@ contract ShrincsAccountVerifierExampleHarness is
     function verifyStatefulUncheckedForTest(
         SHRINCS.PublicKey calldata publicKey,
         bytes calldata message,
-        ShrincsStateful.StatefulSignature calldata signature
+        UXMSS.StatefulSignature calldata signature
     ) external returns (bool) {
         return verifyStatefulUncheckedMessage(publicKey, message, signature);
     }
@@ -340,7 +340,7 @@ contract ShrincsAccountVerifierExampleTest is Test {
     {
         (
             SHRINCS.PublicKey memory publicKey,,
-            ShrincsStateful.StatefulSignature memory signature
+            UXMSS.StatefulSignature memory signature
         ) = decodeStatefulVector(".stateful.cases.valid.calldata");
         bytes32 expectedCompositePublicKey =
             compositePublicKeyWord(publicKey);
@@ -533,7 +533,7 @@ contract ShrincsAccountVerifierExampleTest is Test {
     {
         (
             SHRINCS.PublicKey memory publicKey,,
-            ShrincsStateful.StatefulSignature memory signature
+            UXMSS.StatefulSignature memory signature
         ) = decodeStatefulVector(".stateful.cases.valid.calldata");
         bytes32 expectedCompositePublicKey =
             compositePublicKeyWord(publicKey);
@@ -1112,7 +1112,7 @@ contract ShrincsAccountVerifierExampleTest is Test {
         (
             SHRINCS.PublicKey memory publicKey,
             bytes memory message,
-            ShrincsStateful.StatefulSignature memory signature
+            UXMSS.StatefulSignature memory signature
         ) = decodeStatefulVector(".stateful.cases.valid.calldata");
         bytes32 expectedCompositePublicKey =
             compositePublicKeyWord(publicKey);
@@ -1142,7 +1142,7 @@ contract ShrincsAccountVerifierExampleTest is Test {
         (
             SHRINCS.PublicKey memory publicKey,
             bytes memory message,
-            ShrincsStateful.StatefulSignature memory signature
+            UXMSS.StatefulSignature memory signature
         ) = decodeStatefulVector(".stateful.cases.valid.calldata");
         bytes32 expectedCompositePublicKey =
             compositePublicKeyWord(publicKey);
@@ -1229,7 +1229,7 @@ contract ShrincsAccountVerifierExampleTest is Test {
         (
             SHRINCS.PublicKey memory publicKey,
             bytes memory message,
-            ShrincsStateful.StatefulSignature memory signature
+            UXMSS.StatefulSignature memory signature
         ) = decodeStatefulVector(".stateful.cases.valid.calldata");
         bytes32 expectedCompositePublicKey =
             compositePublicKeyWord(publicKey);
@@ -1598,7 +1598,7 @@ contract ShrincsAccountVerifierExampleTest is Test {
         returns (
             SHRINCS.PublicKey memory publicKey,
             bytes memory message,
-            ShrincsStateful.StatefulSignature memory signature
+            UXMSS.StatefulSignature memory signature
         )
     {
         bytes memory args = vectorArgs(vectorKey);
@@ -1624,7 +1624,7 @@ contract ShrincsAccountVerifierExampleTest is Test {
         );
 
         message = legacyMessage;
-        signature = ShrincsStateful.StatefulSignature({
+        signature = UXMSS.StatefulSignature({
             randomizer: legacySignature.randomizer,
             counter: legacySignature.counter,
             chains: fixedToDynamicChains(legacySignature.chains),

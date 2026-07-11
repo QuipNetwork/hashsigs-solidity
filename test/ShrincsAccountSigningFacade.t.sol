@@ -19,7 +19,7 @@ pragma solidity ^0.8.28;
 import {Test} from "../lib/forge-std/src/Test.sol";
 import {SHRINCS} from "../contracts/SHRINCS.sol";
 import {SPHINCSPlusCCore} from "../contracts/SPHINCSPlusCCore.sol";
-import {ShrincsStateful} from "../contracts/ShrincsStateful.sol";
+import {UXMSS} from "../contracts/UXMSS.sol";
 import {
     ShrincsAccountVerifierExample
 } from "../contracts/examples/ShrincsAccountVerifierExample.sol";
@@ -67,7 +67,7 @@ contract ShrincsAccountSigningFacadeTest is Test {
         (
             SHRINCS.SigningKey memory nextSigningKey,
             SHRINCS.ActionContext memory context,
-            ShrincsStateful.StatefulSignature memory signature,
+            UXMSS.StatefulSignature memory signature,
             bool signOk
         ) = ShrincsAccountSigningFacade.signStatefulActionNow(
             account, signingKey, actionType, payloadHash
@@ -123,7 +123,7 @@ contract ShrincsAccountSigningFacadeTest is Test {
         (
             ,
             SHRINCS.ActionContext memory context,
-            ShrincsStateful.StatefulSignature memory signature,
+            UXMSS.StatefulSignature memory signature,
             bool signOk
         ) = ShrincsAccountSigningFacade.signStatefulActionNow(
             account, signingKey, actionType, payloadHash
@@ -183,7 +183,7 @@ contract ShrincsAccountSigningFacadeTest is Test {
         (
             ,
             SHRINCS.ActionContext memory context,
-            ShrincsStateful.StatefulSignature memory signature,
+            UXMSS.StatefulSignature memory signature,
             bool signOk
         ) = ShrincsAccountSigningFacade.signStatefulActionNow(
             account, signingKey, actionType, payloadHash

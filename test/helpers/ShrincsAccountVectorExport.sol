@@ -18,7 +18,7 @@ pragma solidity ^0.8.28;
 
 import {SHRINCS} from "../../contracts/SHRINCS.sol";
 import {SPHINCSPlusCCore} from "../../contracts/SPHINCSPlusCCore.sol";
-import {ShrincsStateful} from "../../contracts/ShrincsStateful.sol";
+import {UXMSS} from "../../contracts/UXMSS.sol";
 import {
     ShrincsAccountVerifierExample
 } from "../../contracts/examples/ShrincsAccountVerifierExample.sol";
@@ -35,7 +35,7 @@ library ShrincsAccountVectorExport {
         SHRINCS.ActionContext context;
         bytes32 actionType;
         bytes32 payloadHash;
-        ShrincsStateful.StatefulSignature signature;
+        UXMSS.StatefulSignature signature;
         bytes message;
         bytes verifyCalldata;
         bytes erc1271Envelope;
@@ -79,7 +79,7 @@ library ShrincsAccountVectorExport {
         SHRINCS.ActionContext memory context,
         bytes32 actionType,
         bytes32 payloadHash,
-        ShrincsStateful.StatefulSignature memory signature
+        UXMSS.StatefulSignature memory signature
     ) internal view returns (StatefulActionVector memory vector_) {
         bytes32 current = account.currentShrincsPublicKey();
         bytes memory message = abi.encodePacked(

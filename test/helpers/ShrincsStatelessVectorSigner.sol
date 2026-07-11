@@ -21,7 +21,7 @@ import {SHRINCS} from "../../contracts/SHRINCS.sol";
 import {SPHINCSPlusCCore} from "../../contracts/SPHINCSPlusCCore.sol";
 import {FORSMinusC} from "../../contracts/FORSMinusC.sol";
 import {Hypertree} from "../../contracts/Hypertree.sol";
-import {ShrincsStateful} from "../../contracts/ShrincsStateful.sol";
+import {UXMSS} from "../../contracts/UXMSS.sol";
 import {ShrincsParams} from "shrincs-profile/ShrincsParams.sol";
 import {SHRINCSHash} from "../../contracts/SHRINCSHash.sol";
 
@@ -1029,12 +1029,7 @@ contract ShrincsStatelessVectorSigner {
         out = value;
         for (uint32 step = start; step < start + steps;) {
             bytes32 addressWord = SHRINCSHash.addressWord32(
-                layer,
-                tree,
-                ShrincsStateful.AddressTypeWotsHash,
-                keypair,
-                chain,
-                step
+                layer, tree, UXMSS.AddressTypeWotsHash, keypair, chain, step
             );
             out = keccak256(
                 abi.encodePacked("wots-c-chain", pkSeed, addressWord, out)

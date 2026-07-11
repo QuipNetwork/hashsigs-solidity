@@ -20,7 +20,7 @@ import {Test} from "../lib/forge-std/src/Test.sol";
 import {Vm} from "../lib/forge-std/src/Vm.sol";
 import {SHRINCS} from "../contracts/SHRINCS.sol";
 import {SPHINCSPlusCCore} from "../contracts/SPHINCSPlusCCore.sol";
-import {ShrincsStateful} from "../contracts/ShrincsStateful.sol";
+import {UXMSS} from "../contracts/UXMSS.sol";
 import {
     ShrincsAccountVerifierExample
 } from "../contracts/examples/ShrincsAccountVerifierExample.sol";
@@ -44,7 +44,7 @@ contract ShrincsMeasurementsTest is Test {
     struct StatefulCase {
         SHRINCS.PublicKey publicKey;
         SHRINCS.ActionContext context;
-        ShrincsStateful.StatefulSignature signature;
+        UXMSS.StatefulSignature signature;
         ShrincsAccountVerifierExample account;
         bytes message;
         bytes32 hash;
@@ -184,7 +184,7 @@ contract ShrincsMeasurementsTest is Test {
         (
             ,
             SHRINCS.ActionContext memory context,
-            ShrincsStateful.StatefulSignature memory signature,
+            UXMSS.StatefulSignature memory signature,
             bool signOk
         ) = ShrincsAccountSigningFacade.signStatefulActionNow(
             account, signingKey, ACTION_TYPE, PAYLOAD_HASH

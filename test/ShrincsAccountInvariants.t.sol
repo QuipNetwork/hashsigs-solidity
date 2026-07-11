@@ -19,7 +19,7 @@ pragma solidity ^0.8.28;
 import {Test} from "../lib/forge-std/src/Test.sol";
 import {SHRINCS} from "../contracts/SHRINCS.sol";
 import {SPHINCSPlusCCore} from "../contracts/SPHINCSPlusCCore.sol";
-import {ShrincsStateful} from "../contracts/ShrincsStateful.sol";
+import {UXMSS} from "../contracts/UXMSS.sol";
 import {ShrincsParams} from "shrincs-profile/ShrincsParams.sol";
 import {
     ShrincsAccountVerifierExample
@@ -42,7 +42,7 @@ contract InvariantAccountHarness is ShrincsAccountVerifierExample {
     function verifyStatefulUncheckedForTest(
         SHRINCS.PublicKey calldata publicKey,
         bytes calldata message,
-        ShrincsStateful.StatefulSignature calldata signature
+        UXMSS.StatefulSignature calldata signature
     ) external returns (bool) {
         return verifyStatefulUncheckedMessage(publicKey, message, signature);
     }
@@ -83,9 +83,8 @@ contract ShrincsAccountHandler is Test {
     // Pre-signed material, keyed by [keyIndex][leafIndex].
     mapping(uint256 => SHRINCS.PublicKey) internal publicKeyOf;
     mapping(uint256 => bytes32) internal commitmentOf;
-    mapping(
-        uint256 => mapping(uint32 => ShrincsStateful.StatefulSignature)
-    ) internal signatureOf;
+    mapping(uint256 => mapping(uint32 => UXMSS.StatefulSignature)) internal
+        signatureOf;
 
     // Monotonicity high-water marks and latched violations (I1, I2). The
     // *Stuck flags catch a rotation that failed to advance nonce/keyVersion,
@@ -132,7 +131,7 @@ contract ShrincsAccountHandler is Test {
         publicKeyOf[keyIndex] = publicKey;
         commitmentOf[keyIndex] = _commitmentWord(publicKey);
         for (uint32 leaf = 1; leaf <= MAX_LEAF; leaf++) {
-            ShrincsStateful.StatefulSignature memory signature;
+            UXMSS.StatefulSignature memory signature;
             bool signOk;
             (signature, signOk) = ShrincsTestSigner.signStatefulRawAtLeaf(
                 signingKey, leaf, abi.encodePacked(FIXED_MESSAGE)
@@ -201,7 +200,7 @@ contract ShrincsAccountHandler is Test {
         (uint256 keyIndex, bool found) = _currentKeyIndex();
         if (!found) return;
         uint32 leaf = uint32(bound(leafSelector, 1, MAX_LEAF));
-        ShrincsStateful.StatefulSignature memory signature =
+        UXMSS.StatefulSignature memory signature =
             signatureOf[keyIndex][leaf];
         signature.chains[0] =
             bytes32(uint256(signature.chains[0]) ^ (uint256(flip) | 1));

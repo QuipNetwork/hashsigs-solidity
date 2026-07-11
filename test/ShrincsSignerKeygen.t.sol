@@ -19,7 +19,7 @@ pragma solidity ^0.8.28;
 import {Test} from "../lib/forge-std/src/Test.sol";
 import {ShrincsTestSigner} from "./helpers/ShrincsTestSigner.sol";
 import {SHRINCS} from "../contracts/SHRINCS.sol";
-import {ShrincsStateful} from "../contracts/ShrincsStateful.sol";
+import {UXMSS} from "../contracts/UXMSS.sol";
 import {ShrincsParams} from "shrincs-profile/ShrincsParams.sol";
 import {ShrincsCodec} from "../contracts/ShrincsCodec.sol";
 
@@ -35,7 +35,7 @@ contract ShrincsSignerHarness {
     function decodeStatefulPublicKey(bytes calldata encoded)
         external
         pure
-        returns (ShrincsStateful.StatefulPublicKey memory, bool)
+        returns (UXMSS.StatefulPublicKey memory, bool)
     {
         return ShrincsCodec.decodeStatefulPublicKey(encoded);
     }
@@ -155,10 +155,8 @@ contract ShrincsSignerKeygenTest is Test {
             keccak256(abi.encodePacked(expectedCommitment))
         );
 
-        (
-            ShrincsStateful.StatefulPublicKey memory decodedStateful,
-            bool decodedOk
-        ) = harness.decodeStatefulPublicKey(publicKey.statefulPublicKey);
+        (UXMSS.StatefulPublicKey memory decodedStateful, bool decodedOk) =
+            harness.decodeStatefulPublicKey(publicKey.statefulPublicKey);
         assertTrue(decodedOk, "stateful public key must decode");
         assertEq(decodedStateful.pkSeed, signingKey.statefulPkSeed);
         assertEq(decodedStateful.root, signingKey.statefulRoot);

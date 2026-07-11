@@ -17,7 +17,7 @@
 pragma solidity ^0.8.28;
 
 import {SHRINCS} from "../../contracts/SHRINCS.sol";
-import {ShrincsStateful} from "../../contracts/ShrincsStateful.sol";
+import {UXMSS} from "../../contracts/UXMSS.sol";
 import {ShrincsParams} from "shrincs-profile/ShrincsParams.sol";
 import {ShrincsCodec} from "../../contracts/ShrincsCodec.sol";
 import {SHRINCSHash} from "../../contracts/SHRINCSHash.sol";
@@ -107,7 +107,7 @@ library ShrincsTestSigner {
         pure
         returns (
             SHRINCS.SigningKey memory nextSigningKey,
-            ShrincsStateful.StatefulSignature memory signature,
+            UXMSS.StatefulSignature memory signature,
             bool ok
         )
     {
@@ -135,7 +135,7 @@ library ShrincsTestSigner {
         pure
         returns (
             SHRINCS.SigningKey memory nextSigningKey,
-            ShrincsStateful.StatefulSignature memory signature,
+            UXMSS.StatefulSignature memory signature,
             bool ok
         )
     {
@@ -170,7 +170,7 @@ library ShrincsTestSigner {
     )
         internal
         pure
-        returns (ShrincsStateful.StatefulSignature memory signature, bool ok)
+        returns (UXMSS.StatefulSignature memory signature, bool ok)
     {
         if (leafIndex == 0) return (signature, false);
         if (leafIndex > signingKey.maxStatefulSignatures) {
@@ -268,7 +268,7 @@ library ShrincsTestSigner {
     )
         internal
         pure
-        returns (ShrincsStateful.StatefulSignature memory signature, bool ok)
+        returns (UXMSS.StatefulSignature memory signature, bool ok)
     {
         bytes32 randomizer = keccak256(
             abi.encodePacked(
@@ -308,7 +308,7 @@ library ShrincsTestSigner {
                 }
             }
             if (digitSum == ShrincsParams.WOTS_TARGET_SUM_STATEFUL) {
-                signature = ShrincsStateful.StatefulSignature({
+                signature = UXMSS.StatefulSignature({
                     randomizer: randomizer,
                     counter: counter,
                     chains: chains,
@@ -353,7 +353,7 @@ library ShrincsTestSigner {
             bytes32 addressWord = SHRINCSHash.addressWord32(
                 0,
                 0,
-                ShrincsStateful.AddressTypeWotsHash,
+                UXMSS.AddressTypeWotsHash,
                 leafIndex,
                 chainIndex,
                 start + stepOffset
@@ -560,12 +560,7 @@ library ShrincsTestSigner {
         out = value;
         for (uint32 step = start; step < start + steps;) {
             bytes32 addressWord = SHRINCSHash.addressWord32(
-                layer,
-                tree,
-                ShrincsStateful.AddressTypeWotsHash,
-                keypair,
-                chain,
-                step
+                layer, tree, UXMSS.AddressTypeWotsHash, keypair, chain, step
             );
             // Truncate each stateless chain step, mirroring the
             // verifier's hashStatelessWotsCChainNoMask32 maskHash.

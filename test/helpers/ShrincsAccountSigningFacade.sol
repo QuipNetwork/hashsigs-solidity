@@ -18,7 +18,7 @@ pragma solidity ^0.8.28;
 
 import {SHRINCS} from "../../contracts/SHRINCS.sol";
 import {SPHINCSPlusCCore} from "../../contracts/SPHINCSPlusCCore.sol";
-import {ShrincsStateful} from "../../contracts/ShrincsStateful.sol";
+import {UXMSS} from "../../contracts/UXMSS.sol";
 import {ShrincsCodec} from "../../contracts/ShrincsCodec.sol";
 import {
     ShrincsAccountVerifierExample
@@ -91,7 +91,7 @@ library ShrincsAccountSigningFacade {
         returns (
             SHRINCS.SigningKey memory nextSigningKey,
             SHRINCS.ActionContext memory context,
-            ShrincsStateful.StatefulSignature memory signature,
+            UXMSS.StatefulSignature memory signature,
             bool ok
         )
     {
@@ -227,7 +227,7 @@ library ShrincsAccountSigningFacade {
         SHRINCS.PublicKey memory publicKey,
         bytes32 actionType,
         bytes32 payloadHash,
-        ShrincsStateful.StatefulSignature memory signature
+        UXMSS.StatefulSignature memory signature
     ) internal pure returns (bytes memory) {
         return abi.encodePacked(
             bytes1(ERC1271_MODE_STATEFUL_ACTION),

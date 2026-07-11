@@ -17,7 +17,7 @@
 pragma solidity ^0.8.28;
 
 import {SHRINCS} from "./SHRINCS.sol";
-import {ShrincsStateful} from "./ShrincsStateful.sol";
+import {UXMSS} from "./UXMSS.sol";
 import {ShrincsParams} from "shrincs-profile/ShrincsParams.sol";
 
 /// @notice Byte-format definitions bridging ERC-7913 opaque bytes to typed
@@ -67,11 +67,11 @@ library ShrincsCodec {
         pure
         returns (
             SHRINCS.PublicKey memory publicKey,
-            ShrincsStateful.StatefulSignature memory signature
+            UXMSS.StatefulSignature memory signature
         )
     {
         (publicKey, signature) = abi.decode(
-            envelope, (SHRINCS.PublicKey, ShrincsStateful.StatefulSignature)
+            envelope, (SHRINCS.PublicKey, UXMSS.StatefulSignature)
         );
 
         if (
@@ -93,7 +93,7 @@ library ShrincsCodec {
     /// @return envelope The abi-encoded stateful envelope bytes.
     function encodeStatefulEnvelope(
         SHRINCS.PublicKey memory publicKey,
-        ShrincsStateful.StatefulSignature memory signature
+        UXMSS.StatefulSignature memory signature
     ) internal pure returns (bytes memory envelope) {
         return abi.encode(publicKey, signature);
     }
@@ -229,7 +229,7 @@ library ShrincsCodec {
     function decodeStatefulPublicKey(bytes calldata encoded)
         internal
         pure
-        returns (ShrincsStateful.StatefulPublicKey memory publicKey, bool ok)
+        returns (UXMSS.StatefulPublicKey memory publicKey, bool ok)
     {
         if (encoded.length != ShrincsParams.STATEFUL_PUBLIC_KEY_BYTES) {
             return (publicKey, false);

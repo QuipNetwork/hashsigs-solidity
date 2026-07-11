@@ -22,7 +22,7 @@ import {
 } from "../contracts/interfaces/IERC7913SignatureVerifier.sol";
 import {ShrincsCodec} from "../contracts/ShrincsCodec.sol";
 import {SHRINCS} from "../contracts/SHRINCS.sol";
-import {ShrincsStateful} from "../contracts/ShrincsStateful.sol";
+import {UXMSS} from "../contracts/UXMSS.sol";
 import {ShrincsParams} from "shrincs-profile/ShrincsParams.sol";
 import {ShrincsVerifier} from "../contracts/ShrincsVerifier.sol";
 import {ShrincsTestSigner} from "./helpers/ShrincsTestSigner.sol";
@@ -160,7 +160,7 @@ contract ShrincsCodecHarness {
         pure
         returns (
             SHRINCS.PublicKey memory publicKey,
-            ShrincsStateful.StatefulSignature memory signature
+            UXMSS.StatefulSignature memory signature
         )
     {
         return ShrincsCodec.decodeStatefulEnvelope(envelope);
@@ -168,7 +168,7 @@ contract ShrincsCodecHarness {
 
     function encodeStatefulEnvelope(
         SHRINCS.PublicKey memory publicKey,
-        ShrincsStateful.StatefulSignature memory signature
+        UXMSS.StatefulSignature memory signature
     ) external pure returns (bytes memory envelope) {
         return ShrincsCodec.encodeStatefulEnvelope(publicKey, signature);
     }
@@ -218,7 +218,7 @@ contract ShrincsCodecTest is Test {
     function buildSampleSignature()
         internal
         pure
-        returns (ShrincsStateful.StatefulSignature memory signature)
+        returns (UXMSS.StatefulSignature memory signature)
     {
         signature.randomizer = keccak256("codec stateful randomizer");
         signature.counter = 42;
@@ -265,14 +265,13 @@ contract ShrincsCodecTest is Test {
 
     function testStatefulEnvelopeRoundTripPreservesEveryField() public view {
         SHRINCS.PublicKey memory publicKey = buildSamplePublicKey();
-        ShrincsStateful.StatefulSignature memory signature =
-            buildSampleSignature();
+        UXMSS.StatefulSignature memory signature = buildSampleSignature();
 
         bytes memory envelope =
             codec.encodeStatefulEnvelope(publicKey, signature);
         (
             SHRINCS.PublicKey memory decodedKey,
-            ShrincsStateful.StatefulSignature memory decodedSig
+            UXMSS.StatefulSignature memory decodedSig
         ) = codec.decodeStatefulEnvelope(envelope);
 
         // The envelope layout is exactly abi.encode(PublicKey,
@@ -650,7 +649,7 @@ contract ShrincsCodecERC7913IntegrationTest is Test {
         signedHash = keccak256("shrincs erc7913 stateful verifier vector");
         bytes memory message = abi.encodePacked(signedHash);
 
-        (ShrincsStateful.StatefulSignature memory signature, bool signOk) =
+        (UXMSS.StatefulSignature memory signature, bool signOk) =
             ShrincsTestSigner.signStatefulRawAtLeaf(signingKey, 1, message);
         assertTrue(signOk, "leaf-1 signing must succeed");
 
@@ -674,7 +673,7 @@ contract ShrincsCodecERC7913IntegrationTest is Test {
         (
             SHRINCS.PublicKey memory publicKey,
             bytes32 hash,
-            ShrincsStateful.StatefulSignature memory signature
+            UXMSS.StatefulSignature memory signature
         ) = decodeRustStatefulVector();
         bytes memory envelope =
             ShrincsCodec.encodeStatefulEnvelope(publicKey, signature);
@@ -782,7 +781,7 @@ contract ShrincsCodecERC7913IntegrationTest is Test {
         returns (
             SHRINCS.PublicKey memory publicKey,
             bytes32 hash,
-            ShrincsStateful.StatefulSignature memory signature
+            UXMSS.StatefulSignature memory signature
         )
     {
         bytes memory args = vectorArgs(".stateful.cases.valid.calldata");
@@ -815,7 +814,7 @@ contract ShrincsCodecERC7913IntegrationTest is Test {
 
         publicKey =
             publicKeyFromParts(statefulPublicKey, pkSeed, hypertreeRoot);
-        signature = ShrincsStateful.StatefulSignature({
+        signature = UXMSS.StatefulSignature({
             randomizer: legacySignature.randomizer,
             counter: legacySignature.counter,
             chains: fixedToDynamicChains(legacySignature.chains),
