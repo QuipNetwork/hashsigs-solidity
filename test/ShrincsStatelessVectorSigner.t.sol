@@ -18,6 +18,7 @@ pragma solidity ^0.8.28;
 
 import {Test} from "../lib/forge-std/src/Test.sol";
 import {SHRINCS} from "../contracts/SHRINCS.sol";
+import {SPHINCSPlusCCore} from "../contracts/SPHINCSPlusCCore.sol";
 import {ShrincsParams} from "shrincs-profile/ShrincsParams.sol";
 import {
     ShrincsStatelessVectorSigner
@@ -33,7 +34,7 @@ contract ShrincsStatelessVectorSignerHarness is
         bytes32 expectedPublicKeyCommitment,
         SHRINCS.PublicKey calldata publicKey,
         bytes calldata message,
-        SHRINCS.StatelessSignature calldata signature
+        SPHINCSPlusCCore.StatelessSignature calldata signature
     ) external pure returns (bool) {
         return SHRINCS.verifyStatelessUncheckedMessage(
             expectedPublicKeyCommitment, publicKey, message, signature
@@ -116,8 +117,9 @@ contract ShrincsStatelessVectorSignerTest is Test {
         );
 
         bytes memory encodedSignature = signer.finalizeSignature(sessionId);
-        SHRINCS.StatelessSignature memory signature =
-            abi.decode(encodedSignature, (SHRINCS.StatelessSignature));
+        SPHINCSPlusCCore.StatelessSignature memory signature = abi.decode(
+            encodedSignature, (SPHINCSPlusCCore.StatelessSignature)
+        );
         SHRINCS.PublicKey memory publicKey =
             signer.sessionPublicKey(sessionId);
         bytes memory signedMessage = signer.sessionMessage(sessionId);
@@ -158,7 +160,7 @@ contract ShrincsStatelessVectorSignerTest is Test {
         );
         (
             SHRINCS.PublicKey memory publicKey,
-            SHRINCS.StatelessSignature memory signature,
+            SPHINCSPlusCCore.StatelessSignature memory signature,
             bool ok
         ) = signer.signFromSeed(
             bytes("high level stateless vector seed"), 4, message
@@ -205,7 +207,7 @@ contract ShrincsStatelessVectorSignerTest is Test {
         }
         (
             SHRINCS.PublicKey memory publicKey,
-            SHRINCS.StatelessSignature memory signature,
+            SPHINCSPlusCCore.StatelessSignature memory signature,
             bool ok
         ) = signer.signFromSeed(
             bytes("forsDigestBytes overhang regression seed"), 4, message

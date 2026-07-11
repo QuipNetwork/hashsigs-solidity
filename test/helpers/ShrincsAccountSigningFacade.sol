@@ -17,6 +17,7 @@
 pragma solidity ^0.8.28;
 
 import {SHRINCS} from "../../contracts/SHRINCS.sol";
+import {SPHINCSPlusCCore} from "../../contracts/SPHINCSPlusCCore.sol";
 import {ShrincsStateful} from "../../contracts/ShrincsStateful.sol";
 import {ShrincsCodec} from "../../contracts/ShrincsCodec.sol";
 import {
@@ -238,7 +239,7 @@ library ShrincsAccountSigningFacade {
         SHRINCS.PublicKey memory publicKey,
         bytes32 actionType,
         bytes32 payloadHash,
-        SHRINCS.StatelessSignature memory signature
+        SPHINCSPlusCCore.StatelessSignature memory signature
     ) internal pure returns (bytes memory) {
         return abi.encodePacked(
             bytes1(ERC1271_MODE_STATELESS_ACTION),
@@ -279,7 +280,10 @@ library ShrincsAccountSigningFacade {
         bytes32 sessionId
     )
         internal
-        returns (SHRINCS.StatelessSignature memory signature, bool ok)
+        returns (
+            SPHINCSPlusCCore.StatelessSignature memory signature,
+            bool ok
+        )
     {
         (
             , signature, ok

@@ -19,6 +19,7 @@ pragma solidity ^0.8.28;
 import {Test} from "../lib/forge-std/src/Test.sol";
 import {Vm} from "../lib/forge-std/src/Vm.sol";
 import {SHRINCS} from "../contracts/SHRINCS.sol";
+import {SPHINCSPlusCCore} from "../contracts/SPHINCSPlusCCore.sol";
 import {ShrincsStateful} from "../contracts/ShrincsStateful.sol";
 import {
     ShrincsAccountVerifierExample
@@ -53,7 +54,7 @@ contract ShrincsMeasurementsTest is Test {
     struct StatelessCase {
         SHRINCS.PublicKey publicKey;
         SHRINCS.ActionContext context;
-        SHRINCS.StatelessSignature signature;
+        SPHINCSPlusCCore.StatelessSignature signature;
         ShrincsAccountVerifierExample account;
         bytes message;
         bytes32 hash;
@@ -238,7 +239,10 @@ contract ShrincsMeasurementsTest is Test {
         assertTrue(ok, "stateless session must begin");
 
         // line-length: allow — fmt canonical tuple head exceeds cap
-        (SHRINCS.StatelessSignature memory signature, bool completeOk) = ShrincsAccountSigningFacade.completeStatelessSession(
+        (
+            SPHINCSPlusCCore.StatelessSignature memory signature,
+            bool completeOk
+        ) = ShrincsAccountSigningFacade.completeStatelessSession(
             accountSigner, sessionId
         );
         assertTrue(completeOk, "stateless signing must complete");

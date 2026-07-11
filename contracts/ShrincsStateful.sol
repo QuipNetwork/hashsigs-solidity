@@ -16,9 +16,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 pragma solidity ^0.8.28;
 
-import {SHRINCS} from "./SHRINCS.sol";
 import {ShrincsParams} from "shrincs-profile/ShrincsParams.sol";
-import {ShrincsCodec} from "./ShrincsCodec.sol";
 import {SHRINCSHash} from "./SHRINCSHash.sol";
 import {WOTSPlusC} from "./WOTSPlusC.sol";
 
@@ -49,40 +47,23 @@ library ShrincsStateful {
         bytes32[] authPath;
     }
 
-    // verifyStatefulUncheckedMessage: Verify a stateful signature against an
-    // exact caller-supplied message.
-    // 1. Check that the public key uses the compiled fixed layout.
-    // 2. Check the installed public-key commitment and the public-key
-    // encoding.
-    // 3. Decode the compact stateful public key embedded inside the SHRINCS
-    // public bundle.
-    // 4. Recover and validate the consumed stateful leaf index from the auth
+    // verify: Verify a stateful signature against an exact caller-supplied
+    // message using the decoded stateful key fields.
+    // 1. Recover and validate the consumed stateful leaf index from the auth
     // path length.
-    // 5. Reconstruct the compact WOTS-C public-key hash from the signature
+    // 2. Reconstruct the compact WOTS-C public-key hash from the signature
     // and message.
-    // 6. Rebuild the unbalanced stateful tree root from that leaf and auth
+    // 3. Rebuild the unbalanced stateful tree root from that leaf and auth
     // path.
-    // 7. Accept only if the reconstructed root matches the decoded stateful
+    // 4. Accept only if the reconstructed root matches the decoded stateful
     // public root.
-    function verifyStatefulUncheckedMessage(
-        bytes32 expectedPublicKeyCommitment,
-        SHRINCS.PublicKey calldata publicKey,
+    function verify(
+        bytes32 pkSeed,
+        bytes32 root,
+        uint32 maxSignatures,
         bytes memory message,
         ShrincsStateful.StatefulSignature calldata signature
     ) internal pure returns (bool) {
-        // The public key must satisfy the compiled fixed key shape.
-        if (!ShrincsCodec.validPublicKey(publicKey)) return false;
-        // The bundled public key must match the installed public-key
-        // commitment.
-        if (!ShrincsCodec.matchesExpectedPublicKeyCommitment(
-                publicKey, expectedPublicKeyCommitment
-            )) return false;
-        // Decode the compact stateful public key fields from the public
-        // bundle.
-        (ShrincsStateful.StatefulPublicKey memory statefulKey, bool ok) =
-            ShrincsCodec.decodeStatefulPublicKey(publicKey.statefulPublicKey);
-        if (!ok) return false;
-
         // In this unbalanced stateful tree, the leaf index is encoded by
         // auth-path length.
         uint32 leafIndex = uint32(signature.authPath.length);
@@ -90,7 +71,7 @@ library ShrincsStateful {
         if (leafIndex == 0) return false;
         // Reject signatures that claim a leaf beyond the configured stateful
         // budget.
-        if (leafIndex > statefulKey.maxSignatures) return false;
+        if (leafIndex > maxSignatures) return false;
         // Stateful WOTS-C always reveals a fixed number of chains.
         if (signature.chains.length != ShrincsParams.WOTS_CHAINS_STATEFUL) {
             return false;
@@ -100,17 +81,17 @@ library ShrincsStateful {
         // and message.
         // line-length: allow — fmt canonical tuple head exceeds cap
         (bytes32 pkHash, bool validWots) = compactStatefulWotsPublicKeyFromSignature(
-            statefulKey.pkSeed, leafIndex, message, signature
+            pkSeed, leafIndex, message, signature
         );
         if (!validWots) return false;
 
         // Rebuild the unbalanced stateful tree root above that WOTS-derived
         // leaf.
-        (bytes32 root, bool validPath) = rootFromUnbalancedPath(
-            statefulKey.pkSeed, leafIndex, pkHash, signature.authPath
+        (bytes32 reconstructedRoot, bool validPath) = rootFromUnbalancedPath(
+            pkSeed, leafIndex, pkHash, signature.authPath
         );
         if (!validPath) return false;
-        return statefulKey.root == root;
+        return root == reconstructedRoot;
     }
 
     // compactStatefulWotsPublicKeyFromSignature: Reconstruct the compact

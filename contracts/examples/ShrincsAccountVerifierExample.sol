@@ -17,6 +17,7 @@
 pragma solidity ^0.8.28;
 
 import {SHRINCS} from "../SHRINCS.sol";
+import {SPHINCSPlusCCore} from "../SPHINCSPlusCCore.sol";
 import {ShrincsStateful} from "../ShrincsStateful.sol";
 import {ShrincsParams} from "shrincs-profile/ShrincsParams.sol";
 import {ShrincsAccountEnvelope} from "./ShrincsAccountEnvelope.sol";
@@ -235,10 +236,15 @@ contract ShrincsAccountVerifierExample {
             SHRINCS.PublicKey memory publicKey,
             bytes32 actionType,
             bytes32 payloadHash,
-            SHRINCS.StatelessSignature memory shrincsSignature
+            SPHINCSPlusCCore.StatelessSignature memory shrincsSignature
         ) = abi.decode(
             payload,
-            (SHRINCS.PublicKey, bytes32, bytes32, SHRINCS.StatelessSignature)
+            (
+                SHRINCS.PublicKey,
+                bytes32,
+                bytes32,
+                SPHINCSPlusCCore.StatelessSignature
+            )
         );
 
         // Reject non-canonical encodings: the payload must be the exact
@@ -374,7 +380,7 @@ contract ShrincsAccountVerifierExample {
         SHRINCS.PublicKey calldata publicKey,
         bytes32 actionType,
         bytes32 payloadHash,
-        SHRINCS.StatelessSignature calldata signature
+        SPHINCSPlusCCore.StatelessSignature calldata signature
     ) external returns (bool) {
         // Recovery-only policy forbids stateless actions until recovery mode
         // is explicitly entered.
@@ -427,7 +433,7 @@ contract ShrincsAccountVerifierExample {
     /// @return True when rotation succeeds.
     function rotateToFreshKey(
         SHRINCS.PublicKey calldata currentPublicKey,
-        SHRINCS.StatelessSignature calldata recoverySignature,
+        SPHINCSPlusCCore.StatelessSignature calldata recoverySignature,
         SHRINCS.StatefulRotationTarget calldata nextKey
     ) external returns (bool) {
         // Fresh-key rotation is available only in the dedicated recovery
@@ -482,7 +488,7 @@ contract ShrincsAccountVerifierExample {
     /// @return True when rotation succeeds.
     function rotateFullKey(
         SHRINCS.PublicKey calldata currentPublicKey,
-        SHRINCS.StatelessSignature calldata recoverySignature,
+        SPHINCSPlusCCore.StatelessSignature calldata recoverySignature,
         SHRINCS.RotationTarget calldata nextKey
     ) external returns (bool) {
         // Full-key rotation is available only in the dedicated recovery
@@ -714,7 +720,7 @@ contract ShrincsAccountVerifierExample {
         SHRINCS.PublicKey calldata publicKey,
         bytes32 actionType,
         bytes32 payloadHash,
-        SHRINCS.StatelessSignature calldata signature
+        SPHINCSPlusCCore.StatelessSignature calldata signature
     ) external view onlySelf returns (bool) {
         if (
             statefulPolicy == StatefulPolicy.RecoveryRotation

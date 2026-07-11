@@ -17,6 +17,7 @@
 pragma solidity ^0.8.28;
 
 import {SHRINCS} from "../../contracts/SHRINCS.sol";
+import {SPHINCSPlusCCore} from "../../contracts/SPHINCSPlusCCore.sol";
 import {ShrincsStateful} from "../../contracts/ShrincsStateful.sol";
 import {
     ShrincsAccountVerifierExample
@@ -46,7 +47,7 @@ library ShrincsAccountVectorExport {
         SHRINCS.ActionContext context;
         bytes32 actionType;
         bytes32 payloadHash;
-        SHRINCS.StatelessSignature signature;
+        SPHINCSPlusCCore.StatelessSignature signature;
         bytes message;
         bytes verifyCalldata;
         bytes erc1271Envelope;
@@ -57,7 +58,7 @@ library ShrincsAccountVectorExport {
         SHRINCS.PublicKey currentPublicKey;
         SHRINCS.RotationContext context;
         SHRINCS.StatefulRotationTarget nextKey;
-        SHRINCS.StatelessSignature recoverySignature;
+        SPHINCSPlusCCore.StatelessSignature recoverySignature;
         bytes message;
         bytes rotateCalldata;
     }
@@ -67,7 +68,7 @@ library ShrincsAccountVectorExport {
         SHRINCS.PublicKey currentPublicKey;
         SHRINCS.RotationContext context;
         SHRINCS.RotationTarget nextKey;
-        SHRINCS.StatelessSignature recoverySignature;
+        SPHINCSPlusCCore.StatelessSignature recoverySignature;
         bytes message;
         bytes rotateCalldata;
     }
@@ -109,7 +110,7 @@ library ShrincsAccountVectorExport {
         SHRINCS.ActionContext memory context,
         bytes32 actionType,
         bytes32 payloadHash,
-        SHRINCS.StatelessSignature memory signature
+        SPHINCSPlusCCore.StatelessSignature memory signature
     ) internal view returns (StatelessActionVector memory vector_) {
         bytes32 current = account.currentShrincsPublicKey();
         bytes memory message = abi.encodePacked(
@@ -139,7 +140,7 @@ library ShrincsAccountVectorExport {
         SHRINCS.PublicKey memory currentPublicKey,
         SHRINCS.RotationContext memory context,
         SHRINCS.StatefulRotationTarget memory nextKey,
-        SHRINCS.StatelessSignature memory recoverySignature
+        SPHINCSPlusCCore.StatelessSignature memory recoverySignature
     ) internal view returns (StatefulOnlyRotationVector memory vector_) {
         bytes32 current = account.currentShrincsPublicKey();
         bytes memory message = abi.encodePacked(
@@ -175,7 +176,7 @@ library ShrincsAccountVectorExport {
         SHRINCS.PublicKey memory currentPublicKey,
         SHRINCS.RotationContext memory context,
         SHRINCS.RotationTarget memory nextKey,
-        SHRINCS.StatelessSignature memory recoverySignature
+        SPHINCSPlusCCore.StatelessSignature memory recoverySignature
     ) internal view returns (FullRotationVector memory vector_) {
         bytes32 current = account.currentShrincsPublicKey();
         bytes memory message = abi.encodePacked(

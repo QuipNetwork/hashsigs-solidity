@@ -18,6 +18,7 @@ pragma solidity ^0.8.28;
 
 import {Test} from "../lib/forge-std/src/Test.sol";
 import {SHRINCS} from "../contracts/SHRINCS.sol";
+import {SPHINCSPlusCCore} from "../contracts/SPHINCSPlusCCore.sol";
 import {ShrincsStateful} from "../contracts/ShrincsStateful.sol";
 import {
     ShrincsAccountVerifierExample
@@ -137,7 +138,10 @@ contract ShrincsAccountVectorExportTest is Test {
         assertTrue(signOk, "stateless signing must start");
 
         // line-length: allow — fmt canonical tuple head exceeds cap
-        (SHRINCS.StatelessSignature memory signature, bool completeOk) = ShrincsAccountSigningFacade.completeStatelessSession(
+        (
+            SPHINCSPlusCCore.StatelessSignature memory signature,
+            bool completeOk
+        ) = ShrincsAccountSigningFacade.completeStatelessSession(
             signer, sessionId
         );
         assertTrue(completeOk, "stateless signing must complete");
@@ -209,11 +213,11 @@ contract ShrincsAccountVectorExportTest is Test {
         assertTrue(signOk, "stateful-only rotation must start");
 
         (
-            SHRINCS.StatelessSignature memory recoverySignature,
+            SPHINCSPlusCCore.StatelessSignature memory recoverySignature,
             bool completeOk
         ) = ShrincsAccountSigningFacade.completeStatelessSession(
-                signer, sessionId
-            );
+            signer, sessionId
+        );
         assertTrue(completeOk, "stateful-only rotation must complete");
 
         ShrincsAccountVectorExport.StatefulOnlyRotationVector memory
@@ -281,11 +285,11 @@ contract ShrincsAccountVectorExportTest is Test {
         assertTrue(signOk, "full rotation must start");
 
         (
-            SHRINCS.StatelessSignature memory recoverySignature,
+            SPHINCSPlusCCore.StatelessSignature memory recoverySignature,
             bool completeOk
         ) = ShrincsAccountSigningFacade.completeStatelessSession(
-                signer, sessionId
-            );
+            signer, sessionId
+        );
         assertTrue(completeOk, "full rotation must complete");
 
         ShrincsAccountVectorExport.FullRotationVector memory vector_ =

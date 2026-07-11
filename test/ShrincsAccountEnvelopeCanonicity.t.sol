@@ -18,6 +18,7 @@ pragma solidity ^0.8.28;
 
 import {Test} from "../lib/forge-std/src/Test.sol";
 import {SHRINCS} from "../contracts/SHRINCS.sol";
+import {SPHINCSPlusCCore} from "../contracts/SPHINCSPlusCCore.sol";
 import {
     ShrincsAccountEnvelope
 } from "../contracts/examples/ShrincsAccountEnvelope.sol";
@@ -58,10 +59,15 @@ contract CanonicityHarness {
             SHRINCS.PublicKey memory publicKey,
             bytes32 actionType,
             bytes32 payloadHash,
-            SHRINCS.StatelessSignature memory signature
+            SPHINCSPlusCCore.StatelessSignature memory signature
         ) = abi.decode(
             payload,
-            (SHRINCS.PublicKey, bytes32, bytes32, SHRINCS.StatelessSignature)
+            (
+                SHRINCS.PublicKey,
+                bytes32,
+                bytes32,
+                SPHINCSPlusCCore.StatelessSignature
+            )
         );
         return keccak256(payload)
             == keccak256(
@@ -258,7 +264,10 @@ contract ShrincsAccountEnvelopeCanonicityTest is Test {
             );
         require(ok, "begin");
         // line-length: allow — fmt canonical tuple head exceeds cap
-        (SHRINCS.StatelessSignature memory signature, bool completeOk) = ShrincsAccountSigningFacade.completeStatelessSession(
+        (
+            SPHINCSPlusCCore.StatelessSignature memory signature,
+            bool completeOk
+        ) = ShrincsAccountSigningFacade.completeStatelessSession(
             signer, sessionId
         );
         require(completeOk, "complete");

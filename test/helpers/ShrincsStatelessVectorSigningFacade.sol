@@ -20,6 +20,7 @@ import {
     ShrincsStatelessVectorSigner
 } from "./ShrincsStatelessVectorSigner.sol";
 import {SHRINCS} from "../../contracts/SHRINCS.sol";
+import {SPHINCSPlusCCore} from "../../contracts/SPHINCSPlusCCore.sol";
 
 /// @notice TEST-ONLY orchestration facade for the staged stateless signer.
 /// @dev This library keeps the actual signing work in the storage-backed
@@ -35,7 +36,7 @@ library ShrincsStatelessVectorSigningFacade {
         internal
         returns (
             SHRINCS.PublicKey memory publicKey,
-            SHRINCS.StatelessSignature memory signature,
+            SPHINCSPlusCCore.StatelessSignature memory signature,
             bool ok
         )
     {
@@ -54,7 +55,7 @@ library ShrincsStatelessVectorSigningFacade {
         internal
         returns (
             SHRINCS.PublicKey memory publicKey,
-            SHRINCS.StatelessSignature memory signature,
+            SPHINCSPlusCCore.StatelessSignature memory signature,
             bool ok
         )
     {
@@ -71,8 +72,9 @@ library ShrincsStatelessVectorSigningFacade {
 
         bytes memory encodedSignature = signer.finalizeSignature(sessionId);
         publicKey = signer.sessionPublicKey(sessionId);
-        signature =
-            abi.decode(encodedSignature, (SHRINCS.StatelessSignature));
+        signature = abi.decode(
+            encodedSignature, (SPHINCSPlusCCore.StatelessSignature)
+        );
         return (publicKey, signature, true);
     }
 }

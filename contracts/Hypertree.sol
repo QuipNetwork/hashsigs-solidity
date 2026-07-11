@@ -16,12 +16,11 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 pragma solidity ^0.8.28;
 
-import {SHRINCS} from "./SHRINCS.sol";
 import {ShrincsParams} from "shrincs-profile/ShrincsParams.sol";
 import {SHRINCSHash} from "./SHRINCSHash.sol";
 import {WOTSPlusC} from "./WOTSPlusC.sol";
 
-library ShrincsHypertree {
+library Hypertree {
     // Address-type words for the SPHINCS-style keyed hash inputs. These
     // are the ADRS type constants [FIPS205 §4.2]: WOTS+ hash (0), tree
     // (2), and FORS tree (3).
@@ -54,9 +53,10 @@ library ShrincsHypertree {
     // 6. Accept only if the final reconstructed root matches the installed
     // hypertree root.
     function verifyHypertree(
-        SHRINCS.PublicKey calldata publicKey,
+        bytes calldata pkSeed,
+        bytes calldata hypertreeRoot,
         bytes32 forsRoot,
-        ShrincsHypertree.HypertreeLayerSignature[] calldata layers
+        Hypertree.HypertreeLayerSignature[] calldata layers
     ) internal pure returns (bool) {
         // Every hypertree layer must be present exactly once.
         if (layers.length != ShrincsParams.NUM_HYPERTREE_LAYERS) {
@@ -83,7 +83,7 @@ library ShrincsHypertree {
         bytes32 current = forsRoot;
 
         for (uint256 layer = 0; layer < layers.length;) {
-            ShrincsHypertree.HypertreeLayerSignature calldata layerSig =
+            Hypertree.HypertreeLayerSignature calldata layerSig =
                 layers[layer];
             // Deviates from [FIPS205 §8.2]: SHRINCS chains the hypertree
             // coordinates sequentially per layer instead of following the
@@ -111,7 +111,7 @@ library ShrincsHypertree {
             // Verify the WOTS-C layer signature against the current carried
             // value.
             if (!verifyWotsC32(
-                    publicKey.pkSeed,
+                    pkSeed,
                     // casting to 'uint32' is safe because layer is bounded by
                     // the fixed 8-layer hypertree
                     // forge-lint: disable-next-line(unsafe-typecast)
@@ -140,7 +140,7 @@ library ShrincsHypertree {
             // Rebuild the subtree root above this WOTS-C leaf.
             (bytes32 nextRoot, bool ok) = hypertreeRootFromPath32(
                 subtreeHeight,
-                publicKey.pkSeed,
+                pkSeed,
                 layerIndex,
                 layerSig.treeIndex,
                 layerSig.leafIndex,
@@ -166,7 +166,7 @@ library ShrincsHypertree {
             }
         }
 
-        bytes calldata expectedRootBytes = publicKey.hypertreeRoot;
+        bytes calldata expectedRootBytes = hypertreeRoot;
         bytes32 expectedRoot;
         // Memory-safe: reads one calldata word into a stack variable; no
         // memory is written.
@@ -427,8 +427,7 @@ library ShrincsHypertree {
         // Encode the hypertree tree index in the shared address prefix.
         uint256 shiftedTree = uint256(treeIndex) << 128;
         // Mark these addresses as belonging to the tree-hash domain.
-        uint256 shiftedAddressType =
-            uint256(ShrincsHypertree.AddressTypeTree) << 96;
+        uint256 shiftedAddressType = uint256(Hypertree.AddressTypeTree) << 96;
         uint256 addressBase = shiftedLayer;
         addressBase |= shiftedTree;
         addressBase |= shiftedAddressType;

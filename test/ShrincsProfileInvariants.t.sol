@@ -17,7 +17,7 @@
 pragma solidity ^0.8.28;
 
 import {Test} from "../lib/forge-std/src/Test.sol";
-import {ShrincsHypertree} from "../contracts/ShrincsHypertree.sol";
+import {Hypertree} from "../contracts/Hypertree.sol";
 import {ShrincsParams} from "shrincs-profile/ShrincsParams.sol";
 
 /// @title ShrincsProfileInvariants
@@ -189,7 +189,7 @@ contract ShrincsProfileInvariantsTest is Test {
     // The WOTS digest must fit one 32-byte word (baseW16Digit32 reads
     // from the first len/2 bytes of a single digest word).
     function testWotsDigestFitsOneWord() public pure {
-        assertLe(ShrincsHypertree.wotsDigestBytes(), 32, "digest <= 32B");
+        assertLe(Hypertree.wotsDigestBytes(), 32, "digest <= 32B");
     }
 
     // Every digest bit-read stays within its reader's width: FORS tree

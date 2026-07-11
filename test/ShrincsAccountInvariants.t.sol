@@ -18,6 +18,7 @@ pragma solidity ^0.8.28;
 
 import {Test} from "../lib/forge-std/src/Test.sol";
 import {SHRINCS} from "../contracts/SHRINCS.sol";
+import {SPHINCSPlusCCore} from "../contracts/SPHINCSPlusCCore.sol";
 import {ShrincsStateful} from "../contracts/ShrincsStateful.sol";
 import {ShrincsParams} from "shrincs-profile/ShrincsParams.sol";
 import {
@@ -222,7 +223,7 @@ contract ShrincsAccountHandler is Test {
     function actGarbageStateless(bytes32 actionType, bytes32 payloadHash)
         external
     {
-        SHRINCS.StatelessSignature memory signature;
+        SPHINCSPlusCCore.StatelessSignature memory signature;
         bytes32 digestBefore = _stateDigest();
         bool ok = account.verifyStatelessAction(
             publicKeyOf[0], actionType, payloadHash, signature
@@ -243,7 +244,7 @@ contract ShrincsAccountHandler is Test {
         (uint256 keyIndex, bool found) = _currentKeyIndex();
         if (!found) return;
         uint256 targetIndex = bound(targetSelector, 0, KEY_COUNT - 1);
-        SHRINCS.StatelessSignature memory signature;
+        SPHINCSPlusCCore.StatelessSignature memory signature;
         bytes32 digestBefore = _stateDigest();
         bool ok = account.rotateFullKey(
             publicKeyOf[keyIndex], signature, _fullTarget(targetIndex)

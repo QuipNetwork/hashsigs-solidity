@@ -19,8 +19,7 @@ pragma solidity ^0.8.28;
 import {ShrincsParams} from "shrincs-profile/ShrincsParams.sol";
 import {ShrincsCodec} from "./ShrincsCodec.sol";
 import {ShrincsStateful} from "./ShrincsStateful.sol";
-import {ShrincsForsC} from "./ShrincsForsC.sol";
-import {ShrincsHypertree} from "./ShrincsHypertree.sol";
+import {SPHINCSPlusCCore} from "./SPHINCSPlusCCore.sol";
 
 library SHRINCS {
     // Hash-suite identifiers bound into canonical action and rotation hashes.
@@ -74,14 +73,6 @@ library SHRINCS {
         bytes32 pkSeed;
         // Top hypertree root committed in the public key.
         bytes32 hypertreeRoot;
-    }
-
-    struct StatelessSignature {
-        // Message-signing few-time signature at the bottom of the stateless
-        // path.
-        ShrincsForsC.ForsSignature fors;
-        // Hypertree layers authenticating the FORS root to the public root.
-        ShrincsHypertree.HypertreeLayerSignature[] hypertree;
     }
 
     struct StatefulRotationTarget {
@@ -160,7 +151,7 @@ library SHRINCS {
         bytes32 expectedPublicKeyCommitment,
         SHRINCS.PublicKey calldata publicKey,
         SHRINCS.ActionContext memory context,
-        SHRINCS.StatelessSignature calldata signature
+        SPHINCSPlusCCore.StatelessSignature calldata signature
     ) internal pure returns (bool) {
         // Reject malformed or unscoped action contexts before hashing them.
         if (!validActionContext(context)) return false;
@@ -191,7 +182,7 @@ library SHRINCS {
         bytes32 expectedPublicKeyCommitment,
         SHRINCS.PublicKey calldata currentPublicKey,
         SHRINCS.RotationContext memory context,
-        SHRINCS.StatelessSignature calldata recoverySignature,
+        SPHINCSPlusCCore.StatelessSignature calldata recoverySignature,
         SHRINCS.StatefulRotationTarget calldata nextStatefulKey
     ) internal pure returns (bytes32 nextPublicKeyCommitment) {
         if (!ShrincsCodec.validPublicKey(currentPublicKey)) {
@@ -297,7 +288,7 @@ library SHRINCS {
         bytes32 expectedPublicKeyCommitment,
         SHRINCS.PublicKey calldata currentPublicKey,
         SHRINCS.RotationContext memory context,
-        SHRINCS.StatelessSignature calldata recoverySignature,
+        SPHINCSPlusCCore.StatelessSignature calldata recoverySignature,
         SHRINCS.RotationTarget calldata nextKey
     ) internal pure returns (bytes32 nextPublicKeyCommitment) {
         if (!ShrincsCodec.validPublicKey(currentPublicKey)) {
@@ -388,8 +379,12 @@ library SHRINCS {
 
     // verifyStatefulUncheckedMessage: Verify a stateful signature after the
     // caller has already constructed the exact signed message bytes.
-    // 1. Treat the provided bytes as the final message that was signed.
-    // 2. Delegate the cryptographic verification to the stateful component
+    // 1. Check that the public key uses the compiled fixed layout.
+    // 2. Check the installed public-key commitment and the public-key
+    // encoding.
+    // 3. Decode the compact stateful public key embedded inside the SHRINCS
+    // public bundle.
+    // 4. Delegate the cryptographic verification to the stateful component
     // library.
     function verifyStatefulUncheckedMessage(
         bytes32 expectedPublicKeyCommitment,
@@ -397,10 +392,27 @@ library SHRINCS {
         bytes memory message,
         ShrincsStateful.StatefulSignature calldata signature
     ) internal pure returns (bool) {
+        // The public key must satisfy the compiled fixed key shape.
+        if (!ShrincsCodec.validPublicKey(publicKey)) return false;
+        // The bundled public key must match the installed public-key
+        // commitment.
+        if (!ShrincsCodec.matchesExpectedPublicKeyCommitment(
+                publicKey, expectedPublicKeyCommitment
+            )) return false;
+        // Decode the compact stateful public key fields from the public
+        // bundle.
+        (ShrincsStateful.StatefulPublicKey memory statefulKey, bool ok) =
+            ShrincsCodec.decodeStatefulPublicKey(publicKey.statefulPublicKey);
+        if (!ok) return false;
+
         // The component library owns the stateful WOTS-C and unbalanced-tree
         // verification rules.
-        return ShrincsStateful.verifyStatefulUncheckedMessage(
-            expectedPublicKeyCommitment, publicKey, message, signature
+        return ShrincsStateful.verify(
+            statefulKey.pkSeed,
+            statefulKey.root,
+            statefulKey.maxSignatures,
+            message,
+            signature
         );
     }
 
@@ -521,14 +533,13 @@ library SHRINCS {
     // verifyStatelessUncheckedMessage: Verify a stateless signature after the
     // caller has already constructed the exact signed message bytes.
     // 1. Validate the current key bundle and fixed public-key layout.
-    // 2. Reconstruct the FORS-C root from the signed message bytes and FORS
-    // proof.
-    // 3. Carry that root up the hypertree and compare it to the public root.
+    // 2. Delegate FORS-C plus hypertree verification to the stateless
+    // component library.
     function verifyStatelessUncheckedMessage(
         bytes32 expectedPublicKeyCommitment,
         SHRINCS.PublicKey calldata publicKey,
         bytes memory message,
-        SHRINCS.StatelessSignature calldata signature
+        SPHINCSPlusCCore.StatelessSignature calldata signature
     ) internal pure returns (bool) {
         // The current public key must match the installed bundle commitment
         // expected by the caller.
@@ -538,23 +549,11 @@ library SHRINCS {
         // The current key bundle must satisfy the compiled fixed public-key
         // shape.
         if (!ShrincsCodec.validPublicKey(publicKey)) return false;
-        // A stateless signature must carry at least one hypertree layer.
-        if (signature.hypertree.length == 0) return false;
 
-        // Reconstruct the FORS root from the message, FORS
-        // randomness/counter, and revealed leaves.
-        (bytes32 forsRoot, bool ok) = ShrincsForsC.verifyForsCAndReturnRoot(
-            publicKey,
-            message,
-            signature.fors,
-            signature.hypertree[0].treeIndex,
-            signature.hypertree[0].leafIndex
-        );
-        if (!ok) return false;
-        // Carry the reconstructed FORS root up the hypertree until it matches
-        // the public root.
-        return ShrincsHypertree.verifyHypertree(
-            publicKey, forsRoot, signature.hypertree
+        // The component library owns the FORS-C and hypertree verification
+        // rules over the stateless public seed and root.
+        return SPHINCSPlusCCore.verify(
+            publicKey.pkSeed, publicKey.hypertreeRoot, message, signature
         );
     }
 

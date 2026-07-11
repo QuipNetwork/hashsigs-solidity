@@ -18,8 +18,9 @@ pragma solidity ^0.8.28;
 
 import {ShrincsTestSigner} from "./ShrincsTestSigner.sol";
 import {SHRINCS} from "../../contracts/SHRINCS.sol";
-import {ShrincsForsC} from "../../contracts/ShrincsForsC.sol";
-import {ShrincsHypertree} from "../../contracts/ShrincsHypertree.sol";
+import {SPHINCSPlusCCore} from "../../contracts/SPHINCSPlusCCore.sol";
+import {FORSMinusC} from "../../contracts/FORSMinusC.sol";
+import {Hypertree} from "../../contracts/Hypertree.sol";
 import {ShrincsStateful} from "../../contracts/ShrincsStateful.sol";
 import {ShrincsParams} from "shrincs-profile/ShrincsParams.sol";
 import {SHRINCSHash} from "../../contracts/SHRINCSHash.sol";
@@ -60,7 +61,7 @@ contract ShrincsStatelessVectorSigner {
         bytes32 currentLayerSkSeed;
         bytes32 currentLayerPkHash;
         bytes32 currentLayerRandomizer;
-        SHRINCS.StatelessSignature signature;
+        SPHINCSPlusCCore.StatelessSignature signature;
     }
 
     uint256 internal nextSessionNonce;
@@ -166,7 +167,7 @@ contract ShrincsStatelessVectorSigner {
                 leaf
             );
             session.forsRoots.push(root);
-            ShrincsForsC.ForsEntry storage entry =
+            FORSMinusC.ForsEntry storage entry =
                 session.signature.fors.entries.push();
             entry.secretLeaf = abi.encodePacked(
                 forsLeafSecret(
@@ -311,7 +312,7 @@ contract ShrincsStatelessVectorSigner {
         session.hypertreeWotsDone = false;
         session.hypertreeAuthPathDone = false;
 
-        ShrincsHypertree.HypertreeLayerSignature storage layerSig =
+        Hypertree.HypertreeLayerSignature storage layerSig =
             session.signature.hypertree.push();
         layerSig.treeIndex = tree;
         layerSig.leafIndex = leaf;
@@ -359,7 +360,7 @@ contract ShrincsStatelessVectorSigner {
                 fullDigest
             );
             if (digitSum == ShrincsParams.WOTS_TARGET_SUM_STATEFUL) {
-                ShrincsHypertree.HypertreeLayerSignature storage layerSig =
+                Hypertree.HypertreeLayerSignature storage layerSig =
                     session.signature.hypertree[session.nextHypertreeLayer];
                 layerSig.wotsCSignature.randomizer =
                     abi.encodePacked(session.currentLayerRandomizer);
@@ -401,7 +402,7 @@ contract ShrincsStatelessVectorSigner {
         uint32 layer = session.nextHypertreeLayer;
         uint64 tree = session.currentHypertreeTreeIndex;
         uint32 leaf = session.currentHypertreeLeafIndex;
-        ShrincsHypertree.HypertreeLayerSignature storage layerSig =
+        Hypertree.HypertreeLayerSignature storage layerSig =
             session.signature.hypertree[session.nextHypertreeLayer];
 
         while (
@@ -464,7 +465,7 @@ contract ShrincsStatelessVectorSigner {
         // recurrence. The next layer's leaf index is the low
         // subtree-height bits of the current tree index, and the next
         // tree index is the remaining high bits. This must stay in lockstep
-        // with ShrincsHypertree.verifyHypertree.
+        // with Hypertree.verifyHypertree.
         // casting to 'uint32' is safe because leafMask keeps only the low
         // subtree-height bits
         // forge-lint: disable-next-line(unsafe-typecast)
@@ -552,12 +553,16 @@ contract ShrincsStatelessVectorSigner {
     }
 
     function copyStatelessSignature(
-        SHRINCS.StatelessSignature storage signature
-    ) internal view returns (SHRINCS.StatelessSignature memory out) {
+        SPHINCSPlusCCore.StatelessSignature storage signature
+    )
+        internal
+        view
+        returns (SPHINCSPlusCCore.StatelessSignature memory out)
+    {
         out.fors.randomizer = signature.fors.randomizer;
         out.fors.counter = signature.fors.counter;
         out.fors.entries =
-            new ShrincsForsC.ForsEntry[](signature.fors.entries.length);
+            new FORSMinusC.ForsEntry[](signature.fors.entries.length);
         for (uint256 i = 0; i < signature.fors.entries.length;) {
             out.fors.entries[i].secretLeaf =
             signature.fors.entries[i].secretLeaf;
@@ -579,7 +584,7 @@ contract ShrincsStatelessVectorSigner {
             }
         }
 
-        out.hypertree = new ShrincsHypertree
+        out.hypertree = new Hypertree
             .HypertreeLayerSignature[](signature.hypertree.length);
         for (uint256 i = 0; i < signature.hypertree.length;) {
             out.hypertree[i].treeIndex = signature.hypertree[i].treeIndex;
