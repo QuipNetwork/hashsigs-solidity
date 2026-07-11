@@ -34,9 +34,29 @@ import {Create3Factory} from "./Create3.sol";
 abstract contract Create3Deployer is Script {
     // Salt for the shared CREATE3 factory. Its address (and thus every
     // child address) is a function of this salt and the factory
-    // bytecode; bump only for a deliberate factory replacement.
+    // creation-code hash; bump only for a deliberate factory
+    // replacement.
     bytes32 internal constant FACTORY_SALT =
         keccak256("QUIP:Create3Factory:V1.0");
+
+    // Pinned keccak256 of the Create3Factory creation code under a
+    // PRODUCTION profile. The factory address is
+    //   CREATE2(CREATE2_FACTORY, FACTORY_SALT, FACTORY_INITCODE_HASH)
+    //   = 0xcE8dAc13593a359d961F91c35F8694cb2A03D005
+    // and every deployable is a CREATE3 child of it. foundry.toml strips
+    // solc metadata (bytecode_hash="none", cbor_metadata=false), so this
+    // hash is identical across all three production profiles (256s /
+    // 128s-q18 / 128s-q20): ONE factory serves every suite. It is NOT
+    // the test-profile value — test profiles optimize for 200 runs, the
+    // production profiles for 1,000,000, so their factory creation code
+    // (and hash) differ. The production hash is what actually deploys and
+    // is therefore the canonical pinned value; the profile-gated pin
+    // tests (test/SHRINCSPinned*.t.sol) mirror it to derive the
+    // production factory address without a production build. Regenerate
+    // by running any deploy script under a production profile and reading
+    // the logged factory init-code hash.
+    bytes32 internal constant FACTORY_INITCODE_HASH =
+        0xbe6eb1cac061b12187ed962ba44e19142929386dd027feee67ed5ea587777f05;
 
     // HARD REQUIREMENT (F-17): the canonical deploy MUST run under the
     // expected build profile, or the wrong parameter set / bytecode is
@@ -52,10 +72,18 @@ abstract contract Create3Deployer is Script {
     // Return the chain's CREATE3 factory, deploying it deterministically
     // through the canonical CREATE2 proxy on first use.
     function _factory() internal returns (Create3Factory factory) {
+        // The canonical deploy runs under a production profile, whose
+        // metadata-free factory creation code hashes to
+        // FACTORY_INITCODE_HASH. Assert it, so a Create3.sol change (which
+        // would move the factory and every child address) fails the deploy
+        // instead of silently landing at a different address.
+        require(
+            keccak256(type(Create3Factory).creationCode)
+                == FACTORY_INITCODE_HASH,
+            "deploy: factory init-code drift"
+        );
         address predicted = vm.computeCreate2Address(
-            FACTORY_SALT,
-            keccak256(type(Create3Factory).creationCode),
-            CREATE2_FACTORY
+            FACTORY_SALT, FACTORY_INITCODE_HASH, CREATE2_FACTORY
         );
         if (predicted.code.length == 0) {
             vm.broadcast();
@@ -68,6 +96,22 @@ abstract contract Create3Deployer is Script {
             return deployed;
         }
         return Create3Factory(predicted);
+    }
+
+    // A SHRINCS verifier delegates stateless verification to its pinned
+    // SPHINCSPlusC sibling. CREATE3 fixes the sibling address regardless
+    // of deploy order, but verifyStateless reverts on empty code, so the
+    // sibling MUST be deployed (its own script) FIRST. Assert both before
+    // the verifier deploys: `siblingSalt` derives to exactly the pinned
+    // constant (drift guard vs the deploy-script salt), and the sibling
+    // already has code. Call from each SHRINCS script's run().
+    function _requireSibling(bytes32 siblingSalt, address pinned) internal {
+        address derived = _factory().addressOf(siblingSalt);
+        require(derived == pinned, "deploy: SPHINCSPlusC sibling drift");
+        require(
+            derived.code.length != 0,
+            "deploy: SPHINCSPlusC sibling not deployed"
+        );
     }
 
     // Deploy `initCode` under `salt` via CREATE3, after asserting the

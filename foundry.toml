@@ -6,6 +6,23 @@ via_ir = true
 optimizer = true
 optimizer_runs = 200
 gas_limit = "18446744073709551615" # u64::MAX
+# Strip solc metadata from every artifact (inherited by all profiles).
+# The CREATE3 Create3Factory address is CREATE2(canonical proxy,
+# FACTORY_SALT, keccak256(factory creation code)); with metadata the
+# creation code embeds each profile's remappings, so the factory —
+# and every CREATE3 child — moved per profile (DEPLOYMENTS.md, "CREATE3
+# factory address"). Dropping metadata makes the factory creation code
+# identical across the three production profiles, so ONE factory (and
+# one child address per salt) serves every suite. Consequence: runtime
+# codehashes lose their metadata tail and change from any earlier
+# record; SHRINCS is testnet-only and nothing is deployed, so nothing
+# is burned, and Etherscan source verification does not need the
+# metadata hash. Optimizer runs still differ between test (200) and
+# production (1,000,000), so the test-profile factory creation code is
+# NOT the production one; the pin tests derive through the pinned
+# production factory init-code hash (see DeployBase.s.sol FACTORY_SALT).
+bytecode_hash = "none"
+cbor_metadata = false
 # Profile selection ([DESIGN §3.4]): the `shrincs-profile/` prefix
 # resolves to the active profile's ShrincsParams library. Default is
 # the 256s profile. Other profiles override this remapping AND the
@@ -27,6 +44,8 @@ skip = [
     "contracts/SPHINCSPlusC128sQ20Keccak.sol",
     "script/DeploySHRINCS128sQ18Keccak.s.sol",
     "script/DeploySHRINCS128sQ20Keccak.s.sol",
+    "script/DeploySPHINCSPlusC128sQ18Keccak.s.sol",
+    "script/DeploySPHINCSPlusC128sQ20Keccak.s.sol",
     "test/SHRINCSPinned128sQ18.t.sol",
     "test/SHRINCSPinned128sQ20.t.sol",
 ]
@@ -70,6 +89,8 @@ skip = [
     "contracts/SPHINCSPlusC128sQ20Keccak.sol",
     "script/DeploySHRINCS256sKeccak.s.sol",
     "script/DeploySHRINCS128sQ20Keccak.s.sol",
+    "script/DeploySPHINCSPlusC256sKeccak.s.sol",
+    "script/DeploySPHINCSPlusC128sQ20Keccak.s.sol",
     "test/ShrincsSphincs256sVectors.t.sol",
     "test/ShrincsStatelessVectorSigner.t.sol",
     "test/ShrincsAccountEnvelopeCanonicity.t.sol",
@@ -95,6 +116,8 @@ skip = [
     "contracts/SPHINCSPlusC128sQ18Keccak.sol",
     "script/DeploySHRINCS256sKeccak.s.sol",
     "script/DeploySHRINCS128sQ18Keccak.s.sol",
+    "script/DeploySPHINCSPlusC256sKeccak.s.sol",
+    "script/DeploySPHINCSPlusC128sQ18Keccak.s.sol",
     "test/ShrincsSphincs256sVectors.t.sol",
     "test/ShrincsStatelessVectorSigner.t.sol",
     "test/ShrincsAccountEnvelopeCanonicity.t.sol",
@@ -129,6 +152,8 @@ skip = [
     "contracts/SPHINCSPlusC128sQ20Keccak.sol",
     "script/DeploySHRINCS256sKeccak.s.sol",
     "script/DeploySHRINCS128sQ20Keccak.s.sol",
+    "script/DeploySPHINCSPlusC256sKeccak.s.sol",
+    "script/DeploySPHINCSPlusC128sQ20Keccak.s.sol",
 ]
 
 [profile.production-128s-q20]
@@ -146,6 +171,8 @@ skip = [
     "contracts/SPHINCSPlusC128sQ18Keccak.sol",
     "script/DeploySHRINCS256sKeccak.s.sol",
     "script/DeploySHRINCS128sQ18Keccak.s.sol",
+    "script/DeploySPHINCSPlusC256sKeccak.s.sol",
+    "script/DeploySPHINCSPlusC128sQ18Keccak.s.sol",
 ]
 
 # Per-MR security gate: the 256s (default) profile plus bounded,

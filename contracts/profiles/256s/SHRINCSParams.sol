@@ -33,8 +33,10 @@ library SHRINCSParams {
     // wrong-profile or remappings.txt-shadowed build.
     // TODO(T6): bind PROFILE_ID into the public-key commitment tag
     // ("shrincs-public-key/<profile>") during the single vector
-    // regeneration event ([DESIGN §4] rider Q2). Not bound yet.
-    bytes32 internal constant PROFILE_ID = keccak256("shrincs-256s");
+    // regeneration event ([DESIGN §4] rider Q2). Not bound yet; the
+    // string already carries the hash suite (-keccak), so T6 binds
+    // suite-qualified ids.
+    bytes32 internal constant PROFILE_ID = keccak256("shrincs-256s-keccak");
 
     // Encoded stateful public key layout:
     // 32-byte pkSeed || 32-byte root || 4-byte maxSignatures.

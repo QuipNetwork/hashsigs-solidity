@@ -31,7 +31,8 @@ contract SHRINCS128sQ18Keccak is SHRINCS {
     // PROFILE_TAG: the compiled parameter-set identifier for this
     // verifier. Matches SHRINCSParams.PROFILE_ID for the 128s-q18
     // profile (stateless-signature budget 2^18).
-    bytes32 public constant PROFILE_TAG = keccak256("shrincs-128s-q18");
+    bytes32 public constant PROFILE_TAG =
+        keccak256("shrincs-128s-q18-keccak");
 
     // Pinned CREATE3 address of the 128s-q18 SPHINCSPlusC sibling
     // (SPHINCSPlusC128sQ18Keccak) this verifier delegates stateless
@@ -39,13 +40,16 @@ contract SHRINCS128sQ18Keccak is SHRINCS {
     //   factory = CREATE2(
     //     0x4e59b44847b379578588920cA78FbF26c0B4956C,
     //     keccak256("QUIP:Create3Factory:V1.0"),
-    //     keccak256(type(Create3Factory).creationCode))
+    //     FACTORY_INITCODE_HASH)
     //   address = CREATE3 child of (
     //     factory, keccak256("QUIP:SPHINCSPlusC128sQ18Keccak:V1.0"))
-    // Pinned by test/SHRINCSPinned128sQ18.t.sol (profile-gated) so C8's
-    // deploy scripts cannot drift from this constant.
+    // FACTORY_INITCODE_HASH is the production factory creation-code hash
+    // (solc metadata stripped in foundry.toml); factory =
+    // 0xcE8dAc13593a359d961F91c35F8694cb2A03D005. Pinned by
+    // test/SHRINCSPinned128sQ18.t.sol (profile-gated) so C8's deploy
+    // scripts cannot drift from this constant.
     address internal constant SPHINCS_PLUS_C_VERIFIER =
-        0xAFF77E36D9842BD7aD70a9197E2Ee2e3C68E0728;
+        0xBc7Fefc3D757Fa81E3C7d65905e32722b1a044A6;
 
     function _pinnedSphincsPlusC() internal pure override returns (address) {
         return SPHINCS_PLUS_C_VERIFIER;

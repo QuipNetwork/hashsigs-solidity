@@ -64,7 +64,7 @@ contract ShrincsProfileInvariantsTest is Test {
                 || nameHash == keccak256("nightly")
         ) {
             return ProfileExpectation({
-                profileId: keccak256("shrincs-256s"),
+                profileId: keccak256("shrincs-256s-keccak"),
                 hashLen: 32,
                 hypertreeHeight: 64,
                 numHypertreeLayers: 8,
@@ -81,7 +81,7 @@ contract ShrincsProfileInvariantsTest is Test {
                 || nameHash == keccak256("production-128s-q18")
         ) {
             return ProfileExpectation({
-                profileId: keccak256("shrincs-128s-q18"),
+                profileId: keccak256("shrincs-128s-q18-keccak"),
                 hashLen: 16,
                 hypertreeHeight: 18,
                 numHypertreeLayers: 1,
@@ -98,7 +98,7 @@ contract ShrincsProfileInvariantsTest is Test {
                 || nameHash == keccak256("production-128s-q20")
         ) {
             return ProfileExpectation({
-                profileId: keccak256("shrincs-128s-q20"),
+                profileId: keccak256("shrincs-128s-q20-keccak"),
                 hashLen: 16,
                 hypertreeHeight: 18,
                 numHypertreeLayers: 1,

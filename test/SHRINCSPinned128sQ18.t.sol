@@ -17,8 +17,12 @@
 pragma solidity ^0.8.28;
 
 import {Test} from "../lib/forge-std/src/Test.sol";
-import {Create3, Create3Factory} from "../script/Create3.sol";
+import {Create3} from "../script/Create3.sol";
+import {SHRINCSParams} from "shrincs-profile/SHRINCSParams.sol";
 import {SHRINCS128sQ18Keccak} from "../contracts/SHRINCS128sQ18Keccak.sol";
+import {
+    SPHINCSPlusC128sQ18Keccak
+} from "../contracts/SPHINCSPlusC128sQ18Keccak.sol";
 
 /// @dev Exposes the internal pinned SPHINCSPlusC address of the concrete
 /// 128s-q18 deployable so the pin test can compare it to the CREATE3
@@ -30,19 +34,24 @@ contract SHRINCS128sQ18PinHarness is SHRINCS128sQ18Keccak {
 }
 
 /// @notice Pins the 128s-q18 SHRINCS verifier's SPHINCSPlusC sibling address
-/// to its CREATE3 derivation so C8's deploy scripts cannot drift from the C7
-/// constant. Profile-gated (128s-q18) like the deployable itself.
+/// to its CREATE3 derivation so the deploy scripts cannot drift from the
+/// pinned constant. Profile-gated (128s-q18) like the deployable itself.
 contract SHRINCSPinned128sQ18Test is Test {
     bytes32 internal constant FACTORY_SALT =
         keccak256("QUIP:Create3Factory:V1.0");
     bytes32 internal constant CHILD_SALT =
         keccak256("QUIP:SPHINCSPlusC128sQ18Keccak:V1.0");
+    // Production Create3Factory creation-code hash (solc metadata stripped
+    // in foundry.toml). This test runs under a 200-run test profile whose
+    // factory creation code differs from the 1,000,000-run production one,
+    // so it derives the deployed factory from this pinned hash rather than
+    // recompiling it. Mirrors DeployBase.s.sol FACTORY_INITCODE_HASH.
+    bytes32 internal constant FACTORY_INITCODE_HASH =
+        0xbe6eb1cac061b12187ed962ba44e19142929386dd027feee67ed5ea587777f05;
 
     function testPinnedAddressMatchesCreate3Derivation() public {
         address factory = vm.computeCreate2Address(
-            FACTORY_SALT,
-            keccak256(type(Create3Factory).creationCode),
-            CREATE2_FACTORY
+            FACTORY_SALT, FACTORY_INITCODE_HASH, CREATE2_FACTORY
         );
         address expected = Create3.addressOf(CHILD_SALT, factory);
 
@@ -51,6 +60,21 @@ contract SHRINCSPinned128sQ18Test is Test {
             harness.pinned(),
             expected,
             "pinned SPHINCSPlusC128sQ18Keccak address must match CREATE3"
+        );
+    }
+
+    /// @notice Both 128s-q18 deployables tag their compiled parameter set
+    /// with the profile's PROFILE_ID (shrincs-128s-q18-keccak).
+    function testProfileTagMatchesProfileId() public {
+        assertEq(
+            new SHRINCS128sQ18Keccak().PROFILE_TAG(),
+            SHRINCSParams.PROFILE_ID,
+            "SHRINCS128sQ18Keccak PROFILE_TAG"
+        );
+        assertEq(
+            new SPHINCSPlusC128sQ18Keccak().PROFILE_TAG(),
+            SHRINCSParams.PROFILE_ID,
+            "SPHINCSPlusC128sQ18Keccak PROFILE_TAG"
         );
     }
 }

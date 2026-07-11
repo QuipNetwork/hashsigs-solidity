@@ -1,13 +1,21 @@
 # Deployment registry
 
-This repo owns the canonical deployments of the SHRINCS verifiers and
-the WOTS+ library. SHRINCS is testnet-only. Consumers pin the published
-`(address, runtime codehash)` pairs below; they never deploy their own
-copy and never derive these values from a local rebuild.
+This repo owns the canonical deployments of the SHRINCS verifiers, their
+SPHINCSPlusC stateless delegates, and the WOTS+ library. SHRINCS is
+testnet-only. Consumers pin the published `(address, runtime codehash)`
+pairs below; they never deploy their own copy and never derive these
+values from a local rebuild.
 
 All deploys use CREATE3 (maintainer decision, 2026-07-10). A CREATE3
 child address depends only on `(factory, salt)`, not on the child's init
 code, so a recompile or a profile change doesn't move the address.
+
+Solc metadata is disabled for every build (`bytecode_hash = "none"`,
+`cbor_metadata = false` in `foundry.toml`). This makes the
+`Create3Factory` creation code — and with it the factory address —
+identical across the three production profiles, so one factory serves
+every suite. It also drops the metadata tail from each runtime codehash.
+No chain has a deployment yet, so nothing is burned.
 
 ## How a deploy is produced
 
@@ -15,22 +23,38 @@ code, so a recompile or a profile change doesn't move the address.
    automatically on first use: `Create3Factory` is deployed through the
    canonical CREATE2 proxy (`0x4e59b44847b379578588920cA78FbF26c0B4956C`)
    under salt `keccak256("QUIP:Create3Factory:V1.0")`, so its address is
-   the same on every chain.
-2. From the release commit, on each target chain, run the profile's
-   deploy script under its required build profile. Each script asserts
-   `FOUNDRY_PROFILE` and refuses to run under the wrong one.
+   the same on every chain: `0xcE8dAc13593a359d961F91c35F8694cb2A03D005`.
+2. Deploy in dependency order on each target chain, from the release
+   commit, each script under its required build profile (the script
+   asserts `FOUNDRY_PROFILE` and refuses to run under the wrong one).
+   Deploy each SPHINCSPlusC verifier BEFORE its SHRINCS sibling: CREATE3
+   fixes the address either way, but `SHRINCS.verifyStateless` reverts on
+   empty code, and each SHRINCS deploy script asserts its sibling is
+   already deployed at the pinned address.
 
    ```bash
    FOUNDRY_PROFILE=production forge script \
-       script/DeployShrincsVerifier256s.s.sol \
+       script/DeploySPHINCSPlusC256sKeccak.s.sol \
+       --rpc-url $RPC --private-key $DEPLOYER_PK --broadcast --verify
+
+   FOUNDRY_PROFILE=production forge script \
+       script/DeploySHRINCS256sKeccak.s.sol \
        --rpc-url $RPC --private-key $DEPLOYER_PK --broadcast --verify
 
    FOUNDRY_PROFILE=production-128s-q18 forge script \
-       script/DeployShrincsVerifier128sQ18.s.sol \
+       script/DeploySPHINCSPlusC128sQ18Keccak.s.sol \
+       --rpc-url $RPC --private-key $DEPLOYER_PK --broadcast --verify
+
+   FOUNDRY_PROFILE=production-128s-q18 forge script \
+       script/DeploySHRINCS128sQ18Keccak.s.sol \
        --rpc-url $RPC --private-key $DEPLOYER_PK --broadcast --verify
 
    FOUNDRY_PROFILE=production-128s-q20 forge script \
-       script/DeployShrincsVerifier128sQ20.s.sol \
+       script/DeploySPHINCSPlusC128sQ20Keccak.s.sol \
+       --rpc-url $RPC --private-key $DEPLOYER_PK --broadcast --verify
+
+   FOUNDRY_PROFILE=production-128s-q20 forge script \
+       script/DeploySHRINCS128sQ20Keccak.s.sol \
        --rpc-url $RPC --private-key $DEPLOYER_PK --broadcast --verify
 
    FOUNDRY_PROFILE=production forge script \
@@ -39,9 +63,10 @@ code, so a recompile or a profile change doesn't move the address.
    ```
 
 3. Capture the codehash from the on-chain deployment with
-   `cast codehash <address> --rpc-url $RPC`, never from a local rebuild:
-   solc appends a metadata hash that drifts with compiler version,
-   settings, and source paths.
+   `cast codehash <address> --rpc-url $RPC`, never from a local rebuild.
+   With metadata disabled the codehash is the plain runtime-code hash, so
+   it no longer drifts with source paths; it still depends on the compiler
+   version and optimizer settings, which the production profiles pin.
 4. Record the row below and confirm `cast codehash` returns the same
    value on every listed chain.
 
@@ -52,32 +77,60 @@ Deployed artifacts are immutable; nothing is upgraded in place.
 
 The `production` solc pin fixes each verifier's runtime codehash across
 chains. The addresses below are pre-release predictions from a local
-simulation at the current commit through the factory above. They match
+simulation at the current commit through the factory below. They match
 what a real deploy produces from this commit as long as the factory
-bytecode is unchanged. No chain has a deployment yet.
+creation code is unchanged. No chain has a deployment yet.
 
 Shared CREATE3 factory (all rows): predicted
-`0xBF3af840d7523547C358976697E82f9Ebcb7a801`
-(salt `keccak256("QUIP:Create3Factory:V1.0")`).
+`0xcE8dAc13593a359d961F91c35F8694cb2A03D005`
+(salt `keccak256("QUIP:Create3Factory:V1.0")`, creation-code hash
+`0xbe6eb1cac061b12187ed962ba44e19142929386dd027feee67ed5ea587777f05`).
 
 ### SHRINCS verifiers
 
 | Field | 256s | 128s-q18 | 128s-q20 |
 |---|---|---|---|
-| Contract | `ShrincsVerifier256s` | `ShrincsVerifier128sQ18` | `ShrincsVerifier128sQ20` |
+| Contract | `SHRINCS256sKeccak` | `SHRINCS128sQ18Keccak` | `SHRINCS128sQ20Keccak` |
 | Build profile | `production` | `production-128s-q18` | `production-128s-q20` |
-| CREATE3 salt string | `QUIP:ShrincsVerifier256s:V1.0` | `QUIP:ShrincsVerifier128sQ18:V1.0` | `QUIP:ShrincsVerifier128sQ20:V1.0` |
-| `PROFILE_TAG()` | `keccak256("shrincs-256s")` | `keccak256("shrincs-128s-q18")` | `keccak256("shrincs-128s-q20")` |
+| CREATE3 salt string | `QUIP:SHRINCS256sKeccak:V1.0` | `QUIP:SHRINCS128sQ18Keccak:V1.0` | `QUIP:SHRINCS128sQ20Keccak:V1.0` |
+| `PROFILE_TAG()` | `keccak256("shrincs-256s-keccak")` | `keccak256("shrincs-128s-q18-keccak")` | `keccak256("shrincs-128s-q20-keccak")` |
 | `VERSION_TAG()` | `keccak256("quip.shrincs-verifier.v1")` | same | same |
-| Predicted address | `0x435e55c7a9BA8DF02E2C1bAc9daacC732f4F9568` | `0x65E1A21B69658Ae37Dab2Ac1E483306C04b14b06` | `0xDb182Cf4A8726C8816A7F77e345Ad75f417b5968` |
+| Predicted address | `0xb76f5acfa4f1e993b36C9c72eD7514eC2c80F00A` | `0x1bcb84Bd8BcB0038Ad601405e693c2B326b0967a` | `0x48ccFf174F6e5CdabD1e0CC0f769068E3E806816` |
+| Stateless delegate | `SPHINCSPlusC256sKeccak` (below) | `SPHINCSPlusC128sQ18Keccak` (below) | `SPHINCSPlusC128sQ20Keccak` (below) |
 | Runtime codehash | *(capture on first deploy)* | *(capture on first deploy)* | *(capture on first deploy)* |
 | Chains deployed | *(none yet)* | *(none yet)* | *(none yet)* |
+
+Each SHRINCS verifier's `verifyStateless` delegates to the pinned
+SPHINCSPlusC sibling in the next table; deploy the sibling first (step 2).
+The stateful `verify` path uses no sibling.
 
 The 128s-q20 stateless budget (2^20) wants profile security-analysis
 backing before production use; 128s-q18 is the conservative sibling.
 The 128s verifiers verify against the regenerated 128s vectors, which
 land with the Rust-signer coordination (tracked as T6); don't treat a
 128s deploy as production-ready until those vectors exist.
+
+### SPHINCSPlusC verifiers
+
+The stateless delegates. Each SHRINCS verifier pins its profile's sibling
+address (its `SPHINCS_PLUS_C_VERIFIER` constant) and forwards stateless
+verification to it. A SPHINCSPlusC verifier is also usable on its own as
+a bare ERC-7913 stateless verifier: `key` is
+`abi.encode(bytes32 pkSeed, bytes32 hypertreeRoot)` and the signature
+envelope is `abi.encode(StatelessSignature)`, with no commitment logic.
+
+| Field | 256s | 128s-q18 | 128s-q20 |
+|---|---|---|---|
+| Contract | `SPHINCSPlusC256sKeccak` | `SPHINCSPlusC128sQ18Keccak` | `SPHINCSPlusC128sQ20Keccak` |
+| Build profile | `production` | `production-128s-q18` | `production-128s-q20` |
+| CREATE3 salt string | `QUIP:SPHINCSPlusC256sKeccak:V1.0` | `QUIP:SPHINCSPlusC128sQ18Keccak:V1.0` | `QUIP:SPHINCSPlusC128sQ20Keccak:V1.0` |
+| `PROFILE_TAG()` | `keccak256("shrincs-256s-keccak")` | `keccak256("shrincs-128s-q18-keccak")` | `keccak256("shrincs-128s-q20-keccak")` |
+| `VERSION_TAG()` | `keccak256("quip.sphincsplusc-verifier.v1")` | same | same |
+| Predicted address | `0xf1Bd3aE9d3907bA59FB22A77eAcCbd278b51f88A` | `0xBc7Fefc3D757Fa81E3C7d65905e32722b1a044A6` | `0x7C30ef553deE8F6DF59eE1FF4477f382607d330f` |
+| Key format | `abi.encode(pkSeed, hypertreeRoot)` | same | same |
+| Signature envelope | `abi.encode(StatelessSignature)` | same | same |
+| Runtime codehash | *(capture on first deploy)* | *(capture on first deploy)* | *(capture on first deploy)* |
+| Chains deployed | *(none yet)* | *(none yet)* | *(none yet)* |
 
 ### WOTS+ library
 
@@ -86,18 +139,32 @@ land with the Rust-signer coordination (tracked as T6); don't treat a
 | Contract | `WOTSPlus` (library) |
 | Build profile | `production` |
 | CREATE3 salt string | `QUIP:WOTSPlus:V1.0` |
-| Predicted address | `0x628bCbF1A1dfE63cad765012DD20e1dFD4461585` |
+| Predicted address | `0xe440897Eb9Df111FA48b0d62f7093BDe9a5B5dC7` |
 | Runtime codehash | *(capture on first deploy)* |
 | Chains deployed | *(none yet)* |
 
 WOTS+ is profile-independent (its parameters are its own constants, not
-`ShrincsParams`), so its bytecode and CREATE3 address are the same under
-any build profile.
+`SHRINCSParams`), so its bytecode and CREATE3 address are the same under
+any build profile. Its salt and deploy script are unchanged; the
+predicted address moved only because disabling solc metadata moved the
+shared factory (see the top of this file), and every CREATE3 child
+address is a function of that factory.
 
 ## Historical mechanisms (recorded, replaced)
 
-These are the pre-CREATE3 mechanisms, kept for the record. Neither had a
-canonical on-chain deployment.
+These are the superseded names and mechanisms, kept for the record. None
+had a canonical on-chain deployment.
+
+### Pre-release SHRINCS names and predictions
+
+Earlier drafts named the concrete verifiers `ShrincsVerifier256s`,
+`ShrincsVerifier128sQ18`, and `ShrincsVerifier128sQ20`, salted them
+`QUIP:ShrincsVerifier256s:V1.0` (and the q18/q20 forms), and predicted
+their addresses through the pre-metadata-strip factory
+`0xBF3af840d7523547C358976697E82f9Ebcb7a801`. None were deployed. They
+are replaced by the `SHRINCS*Keccak` rows above — new names, new salts,
+new factory, new addresses — plus the new `SPHINCSPlusC*Keccak` stateless
+delegates.
 
 ### SHRINCS verifier — CREATE2
 
@@ -113,10 +180,10 @@ canonical CREATE2 proxy `0x4e59b44847b379578588920cA78FbF26c0B4956C`.
 | Chains deployed | none |
 
 CREATE2 ties the address to the init code, so any recompile moved it.
-CREATE3 removes that coupling, so the profile split adopts it.
-The old `ShrincsVerifier` is now the abstract base of the three concrete
-per-profile verifiers, so this exact artifact is no longer deployable;
-the address above was never used on any chain.
+CREATE3 removes that coupling, so the profile split adopts it. That
+single verifier is now the abstract `SHRINCS` base (contracts/SHRINCS.sol)
+of the concrete per-profile verifiers, so this exact artifact is no
+longer deployable; the address above was never used on any chain.
 
 ### WOTS+ — Hardhat Ignition
 

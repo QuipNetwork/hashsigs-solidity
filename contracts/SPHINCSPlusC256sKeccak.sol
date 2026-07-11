@@ -32,5 +32,5 @@ import {SPHINCSPlusC} from "./SPHINCSPlusC.sol";
 contract SPHINCSPlusC256sKeccak is SPHINCSPlusC {
     // PROFILE_TAG: the compiled parameter-set identifier for this
     // verifier. Matches SHRINCSParams.PROFILE_ID for the 256s profile.
-    bytes32 public constant PROFILE_TAG = keccak256("shrincs-256s");
+    bytes32 public constant PROFILE_TAG = keccak256("shrincs-256s-keccak");
 }

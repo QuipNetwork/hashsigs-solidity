@@ -20,8 +20,12 @@ import {Create3Deployer} from "./DeployBase.s.sol";
 import {SHRINCS128sQ18Keccak} from "../contracts/SHRINCS128sQ18Keccak.sol";
 
 /// @title DeploySHRINCS128sQ18Keccak
-/// @notice Deploys the canonical 128s-q18 SHRINCS via CREATE3.
-/// Run from the release commit under the 128s-q18 production profile:
+/// @notice Deploys the canonical 128s-q18 SHRINCS via CREATE3. Deploy the
+/// SPHINCSPlusC sibling FIRST
+/// (script/DeploySPHINCSPlusC128sQ18Keccak.s.sol): CREATE3 fixes the
+/// sibling address either way, but this verifier's verifyStateless reverts
+/// on empty code, so the delegate must exist first. Run from the release
+/// commit under the 128s-q18 production profile:
 ///   FOUNDRY_PROFILE=production-128s-q18 forge script \
 ///       script/DeploySHRINCS128sQ18Keccak.s.sol \
 ///       --rpc-url $RPC --private-key $DEPLOYER_PK --broadcast --verify
@@ -30,9 +34,19 @@ contract DeploySHRINCS128sQ18Keccak is Create3Deployer {
     // Per-profile CREATE3 salt. A new verifier version is a NEW salt →
     // new address; deployed artifacts are never upgraded in place.
     bytes32 internal constant SALT =
-        keccak256("QUIP:ShrincsVerifier128sQ18:V1.0");
+        keccak256("QUIP:SHRINCS128sQ18Keccak:V1.0");
+
+    // Stateless delegate. SPHINCS_PLUS_C_SALT is the sibling's CREATE3
+    // salt; SPHINCS_PLUS_C is its address and MUST equal the pinned
+    // SPHINCS_PLUS_C_VERIFIER constant in SHRINCS128sQ18Keccak.
+    // _requireSibling asserts the salt derives to this address.
+    bytes32 internal constant SPHINCS_PLUS_C_SALT =
+        keccak256("QUIP:SPHINCSPlusC128sQ18Keccak:V1.0");
+    address internal constant SPHINCS_PLUS_C =
+        0xBc7Fefc3D757Fa81E3C7d65905e32722b1a044A6;
 
     function run() external {
+        _requireSibling(SPHINCS_PLUS_C_SALT, SPHINCS_PLUS_C);
         _deploy(
             "SHRINCS128sQ18Keccak:",
             "production-128s-q18",

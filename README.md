@@ -76,10 +76,15 @@ Main contracts:
   - stateless `WOTS-C` and hypertree layer verification
 - [contracts/ShrincsVerifier.sol](./contracts/ShrincsVerifier.sol)
   - abstract ERC-7913 raw-verifier base for the stateful path
-- [contracts/ShrincsVerifier256s.sol](./contracts/ShrincsVerifier256s.sol),
-  [contracts/ShrincsVerifier128sQ18.sol](./contracts/ShrincsVerifier128sQ18.sol),
-  [contracts/ShrincsVerifier128sQ20.sol](./contracts/ShrincsVerifier128sQ20.sol)
+- [contracts/SHRINCS256sKeccak.sol](./contracts/SHRINCS256sKeccak.sol),
+  [contracts/SHRINCS128sQ18Keccak.sol](./contracts/SHRINCS128sQ18Keccak.sol),
+  [contracts/SHRINCS128sQ20Keccak.sol](./contracts/SHRINCS128sQ20Keccak.sol)
   - deployable per-profile verifiers, each with a `PROFILE_TAG`
+- [contracts/SPHINCSPlusC256sKeccak.sol](./contracts/SPHINCSPlusC256sKeccak.sol),
+  [contracts/SPHINCSPlusC128sQ18Keccak.sol](./contracts/SPHINCSPlusC128sQ18Keccak.sol),
+  [contracts/SPHINCSPlusC128sQ20Keccak.sol](./contracts/SPHINCSPlusC128sQ20Keccak.sol)
+  - deployable per-profile stateless SPHINCSPlusC verifiers; each SHRINCS
+    verifier delegates its stateless path to the profile's sibling
 - [contracts/profiles/](./contracts/profiles/)
   - per-profile `ShrincsParams` constant libraries (see
     [Profiles](#profiles))
@@ -104,9 +109,12 @@ Deployment and tooling:
 - [script/Create3.sol](./script/Create3.sol) and
   [script/DeployBase.s.sol](./script/DeployBase.s.sol)
   - CREATE3 factory and shared deploy plumbing
-- [script/DeployShrincsVerifier256s.s.sol](./script/DeployShrincsVerifier256s.s.sol),
-  [script/DeployShrincsVerifier128sQ18.s.sol](./script/DeployShrincsVerifier128sQ18.s.sol),
-  [script/DeployShrincsVerifier128sQ20.s.sol](./script/DeployShrincsVerifier128sQ20.s.sol),
+- [script/DeploySHRINCS256sKeccak.s.sol](./script/DeploySHRINCS256sKeccak.s.sol),
+  [script/DeploySHRINCS128sQ18Keccak.s.sol](./script/DeploySHRINCS128sQ18Keccak.s.sol),
+  [script/DeploySHRINCS128sQ20Keccak.s.sol](./script/DeploySHRINCS128sQ20Keccak.s.sol),
+  [script/DeploySPHINCSPlusC256sKeccak.s.sol](./script/DeploySPHINCSPlusC256sKeccak.s.sol),
+  [script/DeploySPHINCSPlusC128sQ18Keccak.s.sol](./script/DeploySPHINCSPlusC128sQ18Keccak.s.sol),
+  [script/DeploySPHINCSPlusC128sQ20Keccak.s.sol](./script/DeploySPHINCSPlusC128sQ20Keccak.s.sol),
   [script/DeployWOTSPlus.s.sol](./script/DeployWOTSPlus.s.sol)
   - per-profile CREATE3 deploy scripts (see [Deployment](#deployment))
 - [scripts/check-line-length.sh](./scripts/check-line-length.sh)
@@ -1190,19 +1198,31 @@ vector work. They are not a production signer interface.
 
 ## Deployment
 
-The canonical SHRINCS verifiers and the WOTS+ library deploy through
-CREATE3 Foundry scripts. A CREATE3 address depends only on the factory and
-salt, not on the init code, so each verifier profile gets a distinct,
-chain-invariant address. [DEPLOYMENTS.md](./DEPLOYMENTS.md) is the
-registry: it holds the salts, profile tags, predicted addresses, the
-deploy procedure, and the historical CREATE2 (verifier) and
-Hardhat-Ignition (WOTS+) mechanisms these scripts replace.
+The canonical SHRINCS verifiers, their SPHINCSPlusC stateless delegates,
+and the WOTS+ library deploy through CREATE3 Foundry scripts. A CREATE3
+address depends only on the factory and salt, not on the init code, so
+each verifier profile gets a distinct, chain-invariant address.
+[DEPLOYMENTS.md](./DEPLOYMENTS.md) is the registry: it holds the salts,
+profile tags, predicted addresses, the deploy procedure, and the
+historical CREATE2 (verifier) and Hardhat-Ignition (WOTS+) mechanisms
+these scripts replace.
 
-- `script/DeployShrincsVerifier256s.s.sol` — 256s verifier (profile
+Deploy each SPHINCSPlusC delegate before its SHRINCS sibling: CREATE3
+fixes the address either way, but `SHRINCS.verifyStateless` reverts on
+empty code, and each SHRINCS deploy script asserts its sibling is already
+deployed at the pinned address.
+
+- `script/DeploySPHINCSPlusC256sKeccak.s.sol` — 256s stateless delegate
+  (profile `production`)
+- `script/DeploySHRINCS256sKeccak.s.sol` — 256s verifier (profile
   `production`)
-- `script/DeployShrincsVerifier128sQ18.s.sol` — 128s-q18 verifier
+- `script/DeploySPHINCSPlusC128sQ18Keccak.s.sol` — 128s-q18 delegate
   (profile `production-128s-q18`)
-- `script/DeployShrincsVerifier128sQ20.s.sol` — 128s-q20 verifier
+- `script/DeploySHRINCS128sQ18Keccak.s.sol` — 128s-q18 verifier
+  (profile `production-128s-q18`)
+- `script/DeploySPHINCSPlusC128sQ20Keccak.s.sol` — 128s-q20 delegate
+  (profile `production-128s-q20`)
+- `script/DeploySHRINCS128sQ20Keccak.s.sol` — 128s-q20 verifier
   (profile `production-128s-q20`)
 - `script/DeployWOTSPlus.s.sol` — WOTS+ library (profile `production`)
 
@@ -1211,7 +1231,7 @@ wrong one. Example:
 
 ```bash
 FOUNDRY_PROFILE=production forge script \
-    script/DeployShrincsVerifier256s.s.sol \
+    script/DeploySHRINCS256sKeccak.s.sol \
     --rpc-url $RPC --private-key $DEPLOYER_PK --broadcast --verify
 ```
 

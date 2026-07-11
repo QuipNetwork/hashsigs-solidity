@@ -31,5 +31,6 @@ contract SPHINCSPlusC128sQ18Keccak is SPHINCSPlusC {
     // PROFILE_TAG: the compiled parameter-set identifier for this
     // verifier. Matches SHRINCSParams.PROFILE_ID for the 128s-q18
     // profile (stateless-signature budget 2^18).
-    bytes32 public constant PROFILE_TAG = keccak256("shrincs-128s-q18");
+    bytes32 public constant PROFILE_TAG =
+        keccak256("shrincs-128s-q18-keccak");
 }
