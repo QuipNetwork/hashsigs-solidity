@@ -84,11 +84,11 @@ Rules:
     (`OP_VERIFY_STATEFUL`, `STATEFUL_PUBLIC_KEY_BYTES`).
 - **Functions:** `mixedCase`, including `internal` and `private`
   functions. `private` functions take a leading underscore
-  (`_verifyStatelessRawMemory`). `internal` library functions are
+  (`_isCanonicalEnvelope`). `internal` library functions are
   unprefixed — in an `internal` library they are the API.
 - **Structs, enums, libraries, contracts:** `CapWords`.
 - **Imports:** explicit named imports only:
-  `import {SHRINCSCore} from "./SHRINCSCore.sol";`
+  `import {SHRINCS} from "./SHRINCS.sol";`
 
 ## 3. Layout and formatting
 

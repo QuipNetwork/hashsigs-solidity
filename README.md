@@ -73,13 +73,13 @@ path directly.
 
 Main contracts:
 
-- [contracts/SHRINCS.sol](./contracts/SHRINCS.sol)
+- [contracts/SHRINCSVerifier.sol](./contracts/SHRINCSVerifier.sol)
   - abstract ERC-7913 verifier for the hybrid scheme: stateful `verify`
-    plus `verifyStateless`
-- [contracts/SHRINCSCore.sol](./contracts/SHRINCSCore.sol)
-  - pure verification core (facade over the component libraries): builds
-    the canonical action and rotation hashes and runs the stateful and
-    stateless verify-and-decode logic
+    plus `verifyStateless` delegating to the pinned SPHINCSPlusC sibling
+- [contracts/SHRINCS.sol](./contracts/SHRINCS.sol)
+  - pure verification core library (facade over the component libraries):
+    builds the canonical action and rotation hashes and runs the stateful
+    and stateless verify-and-decode logic
 - [contracts/SHRINCSCodec.sol](./contracts/SHRINCSCodec.sol)
   - key and envelope codec bridging ERC-7913 opaque bytes to typed
     SHRINCS structures
@@ -95,10 +95,10 @@ Main contracts:
   - stateless `WOTS-C` and hypertree layer verification
 - [contracts/WOTSPlusC.sol](./contracts/WOTSPlusC.sol)
   - shared `WOTS+C` chain machinery used by the hypertree and UXMSS
-- [contracts/SPHINCSPlusC.sol](./contracts/SPHINCSPlusC.sol)
+- [contracts/SPHINCSPlusCVerifier.sol](./contracts/SPHINCSPlusCVerifier.sol)
   - abstract ERC-7913 verifier for the stateless recovery path
-- [contracts/SPHINCSPlusCCore.sol](./contracts/SPHINCSPlusCCore.sol)
-  - stateless SPHINCS+C verification core (`FORS-C` + hypertree +
+- [contracts/SPHINCSPlusC.sol](./contracts/SPHINCSPlusC.sol)
+  - stateless SPHINCS+C verification core library (`FORS-C` + hypertree +
     `WOTS-C` to the public root)
 - [contracts/SHRINCS256sKeccak.sol](./contracts/SHRINCS256sKeccak.sol),
   [contracts/SHRINCS128sQ18Keccak.sol](./contracts/SHRINCS128sQ18Keccak.sol),
@@ -154,14 +154,14 @@ graph TD
     end
 
     subgraph "ERC-7913 verifiers"
-        VF["SHRINCS.sol (abstract base)<br/>+ SHRINCS256sKeccak / 128sQ18Keccak / 128sQ20Keccak<br/>(stateful verify + verifyStateless)"]
-        SP["SPHINCSPlusC.sol (abstract base)<br/>+ SPHINCSPlusC256sKeccak / 128sQ18Keccak / 128sQ20Keccak<br/>(stateless recovery path)"]
-        CO["SHRINCSCodec.sol<br/>(key + envelope codec)"]
+        VF["SHRINCSVerifier.sol (abstract base)<br/>+ SHRINCS256sKeccak / 128sQ18Keccak / 128sQ20Keccak<br/>(stateful verify + verifyStateless)"]
+        SP["SPHINCSPlusCVerifier.sol (abstract base)<br/>+ SPHINCSPlusC256sKeccak / 128sQ18Keccak / 128sQ20Keccak<br/>(stateless recovery path)"]
     end
 
     subgraph "Verification core libraries"
-        FA["SHRINCSCore.sol<br/>stateful + stateless verify-and-decode,<br/>canonical action + rotation hashes"]
-        SC["SPHINCSPlusCCore.sol<br/>stateless FORS-C + hypertree<br/>-> public root"]
+        FA["SHRINCS.sol<br/>stateful + stateless verify-and-decode,<br/>canonical action + rotation hashes"]
+        SC["SPHINCSPlusC.sol<br/>stateless FORS-C + hypertree<br/>-> public root"]
+        CO["SHRINCSCodec.sol<br/>(key + envelope codec)"]
     end
 
     subgraph "Crypto component libraries"
@@ -180,31 +180,32 @@ graph TD
 
     EX --> FA
     EX --> SC
-    EX --> ST
     EX --> PA
     EX --> EN
-    VF --> CO
     VF --> FA
-    VF --> ST
-    VF --> SC
     VF -. stateless delegate .-> SP
-    SP --> CO
     SP --> SC
     FA --> CO
     FA --> ST
     FA --> SC
+    FA --> PA
+    CO --> FA
+    CO --> ST
+    CO --> SC
+    CO --> PA
     SC --> FO
     SC --> HY
+    SC --> CO
     ST --> WC
-    HY --> WC
     ST --> HH
-    FO --> HH
-    HY --> HH
-    WC --> HH
-    FA --> PA
     ST --> PA
+    FO --> HH
     FO --> PA
+    HY --> WC
+    HY --> HH
     HY --> PA
+    WC --> HH
+    HH --> PA
 ```
 
 Tests (24 suites, 232 tests as of 2026-07-11, default profile):
@@ -239,7 +240,7 @@ Test vectors:
 
 ## Public-Key Shape
 
-The SHRINCS public key (`SHRINCSCore.PublicKey`) contains:
+The SHRINCS public key (`SHRINCS.PublicKey`) contains:
 
 - `statefulPublicKey`
 - `publicKeyCommitment`
@@ -465,13 +466,12 @@ Important semantics:
 - stateless/key-rotation authorizations are not part of this ERC-1271
   surface
 - **minimum gas:** malformed envelopes return `0xffffffff` through
-  non-reverting canonicity validators, but verification itself runs through
-  one untried self-call hop. An inner out-of-gas (the EIP-150 63/64 rule
-  strands the hop while the outer frame keeps 1/64) reverts with empty
-  returndata rather than being reported as `0xffffffff`, so a valid
-  signature is never reported invalid. Callers must forward gas
-  comfortably above the measured figures in
-  [Gas measurements](#gas-measurements).
+  non-reverting canonicity validators, but verification itself runs
+  entirely in-contract through the memory-typed `SHRINCS` library with no
+  external call. An execution failure, including out-of-gas, reverts
+  rather than being reported as `0xffffffff`, so a valid signature is
+  never reported invalid. Callers must forward gas comfortably above the
+  measured figures in [Gas measurements](#gas-measurements).
 
 ### 6. ERC-7913 raw verifier
 
@@ -489,10 +489,9 @@ stateful SHRINCS path.
 - For ABI-valid `verify(...)` calls, returns `0x024ad318` on success and
   `0xffffffff` on verification failure, malformed key bytes, or malformed
   SHRINCS envelope bytes. The public `verify(...)` entrypoint catches
-  envelope-decoding failures. Malformed ABI calldata can still fail before
-  the function body is entered, and lower-level self-call or decoder helpers
-  revert when called directly because of `onlySelf` checks or decoder
-  errors.
+  envelope-decoding failures through the non-reverting `SHRINCS`
+  decoders. Malformed ABI calldata can still fail before the function
+  body is entered.
 
 The envelope fields are:
 
@@ -510,26 +509,29 @@ The ERC-7913 verifier is intentionally narrow:
   family, and each deployable subclass adds a `PROFILE_TAG` identifying
   its compiled parameter set
 
-`SHRINCS` itself is an abstract base; the deployable contracts are
+`SHRINCSVerifier` itself is an abstract base; the deployable contracts are
 the per-profile subclasses (`SHRINCS256sKeccak`, `SHRINCS128sQ18Keccak`,
 `SHRINCS128sQ20Keccak`), each compiled under its own build profile.
 
 #### Verification semantics
 
-At a high level, [`SHRINCS.verify(...)`](./contracts/SHRINCS.sol):
+At a high level, [`SHRINCSVerifier.verify(...)`](./contracts/SHRINCSVerifier.sol):
 
 1. decodes `key` as the expected bundle commitment
 2. decodes `signature` as a stateful SHRINCS envelope
-3. converts the ERC-7913 `bytes32 hash` into the 32-byte SHRINCS message
-4. calls `SHRINCSCore.verifyStatefulUncheckedMessage(...)`
+3. hands the decoded memory structs to the memory-typed `SHRINCS` library
+   over the 32-byte `hash`
+4. calls `SHRINCS.verify(...)`, which enforces the commitment match,
+   bundle shape, `WOTS-C` reconstruction, and the unbalanced-tree root
 5. returns the ERC-7913 magic value on success, or `0xffffffff` on failure
 
-Malformed signature envelopes passed through `SHRINCS.verify(...)`
+Malformed signature envelopes passed through `SHRINCSVerifier.verify(...)`
 are treated as signature failure, not bubbled as verifier reverts.
 
-Like the ERC-1271 adapter, `verify(...)` runs the check through one untried
-self-call hop, so callers must forward gas comfortably above the measured
-stateful figure or a valid signature reverts with empty returndata.
+`verify(...)` makes no external call: it runs entirely in-contract through
+the memory-typed `SHRINCS` library, so any execution failure, including
+out-of-gas, reverts to the caller rather than being misreported as an
+invalid signature.
 
 #### Security scope
 
@@ -973,7 +975,6 @@ Current tests cover:
   are rejected
 - fuzzed ABI-valid `verify(...)` inputs return the failure value instead of
   reverting
-- direct lower-level self-call helpers reject non-self callers by reverting
 - `SHRINCSCodec.decodeKey(...)` accepts exactly 32-byte keys and rejects
   other lengths without reverting
 - `SHRINCSCodec.decodeStatefulEnvelope(...)` round-trips canonical envelopes
@@ -1015,11 +1016,11 @@ delegation figure is `verifyStateless` calling its SPHINCS+C sibling.
 
 | Path                              | Gas       |
 |-----------------------------------|-----------|
-| stateful, canonical wrapper call  | 205,841   |
-| stateful, ERC-1271                | 200,578   |
-| stateless, canonical wrapper call | 1,855,613 |
-| stateless, ERC-1271               | 2,970,497 |
-| stateless delegation, ERC-7913    | 4,014,578 |
+| stateful, canonical wrapper call  | 201,162   |
+| stateful, ERC-1271                | 179,941   |
+| stateless, canonical wrapper call | 2,105,166 |
+| stateless, ERC-1271               | 2,414,248 |
+| stateless delegation, ERC-7913    | 3,444,369 |
 
 For the stateful profile the ERC-1271 figure falls below the canonical
 wrapper call: the wrapper builds and validates the typed `ActionContext`
@@ -1033,10 +1034,12 @@ Reproduce with:
 forge test --match-contract SHRINCSMeasurements -vv
 ```
 
-These figures also set the minimum-gas floor for the untried self-call hop
-in each entrypoint (see the ERC-1271 and ERC-7913 sections above): forward
-gas comfortably above them or a valid signature reverts with empty
-returndata.
+The stateful entrypoints make no external call, so their execution
+failures (including out-of-gas) simply revert. The stateless delegation
+(`verifyStateless` calling its SPHINCS+C sibling) is the one remaining
+external call; an out-of-gas there reverts rather than being misreported
+as `0xffffffff` (see the ERC-1271 and ERC-7913 sections above). Either
+way, forward gas comfortably above these figures.
 
 ## Development
 
@@ -1251,9 +1254,9 @@ historical CREATE2 (verifier) and Hardhat-Ignition (WOTS+) mechanisms
 these scripts replace.
 
 Deploy each SPHINCSPlusC delegate before its SHRINCS sibling: CREATE3
-fixes the address either way, but `SHRINCS.verifyStateless` reverts on
-empty code, and each SHRINCS deploy script asserts its sibling is already
-deployed at the pinned address.
+fixes the address either way, but `SHRINCSVerifier.verifyStateless`
+reverts on empty code, and each SHRINCS deploy script asserts its sibling
+is already deployed at the pinned address.
 
 - `script/DeploySPHINCSPlusC256sKeccak.s.sol` — 256s stateless delegate
   (profile `production`)
