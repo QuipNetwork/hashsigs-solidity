@@ -20,6 +20,7 @@ import {SHRINCS} from "./SHRINCS.sol";
 import {ShrincsParams} from "shrincs-profile/ShrincsParams.sol";
 import {ShrincsCodec} from "./ShrincsCodec.sol";
 import {SHRINCSHash} from "./SHRINCSHash.sol";
+import {WOTSPlusC} from "./WOTSPlusC.sol";
 
 library ShrincsStateful {
     // Address-type words for the SPHINCS-style keyed hash inputs. These
@@ -151,10 +152,18 @@ library ShrincsStateful {
         // Reserve one 32-byte slot per reconstructed WOTS chain endpoint.
         bytes memory segments =
             new bytes(ShrincsParams.WOTS_CHAINS_STATEFUL * 32);
+        // Shared WOTS-C key address base for this stateful leaf: the WOTS-
+        // hash address type (0) in bits 96..127 and the leaf index in bits
+        // 64..95; layer and tree are 0 for the stateful subtree. The
+        // per-step chain index and step are folded in by the shared walk
+        // (WOTSPlusC.wotsChainNoMaskBase), reproducing the address word this
+        // path previously built via SHRINCSHash.addressWord32.
+        uint256 addressBase = (uint256(AddressTypeWotsHash) << 96)
+            | (uint256(leafIndex) << 64);
         for (uint256 i = 0; i < ShrincsParams.WOTS_CHAINS_STATEFUL;) {
             // Read the base-16 digit that chooses where this chain stopped
             // during signing.
-            uint32 digit = baseW16Digit(digest, i);
+            uint32 digit = WOTSPlusC.baseW16Digit32(digest, i);
             // Accumulate the fixed target-sum check used by this compact
             // WOTS-C variant.
             digitSum += digit;
@@ -162,15 +171,21 @@ library ShrincsStateful {
             // WOTS chains
             // forge-lint: disable-next-line(unsafe-typecast)
             uint32 chainIndex = uint32(i);
+            // T6/F-08: to unconditionally separate the stateful chain
+            // domain, pass the tag "uxmss-wots-chain" / 16 here instead of
+            // the shared WOTS_C_CHAIN_TAG (see
+            // WOTSPlusC.hashWotsCChainNoMask32).
             // Complete the revealed chain from its signing position to the
             // chain endpoint.
-            bytes32 segment = statefulChainNoMask(
+            bytes32 segment = WOTSPlusC.wotsChainNoMaskBase(
+                WOTSPlusC.WOTS_C_CHAIN_TAG,
+                WOTSPlusC.WOTS_C_CHAIN_TAG_LEN,
+                ShrincsParams.WOTS_BASE_STATEFUL,
                 pkSeed,
-                leafIndex,
+                addressBase,
                 chainIndex,
                 signature.chains[i],
-                digit,
-                ShrincsParams.WOTS_BASE_STATEFUL - 1 - digit
+                digit
             );
             // Store the reconstructed endpoint into the packed segment
             // buffer.
@@ -284,107 +299,6 @@ library ShrincsStateful {
             out := keccak256(ptr, 110)
         }
         out = SHRINCSHash.maskHash(out);
-    }
-
-    // statefulChainNoMask: Advance one stateful WOTS-C chain for a chosen
-    // number of steps.
-    // 1. Start from the revealed chain value.
-    // 2. Rebuild the address word for each remaining chain position.
-    // 3. Apply one unmasked WOTS-C chain hash per remaining step.
-    // 4. Return the reconstructed chain endpoint.
-    function statefulChainNoMask(
-        bytes32 pkSeed,
-        uint32 leafIndex,
-        uint32 chainIdx,
-        bytes32 value,
-        uint32 start,
-        uint32 steps
-    ) internal pure returns (bytes32 out) {
-        // Start from the revealed chain value carried in the signature.
-        out = value;
-        for (uint32 j = 0; j < steps;) {
-            // Rebuild the WOTS chain-step address for this leaf, chain, and
-            // step index.
-            bytes32 addressWord = SHRINCSHash.addressWord32(
-                0,
-                0,
-                ShrincsStateful.AddressTypeWotsHash,
-                leafIndex,
-                chainIdx,
-                start + j
-            );
-            // Hash one step forward along the chain.
-            out = hashStatefulWotsCChainNoMask32(pkSeed, addressWord, out);
-            unchecked {
-                ++j;
-            }
-        }
-    }
-
-    // hashStatefulWotsCChainNoMask32: Execute one unmasked stateful WOTS-C
-    // chain-hash step.
-    // 1. Domain-separate the hash as a WOTS-C chain computation.
-    // 2. Bind the public seed and chain-step address.
-    // 3. Mix in the current chain segment value.
-    // 4. Return the next chain value.
-    // Domain separation: this "wots-c-chain" tag and its 108-byte
-    // preimage layout are identical to the hypertree WOTS-C chain hash
-    // (ShrincsHypertree.hashStatelessWotsCChainNoMask32). The two
-    // subsystems stay separated through pkSeed: this path binds the
-    // stateful key's pkSeed while the hypertree path binds the stateless
-    // bundle pkSeed, and honest keygen derives the two seeds
-    // independently, so their preimages never coincide. Setting both
-    // seeds equal only collides a key against itself and cannot forge
-    // against an honest key whose seeds differ. A dedicated tag (e.g.
-    // "uxmss-wots-chain") would separate them unconditionally but is
-    // deferred: it is a breaking change to the Rust-anchored stateful
-    // vectors and keygen constants.
-    function hashStatefulWotsCChainNoMask32(
-        bytes32 pkSeed,
-        bytes32 addressWord,
-        bytes32 segment
-    ) internal pure returns (bytes32 out) {
-        // keccak256 input ("wots-c-chain" tag [§1 tags], 108 bytes):
-        //   [0..12)   "wots-c-chain"
-        //   [12..44)  pkSeed
-        //   [44..76)  addressWord
-        //   [76..108) chain segment
-        // Output truncated to HASH_LEN bytes, high-aligned (maskHash
-        // below); for 256s this folds to a no-op.
-        // Memory-safe: uses scratch at the free-memory pointer without
-        // advancing it and without relying on prior contents.
-        assembly ("memory-safe") {
-            // Allocate a scratch buffer starting at the free-memory pointer.
-            let ptr := mload(0x40)
-            // Write the domain tag prefix for WOTS-C chain hashing.
-            mstore(ptr, "wots-c-chain")
-            // Write the 32-byte public seed after the 12-byte tag.
-            mstore(add(ptr, 12), pkSeed)
-            // Write the 32-byte address word after the seed.
-            mstore(add(ptr, 44), addressWord)
-            // Write the current chain segment after the address.
-            mstore(add(ptr, 76), segment)
-            // Hash the complete WOTS-C chain-step preimage.
-            out := keccak256(ptr, 108)
-        }
-        out = SHRINCSHash.maskHash(out);
-    }
-
-    // baseW16Digit: Read one base-16 digit from a 32-byte digest.
-    // 1. Select the byte containing the requested high or low nibble.
-    // 2. Return the high nibble for even indices.
-    // 3. Return the low nibble for odd indices.
-    function baseW16Digit(bytes32 digest, uint256 index)
-        internal
-        pure
-        returns (uint32 digit)
-    {
-        // Each byte of the digest carries two base-16 digits.
-        uint8 packedByte = uint8(digest[index >> 1]);
-        return
-            index & 1 == 0
-                ? uint32(packedByte >> 4)
-                : uint32(packedByte & 0x0f);
     }
 
     // setSlice32: Write one 32-byte segment into a packed byte buffer.

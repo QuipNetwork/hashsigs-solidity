@@ -21,6 +21,7 @@ import {SHRINCS} from "../contracts/SHRINCS.sol";
 import {ShrincsForsC} from "../contracts/ShrincsForsC.sol";
 import {ShrincsHypertree} from "../contracts/ShrincsHypertree.sol";
 import {ShrincsStateful} from "../contracts/ShrincsStateful.sol";
+import {WOTSPlusC} from "../contracts/WOTSPlusC.sol";
 import {ShrincsParams} from "shrincs-profile/ShrincsParams.sol";
 import {
     ShrincsAccountVerifierExample
@@ -1688,7 +1689,7 @@ contract ShrincsAccountVerifierExampleTest is Test {
                 treeIndex: legacy.hypertree[i].treeIndex,
                 leafIndex: legacy.hypertree[i].leafIndex,
                 wotsCPkHash: legacy.hypertree[i].wotsCPkHash,
-                wotsCSignature: ShrincsHypertree.WotsCSignature({
+                wotsCSignature: WOTSPlusC.WotsCSignature({
                     randomizer: legacy.hypertree[i].wotsCSignature
                     .randomizer,
                     counter: legacy.hypertree[i].wotsCSignature.counter,
