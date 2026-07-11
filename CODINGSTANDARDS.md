@@ -25,6 +25,12 @@ Canonical citation keys:
   Bitcoin*, Cryptology ePrint Archive 2025/2203, 2025; SHRINCS is
   specified in the appendix.
   <https://eprint.iacr.org/2025/2203>
+- `SPHINCSPLUSC` — M. Kudinov, A. Hülsing, E. Ronen, E. Yogev,
+  *SPHINCS+C: Compressing SPHINCS+ With (Almost) No Cost*,
+  Cryptology ePrint Archive 2022/778 (IEEE S&P 2023).
+  <https://eprint.iacr.org/2022/778>
+- `DESIGN` — *SHRINCS profile parameterization design*, in-repo
+  design reference. See `docs/parameterization-design.md`.
 
 Cite as `[KEY §x.y]`, `[KEY Alg n]`, `[KEY Eq n]`, `[KEY p. n]`.
 Examples: `[RFC8391 §5.1]`, `[FIPS205 Alg 19]`, `[WOTSPLUS §3]`.

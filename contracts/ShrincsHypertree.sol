@@ -80,7 +80,7 @@ library ShrincsHypertree {
             // 32-byte slot. Pinned to the slot width (literal 32), not
             // HASH_LEN: a truncated profile still transports the hash in
             // a full 32-byte field, high-aligned and zero-padded
-            // (design §3.2).
+            // ([DESIGN §3.2]).
             if (layerSig.wotsCPkHash.length != 32) {
                 return false;
             }
@@ -163,6 +163,8 @@ library ShrincsHypertree {
 
     // verifyWotsC32: Verify one compressed stateless WOTS-C signature inside
     // a hypertree layer.
+    // WOTS-C (WOTS+C in [SPHINCSPLUSC §3]): a fixed target-sum check
+    // replaces the WOTS checksum chains. Construction: [SHRINCS §5].
     // 1. Check the compact WOTS-C signature shape and digest width
     // assumptions.
     // 2. Load the public seed, expected public-key hash, and signature
@@ -195,7 +197,7 @@ library ShrincsHypertree {
         // 32-byte digest word (baseW16Digit32). A profile whose digest
         // needs more than one 32-byte word is unsupported here; the
         // exact per-profile expectation is asserted by the profile-
-        // invariants test (design §3.3/§3.5). For every supported
+        // invariants test ([DESIGN §3.3/§3.5]). For every supported
         // profile wotsDigestBytes() <= 32, so this folds to false.
         if (wotsDigestBytes() > 32) return false;
 
@@ -287,7 +289,7 @@ library ShrincsHypertree {
         }
         // WOTS-C does not carry an explicit checksum chain suffix. Instead
         // the message expansion is accepted only when the reconstructed
-        // base-w digits add up to the fixed target sum.
+        // base-w digits add up to the fixed target sum ([SHRINCS §5]).
         if (digitSum != ShrincsTypes.WOTS_TARGET_SUM_STATEFUL) return false;
 
         bytes32 computedPkHash;

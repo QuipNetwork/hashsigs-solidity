@@ -180,7 +180,7 @@ contract ShrincsSignerKeygenTest is Test {
     function testKeygenMatchesRustSignerGoldenOutput() public {
         // These golden hashes are anchored to the 256s Rust signer.
         // 128s goldens are regenerated with the profile vectors in T6
-        // (design §5); until then this is pending under any non-256s
+        // ([DESIGN §5]); until then this is pending under any non-256s
         // profile. The other keygen tests here are profile-agnostic and
         // run everywhere.
         vm.skip(ShrincsTypes.HASH_LEN != 32);

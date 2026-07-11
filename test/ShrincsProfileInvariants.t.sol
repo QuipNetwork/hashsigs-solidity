@@ -23,13 +23,13 @@ import {ShrincsParams} from "shrincs-profile/ShrincsParams.sol";
 
 /// @title ShrincsProfileInvariants
 /// @notice Profile-agnostic structural invariants plus the profile
-/// identity guard (design §3.5). Compiled and run under every build
+/// identity guard ([DESIGN §3.5]). Compiled and run under every build
 /// profile.
 /// @dev The identity test cross-checks the FOUNDRY_PROFILE name against
 /// the compiled-in ShrincsParams tuple, so it fails closed if a
 /// top-level remappings.txt shadows the per-profile TOML remapping and
 /// silently compiles one profile's name with another's constants
-/// (verified hazard, design §2(d′)). CI additionally rejects any
+/// (verified hazard, [DESIGN §2(d′)]). CI additionally rejects any
 /// remappings.txt at the shell level.
 contract ShrincsProfileInvariantsTest is Test {
     // Expected parameter tuple for one profile, keyed by profile name.
@@ -116,7 +116,7 @@ contract ShrincsProfileInvariantsTest is Test {
 
     // Identity guard: the compiled constants must match the tuple the
     // FOUNDRY_PROFILE name promises. Catches a wrong-profile build and
-    // the remappings.txt-shadow hazard (design §2(d′)/§3.5).
+    // the remappings.txt-shadow hazard ([DESIGN §2(d′)/§3.5]).
     function testProfileIdentityMatchesCompiledConstants() public view {
         string memory profile = vm.envOr("FOUNDRY_PROFILE", string(""));
         ProfileExpectation memory want = expectedFor(profile);
@@ -225,7 +225,7 @@ contract ShrincsProfileInvariantsTest is Test {
     }
 
     // HASH_MASK must be exactly the high HASH_LEN bytes of ones (the
-    // high-aligned truncation mask, design §3.3).
+    // high-aligned truncation mask, [DESIGN §3.3]).
     function testHashMaskIsHighAlignedOnes() public pure {
         uint256 hashLen = uint256(ShrincsTypes.HASH_LEN);
         uint256 hashBits = 8 * hashLen;

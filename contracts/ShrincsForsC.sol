@@ -22,6 +22,9 @@ import {ShrincsUtils} from "./ShrincsUtils.sol";
 library ShrincsForsC {
     // verifyForsCAndReturnRoot: Verify the FORS-C portion of a stateless
     // SHRINCS signature.
+    // FORS-C (FORS+C in [SPHINCSPLUSC §4]): the omitted final tree is
+    // forced to select leaf 0 by grinding the digest so its last a
+    // bits (a = FORS_TREE_HEIGHT) are zero. Construction: [SHRINCS §9.2].
     // 1. Check the compact FORS-C signature shape and randomizer length.
     // 2. Recompute the FORS digest bits and expected hypertree coordinates.
     // 3. Enforce the FORS-C convention that the omitted final tree selects
@@ -348,6 +351,9 @@ library ShrincsForsC {
 
     // forsDigest: Derive the FORS digest bits and selected hypertree
     // coordinates.
+    // The grind counter drives the FORS-C digest-grinding rule
+    // [SHRINCS §9.2]: iterate the counter until the digest forces the
+    // omitted final tree to leaf 0.
     // 1. Compute how many bits are needed for FORS choices and hypertree
     // coordinates.
     // 2. Expand the digest stream from the message, public key, randomizer,
@@ -403,6 +409,8 @@ library ShrincsForsC {
 
     // forsDigestBytes: Expand the digest stream used by FORS-C and the
     // hypertree.
+    // Binds the grind counter that the FORS-C grinding rule iterates
+    // [SHRINCS §9.2].
     // 1. Domain-separate the digest input as a FORS digest computation.
     // 2. Bind the public seed, public root, randomizer, and grind counter.
     // 3. Mix in the signed message bytes.

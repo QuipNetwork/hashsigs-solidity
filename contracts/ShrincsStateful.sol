@@ -86,6 +86,8 @@ library ShrincsStateful {
 
     // compactStatefulWotsPublicKeyFromSignature: Reconstruct the compact
     // stateful WOTS-C public-key hash.
+    // WOTS-C (WOTS+C in [SPHINCSPLUSC §3]): a fixed target-sum check
+    // stands in for the WOTS checksum chains. Construction: [SHRINCS §5].
     // 1. Derive the stateful WOTS-C digest from the public seed, leaf index,
     // randomizer, counter, and message.
     // 2. Read one base-16 digit per WOTS chain from that digest.
@@ -172,6 +174,7 @@ library ShrincsStateful {
 
     // rootFromUnbalancedPath: Rebuild the root of the custom unbalanced
     // stateful tree from one leaf and path.
+    // Unbalanced XMSS-style tree per [SHRINCS App. B.3].
     // 1. Check that the auth path length matches the encoded leaf index.
     // 2. Hash the leaf together with the first auth node to form the first
     // parent.

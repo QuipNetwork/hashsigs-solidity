@@ -26,18 +26,18 @@ pragma solidity ^0.8.28;
 /// @dev q20 fixes STATELESS_SIGNATURE_LIMIT = 2^20; it shares every
 /// other constant with the q18 sibling. Node values are truncated to
 /// HASH_LEN = 16 bytes, high-aligned in a 32-byte slot (HASH_MASK,
-/// design §2(b)). Stateful side follows n (32 chains, target sum 240;
-/// maintainer decision Q6). See .plans/parameterization-design.md.
+/// [DESIGN §2(b)]). Stateful side follows n (32 chains, target sum
+/// 240; maintainer decision Q6). See [DESIGN].
 library ShrincsParams {
     // PROFILE_ID: stable identifier for this compiled profile. Consumed
-    // by the profile-identity test/CI guard (design §3.5).
+    // by the profile-identity test/CI guard ([DESIGN §3.5]).
     // TODO(T6): bind PROFILE_ID into the public-key commitment tag
     // ("shrincs-public-key/<profile>") during the single vector
-    // regeneration event (design §4 rider Q2). Not bound yet.
+    // regeneration event ([DESIGN §4] rider Q2). Not bound yet.
     bytes32 internal constant PROFILE_ID = keccak256("shrincs-128s-q20");
 
     // Encoded stateful public key layout (kept 68 bytes across all
-    // profiles, design §3.2):
+    // profiles, [DESIGN §3.2]):
     // 32-byte pkSeed || 32-byte root || 4-byte maxSignatures.
     uint16 internal constant STATEFUL_PUBLIC_KEY_BYTES = 68;
     // Stateful WOTS-C follows n: 2n = 32 chains (maintainer decision Q6).
@@ -62,7 +62,7 @@ library ShrincsParams {
     // HASH_LEN: the SPHINCS/WOTS `n` security parameter [FIPS205 §11] —
     // hash output length in bytes.
     uint16 internal constant HASH_LEN = 16;
-    // HASH_MASK: high-aligned truncation mask (design §2(b)/§3.3).
+    // HASH_MASK: high-aligned truncation mask ([DESIGN §2(b)/§3.3]).
     // Keeps the top HASH_LEN bytes of a 32-byte hash slot and zeroes the
     // low (32 - HASH_LEN), so node values are high-aligned, zero-padded.
     // = ((1 << (8*HASH_LEN)) - 1) << (8*(32 - HASH_LEN))

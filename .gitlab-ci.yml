@@ -31,10 +31,11 @@ variables:
 # Profile-independent gates, run once. Format, hard line cap, and the
 # profile-selection hazard guard: a top-level remappings.txt silently
 # overrides the per-profile TOML remappings, so a profile build could
-# compile with another profile's constants (verified hazard, design
-# §2(d′)/§3.5). Per-profile remappings live only in foundry.toml; fail
-# closed if a remappings.txt exists. The ShrincsProfileInvariants
-# identity test is the in-Solidity backstop for the same hazard.
+# compile with another profile's constants (verified hazard,
+# [DESIGN §2(d′)/§3.5]). Per-profile remappings live only in
+# foundry.toml; fail closed if a remappings.txt exists. The
+# ShrincsProfileInvariants identity test is the in-Solidity backstop
+# for the same hazard.
 format-and-checks:
   extends: .foundry
   rules:
@@ -49,9 +50,10 @@ format-and-checks:
 # compile under their own profile (the others are skipped); lint emits a
 # cosmetic "AST source not found" note for the skipped files but exits 0.
 # The 256s-specific vector/stateless tests are skipped under the 128s
-# profiles via foundry.toml until the T6 vector regeneration (design
-# §3.6). The 256s leg runs under the `ci` profile: 256s params (inherited
-# from default) plus bounded, deterministic fuzz/invariant runs
+# profiles via foundry.toml until the T6 vector regeneration
+# ([DESIGN §3.6]). The 256s leg runs under the `ci` profile: 256s
+# params (inherited from default) plus bounded, deterministic
+# fuzz/invariant runs
 # (foundry.toml). FOUNDRY_FUZZ_SEED (global) pins the seed; the
 # failure_persist cache replays any counterexample a nightly or prior MR
 # found before exploring new cases.

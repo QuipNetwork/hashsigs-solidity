@@ -235,12 +235,12 @@ library ShrincsUtils {
 
     // maskHash: Truncate a freshly produced 32-byte hash to the active
     // profile's HASH_LEN, keeping the high HASH_LEN bytes and zeroing
-    // the low (32 - HASH_LEN) (design §2(b)/§3.3). Applied at every
+    // the low (32 - HASH_LEN) ([DESIGN §2(b)/§3.3]). Applied at every
     // hash-*producing* site so a truncated profile emits high-aligned,
     // zero-padded node values in a bytes32 slot; the exact bytes hashed
     // downstream stay 32-byte-slot sized. No masking is done on *load*,
     // so a mutated low half fails a downstream comparison rather than
-    // opening a second accepted encoding (canonicality, design §2(b)).
+    // opening a second accepted encoding (canonicality, [DESIGN §2(b)]).
     // For the 256s profile HASH_MASK is all-ones, so this folds to a
     // no-op under via-ir.
     function maskHash(bytes32 hashValue) internal pure returns (bytes32) {

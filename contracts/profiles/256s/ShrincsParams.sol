@@ -26,14 +26,14 @@ pragma solidity ^0.8.28;
 /// @dev Every count here sizes arrays and bounds loops, so it must be a
 /// compile-time constant (not a runtime value): via-ir does not
 /// constant-fold struct-passed params. See
-/// .plans/parameterization-design.md §2/§3 for the option analysis.
+/// [DESIGN §2/§3] for the option analysis.
 library ShrincsParams {
     // PROFILE_ID: stable identifier for this compiled profile. Consumed
-    // by the profile-identity test/CI guard (design §3.5) to catch a
+    // by the profile-identity test/CI guard ([DESIGN §3.5]) to catch a
     // wrong-profile or remappings.txt-shadowed build.
     // TODO(T6): bind PROFILE_ID into the public-key commitment tag
     // ("shrincs-public-key/<profile>") during the single vector
-    // regeneration event (design §4 rider Q2). Not bound yet.
+    // regeneration event ([DESIGN §4] rider Q2). Not bound yet.
     bytes32 internal constant PROFILE_ID = keccak256("shrincs-256s");
 
     // Encoded stateful public key layout:
@@ -58,11 +58,11 @@ library ShrincsParams {
     // hash output length in bytes.
     uint16 internal constant HASH_LEN = 32;
     // HASH_MASK: high-aligned truncation mask applied at every hash-
-    // producing site (design §2(b)/§3.3). Keeps the top HASH_LEN bytes
+    // producing site ([DESIGN §2(b)/§3.3]). Keeps the top HASH_LEN bytes
     // of a 32-byte hash slot and zeroes the low (32 - HASH_LEN), so a
     // truncated profile emits high-aligned, zero-padded node values in
     // a bytes32. For 256s (HASH_LEN = 32) this is all-ones and folds to
-    // a no-op under via-ir (measured, design §2(b)).
+    // a no-op under via-ir (measured, [DESIGN §2(b)]).
     // = ((1 << (8*HASH_LEN)) - 1) << (8*(32 - HASH_LEN))
     // -> (2^256 - 1) << 0 = 2^256 - 1
     // Python: (((1 << (8*32)) - 1) << (8*(32-32))) & (2**256 - 1)

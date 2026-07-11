@@ -6,11 +6,11 @@ via_ir = true
 optimizer = true
 optimizer_runs = 200
 gas_limit = "18446744073709551615" # u64::MAX
-# Profile selection (design §3.4): the `shrincs-profile/` prefix
+# Profile selection ([DESIGN §3.4]): the `shrincs-profile/` prefix
 # resolves to the active profile's ShrincsParams library. Default is
 # the 256s profile. Other profiles override this remapping AND the
 # `out` dir. WARNING: a top-level remappings.txt silently overrides
-# these per-profile TOML remappings (verified hazard, design §2(d′));
+# these per-profile TOML remappings (verified hazard, [DESIGN §2(d′)]);
 # the profile-identity test + CI guard (T3) fail closed if one exists.
 remappings = ["shrincs-profile/=contracts/profiles/256s/"]
 # The concrete per-profile verifiers and their deploy scripts each
@@ -42,13 +42,13 @@ optimizer = true
 optimizer_runs = 1000000
 gas_limit = "18446744073709551615" # u64::MAX
 
-# 128s profiles (design §3.4). Each overrides the `shrincs-profile/`
+# 128s profiles ([DESIGN §3.4]). Each overrides the `shrincs-profile/`
 # remapping and uses its own `out` dir so artifacts never collide.
 # `skip` excludes the 256s-specific tests: those either read the
 # Rust-anchored 256s vectors or run the in-Solidity stateless signer
 # (full 2^a FORS trees + fixed 8-layer hypertree), which is infeasible
 # at 128s (a = 24, d = 1). 128s stateless coverage lands with the
-# regenerated vectors in T6 (design §3.6). Stateful, toy-profile,
+# regenerated vectors in T6 ([DESIGN §3.6]). Stateful, toy-profile,
 # WOTS+, and profile-invariant tests run under every profile.
 # Each 128s `skip` excludes the non-matching concrete verifiers and
 # deploy scripts (so only this profile's verifier compiles, with this
@@ -93,7 +93,7 @@ skip = [
 
 # Production twins of the 128s profiles: same solc/via-ir/runs pin as
 # [profile.production], differing only in remapping, `out`, and skip
-# (design §3.4). Used to build each profile's canonical verifier
+# ([DESIGN §3.4]). Used to build each profile's canonical verifier
 # artifact; each skips the other profiles' verifiers and deploy scripts.
 [profile.production-128s-q18]
 solc = "0.8.35"
