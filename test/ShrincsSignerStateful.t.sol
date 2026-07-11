@@ -17,28 +17,32 @@
 pragma solidity ^0.8.28;
 
 import {Test} from "../lib/forge-std/src/Test.sol";
-import {SHRINCS} from "../contracts/SHRINCS.sol";
+import {SHRINCSCore} from "../contracts/SHRINCSCore.sol";
 import {ShrincsTestSigner} from "./helpers/ShrincsTestSigner.sol";
 import {UXMSS} from "../contracts/UXMSS.sol";
-import {ShrincsParams} from "shrincs-profile/ShrincsParams.sol";
+import {SHRINCSParams} from "shrincs-profile/SHRINCSParams.sol";
 
 contract ShrincsStatefulSignerHarness {
     function keygen(bytes memory seedMaterial, uint32 maxStatefulSignatures)
         external
         pure
-        returns (SHRINCS.SigningKey memory, SHRINCS.PublicKey memory, bool)
+        returns (
+            SHRINCSCore.SigningKey memory,
+            SHRINCSCore.PublicKey memory,
+            bool
+        )
     {
         return ShrincsTestSigner.keygen(seedMaterial, maxStatefulSignatures);
     }
 
     function signStatefulRaw(
-        SHRINCS.SigningKey memory signingKey,
+        SHRINCSCore.SigningKey memory signingKey,
         bytes memory message
     )
         external
         pure
         returns (
-            SHRINCS.SigningKey memory,
+            SHRINCSCore.SigningKey memory,
             UXMSS.StatefulSignature memory,
             bool
         )
@@ -48,11 +52,11 @@ contract ShrincsStatefulSignerHarness {
 
     function verifyUnsafeRaw(
         bytes32 expectedPublicKeyCommitment,
-        SHRINCS.PublicKey calldata publicKey,
+        SHRINCSCore.PublicKey calldata publicKey,
         bytes calldata message,
         UXMSS.StatefulSignature calldata signature
     ) external pure returns (bool) {
-        return SHRINCS.verifyStatefulUncheckedMessage(
+        return SHRINCSCore.verifyStatefulUncheckedMessage(
             expectedPublicKeyCommitment, publicKey, message, signature
         );
     }
@@ -70,8 +74,8 @@ contract ShrincsSignerStatefulTest is Test {
         view
     {
         (
-            SHRINCS.SigningKey memory signingKey,
-            SHRINCS.PublicKey memory publicKey,
+            SHRINCSCore.SigningKey memory signingKey,
+            SHRINCSCore.PublicKey memory publicKey,
             bool keygenOk
         ) = harness.keygen(bytes("solidity stateful signer seed"), 4);
         assertTrue(keygenOk, "keygen must succeed");
@@ -79,7 +83,7 @@ contract ShrincsSignerStatefulTest is Test {
         bytes memory message =
             abi.encodePacked(keccak256("solidity stateful signer message"));
         (
-            SHRINCS.SigningKey memory nextSigningKey,
+            SHRINCSCore.SigningKey memory nextSigningKey,
             UXMSS.StatefulSignature memory signature,
             bool signOk
         ) = harness.signStatefulRaw(signingKey, message);
@@ -92,7 +96,7 @@ contract ShrincsSignerStatefulTest is Test {
         );
         assertEq(
             signature.chains.length,
-            ShrincsParams.WOTS_CHAINS_STATEFUL,
+            SHRINCSParams.WOTS_CHAINS_STATEFUL,
             "all stateful chains must be present"
         );
         assertEq(
@@ -115,14 +119,14 @@ contract ShrincsSignerStatefulTest is Test {
     }
 
     function testStatefulSignerRejectsExhaustedKey() public view {
-        (SHRINCS.SigningKey memory signingKey,, bool keygenOk) =
+        (SHRINCSCore.SigningKey memory signingKey,, bool keygenOk) =
             harness.keygen(bytes("stateful exhaustion seed"), 1);
         assertTrue(keygenOk, "keygen must succeed");
 
         bytes memory message = abi.encodePacked(
             keccak256("stateful signer exhaustion message")
         );
-        (SHRINCS.SigningKey memory usedKey,, bool firstOk) =
+        (SHRINCSCore.SigningKey memory usedKey,, bool firstOk) =
             harness.signStatefulRaw(signingKey, message);
         assertTrue(firstOk, "first signature must succeed");
 

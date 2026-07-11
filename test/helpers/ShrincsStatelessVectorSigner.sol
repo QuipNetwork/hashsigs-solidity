@@ -17,12 +17,12 @@
 pragma solidity ^0.8.28;
 
 import {ShrincsTestSigner} from "./ShrincsTestSigner.sol";
-import {SHRINCS} from "../../contracts/SHRINCS.sol";
+import {SHRINCSCore} from "../../contracts/SHRINCSCore.sol";
 import {SPHINCSPlusCCore} from "../../contracts/SPHINCSPlusCCore.sol";
 import {FORSMinusC} from "../../contracts/FORSMinusC.sol";
 import {Hypertree} from "../../contracts/Hypertree.sol";
 import {UXMSS} from "../../contracts/UXMSS.sol";
-import {ShrincsParams} from "shrincs-profile/ShrincsParams.sol";
+import {SHRINCSParams} from "shrincs-profile/SHRINCSParams.sol";
 import {SHRINCSHash} from "../../contracts/SHRINCSHash.sol";
 
 /// @notice TEST-ONLY staged stateless SHRINCS signer for on-demand vector
@@ -43,8 +43,8 @@ contract ShrincsStatelessVectorSigner {
         bool hypertreeLayerStarted;
         bool hypertreeWotsDone;
         bool hypertreeAuthPathDone;
-        SHRINCS.SigningKey signingKey;
-        SHRINCS.PublicKey publicKey;
+        SHRINCSCore.SigningKey signingKey;
+        SHRINCSCore.PublicKey publicKey;
         bytes message;
         bytes forsDigest;
         uint64 bottomTreeIndex;
@@ -72,8 +72,8 @@ contract ShrincsStatelessVectorSigner {
         uint32 maxStatefulSignatures,
         bytes memory message
     ) external returns (bytes32 sessionId, bool ok) {
-        SHRINCS.SigningKey memory signingKey;
-        SHRINCS.PublicKey memory publicKey;
+        SHRINCSCore.SigningKey memory signingKey;
+        SHRINCSCore.PublicKey memory publicKey;
         (signingKey, publicKey, ok) =
             ShrincsTestSigner.keygen(seedMaterial, maxStatefulSignatures);
         if (!ok) return (bytes32(0), false);
@@ -81,8 +81,8 @@ contract ShrincsStatelessVectorSigner {
     }
 
     function beginSession(
-        SHRINCS.SigningKey memory signingKey,
-        SHRINCS.PublicKey memory publicKey,
+        SHRINCSCore.SigningKey memory signingKey,
+        SHRINCSCore.PublicKey memory publicKey,
         bytes memory message
     ) public returns (bytes32 sessionId, bool ok) {
         sessionId = keccak256(
@@ -103,7 +103,7 @@ contract ShrincsStatelessVectorSigner {
                 "fors-randomizer", signingKey.statelessPrfSeed, message
             )
         );
-        uint256 signedTrees = uint256(ShrincsParams.NUM_FORS_TREES) - 1;
+        uint256 signedTrees = uint256(SHRINCSParams.NUM_FORS_TREES) - 1;
         for (uint32 counter = 0; counter < MAX_GRIND_COUNTER;) {
             bytes memory digest;
             uint64 treeIndex;
@@ -118,8 +118,8 @@ contract ShrincsStatelessVectorSigner {
             if (
                 readBits32Memory(
                         digest,
-                        signedTrees * ShrincsParams.FORS_TREE_HEIGHT,
-                        ShrincsParams.FORS_TREE_HEIGHT
+                        signedTrees * SHRINCSParams.FORS_TREE_HEIGHT,
+                        SHRINCSParams.FORS_TREE_HEIGHT
                     ) == 0
             ) {
                 session.signature.fors.randomizer =
@@ -149,13 +149,13 @@ contract ShrincsStatelessVectorSigner {
         require(session.forsPrepared, "fors not prepared");
         require(!session.forsFinalized, "fors finalized");
 
-        uint32 signedTrees = ShrincsParams.NUM_FORS_TREES - 1;
+        uint32 signedTrees = SHRINCSParams.NUM_FORS_TREES - 1;
         while (processed < maxTrees && session.nextForsTree < signedTrees) {
             uint32 forsTree = session.nextForsTree;
             uint32 leaf = readBits32Memory(
                 session.forsDigest,
-                uint256(forsTree) * ShrincsParams.FORS_TREE_HEIGHT,
-                ShrincsParams.FORS_TREE_HEIGHT
+                uint256(forsTree) * SHRINCSParams.FORS_TREE_HEIGHT,
+                SHRINCSParams.FORS_TREE_HEIGHT
             );
             // line-length: allow — fmt canonical tuple head exceeds cap
             (bytes32 root, bytes32[] memory authPath) = forsTreeRootAndAuthPath(
@@ -203,7 +203,7 @@ contract ShrincsStatelessVectorSigner {
         require(session.forsPrepared, "fors not prepared");
         require(!session.forsFinalized, "fors finalized");
         require(
-            session.nextForsTree == ShrincsParams.NUM_FORS_TREES - 1,
+            session.nextForsTree == SHRINCSParams.NUM_FORS_TREES - 1,
             "fors incomplete"
         );
 
@@ -247,8 +247,8 @@ contract ShrincsStatelessVectorSigner {
             }
             if (!session.hypertreeAuthPathDone) {
                 uint32 subtreeHeight = uint32(
-                    ShrincsParams.HYPERTREE_HEIGHT
-                        / ShrincsParams.NUM_HYPERTREE_LAYERS
+                    SHRINCSParams.HYPERTREE_HEIGHT
+                        / SHRINCSParams.NUM_HYPERTREE_LAYERS
                 );
                 (, bool authDone) =
                     this.stepHypertreeAuthPath(sessionId, subtreeHeight);
@@ -359,7 +359,7 @@ contract ShrincsStatelessVectorSigner {
                 leaf,
                 fullDigest
             );
-            if (digitSum == ShrincsParams.WOTS_TARGET_SUM_STATEFUL) {
+            if (digitSum == SHRINCSParams.WOTS_TARGET_SUM_STATEFUL) {
                 Hypertree.HypertreeLayerSignature storage layerSig =
                     session.signature.hypertree[session.nextHypertreeLayer];
                 layerSig.wotsCSignature.randomizer =
@@ -396,8 +396,8 @@ contract ShrincsStatelessVectorSigner {
         require(!session.hypertreeAuthPathDone, "auth finalized");
 
         uint32 subtreeHeight = uint32(
-            ShrincsParams.HYPERTREE_HEIGHT
-                / ShrincsParams.NUM_HYPERTREE_LAYERS
+            SHRINCSParams.HYPERTREE_HEIGHT
+                / SHRINCSParams.NUM_HYPERTREE_LAYERS
         );
         uint32 layer = session.nextHypertreeLayer;
         uint64 tree = session.currentHypertreeTreeIndex;
@@ -444,8 +444,8 @@ contract ShrincsStatelessVectorSigner {
         require(session.hypertreeAuthPathDone, "auth incomplete");
 
         uint32 subtreeHeight = uint32(
-            ShrincsParams.HYPERTREE_HEIGHT
-                / ShrincsParams.NUM_HYPERTREE_LAYERS
+            SHRINCSParams.HYPERTREE_HEIGHT
+                / SHRINCSParams.NUM_HYPERTREE_LAYERS
         );
         uint64 tree = session.currentHypertreeTreeIndex;
         uint32 nextLayer = session.nextHypertreeLayer + 1;
@@ -503,7 +503,7 @@ contract ShrincsStatelessVectorSigner {
     function sessionPublicKey(bytes32 sessionId)
         external
         view
-        returns (SHRINCS.PublicKey memory publicKey)
+        returns (SHRINCSCore.PublicKey memory publicKey)
     {
         Session storage session = sessions[sessionId];
         require(session.active, "unknown session");
@@ -541,10 +541,10 @@ contract ShrincsStatelessVectorSigner {
         );
     }
 
-    function copyPublicKey(SHRINCS.PublicKey storage publicKey)
+    function copyPublicKey(SHRINCSCore.PublicKey storage publicKey)
         internal
         view
-        returns (SHRINCS.PublicKey memory out)
+        returns (SHRINCSCore.PublicKey memory out)
     {
         out.statefulPublicKey = publicKey.statefulPublicKey;
         out.publicKeyCommitment = publicKey.publicKeyCommitment;
@@ -634,17 +634,17 @@ contract ShrincsStatelessVectorSigner {
         pure
         returns (bytes memory digest, uint64 treeIndex, uint32 leafIndex)
     {
-        uint32 indexBits = uint32(ShrincsParams.NUM_FORS_TREES)
-            * uint32(ShrincsParams.FORS_TREE_HEIGHT);
+        uint32 indexBits = uint32(SHRINCSParams.NUM_FORS_TREES)
+            * uint32(SHRINCSParams.FORS_TREE_HEIGHT);
         uint32 subtreeHeight = uint32(
-            ShrincsParams.HYPERTREE_HEIGHT
-                / ShrincsParams.NUM_HYPERTREE_LAYERS
+            SHRINCSParams.HYPERTREE_HEIGHT
+                / SHRINCSParams.NUM_HYPERTREE_LAYERS
         );
         uint32 treeBits =
-            uint32(ShrincsParams.HYPERTREE_HEIGHT) - subtreeHeight;
+            uint32(SHRINCSParams.HYPERTREE_HEIGHT) - subtreeHeight;
         uint256 digestBytes =
             (uint256(indexBits)
-                    + uint256(ShrincsParams.HYPERTREE_HEIGHT)
+                    + uint256(SHRINCSParams.HYPERTREE_HEIGHT)
                     + 7) / 8;
         digest = forsDigestBytes(
             pkSeed, hypertreeRoot, randomizer, counter, message, digestBytes
@@ -702,7 +702,7 @@ contract ShrincsStatelessVectorSigner {
         uint32 forsTree,
         uint32 leaf
     ) internal pure returns (bytes32, bytes32[] memory) {
-        uint32 height = ShrincsParams.FORS_TREE_HEIGHT;
+        uint32 height = SHRINCSParams.FORS_TREE_HEIGHT;
         uint256 leafCount = uint256(1) << height;
         bytes32[] memory levelNodes = new bytes32[](leafCount);
         for (uint32 index = 0; index < leafCount;) {
@@ -760,7 +760,7 @@ contract ShrincsStatelessVectorSigner {
         uint32 leaf
     ) internal pure returns (bytes32) {
         uint64 treeLeaf =
-            (uint64(forsTree) << ShrincsParams.FORS_TREE_HEIGHT)
+            (uint64(forsTree) << SHRINCSParams.FORS_TREE_HEIGHT)
                 + uint64(leaf);
         bytes32 addressWord =
             forsAddressWord(treeIndex, leafIndex, 0, treeLeaf);
@@ -782,7 +782,7 @@ contract ShrincsStatelessVectorSigner {
             pkSeed, skSeed, treeIndex, leafIndex, forsTree, leaf
         );
         uint64 treeLeaf = (uint64(forsTree)
-                    << ShrincsParams.FORS_TREE_HEIGHT) + uint64(leaf);
+                    << SHRINCSParams.FORS_TREE_HEIGHT) + uint64(leaf);
         bytes32 addressWord =
             forsAddressWord(treeIndex, leafIndex, 0, treeLeaf);
         return keccak256(
@@ -841,7 +841,7 @@ contract ShrincsStatelessVectorSigner {
             (chains, digitSum) = buildStatelessWotsChains(
                 pkSeed, skSeed, layer, tree, keypair, fullDigest
             );
-            if (digitSum == ShrincsParams.WOTS_TARGET_SUM_STATEFUL) {
+            if (digitSum == SHRINCSParams.WOTS_TARGET_SUM_STATEFUL) {
                 return (randomizer, counter, chains, true);
             }
             unchecked {
@@ -859,8 +859,8 @@ contract ShrincsStatelessVectorSigner {
         uint32 keypair,
         bytes32 digest
     ) internal pure returns (bytes32[] memory chains, uint32 digitSum) {
-        chains = new bytes32[](ShrincsParams.NUM_WOTS_CHAINS);
-        for (uint32 chain = 0; chain < ShrincsParams.NUM_WOTS_CHAINS;) {
+        chains = new bytes32[](SHRINCSParams.NUM_WOTS_CHAINS);
+        for (uint32 chain = 0; chain < SHRINCSParams.NUM_WOTS_CHAINS;) {
             uint32 digit = baseW16Digit(digest, chain);
             digitSum += digit;
             bytes32 secret = statelessWotsCSecret(skSeed, chain);
@@ -882,7 +882,7 @@ contract ShrincsStatelessVectorSigner {
             hypertreeLayerSeeds(statelessSkSeed);
         uint32 topLayer = NUM_HYPERTREE_LAYERS - 1;
         uint32 subtreeHeight =
-            uint32(ShrincsParams.HYPERTREE_HEIGHT / NUM_HYPERTREE_LAYERS);
+            uint32(SHRINCSParams.HYPERTREE_HEIGHT / NUM_HYPERTREE_LAYERS);
         return hypertreeVirtualNode(
             pkSeed, layerSeeds[topLayer], topLayer, 0, subtreeHeight, 0
         );
@@ -963,9 +963,9 @@ contract ShrincsStatelessVectorSigner {
         uint32 keypair
     ) internal pure returns (bytes32) {
         bytes memory endpoints = new bytes(
-            uint256(ShrincsParams.NUM_WOTS_CHAINS) * 32
+            uint256(SHRINCSParams.NUM_WOTS_CHAINS) * 32
         );
-        for (uint32 chain = 0; chain < ShrincsParams.NUM_WOTS_CHAINS;) {
+        for (uint32 chain = 0; chain < SHRINCSParams.NUM_WOTS_CHAINS;) {
             bytes32 secret = statelessWotsCSecret(skSeed, chain);
             bytes32 endpoint = statelessWotsCChain(
                 pkSeed,
@@ -975,7 +975,7 @@ contract ShrincsStatelessVectorSigner {
                 chain,
                 secret,
                 0,
-                ShrincsParams.WOTS_CHAIN_LEN - 1
+                SHRINCSParams.WOTS_CHAIN_LEN - 1
             );
             setSlice32(endpoints, endpoint, uint256(chain) * 32);
             unchecked {
@@ -993,8 +993,8 @@ contract ShrincsStatelessVectorSigner {
         uint32 leaf
     ) internal pure returns (bytes32[] memory path) {
         uint32 subtreeHeight = uint32(
-            ShrincsParams.HYPERTREE_HEIGHT
-                / ShrincsParams.NUM_HYPERTREE_LAYERS
+            SHRINCSParams.HYPERTREE_HEIGHT
+                / SHRINCSParams.NUM_HYPERTREE_LAYERS
         );
         path = new bytes32[](subtreeHeight);
         for (uint32 level = 0; level < subtreeHeight;) {

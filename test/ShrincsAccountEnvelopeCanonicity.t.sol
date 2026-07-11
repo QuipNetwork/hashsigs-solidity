@@ -17,14 +17,14 @@
 pragma solidity ^0.8.28;
 
 import {Test} from "../lib/forge-std/src/Test.sol";
-import {SHRINCS} from "../contracts/SHRINCS.sol";
+import {SHRINCSCore} from "../contracts/SHRINCSCore.sol";
 import {SPHINCSPlusCCore} from "../contracts/SPHINCSPlusCCore.sol";
 import {
-    ShrincsAccountEnvelope
-} from "../contracts/examples/ShrincsAccountEnvelope.sol";
+    SHRINCSAccountEnvelope
+} from "../contracts/examples/SHRINCSAccountEnvelope.sol";
 import {
-    ShrincsAccountVerifierExample
-} from "../contracts/examples/ShrincsAccountVerifierExample.sol";
+    SHRINCSAccountVerifierExample
+} from "../contracts/examples/SHRINCSAccountVerifierExample.sol";
 import {
     ShrincsAccountSigningFacade
 } from "./helpers/ShrincsAccountSigningFacade.sol";
@@ -43,7 +43,7 @@ contract CanonicityHarness {
         pure
         returns (bool)
     {
-        return ShrincsAccountEnvelope.isCanonicalStatelessEnvelope(payload);
+        return SHRINCSAccountEnvelope.isCanonicalStatelessEnvelope(payload);
     }
 
     /// @dev Reference implementation: decode then require the re-encoding to
@@ -56,14 +56,14 @@ contract CanonicityHarness {
         returns (bool)
     {
         (
-            SHRINCS.PublicKey memory publicKey,
+            SHRINCSCore.PublicKey memory publicKey,
             bytes32 actionType,
             bytes32 payloadHash,
             SPHINCSPlusCCore.StatelessSignature memory signature
         ) = abi.decode(
             payload,
             (
-                SHRINCS.PublicKey,
+                SHRINCSCore.PublicKey,
                 bytes32,
                 bytes32,
                 SPHINCSPlusCCore.StatelessSignature
@@ -82,7 +82,7 @@ contract ShrincsAccountEnvelopeCanonicityTest is Test {
         keccak256("measurement payload");
 
     // Byte offsets of framing words in the canonical stateless envelope,
-    // taken from the fixed ABI template (see ShrincsAccountEnvelope):
+    // taken from the fixed ABI template (see SHRINCSAccountEnvelope):
     //   [0]   offset to PublicKey (128)
     //   [96]  offset to StatelessSignature (576)
     //   [256] statefulPublicKey length (68)
@@ -221,33 +221,38 @@ contract ShrincsAccountEnvelopeCanonicityTest is Test {
 
     // ---- Helpers ----------------------------------------------------------
 
-    /// @dev When the payload decodes, the structural walk MUST match the
-    /// re-encode reference exactly. When decode reverts, production returns
-    /// INVALID before the validator runs, so its output is out of scope.
+    /// @dev The structural walk accepts EXACTLY the canonical encodings:
+    /// walk(p) == (abi.decode(p) succeeds AND re-encoding reproduces p). A
+    /// decode revert counts as non-canonical (refOk = false), pinning that
+    /// the walk also rejects any input abi.decode would revert on — the
+    /// property the non-reverting ERC-1271 path relies on so a malformed
+    /// envelope returns INVALID instead of reverting.
     function _assertAgreeIfDecodes(bytes memory payload) internal view {
-        try harness.referenceCanonical(payload) returns (bool refOk) {
-            assertEq(
-                harness.structural(payload),
-                refOk,
-                "structural walk must match re-encode reference"
-            );
+        bool refOk;
+        try harness.referenceCanonical(payload) returns (bool r) {
+            refOk = r;
         } catch {
-            // decode reverted: not reachable by the production validator.
+            refOk = false;
         }
+        assertEq(
+            harness.structural(payload),
+            refOk,
+            "structural walk must match re-encode reference"
+        );
     }
 
     function _buildEnvelope() internal returns (bytes memory) {
         (
-            SHRINCS.SigningKey memory signingKey,
-            SHRINCS.PublicKey memory publicKey,
+            SHRINCSCore.SigningKey memory signingKey,
+            SHRINCSCore.PublicKey memory publicKey,
             bool ok
         ) = ShrincsAccountSigningFacade.keygen(
             bytes("canonicity stateless fixture seed"), 4
         );
         require(ok, "keygen");
         // forgefmt: disable-next-line
-        ShrincsAccountVerifierExample account =
-            new ShrincsAccountVerifierExample(
+        SHRINCSAccountVerifierExample account =
+            new SHRINCSAccountVerifierExample(
                 ShrincsAccountSigningFacade.publicKeyCommitmentWord(
                     publicKey
                 )

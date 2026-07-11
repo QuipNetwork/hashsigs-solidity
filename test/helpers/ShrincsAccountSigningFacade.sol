@@ -16,13 +16,13 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 pragma solidity ^0.8.28;
 
-import {SHRINCS} from "../../contracts/SHRINCS.sol";
+import {SHRINCSCore} from "../../contracts/SHRINCSCore.sol";
 import {SPHINCSPlusCCore} from "../../contracts/SPHINCSPlusCCore.sol";
 import {UXMSS} from "../../contracts/UXMSS.sol";
-import {ShrincsCodec} from "../../contracts/ShrincsCodec.sol";
+import {SHRINCSCodec} from "../../contracts/SHRINCSCodec.sol";
 import {
-    ShrincsAccountVerifierExample
-} from "../../contracts/examples/ShrincsAccountVerifierExample.sol";
+    SHRINCSAccountVerifierExample
+} from "../../contracts/examples/SHRINCSAccountVerifierExample.sol";
 import {
     ShrincsStatelessVectorSigner
 } from "./ShrincsStatelessVectorSigner.sol";
@@ -46,8 +46,8 @@ library ShrincsAccountSigningFacade {
         internal
         pure
         returns (
-            SHRINCS.SigningKey memory signingKey,
-            SHRINCS.PublicKey memory publicKey,
+            SHRINCSCore.SigningKey memory signingKey,
+            SHRINCSCore.PublicKey memory publicKey,
             bool ok
         )
     {
@@ -55,11 +55,11 @@ library ShrincsAccountSigningFacade {
     }
 
     function actionContext(
-        ShrincsAccountVerifierExample account,
+        SHRINCSAccountVerifierExample account,
         bytes32 actionType,
         bytes32 payloadHash
-    ) internal view returns (SHRINCS.ActionContext memory context) {
-        context = SHRINCS.ActionContext({
+    ) internal view returns (SHRINCSCore.ActionContext memory context) {
+        context = SHRINCSCore.ActionContext({
             domainSeparator: domainSeparator(address(account)),
             nonce: account.nonce(),
             keyVersion: account.keyVersion(),
@@ -68,12 +68,12 @@ library ShrincsAccountSigningFacade {
         });
     }
 
-    function rotationContext(ShrincsAccountVerifierExample account)
+    function rotationContext(SHRINCSAccountVerifierExample account)
         internal
         view
-        returns (SHRINCS.RotationContext memory context)
+        returns (SHRINCSCore.RotationContext memory context)
     {
-        context = SHRINCS.RotationContext({
+        context = SHRINCSCore.RotationContext({
             domainSeparator: domainSeparator(address(account)),
             nonce: account.nonce(),
             keyVersion: account.keyVersion()
@@ -81,24 +81,24 @@ library ShrincsAccountSigningFacade {
     }
 
     function signStatefulActionNow(
-        ShrincsAccountVerifierExample account,
-        SHRINCS.SigningKey memory signingKey,
+        SHRINCSAccountVerifierExample account,
+        SHRINCSCore.SigningKey memory signingKey,
         bytes32 actionType,
         bytes32 payloadHash
     )
         internal
         view
         returns (
-            SHRINCS.SigningKey memory nextSigningKey,
-            SHRINCS.ActionContext memory context,
+            SHRINCSCore.SigningKey memory nextSigningKey,
+            SHRINCSCore.ActionContext memory context,
             UXMSS.StatefulSignature memory signature,
             bool ok
         )
     {
         context = actionContext(account, actionType, payloadHash);
         bytes memory message = abi.encodePacked(
-            SHRINCS.statefulActionMessageHash(
-                account.currentShrincsPublicKey(), context
+            SHRINCSCore.statefulActionMessageHash(
+                account.currentSHRINCSPublicKey(), context
             )
         );
         (nextSigningKey, signature, ok) =
@@ -107,23 +107,23 @@ library ShrincsAccountSigningFacade {
 
     function beginStatelessActionSessionNow(
         ShrincsStatelessVectorSigner signer,
-        ShrincsAccountVerifierExample account,
-        SHRINCS.SigningKey memory signingKey,
-        SHRINCS.PublicKey memory publicKey,
+        SHRINCSAccountVerifierExample account,
+        SHRINCSCore.SigningKey memory signingKey,
+        SHRINCSCore.PublicKey memory publicKey,
         bytes32 actionType,
         bytes32 payloadHash
     )
         internal
         returns (
-            SHRINCS.ActionContext memory context,
+            SHRINCSCore.ActionContext memory context,
             bytes32 sessionId,
             bool ok
         )
     {
         context = actionContext(account, actionType, payloadHash);
         bytes memory message = abi.encodePacked(
-            SHRINCS.statelessActionMessageHash(
-                account.currentShrincsPublicKey(), context
+            SHRINCSCore.statelessActionMessageHash(
+                account.currentSHRINCSPublicKey(), context
             )
         );
         (sessionId, ok) = signer.beginSession(signingKey, publicKey, message);
@@ -131,14 +131,14 @@ library ShrincsAccountSigningFacade {
 
     function beginStatefulOnlyRotationSessionNow(
         ShrincsStatelessVectorSigner signer,
-        ShrincsAccountVerifierExample account,
-        SHRINCS.SigningKey memory signingKey,
-        SHRINCS.PublicKey memory currentPublicKey,
-        SHRINCS.StatefulRotationTarget memory nextStatefulKey
+        SHRINCSAccountVerifierExample account,
+        SHRINCSCore.SigningKey memory signingKey,
+        SHRINCSCore.PublicKey memory currentPublicKey,
+        SHRINCSCore.StatefulRotationTarget memory nextStatefulKey
     )
         internal
         returns (
-            SHRINCS.RotationContext memory context,
+            SHRINCSCore.RotationContext memory context,
             bytes32 sessionId,
             bool ok
         )
@@ -147,9 +147,9 @@ library ShrincsAccountSigningFacade {
         bytes memory message = abi.encodePacked(
             keccak256(
                 abi.encodePacked(
-                    SHRINCS.OP_ROTATE_STATEFUL,
-                    SHRINCS.HASH_SUITE_KECCAK_256,
-                    account.currentShrincsPublicKey(),
+                    SHRINCSCore.OP_ROTATE_STATEFUL,
+                    SHRINCSCore.HASH_SUITE_KECCAK_256,
+                    account.currentSHRINCSPublicKey(),
                     context.domainSeparator,
                     context.nonce,
                     context.keyVersion,
@@ -164,14 +164,14 @@ library ShrincsAccountSigningFacade {
 
     function beginFullRotationSessionNow(
         ShrincsStatelessVectorSigner signer,
-        ShrincsAccountVerifierExample account,
-        SHRINCS.SigningKey memory signingKey,
-        SHRINCS.PublicKey memory currentPublicKey,
-        SHRINCS.RotationTarget memory nextKey
+        SHRINCSAccountVerifierExample account,
+        SHRINCSCore.SigningKey memory signingKey,
+        SHRINCSCore.PublicKey memory currentPublicKey,
+        SHRINCSCore.RotationTarget memory nextKey
     )
         internal
         returns (
-            SHRINCS.RotationContext memory context,
+            SHRINCSCore.RotationContext memory context,
             bytes32 sessionId,
             bool ok
         )
@@ -180,9 +180,9 @@ library ShrincsAccountSigningFacade {
         bytes memory message = abi.encodePacked(
             keccak256(
                 abi.encodePacked(
-                    SHRINCS.OP_ROTATE_FULL,
-                    SHRINCS.HASH_SUITE_KECCAK_256,
-                    account.currentShrincsPublicKey(),
+                    SHRINCSCore.OP_ROTATE_FULL,
+                    SHRINCSCore.HASH_SUITE_KECCAK_256,
+                    account.currentSHRINCSPublicKey(),
                     context.domainSeparator,
                     context.nonce,
                     context.keyVersion,
@@ -196,26 +196,30 @@ library ShrincsAccountSigningFacade {
     }
 
     function statefulRotationTarget(
-        SHRINCS.PublicKey memory currentPublicKey,
+        SHRINCSCore.PublicKey memory currentPublicKey,
         bytes memory nextStatefulPublicKey
-    ) internal pure returns (SHRINCS.StatefulRotationTarget memory nextKey) {
-        bytes32 commitment = ShrincsCodec.publicKeyCommitmentFromParts(
+    )
+        internal
+        pure
+        returns (SHRINCSCore.StatefulRotationTarget memory nextKey)
+    {
+        bytes32 commitment = SHRINCSCodec.publicKeyCommitmentFromParts(
             nextStatefulPublicKey,
             currentPublicKey.pkSeed,
             currentPublicKey.hypertreeRoot
         );
-        nextKey = SHRINCS.StatefulRotationTarget({
+        nextKey = SHRINCSCore.StatefulRotationTarget({
             statefulPublicKey: nextStatefulPublicKey,
             publicKeyCommitment: abi.encodePacked(commitment)
         });
     }
 
-    function fullRotationTarget(SHRINCS.PublicKey memory nextPublicKey)
+    function fullRotationTarget(SHRINCSCore.PublicKey memory nextPublicKey)
         internal
         pure
-        returns (SHRINCS.RotationTarget memory nextKey)
+        returns (SHRINCSCore.RotationTarget memory nextKey)
     {
-        nextKey = SHRINCS.RotationTarget({
+        nextKey = SHRINCSCore.RotationTarget({
             statefulPublicKey: nextPublicKey.statefulPublicKey,
             publicKeyCommitment: nextPublicKey.publicKeyCommitment,
             pkSeed: nextPublicKey.pkSeed,
@@ -224,7 +228,7 @@ library ShrincsAccountSigningFacade {
     }
 
     function encodeStateful1271Envelope(
-        SHRINCS.PublicKey memory publicKey,
+        SHRINCSCore.PublicKey memory publicKey,
         bytes32 actionType,
         bytes32 payloadHash,
         UXMSS.StatefulSignature memory signature
@@ -236,7 +240,7 @@ library ShrincsAccountSigningFacade {
     }
 
     function encodeStateless1271Envelope(
-        SHRINCS.PublicKey memory publicKey,
+        SHRINCSCore.PublicKey memory publicKey,
         bytes32 actionType,
         bytes32 payloadHash,
         SPHINCSPlusCCore.StatelessSignature memory signature
@@ -247,7 +251,7 @@ library ShrincsAccountSigningFacade {
         );
     }
 
-    function publicKeyCommitmentWord(SHRINCS.PublicKey memory publicKey)
+    function publicKeyCommitmentWord(SHRINCSCore.PublicKey memory publicKey)
         internal
         pure
         returns (bytes32 word)
@@ -259,7 +263,7 @@ library ShrincsAccountSigningFacade {
     }
 
     function publicKeyCommitmentWord(
-        SHRINCS.StatefulRotationTarget memory nextKey
+        SHRINCSCore.StatefulRotationTarget memory nextKey
     ) internal pure returns (bytes32 word) {
         bytes memory encoded = nextKey.publicKeyCommitment;
         assembly {

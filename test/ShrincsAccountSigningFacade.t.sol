@@ -17,12 +17,12 @@
 pragma solidity ^0.8.28;
 
 import {Test} from "../lib/forge-std/src/Test.sol";
-import {SHRINCS} from "../contracts/SHRINCS.sol";
+import {SHRINCSCore} from "../contracts/SHRINCSCore.sol";
 import {SPHINCSPlusCCore} from "../contracts/SPHINCSPlusCCore.sol";
 import {UXMSS} from "../contracts/UXMSS.sol";
 import {
-    ShrincsAccountVerifierExample
-} from "../contracts/examples/ShrincsAccountVerifierExample.sol";
+    SHRINCSAccountVerifierExample
+} from "../contracts/examples/SHRINCSAccountVerifierExample.sol";
 import {
     ShrincsStatelessVectorSigner
 } from "./helpers/ShrincsStatelessVectorSigner.sol";
@@ -46,8 +46,8 @@ contract ShrincsAccountSigningFacadeTest is Test {
 
     function testAccountAwareStatefulActionSignerFeedsWrapper() public {
         (
-            SHRINCS.SigningKey memory signingKey,
-            SHRINCS.PublicKey memory publicKey,
+            SHRINCSCore.SigningKey memory signingKey,
+            SHRINCSCore.PublicKey memory publicKey,
             bool keygenOk
         ) = ShrincsAccountSigningFacade.keygen(
             bytes("account-aware current key"), 4
@@ -55,8 +55,8 @@ contract ShrincsAccountSigningFacadeTest is Test {
         assertTrue(keygenOk, "keygen must succeed");
 
         // forgefmt: disable-next-line
-        ShrincsAccountVerifierExample account =
-            new ShrincsAccountVerifierExample(
+        SHRINCSAccountVerifierExample account =
+            new SHRINCSAccountVerifierExample(
                 ShrincsAccountSigningFacade.publicKeyCommitmentWord(
                     publicKey
                 )
@@ -65,8 +65,8 @@ contract ShrincsAccountSigningFacadeTest is Test {
         bytes32 payloadHash = keccak256("payload");
 
         (
-            SHRINCS.SigningKey memory nextSigningKey,
-            SHRINCS.ActionContext memory context,
+            SHRINCSCore.SigningKey memory nextSigningKey,
+            SHRINCSCore.ActionContext memory context,
             UXMSS.StatefulSignature memory signature,
             bool signOk
         ) = ShrincsAccountSigningFacade.signStatefulActionNow(
@@ -102,8 +102,8 @@ contract ShrincsAccountSigningFacadeTest is Test {
         public
     {
         (
-            SHRINCS.SigningKey memory signingKey,
-            SHRINCS.PublicKey memory publicKey,
+            SHRINCSCore.SigningKey memory signingKey,
+            SHRINCSCore.PublicKey memory publicKey,
             bool keygenOk
         ) = ShrincsAccountSigningFacade.keygen(
             bytes("account-aware 1271 stateful current key"), 4
@@ -111,8 +111,8 @@ contract ShrincsAccountSigningFacadeTest is Test {
         assertTrue(keygenOk, "keygen must succeed");
 
         // forgefmt: disable-next-line
-        ShrincsAccountVerifierExample account =
-            new ShrincsAccountVerifierExample(
+        SHRINCSAccountVerifierExample account =
+            new SHRINCSAccountVerifierExample(
                 ShrincsAccountSigningFacade.publicKeyCommitmentWord(
                     publicKey
                 )
@@ -122,7 +122,7 @@ contract ShrincsAccountSigningFacadeTest is Test {
 
         (
             ,
-            SHRINCS.ActionContext memory context,
+            SHRINCSCore.ActionContext memory context,
             UXMSS.StatefulSignature memory signature,
             bool signOk
         ) = ShrincsAccountSigningFacade.signStatefulActionNow(
@@ -130,8 +130,8 @@ contract ShrincsAccountSigningFacadeTest is Test {
         );
         assertTrue(signOk, "stateful action signing must succeed");
 
-        bytes32 hash = SHRINCS.statefulActionMessageHash(
-            account.currentShrincsPublicKey(), context
+        bytes32 hash = SHRINCSCore.statefulActionMessageHash(
+            account.currentSHRINCSPublicKey(), context
         );
         bytes memory envelope =
             ShrincsAccountSigningFacade.encodeStateful1271Envelope(
@@ -162,8 +162,8 @@ contract ShrincsAccountSigningFacadeTest is Test {
         public
     {
         (
-            SHRINCS.SigningKey memory signingKey,
-            SHRINCS.PublicKey memory publicKey,
+            SHRINCSCore.SigningKey memory signingKey,
+            SHRINCSCore.PublicKey memory publicKey,
             bool keygenOk
         ) = ShrincsAccountSigningFacade.keygen(
             bytes("account-aware 1271 stateful trailing key"), 4
@@ -171,8 +171,8 @@ contract ShrincsAccountSigningFacadeTest is Test {
         assertTrue(keygenOk, "keygen must succeed");
 
         // forgefmt: disable-next-line
-        ShrincsAccountVerifierExample account =
-            new ShrincsAccountVerifierExample(
+        SHRINCSAccountVerifierExample account =
+            new SHRINCSAccountVerifierExample(
                 ShrincsAccountSigningFacade.publicKeyCommitmentWord(
                     publicKey
                 )
@@ -182,7 +182,7 @@ contract ShrincsAccountSigningFacadeTest is Test {
 
         (
             ,
-            SHRINCS.ActionContext memory context,
+            SHRINCSCore.ActionContext memory context,
             UXMSS.StatefulSignature memory signature,
             bool signOk
         ) = ShrincsAccountSigningFacade.signStatefulActionNow(
@@ -190,8 +190,8 @@ contract ShrincsAccountSigningFacadeTest is Test {
         );
         assertTrue(signOk, "stateful action signing must succeed");
 
-        bytes32 hash = SHRINCS.statefulActionMessageHash(
-            account.currentShrincsPublicKey(), context
+        bytes32 hash = SHRINCSCore.statefulActionMessageHash(
+            account.currentSHRINCSPublicKey(), context
         );
         bytes memory envelope =
             ShrincsAccountSigningFacade.encodeStateful1271Envelope(
@@ -214,8 +214,8 @@ contract ShrincsAccountSigningFacadeTest is Test {
 
     function testAccountAwareStatelessActionSignerFeedsWrapper() public {
         (
-            SHRINCS.SigningKey memory signingKey,
-            SHRINCS.PublicKey memory publicKey,
+            SHRINCSCore.SigningKey memory signingKey,
+            SHRINCSCore.PublicKey memory publicKey,
             bool keygenOk
         ) = ShrincsAccountSigningFacade.keygen(
             bytes("account-aware stateless current key"), 4
@@ -223,8 +223,8 @@ contract ShrincsAccountSigningFacadeTest is Test {
         assertTrue(keygenOk, "keygen must succeed");
 
         // forgefmt: disable-next-line
-        ShrincsAccountVerifierExample account =
-            new ShrincsAccountVerifierExample(
+        SHRINCSAccountVerifierExample account =
+            new SHRINCSAccountVerifierExample(
                 ShrincsAccountSigningFacade.publicKeyCommitmentWord(
                     publicKey
                 )
@@ -233,7 +233,7 @@ contract ShrincsAccountSigningFacadeTest is Test {
         bytes32 payloadHash = keccak256("payload");
 
         (
-            SHRINCS.ActionContext memory context,
+            SHRINCSCore.ActionContext memory context,
             bytes32 sessionId,
             bool signOk
         ) = ShrincsAccountSigningFacade.beginStatelessActionSessionNow(
@@ -283,8 +283,8 @@ contract ShrincsAccountSigningFacadeTest is Test {
         public
     {
         (
-            SHRINCS.SigningKey memory signingKey,
-            SHRINCS.PublicKey memory publicKey,
+            SHRINCSCore.SigningKey memory signingKey,
+            SHRINCSCore.PublicKey memory publicKey,
             bool keygenOk
         ) = ShrincsAccountSigningFacade.keygen(
             bytes("account-aware 1271 stateless current key"), 4
@@ -292,8 +292,8 @@ contract ShrincsAccountSigningFacadeTest is Test {
         assertTrue(keygenOk, "keygen must succeed");
 
         // forgefmt: disable-next-line
-        ShrincsAccountVerifierExample account =
-            new ShrincsAccountVerifierExample(
+        SHRINCSAccountVerifierExample account =
+            new SHRINCSAccountVerifierExample(
                 ShrincsAccountSigningFacade.publicKeyCommitmentWord(
                     publicKey
                 )
@@ -302,7 +302,7 @@ contract ShrincsAccountSigningFacadeTest is Test {
         bytes32 payloadHash = keccak256("payload");
 
         (
-            SHRINCS.ActionContext memory context,
+            SHRINCSCore.ActionContext memory context,
             bytes32 sessionId,
             bool signOk
         ) = ShrincsAccountSigningFacade.beginStatelessActionSessionNow(
@@ -324,8 +324,8 @@ contract ShrincsAccountSigningFacadeTest is Test {
         );
         assertTrue(completeOk, "stateless session completion must succeed");
 
-        bytes32 hash = SHRINCS.statelessActionMessageHash(
-            account.currentShrincsPublicKey(), context
+        bytes32 hash = SHRINCSCore.statelessActionMessageHash(
+            account.currentSHRINCSPublicKey(), context
         );
         bytes memory envelope =
             ShrincsAccountSigningFacade.encodeStateless1271Envelope(
@@ -356,8 +356,8 @@ contract ShrincsAccountSigningFacadeTest is Test {
         public
     {
         (
-            SHRINCS.SigningKey memory signingKey,
-            SHRINCS.PublicKey memory publicKey,
+            SHRINCSCore.SigningKey memory signingKey,
+            SHRINCSCore.PublicKey memory publicKey,
             bool keygenOk
         ) = ShrincsAccountSigningFacade.keygen(
             bytes("account-aware 1271 stateless trailing key"), 4
@@ -365,8 +365,8 @@ contract ShrincsAccountSigningFacadeTest is Test {
         assertTrue(keygenOk, "keygen must succeed");
 
         // forgefmt: disable-next-line
-        ShrincsAccountVerifierExample account =
-            new ShrincsAccountVerifierExample(
+        SHRINCSAccountVerifierExample account =
+            new SHRINCSAccountVerifierExample(
                 ShrincsAccountSigningFacade.publicKeyCommitmentWord(
                     publicKey
                 )
@@ -375,7 +375,7 @@ contract ShrincsAccountSigningFacadeTest is Test {
         bytes32 payloadHash = keccak256("payload");
 
         (
-            SHRINCS.ActionContext memory context,
+            SHRINCSCore.ActionContext memory context,
             bytes32 sessionId,
             bool signOk
         ) = ShrincsAccountSigningFacade.beginStatelessActionSessionNow(
@@ -397,8 +397,8 @@ contract ShrincsAccountSigningFacadeTest is Test {
         );
         assertTrue(completeOk, "stateless session completion must succeed");
 
-        bytes32 hash = SHRINCS.statelessActionMessageHash(
-            account.currentShrincsPublicKey(), context
+        bytes32 hash = SHRINCSCore.statelessActionMessageHash(
+            account.currentSHRINCSPublicKey(), context
         );
         bytes memory envelope =
             ShrincsAccountSigningFacade.encodeStateless1271Envelope(
@@ -423,8 +423,8 @@ contract ShrincsAccountSigningFacadeTest is Test {
         public
     {
         (
-            SHRINCS.SigningKey memory currentSigningKey,
-            SHRINCS.PublicKey memory currentPublicKey,
+            SHRINCSCore.SigningKey memory currentSigningKey,
+            SHRINCSCore.PublicKey memory currentPublicKey,
             bool currentOk
         ) = ShrincsAccountSigningFacade.keygen(
             bytes("account-aware rotation current key"), 4
@@ -432,8 +432,8 @@ contract ShrincsAccountSigningFacadeTest is Test {
         assertTrue(currentOk, "current keygen must succeed");
 
         // forgefmt: disable-next-line
-        ShrincsAccountVerifierExample account =
-            new ShrincsAccountVerifierExample(
+        SHRINCSAccountVerifierExample account =
+            new SHRINCSAccountVerifierExample(
                 ShrincsAccountSigningFacade.publicKeyCommitmentWord(
                     currentPublicKey
                 )
@@ -442,18 +442,18 @@ contract ShrincsAccountSigningFacadeTest is Test {
         account.enterRecoveryMode();
 
         // line-length: allow — fmt canonical tuple head exceeds cap
-        (, SHRINCS.PublicKey memory nextPublicKey, bool nextOk) = ShrincsAccountSigningFacade.keygen(
+        (, SHRINCSCore.PublicKey memory nextPublicKey, bool nextOk) = ShrincsAccountSigningFacade.keygen(
             bytes("account-aware rotation next key"), 4
         );
         assertTrue(nextOk, "next keygen must succeed");
 
-        SHRINCS.StatefulRotationTarget memory nextKey =
+        SHRINCSCore.StatefulRotationTarget memory nextKey =
             ShrincsAccountSigningFacade.statefulRotationTarget(
                 currentPublicKey, nextPublicKey.statefulPublicKey
             );
 
         (
-            SHRINCS.RotationContext memory context,
+            SHRINCSCore.RotationContext memory context,
             bytes32 sessionId,
             bool signOk
         ) = ShrincsAccountSigningFacade.beginStatefulOnlyRotationSessionNow(
@@ -486,7 +486,7 @@ contract ShrincsAccountSigningFacadeTest is Test {
             "wrapper must accept the account-aware stateful-only rotation"
         );
         assertEq(
-            account.currentShrincsPublicKey(),
+            account.currentSHRINCSPublicKey(),
             ShrincsAccountSigningFacade.publicKeyCommitmentWord(nextKey)
         );
         assertEq(account.keyVersion(), 1, "key epoch must advance");
@@ -502,8 +502,8 @@ contract ShrincsAccountSigningFacadeTest is Test {
 
     function testAccountAwareFullRotationSignerFeedsWrapper() public {
         (
-            SHRINCS.SigningKey memory currentSigningKey,
-            SHRINCS.PublicKey memory currentPublicKey,
+            SHRINCSCore.SigningKey memory currentSigningKey,
+            SHRINCSCore.PublicKey memory currentPublicKey,
             bool currentOk
         ) = ShrincsAccountSigningFacade.keygen(
             bytes("account-aware full rotation current key"), 4
@@ -511,8 +511,8 @@ contract ShrincsAccountSigningFacadeTest is Test {
         assertTrue(currentOk, "current keygen must succeed");
 
         // forgefmt: disable-next-line
-        ShrincsAccountVerifierExample account =
-            new ShrincsAccountVerifierExample(
+        SHRINCSAccountVerifierExample account =
+            new SHRINCSAccountVerifierExample(
                 ShrincsAccountSigningFacade.publicKeyCommitmentWord(
                     currentPublicKey
                 )
@@ -521,16 +521,16 @@ contract ShrincsAccountSigningFacadeTest is Test {
         account.enterRecoveryMode();
 
         // line-length: allow — fmt canonical tuple head exceeds cap
-        (, SHRINCS.PublicKey memory nextPublicKey, bool nextOk) = ShrincsAccountSigningFacade.keygen(
+        (, SHRINCSCore.PublicKey memory nextPublicKey, bool nextOk) = ShrincsAccountSigningFacade.keygen(
             bytes("account-aware full rotation next key"), 4
         );
         assertTrue(nextOk, "next keygen must succeed");
 
-        SHRINCS.RotationTarget memory nextKey =
+        SHRINCSCore.RotationTarget memory nextKey =
             ShrincsAccountSigningFacade.fullRotationTarget(nextPublicKey);
 
         (
-            SHRINCS.RotationContext memory context,
+            SHRINCSCore.RotationContext memory context,
             bytes32 sessionId,
             bool signOk
         ) = ShrincsAccountSigningFacade.beginFullRotationSessionNow(
@@ -561,7 +561,7 @@ contract ShrincsAccountSigningFacadeTest is Test {
             rotateOk, "wrapper must accept the account-aware full rotation"
         );
         assertEq(
-            account.currentShrincsPublicKey(),
+            account.currentSHRINCSPublicKey(),
             ShrincsAccountSigningFacade.publicKeyCommitmentWord(
                 nextPublicKey
             )

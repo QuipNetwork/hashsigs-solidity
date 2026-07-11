@@ -16,10 +16,10 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 pragma solidity ^0.8.28;
 
-import {SHRINCS} from "../../contracts/SHRINCS.sol";
+import {SHRINCSCore} from "../../contracts/SHRINCSCore.sol";
 import {UXMSS} from "../../contracts/UXMSS.sol";
-import {ShrincsParams} from "shrincs-profile/ShrincsParams.sol";
-import {ShrincsCodec} from "../../contracts/ShrincsCodec.sol";
+import {SHRINCSParams} from "shrincs-profile/SHRINCSParams.sol";
+import {SHRINCSCodec} from "../../contracts/SHRINCSCodec.sol";
 import {SHRINCSHash} from "../../contracts/SHRINCSHash.sol";
 
 /// @notice TEST-ONLY Solidity signer helpers that mirror the Rust signer for
@@ -37,8 +37,8 @@ library ShrincsTestSigner {
         internal
         pure
         returns (
-            SHRINCS.SigningKey memory signingKey,
-            SHRINCS.PublicKey memory publicKey,
+            SHRINCSCore.SigningKey memory signingKey,
+            SHRINCSCore.PublicKey memory publicKey,
             bool ok
         )
     {
@@ -68,7 +68,7 @@ library ShrincsTestSigner {
         bytes32 pkSeed = derive32("shrincs-pk-seed", seedMaterial, "");
         bytes32 hypertreeRoot = hypertreePublicRoot(statelessSkSeed, pkSeed);
 
-        signingKey = SHRINCS.SigningKey({
+        signingKey = SHRINCSCore.SigningKey({
             statefulSkSeed: statefulSkSeed,
             statefulPrfSeed: statefulPrfSeed,
             statefulPkSeed: statefulPkSeed,
@@ -85,12 +85,12 @@ library ShrincsTestSigner {
             statefulPkSeed, statefulRoot, maxStatefulSignatures
         );
         bytes32 publicKeyCommitment =
-            ShrincsCodec.publicKeyCommitmentFromParts(
+            SHRINCSCodec.publicKeyCommitmentFromParts(
                 statefulPublicKey,
                 abi.encodePacked(pkSeed),
                 abi.encodePacked(hypertreeRoot)
             );
-        publicKey = SHRINCS.PublicKey({
+        publicKey = SHRINCSCore.PublicKey({
             statefulPublicKey: statefulPublicKey,
             publicKeyCommitment: abi.encodePacked(publicKeyCommitment),
             pkSeed: abi.encodePacked(pkSeed),
@@ -100,13 +100,13 @@ library ShrincsTestSigner {
     }
 
     function signStatefulRaw(
-        SHRINCS.SigningKey memory signingKey,
+        SHRINCSCore.SigningKey memory signingKey,
         bytes memory message
     )
         internal
         pure
         returns (
-            SHRINCS.SigningKey memory nextSigningKey,
+            SHRINCSCore.SigningKey memory nextSigningKey,
             UXMSS.StatefulSignature memory signature,
             bool ok
         )
@@ -127,14 +127,14 @@ library ShrincsTestSigner {
     }
 
     function signStatefulAction(
-        SHRINCS.SigningKey memory signingKey,
-        SHRINCS.PublicKey memory publicKey,
-        SHRINCS.ActionContext memory context
+        SHRINCSCore.SigningKey memory signingKey,
+        SHRINCSCore.PublicKey memory publicKey,
+        SHRINCSCore.ActionContext memory context
     )
         internal
         pure
         returns (
-            SHRINCS.SigningKey memory nextSigningKey,
+            SHRINCSCore.SigningKey memory nextSigningKey,
             UXMSS.StatefulSignature memory signature,
             bool ok
         )
@@ -148,7 +148,7 @@ library ShrincsTestSigner {
             expectedPublicKeyCommitment := mload(add(commitmentBytes, 32))
         }
         bytes memory message = abi.encodePacked(
-            SHRINCS.statefulActionMessageHash(
+            SHRINCSCore.statefulActionMessageHash(
                 expectedPublicKeyCommitment, context
             )
         );
@@ -164,7 +164,7 @@ library ShrincsTestSigner {
     }
 
     function signStatefulRawAtLeaf(
-        SHRINCS.SigningKey memory signingKey,
+        SHRINCSCore.SigningKey memory signingKey,
         uint32 leafIndex,
         bytes memory message
     )
@@ -225,11 +225,11 @@ library ShrincsTestSigner {
         uint32 leafIndex
     ) internal pure returns (bytes32) {
         bytes memory endpoints = new bytes(
-            uint256(ShrincsParams.WOTS_CHAINS_STATEFUL) * 32
+            uint256(SHRINCSParams.WOTS_CHAINS_STATEFUL) * 32
         );
         for (
             uint32 chainIndex = 0;
-            chainIndex < ShrincsParams.WOTS_CHAINS_STATEFUL;
+            chainIndex < SHRINCSParams.WOTS_CHAINS_STATEFUL;
 
         ) {
             bytes32 secret =
@@ -240,7 +240,7 @@ library ShrincsTestSigner {
                 chainIndex,
                 secret,
                 0,
-                ShrincsParams.WOTS_BASE_STATEFUL - 1
+                SHRINCSParams.WOTS_BASE_STATEFUL - 1
             );
             setSlice32(endpoints, endpoint, uint256(chainIndex) * 32);
             unchecked {
@@ -289,10 +289,10 @@ library ShrincsTestSigner {
             );
             uint32 digitSum;
             bytes32[] memory chains =
-                new bytes32[](ShrincsParams.WOTS_CHAINS_STATEFUL);
+                new bytes32[](SHRINCSParams.WOTS_CHAINS_STATEFUL);
             for (
                 uint32 chainIndex = 0;
-                chainIndex < ShrincsParams.WOTS_CHAINS_STATEFUL;
+                chainIndex < SHRINCSParams.WOTS_CHAINS_STATEFUL;
 
             ) {
                 uint32 digit = baseW16Digit(digest, chainIndex);
@@ -307,7 +307,7 @@ library ShrincsTestSigner {
                     ++chainIndex;
                 }
             }
-            if (digitSum == ShrincsParams.WOTS_TARGET_SUM_STATEFUL) {
+            if (digitSum == SHRINCSParams.WOTS_TARGET_SUM_STATEFUL) {
                 signature = UXMSS.StatefulSignature({
                     randomizer: randomizer,
                     counter: counter,
@@ -359,7 +359,7 @@ library ShrincsTestSigner {
                 start + stepOffset
             );
             // Truncate each chain step, mirroring the verifier's
-            // hashStatefulWotsCChainNoMask32 maskHash. No-op at 256s.
+            // WOTSPlusC.hashWotsCChainNoMask32 maskHash. No-op at 256s.
             out = SHRINCSHash.maskHash(
                 keccak256(
                     abi.encodePacked(
@@ -436,7 +436,7 @@ library ShrincsTestSigner {
             hypertreeLayerSeeds(statelessSkSeed);
         uint32 topLayer = NUM_HYPERTREE_LAYERS - 1;
         uint32 subtreeHeight =
-            uint32(ShrincsParams.HYPERTREE_HEIGHT / NUM_HYPERTREE_LAYERS);
+            uint32(SHRINCSParams.HYPERTREE_HEIGHT / NUM_HYPERTREE_LAYERS);
         return hypertreeVirtualNode(
             pkSeed, layerSeeds[topLayer], topLayer, 0, subtreeHeight, 0
         );
@@ -513,9 +513,9 @@ library ShrincsTestSigner {
         uint32 keypair
     ) internal pure returns (bytes32) {
         bytes memory endpoints = new bytes(
-            uint256(ShrincsParams.NUM_WOTS_CHAINS) * 32
+            uint256(SHRINCSParams.NUM_WOTS_CHAINS) * 32
         );
-        for (uint32 chain = 0; chain < ShrincsParams.NUM_WOTS_CHAINS;) {
+        for (uint32 chain = 0; chain < SHRINCSParams.NUM_WOTS_CHAINS;) {
             bytes32 secret = statelessWotsCSecret(skSeed, chain);
             bytes32 endpoint = statelessWotsCChain(
                 pkSeed,
@@ -525,7 +525,7 @@ library ShrincsTestSigner {
                 chain,
                 secret,
                 0,
-                ShrincsParams.WOTS_CHAIN_LEN - 1
+                SHRINCSParams.WOTS_CHAIN_LEN - 1
             );
             setSlice32(endpoints, endpoint, uint256(chain) * 32);
             unchecked {
@@ -563,7 +563,7 @@ library ShrincsTestSigner {
                 layer, tree, UXMSS.AddressTypeWotsHash, keypair, chain, step
             );
             // Truncate each stateless chain step, mirroring the
-            // verifier's hashStatelessWotsCChainNoMask32 maskHash.
+            // verifier's WOTSPlusC.hashWotsCChainNoMask32 maskHash.
             // No-op at 256s.
             out = SHRINCSHash.maskHash(
                 keccak256(

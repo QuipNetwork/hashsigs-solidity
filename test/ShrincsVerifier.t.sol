@@ -20,23 +20,30 @@ import {Test} from "../lib/forge-std/src/Test.sol";
 import {
     IERC7913SignatureVerifier
 } from "../contracts/interfaces/IERC7913SignatureVerifier.sol";
-import {ShrincsCodec} from "../contracts/ShrincsCodec.sol";
-import {SHRINCS} from "../contracts/SHRINCS.sol";
+import {SHRINCSCodec} from "../contracts/SHRINCSCodec.sol";
+import {SHRINCSCore} from "../contracts/SHRINCSCore.sol";
 import {UXMSS} from "../contracts/UXMSS.sol";
-import {ShrincsVerifier} from "../contracts/ShrincsVerifier.sol";
+import {SHRINCS} from "../contracts/SHRINCS.sol";
 import {ShrincsTestSigner} from "./helpers/ShrincsTestSigner.sol";
 
 /// @dev Minimal concrete instance of the abstract profile base, used to
-/// exercise the profile-agnostic verify/decode logic under whichever
-/// profile the suite runs. Mirrors the empty concrete subclasses
-/// (ShrincsVerifier256s / ShrincsVerifier128sQ18 / ShrincsVerifier128sQ20)
-/// without pinning the test to any one of them.
-contract ShrincsVerifierHarness is ShrincsVerifier {}
+/// exercise the profile-agnostic stateful verify/decode logic under
+/// whichever profile the suite runs. Mirrors the empty concrete subclasses
+/// (SHRINCS256sKeccak / SHRINCS128sQ18Keccak / SHRINCS128sQ20Keccak)
+/// without pinning the test to any one of them. The pinned SPHINCSPlusC
+/// address is irrelevant here (the stateful path never reads it), so it
+/// returns the zero address; verifyStateless delegation is covered by the
+/// profile-gated SHRINCSStatelessDelegation suite against a real deployable.
+contract ShrincsVerifierHarness is SHRINCS {
+    function _pinnedSphincsPlusC() internal pure override returns (address) {
+        return address(0);
+    }
+}
 
 contract ShrincsVerifierTest is Test {
     bytes4 internal constant INVALID_SIGNATURE = 0xffffffff;
 
-    ShrincsVerifier internal verifier;
+    SHRINCS internal verifier;
 
     // One stateful key is generated in setUp; signatures at two in-budget
     // leaves are shared across the happy-path and mutation tests.
@@ -50,8 +57,8 @@ contract ShrincsVerifierTest is Test {
         verifier = new ShrincsVerifierHarness();
 
         (
-            SHRINCS.SigningKey memory signingKey,
-            SHRINCS.PublicKey memory publicKey,
+            SHRINCSCore.SigningKey memory signingKey,
+            SHRINCSCore.PublicKey memory publicKey,
             bool keygenOk
         ) = ShrincsTestSigner.keygen(
             bytes("shrincs erc7913 stateful verifier seed"), 4
@@ -82,9 +89,9 @@ contract ShrincsVerifierTest is Test {
         // Encode through the codec so the tests pin the same format
         // definition the verifier decodes.
         validEnvelope =
-            ShrincsCodec.encodeStatefulEnvelope(publicKey, leafOneSignature);
+            SHRINCSCodec.encodeStatefulEnvelope(publicKey, leafOneSignature);
         secondLeafEnvelope =
-            ShrincsCodec.encodeStatefulEnvelope(publicKey, leafTwoSignature);
+            SHRINCSCodec.encodeStatefulEnvelope(publicKey, leafTwoSignature);
     }
 
     // decodeStoredEnvelope: Reload the shared valid envelope as mutable
@@ -93,12 +100,12 @@ contract ShrincsVerifierTest is Test {
         internal
         view
         returns (
-            SHRINCS.PublicKey memory publicKey,
+            SHRINCSCore.PublicKey memory publicKey,
             UXMSS.StatefulSignature memory signature
         )
     {
         return abi.decode(
-            validEnvelope, (SHRINCS.PublicKey, UXMSS.StatefulSignature)
+            validEnvelope, (SHRINCSCore.PublicKey, UXMSS.StatefulSignature)
         );
     }
 
@@ -173,12 +180,12 @@ contract ShrincsVerifierTest is Test {
 
     function testRejectsTamperedChainValue() public view {
         (
-            SHRINCS.PublicKey memory publicKey,
+            SHRINCSCore.PublicKey memory publicKey,
             UXMSS.StatefulSignature memory signature
         ) = decodeStoredEnvelope();
         signature.chains[0] = bytes32(uint256(signature.chains[0]) ^ 1);
         bytes memory envelope =
-            ShrincsCodec.encodeStatefulEnvelope(publicKey, signature);
+            SHRINCSCodec.encodeStatefulEnvelope(publicKey, signature);
         assertEq(
             verifier.verify(validKey, signedHash, envelope),
             INVALID_SIGNATURE,
@@ -188,12 +195,12 @@ contract ShrincsVerifierTest is Test {
 
     function testRejectsTamperedAuthPath() public view {
         (
-            SHRINCS.PublicKey memory publicKey,
+            SHRINCSCore.PublicKey memory publicKey,
             UXMSS.StatefulSignature memory signature
         ) = decodeStoredEnvelope();
         signature.authPath[0] = bytes32(uint256(signature.authPath[0]) ^ 1);
         bytes memory envelope =
-            ShrincsCodec.encodeStatefulEnvelope(publicKey, signature);
+            SHRINCSCodec.encodeStatefulEnvelope(publicKey, signature);
         assertEq(
             verifier.verify(validKey, signedHash, envelope),
             INVALID_SIGNATURE,
@@ -241,13 +248,13 @@ contract ShrincsVerifierTest is Test {
         // field DOES match the key, but the bundle no longer recomputes to
         // that commitment.
         (
-            SHRINCS.PublicKey memory publicKey,
+            SHRINCSCore.PublicKey memory publicKey,
             UXMSS.StatefulSignature memory signature
         ) = decodeStoredEnvelope();
         bytes32 fakeCommitment = keccak256("mismatched bundle commitment");
         publicKey.publicKeyCommitment = abi.encodePacked(fakeCommitment);
         bytes memory envelope =
-            ShrincsCodec.encodeStatefulEnvelope(publicKey, signature);
+            SHRINCSCodec.encodeStatefulEnvelope(publicKey, signature);
         assertEq(
             verifier.verify(
                 abi.encodePacked(fakeCommitment), signedHash, envelope
@@ -257,19 +264,55 @@ contract ShrincsVerifierTest is Test {
         );
     }
 
-    function testDecodeAndCheckRejectsNonSelfCaller() public {
-        vm.expectRevert(bytes("only self"));
-        verifier.decodeAndCheck(keyCommitment, signedHash, validEnvelope);
-    }
-
-    function testCheckDecodedRejectsNonSelfCaller() public {
+    function testCheckStatefulRejectsNonSelfCaller() public {
         (
-            SHRINCS.PublicKey memory publicKey,
+            SHRINCSCore.PublicKey memory publicKey,
             UXMSS.StatefulSignature memory signature
         ) = decodeStoredEnvelope();
         vm.expectRevert(bytes("only self"));
-        verifier.checkDecoded(
+        verifier.checkStateful(
             keyCommitment, signedHash, publicKey, signature
+        );
+    }
+
+    function testCheckStatelessBundleRejectsNonSelfCaller() public {
+        (SHRINCSCore.PublicKey memory publicKey,) = decodeStoredEnvelope();
+        vm.expectRevert(bytes("only self"));
+        verifier.checkStatelessBundle(keyCommitment, publicKey);
+    }
+
+    /// @dev The deliberate revert-model change: with the try/catch removed,
+    /// an inner out-of-gas is no longer swallowed to 0xffffffff. Stranding
+    /// the single self-call hop under the 63/64 rule on a VALID signature
+    /// makes the outer verify REVERT, so a genuine signature can never be
+    /// misreported as invalid because of a gas shortfall.
+    function testVerifyRevertsWhenInnerHopStrandedOnValidSig() public {
+        // Full gas: the valid signature verifies.
+        assertEq(
+            verifier.verify(validKey, signedHash, validEnvelope),
+            IERC7913SignatureVerifier.verify.selector,
+            "control: valid signature verifies with ample gas"
+        );
+
+        // Measure the happy-path cost, then forward a fraction that lets the
+        // key/envelope decode complete but strands the ~260k stateful hop
+        // (which is the bulk of the work) under the 63/64 forwarding rule.
+        uint256 gasBefore = gasleft();
+        verifier.verify(validKey, signedHash, validEnvelope);
+        uint256 happyGas = gasBefore - gasleft();
+
+        (bool success, bytes memory ret) = address(verifier)
+        .call{gas: happyGas * 3 / 4}(
+            abi.encodeWithSelector(
+                SHRINCS.verify.selector, validKey, signedHash, validEnvelope
+            )
+        );
+        assertFalse(
+            success,
+            "stranded inner hop must revert, not swallow to 0xffffffff"
+        );
+        assertEq(
+            ret.length, 0, "an out-of-gas revert carries no return data"
         );
     }
 

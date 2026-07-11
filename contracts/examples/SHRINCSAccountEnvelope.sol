@@ -24,7 +24,7 @@ pragma solidity ^0.8.28;
 /// canonical encoding without ever re-encoding it. Integrators copy the
 /// example wrapper; keep this walk readable and auditable against the
 /// SHRINCS struct definitions.
-library ShrincsAccountEnvelope {
+library SHRINCSAccountEnvelope {
     /// @notice True iff `payload` is the canonical ABI encoding of a
     /// stateless action envelope `abi.encode(PublicKey, bytes32, bytes32,
     /// StatelessSignature)`.
@@ -189,6 +189,9 @@ library ShrincsAccountEnvelope {
             function fors(po, pl, base) -> end, good {
                 // (bytes randomizer, uint32 counter, ForsEntry[]), head 96.
                 if iszero(eq(word(po, base), 96)) { leave }
+                // counter (slot 1) is a uint32: dirty high bits are
+                // canonical framing but revert abi.decode, so reject them.
+                if shr(32, word(po, add(base, 32))) { leave }
                 let e, g := bytesVal(po, pl, add(base, 96))
                 if iszero(g) { leave }
                 if iszero(eq(word(po, add(base, 64)), sub(e, base))) {
@@ -201,6 +204,8 @@ library ShrincsAccountEnvelope {
             function wotsC(po, pl, base) -> end, good {
                 // (bytes randomizer, uint32 counter, bytes[] chains) head 96
                 if iszero(eq(word(po, base), 96)) { leave }
+                // counter (slot 1) is a uint32: reject dirty high bits.
+                if shr(32, word(po, add(base, 32))) { leave }
                 let e, g := bytesVal(po, pl, add(base, 96))
                 if iszero(g) { leave }
                 if iszero(eq(word(po, add(base, 64)), sub(e, base))) {
@@ -213,7 +218,13 @@ library ShrincsAccountEnvelope {
             function layer(po, pl, base) -> end, good {
                 // (uint64, uint32, bytes wotsCPkHash, WotsCSignature,
                 //  bytes[] authPath), head 160.
-                if iszero(eq(word(po, add(base, 64)), 160)) { leave }
+                // treeIndex (uint64, slot 0) and leafIndex (uint32, slot 1)
+                // must have clean high bits or abi.decode reverts.
+                if shr(64, word(po, base)) { leave }
+                if shr(32, word(po, add(base, 32))) { leave }
+                if iszero(eq(word(po, add(base, 64)), 160)) {
+                    leave
+                }
                 let e, g := bytesVal(po, pl, add(base, 160))
                 if iszero(g) { leave }
                 if iszero(eq(word(po, add(base, 96)), sub(e, base))) {
@@ -287,6 +298,134 @@ library ShrincsAccountEnvelope {
                 let pkEnd, gpk := publicKey(poff, plen, 128)
                 if and(gpk, eq(word(poff, 96), pkEnd)) {
                     let sigEnd, gsig := statelessSig(poff, plen, pkEnd)
+                    // Anchor: the walk must consume exactly the whole
+                    // payload, which rejects trailing bytes and any framing
+                    // that leaves a gap.
+                    if and(gsig, eq(sigEnd, plen)) { ok := 1 }
+                }
+            }
+        }
+    }
+
+    /// @notice True iff `payload` is the canonical ABI encoding of a
+    /// stateful action envelope `abi.encode(PublicKey, bytes32, bytes32,
+    /// StatefulSignature)`.
+    /// @dev Same walk-B discipline and re-encode equivalence as
+    /// isCanonicalStatelessEnvelope (see that header); the only differences
+    /// are the tail type (a StatefulSignature of value-type arrays instead
+    /// of a StatelessSignature). A differential fuzz test pins the
+    /// equivalence against the re-encode reference over a mutation battery.
+    ///
+    /// ABI framing template (byte offsets relative to each tuple/array head;
+    /// `L` a length/count word, `O` an offset word, `.` a leaf value or
+    /// padding word the walk skips):
+    ///   T0 = (PublicKey pk, bytes32 actionType, bytes32 payloadHash,
+    ///         StatefulSignature sig)   head 128 = [O pk][.][.][O sig]
+    ///   PublicKey = (bytes,bytes,bytes,bytes)  head 128 = 4x[O]; each tail
+    ///     [L][data...]; statefulPublicKey (len 68) has a padded final word.
+    ///   StatefulSignature = (bytes32 randomizer, uint32 counter,
+    ///     bytes32[] chains, bytes32[] authPath)
+    ///     head 128 = [.][.][O chains][O authPath]; each bytes32[] tail is
+    ///     [L count][count value words] with no offsets and no padding.
+    /// @param payload The stateful envelope bytes (no mode prefix).
+    /// @return ok True when `payload` is in canonical form.
+    function isCanonicalStatefulEnvelope(bytes calldata payload)
+        internal
+        pure
+        returns (bool ok)
+    {
+        // Read primitives follow the same CODINGSTANDARDS §5 boundary as
+        // isCanonicalStatelessEnvelope: `word` is an unchecked framing read
+        // used only in an equality against a constant or the running cursor
+        // (out-of-bounds zero fails closed); `rdLen` and `rdPad` are checked.
+        assembly {
+            let poff := payload.offset
+            let plen := payload.length
+
+            function word(po, pos) -> w {
+                w := calldataload(add(po, pos))
+            }
+            function rdLen(po, pl, pos) -> v, okv {
+                v := calldataload(add(po, pos))
+                okv := and(iszero(gt(add(pos, 32), pl)), iszero(gt(v, pl)))
+            }
+            function rdPad(po, pl, pos) -> v, okv {
+                v := calldataload(add(po, pos))
+                okv := iszero(gt(add(pos, 32), pl))
+            }
+
+            // `bytes` tail at pos = [len][data...]. Returns end and ok.
+            function bytesVal(po, pl, pos) -> end, good {
+                let len, okl := rdLen(po, pl, pos)
+                // slither-disable-next-line divide-before-multiply
+                let dataWords := div(add(len, 31), 32)
+                let dataStart := add(pos, 32)
+                let rem := mod(len, 32)
+                let padOk := 1
+                if rem {
+                    let lastPos := add(dataStart, mul(sub(dataWords, 1), 32))
+                    let lw, okp := rdPad(po, pl, lastPos)
+                    let padMask := sub(shl(mul(sub(32, rem), 8), 1), 1)
+                    padOk := and(okp, iszero(and(lw, padMask)))
+                }
+                end := add(dataStart, mul(dataWords, 32))
+                good := and(okl, padOk)
+            }
+
+            // bytes32[] at base = [count][value words]; no offsets, no pad.
+            function wordArr(po, pl, base) -> end, good {
+                let count, okc := rdLen(po, pl, base)
+                if iszero(okc) { leave }
+                end := add(add(base, 32), mul(count, 32))
+                good := 1
+            }
+
+            function publicKey(po, pl, base) -> end, good {
+                // (bytes, bytes, bytes, bytes), head 128.
+                if iszero(eq(word(po, base), 128)) { leave }
+                let e, g := bytesVal(po, pl, add(base, 128))
+                if iszero(g) { leave }
+                if iszero(eq(word(po, add(base, 32)), sub(e, base))) {
+                    leave
+                }
+                e, g := bytesVal(po, pl, e)
+                if iszero(g) { leave }
+                if iszero(eq(word(po, add(base, 64)), sub(e, base))) {
+                    leave
+                }
+                e, g := bytesVal(po, pl, e)
+                if iszero(g) { leave }
+                if iszero(eq(word(po, add(base, 96)), sub(e, base))) {
+                    leave
+                }
+                end, g := bytesVal(po, pl, e)
+                good := g
+            }
+
+            function statefulSig(po, pl, base) -> end, good {
+                // (bytes32 randomizer, uint32 counter, bytes32[] chains,
+                //  bytes32[] authPath), head 128. chains offset (head slot
+                //  2, byte 64) is fixed at 128.
+                // counter (slot 1) is a uint32: reject dirty high bits.
+                if shr(32, word(po, add(base, 32))) { leave }
+                if iszero(eq(word(po, add(base, 64)), 128)) {
+                    leave
+                }
+                let e, g := wordArr(po, pl, add(base, 128))
+                if iszero(g) { leave }
+                if iszero(eq(word(po, add(base, 96)), sub(e, base))) {
+                    leave
+                }
+                end, g := wordArr(po, pl, e)
+                good := g
+            }
+
+            // T0 head is 128 bytes: pk offset, actionType, payloadHash, sig
+            // offset. pk tail follows the head; sig tail follows the pk tail.
+            if eq(word(poff, 0), 128) {
+                let pkEnd, gpk := publicKey(poff, plen, 128)
+                if and(gpk, eq(word(poff, 96), pkEnd)) {
+                    let sigEnd, gsig := statefulSig(poff, plen, pkEnd)
                     // Anchor: the walk must consume exactly the whole
                     // payload, which rejects trailing bytes and any framing
                     // that leaves a gap.

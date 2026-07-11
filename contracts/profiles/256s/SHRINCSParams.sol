@@ -16,9 +16,9 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 pragma solidity ^0.8.28;
 
-/// @title ShrincsParams (256s profile)
+/// @title SHRINCSParams (256s profile)
 /// @notice Compile-time SHRINCS/SPHINCS parameter tuple for the 256s
-/// profile. One `ShrincsParams` library exists per build profile under
+/// profile. One `SHRINCSParams` library exists per build profile under
 /// contracts/profiles/<profile>/; the active one is selected by the
 /// `shrincs-profile/` Foundry remapping (foundry.toml). Every module
 /// imports this library directly through that remapping, so each
@@ -27,7 +27,7 @@ pragma solidity ^0.8.28;
 /// compile-time constant (not a runtime value): via-ir does not
 /// constant-fold struct-passed params. See
 /// [DESIGN §2/§3] for the option analysis.
-library ShrincsParams {
+library SHRINCSParams {
     // PROFILE_ID: stable identifier for this compiled profile. Consumed
     // by the profile-identity test/CI guard ([DESIGN §3.5]) to catch a
     // wrong-profile or remappings.txt-shadowed build.

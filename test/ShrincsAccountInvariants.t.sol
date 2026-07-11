@@ -17,13 +17,13 @@
 pragma solidity ^0.8.28;
 
 import {Test} from "../lib/forge-std/src/Test.sol";
-import {SHRINCS} from "../contracts/SHRINCS.sol";
+import {SHRINCSCore} from "../contracts/SHRINCSCore.sol";
 import {SPHINCSPlusCCore} from "../contracts/SPHINCSPlusCCore.sol";
 import {UXMSS} from "../contracts/UXMSS.sol";
-import {ShrincsParams} from "shrincs-profile/ShrincsParams.sol";
+import {SHRINCSParams} from "shrincs-profile/SHRINCSParams.sol";
 import {
-    ShrincsAccountVerifierExample
-} from "../contracts/examples/ShrincsAccountVerifierExample.sol";
+    SHRINCSAccountVerifierExample
+} from "../contracts/examples/SHRINCSAccountVerifierExample.sol";
 import {ShrincsTestSigner} from "./helpers/ShrincsTestSigner.sol";
 
 /// @notice Minimal wrapper subclass exposing the internal state-transition
@@ -34,13 +34,13 @@ import {ShrincsTestSigner} from "./helpers/ShrincsTestSigner.sol";
 /// rotate paths call after a valid recovery signature, so the budget-reset
 /// and key-epoch transitions are exercised without an in-loop stateless sign
 /// (infeasible at 256s).
-contract InvariantAccountHarness is ShrincsAccountVerifierExample {
-    constructor(bytes32 initialShrincsPublicKey)
-        ShrincsAccountVerifierExample(initialShrincsPublicKey)
+contract InvariantAccountHarness is SHRINCSAccountVerifierExample {
+    constructor(bytes32 initialSHRINCSPublicKey)
+        SHRINCSAccountVerifierExample(initialSHRINCSPublicKey)
     {}
 
     function verifyStatefulUncheckedForTest(
-        SHRINCS.PublicKey calldata publicKey,
+        SHRINCSCore.PublicKey calldata publicKey,
         bytes calldata message,
         UXMSS.StatefulSignature calldata signature
     ) external returns (bool) {
@@ -81,7 +81,7 @@ contract ShrincsAccountHandler is Test {
     InvariantAccountHarness public account;
 
     // Pre-signed material, keyed by [keyIndex][leafIndex].
-    mapping(uint256 => SHRINCS.PublicKey) internal publicKeyOf;
+    mapping(uint256 => SHRINCSCore.PublicKey) internal publicKeyOf;
     mapping(uint256 => bytes32) internal commitmentOf;
     mapping(uint256 => mapping(uint32 => UXMSS.StatefulSignature)) internal
         signatureOf;
@@ -123,8 +123,8 @@ contract ShrincsAccountHandler is Test {
         bytes memory seed =
             abi.encodePacked("shrincs-invariant-key", keyIndex);
         (
-            SHRINCS.SigningKey memory signingKey,
-            SHRINCS.PublicKey memory publicKey,
+            SHRINCSCore.SigningKey memory signingKey,
+            SHRINCSCore.PublicKey memory publicKey,
             bool keygenOk
         ) = ShrincsTestSigner.keygen(seed, MAX_LEAF);
         require(keygenOk, "handler keygen");
@@ -154,18 +154,18 @@ contract ShrincsAccountHandler is Test {
     function actValidStatefulAction(uint256) external {
         (uint256 keyIndex, bool found) = _currentKeyIndex();
         if (!found) return;
-        ShrincsAccountVerifierExample.StatefulPolicy policy =
+        SHRINCSAccountVerifierExample.StatefulPolicy policy =
             account.statefulPolicy();
         if (
             policy
-                == ShrincsAccountVerifierExample.StatefulPolicy
+                == SHRINCSAccountVerifierExample.StatefulPolicy
                 .RecoveryRotation
         ) return;
 
         uint32 leaf;
         if (
             policy
-                == ShrincsAccountVerifierExample.StatefulPolicy
+                == SHRINCSAccountVerifierExample.StatefulPolicy
                 .MonotonicIndex
         ) {
             leaf = account.nextStatefulLeafIndex();
@@ -176,7 +176,7 @@ contract ShrincsAccountHandler is Test {
         }
 
         bool isBitmap = policy
-            == ShrincsAccountVerifierExample.StatefulPolicy.LeafBitmap;
+            == SHRINCSAccountVerifierExample.StatefulPolicy.LeafBitmap;
         bytes32 digestBefore = _stateDigest();
         bool ok = account.verifyStatefulUncheckedForTest(
             publicKeyOf[keyIndex],
@@ -276,7 +276,7 @@ contract ShrincsAccountHandler is Test {
     // leaf was already consumed this epoch the change must not take effect.
     function actSetPolicyMonotonic(uint256 leafSelector) external {
         uint32 initial = uint32(bound(leafSelector, 1, MAX_LEAF));
-        ShrincsAccountVerifierExample.StatefulPolicy before =
+        SHRINCSAccountVerifierExample.StatefulPolicy before =
             account.statefulPolicy();
         try account.setStatefulPolicyMonotonicIndex(initial) {
             if (ghostLeafConsumedThisEpoch) ghostFrozenPolicyChanged = true;
@@ -292,7 +292,7 @@ contract ShrincsAccountHandler is Test {
     // rotation-reset invariants have a nonzero budget to act on. Bounded to
     // the limit so the mutator never manufactures an out-of-range value.
     function actConsumeBudget(uint256 amount) external {
-        uint64 limit = ShrincsParams.STATELESS_SIGNATURE_LIMIT;
+        uint64 limit = SHRINCSParams.STATELESS_SIGNATURE_LIMIT;
         uint64 target = uint64(bound(amount, 0, limit));
         account.setStatelessSignaturesUsedForTest(target);
         _afterOp();
@@ -303,7 +303,7 @@ contract ShrincsAccountHandler is Test {
     // consumed recovery signature and the whole budget are then reset to
     // zero, and the key epoch advances (I2, I3).
     function actSimulateFullRotation(uint256 targetSelector) external {
-        uint64 limit = ShrincsParams.STATELESS_SIGNATURE_LIMIT;
+        uint64 limit = SHRINCSParams.STATELESS_SIGNATURE_LIMIT;
         if (account.statelessSignaturesUsed() >= limit) return;
         uint256 targetIndex = bound(targetSelector, 0, KEY_COUNT - 1);
         uint256 nonceBefore = account.nonce();
@@ -321,7 +321,7 @@ contract ShrincsAccountHandler is Test {
     // recovery signature is consumed (budget += 1) and carried into the new
     // epoch: budget must advance by exactly one, never reset (I3).
     function actSimulateStatefulRotation(uint256 targetSelector) external {
-        uint64 limit = ShrincsParams.STATELESS_SIGNATURE_LIMIT;
+        uint64 limit = SHRINCSParams.STATELESS_SIGNATURE_LIMIT;
         uint64 budgetBefore = account.statelessSignaturesUsed();
         if (budgetBefore >= limit) return;
         uint256 targetIndex = bound(targetSelector, 0, KEY_COUNT - 1);
@@ -351,7 +351,7 @@ contract ShrincsAccountHandler is Test {
     // leaf was consumed this epoch, tracked independently of the wrapper's
     // freeze flag.
     function _trySetPolicy(uint256) internal {
-        ShrincsAccountVerifierExample.StatefulPolicy before =
+        SHRINCSAccountVerifierExample.StatefulPolicy before =
             account.statefulPolicy();
         try account.setStatefulPolicyLeafBitmap() {
             if (ghostLeafConsumedThisEpoch) ghostFrozenPolicyChanged = true;
@@ -383,7 +383,7 @@ contract ShrincsAccountHandler is Test {
         view
         returns (uint256 keyIndex, bool found)
     {
-        bytes32 current = account.currentShrincsPublicKey();
+        bytes32 current = account.currentSHRINCSPublicKey();
         for (uint256 i = 0; i < KEY_COUNT; i++) {
             if (commitmentOf[i] == current) return (i, true);
         }
@@ -393,10 +393,10 @@ contract ShrincsAccountHandler is Test {
     function _fullTarget(uint256 keyIndex)
         internal
         view
-        returns (SHRINCS.RotationTarget memory target)
+        returns (SHRINCSCore.RotationTarget memory target)
     {
-        SHRINCS.PublicKey memory publicKey = publicKeyOf[keyIndex];
-        target = SHRINCS.RotationTarget({
+        SHRINCSCore.PublicKey memory publicKey = publicKeyOf[keyIndex];
+        target = SHRINCSCore.RotationTarget({
             statefulPublicKey: publicKey.statefulPublicKey,
             publicKeyCommitment: publicKey.publicKeyCommitment,
             pkSeed: publicKey.pkSeed,
@@ -444,14 +444,14 @@ contract ShrincsAccountHandler is Test {
                 account.statefulPolicyFrozen(),
                 account.nextStatefulLeafIndex(),
                 account.recoveryMode(),
-                account.currentShrincsPublicKey(),
+                account.currentSHRINCSPublicKey(),
                 account.isLeafUsed(1),
                 account.isLeafUsed(2)
             )
         );
     }
 
-    function _commitmentWord(SHRINCS.PublicKey memory publicKey)
+    function _commitmentWord(SHRINCSCore.PublicKey memory publicKey)
         internal
         pure
         returns (bytes32 word)
@@ -473,7 +473,7 @@ contract ShrincsAccountHandler is Test {
 /// rotation state transitions via the internal install helpers. The
 /// canonical nonce-advancing action path and the positive recovery-signature
 /// gating are covered by the unit suite in
-/// ShrincsAccountVerifierExample.t.sol; this suite covers the monotonicity,
+/// SHRINCSAccountVerifierExample.t.sol; this suite covers the monotonicity,
 /// freeze, budget-reset, and fail-closed-purity properties under random
 /// operation sequences.
 contract ShrincsAccountInvariantsTest is Test {
@@ -524,7 +524,7 @@ contract ShrincsAccountInvariantsTest is Test {
     function invariant_I3_budgetConserved() public view {
         assertLe(
             handler.account().statelessSignaturesUsed(),
-            ShrincsParams.STATELESS_SIGNATURE_LIMIT,
+            SHRINCSParams.STATELESS_SIGNATURE_LIMIT,
             "budget over limit"
         );
         assertFalse(handler.ghostResetViolated(), "budget reset rule");

@@ -22,7 +22,7 @@ import {WOTSPlus} from "../contracts/WOTSPlus.sol";
 /// @title DeployWOTSPlus
 /// @notice Deploys the standalone WOTS+ library via CREATE3 (maintainer
 /// decision Q5). WOTS+ is profile-independent (its parameters are its
-/// own constants, not ShrincsParams), so it deploys under the 256s
+/// own constants, not SHRINCSParams), so it deploys under the 256s
 /// production profile and its CREATE3 address is the same regardless.
 /// Replaces the historical Hardhat-Ignition (plain CREATE) deployment;
 /// see DEPLOYMENTS.md.

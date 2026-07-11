@@ -16,13 +16,12 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 pragma solidity ^0.8.28;
 
-import {ShrincsParams} from "shrincs-profile/ShrincsParams.sol";
+import {SHRINCSParams} from "shrincs-profile/SHRINCSParams.sol";
 import {SHRINCSHash} from "./SHRINCSHash.sol";
 
 library FORSMinusC {
-    // Address-type words for the SPHINCS-style keyed hash inputs. These
-    // are the ADRS type constants [FIPS205 §4.2]: WOTS+ hash (0), tree
-    // (2), and FORS tree (3).
+    // AddressTypeForsTree: the FORS-tree ADRS type constant
+    // [FIPS205 §4.2] (value 3) for the SPHINCS-style keyed hash inputs.
     uint32 internal constant AddressTypeForsTree = 3;
 
     struct ForsDigest {
@@ -76,7 +75,7 @@ library FORSMinusC {
         // leaf index to zero. Verification therefore expects only k - 1
         // revealed entries and rejects any digest whose omitted final tree
         // would require a nonzero leaf.
-        uint256 signedTrees = uint256(ShrincsParams.NUM_FORS_TREES) - 1;
+        uint256 signedTrees = uint256(SHRINCSParams.NUM_FORS_TREES) - 1;
         // The randomizer is always one hash output wide.
         if (signature.randomizer.length != 32) return (bytes32(0), false);
         // FORS-C reveals only the signedTrees entries, never the omitted
@@ -96,14 +95,14 @@ library FORSMinusC {
         );
         // forsHeight: the SPHINCSPLUS `a` parameter [SPHINCSPLUS §5.5]
         // — FORS tree height.
-        uint256 forsHeight = uint256(ShrincsParams.FORS_TREE_HEIGHT);
+        uint256 forsHeight = uint256(SHRINCSParams.FORS_TREE_HEIGHT);
         // The omitted final FORS tree must always select leaf 0 in the
         // compressed FORS-C layout.
         if (
             SHRINCSHash.readBits32(
                     digest.digest,
                     signedTrees * forsHeight,
-                    ShrincsParams.FORS_TREE_HEIGHT
+                    SHRINCSParams.FORS_TREE_HEIGHT
                 ) != 0
         ) {
             return (bytes32(0), false);
@@ -154,7 +153,7 @@ library FORSMinusC {
             uint32 entryLeafIndex = SHRINCSHash.readBits32(
                 digest.digest,
                 tree * forsHeight,
-                ShrincsParams.FORS_TREE_HEIGHT
+                SHRINCSParams.FORS_TREE_HEIGHT
             );
             // casting to 'uint32' is safe because the supported FORS tree
             // height is 14 bits
@@ -404,21 +403,21 @@ library FORSMinusC {
         uint32 counter
     ) internal pure returns (FORSMinusC.ForsDigest memory out) {
         // Reserve bits for all signed FORS tree leaf choices.
-        uint32 indexBits = uint32(ShrincsParams.NUM_FORS_TREES)
-            * uint32(ShrincsParams.FORS_TREE_HEIGHT);
+        uint32 indexBits = uint32(SHRINCSParams.NUM_FORS_TREES)
+            * uint32(SHRINCSParams.FORS_TREE_HEIGHT);
         // Each hypertree layer shares this many leaf-index bits.
         uint32 subtreeHeight = uint32(
-            ShrincsParams.HYPERTREE_HEIGHT
-                / ShrincsParams.NUM_HYPERTREE_LAYERS
+            SHRINCSParams.HYPERTREE_HEIGHT
+                / SHRINCSParams.NUM_HYPERTREE_LAYERS
         );
         // The remaining hypertree bits identify the subtree itself.
         uint32 treeBits =
-            uint32(ShrincsParams.HYPERTREE_HEIGHT) - subtreeHeight;
+            uint32(SHRINCSParams.HYPERTREE_HEIGHT) - subtreeHeight;
         // Expand enough bytes to cover FORS choices plus hypertree
         // coordinates.
         uint256 digestBytes =
             (uint256(indexBits)
-                    + uint256(ShrincsParams.HYPERTREE_HEIGHT)
+                    + uint256(SHRINCSParams.HYPERTREE_HEIGHT)
                     + 7) / 8;
         // Derive the digest stream from the public seed/root, signature
         // randomizer, counter, and message.

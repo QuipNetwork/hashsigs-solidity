@@ -16,13 +16,13 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 pragma solidity ^0.8.28;
 
-import {SHRINCS} from "../SHRINCS.sol";
+import {SHRINCSCore} from "../SHRINCSCore.sol";
 import {SPHINCSPlusCCore} from "../SPHINCSPlusCCore.sol";
 import {UXMSS} from "../UXMSS.sol";
-import {ShrincsParams} from "shrincs-profile/ShrincsParams.sol";
-import {ShrincsAccountEnvelope} from "./ShrincsAccountEnvelope.sol";
+import {SHRINCSParams} from "shrincs-profile/SHRINCSParams.sol";
+import {SHRINCSAccountEnvelope} from "./SHRINCSAccountEnvelope.sol";
 
-contract ShrincsAccountVerifierExample {
+contract SHRINCSAccountVerifierExample {
     // ERC-1271 success return value.
     bytes4 internal constant MAGIC_VALUE = 0x1626ba7e;
     // Any non-magic value denotes signature failure.
@@ -46,7 +46,7 @@ contract ShrincsAccountVerifierExample {
     uint32 internal constant INITIAL_STATEFUL_LEAF_INDEX = 1;
 
     // Installed bundle commitment currently trusted by the wrapper.
-    bytes32 public currentShrincsPublicKey;
+    bytes32 public currentSHRINCSPublicKey;
     // Account owner allowed to change wrapper policy and enter recovery mode.
     address public owner;
     // Canonical action/rotation nonce consumed on successful wrapper
@@ -76,17 +76,13 @@ contract ShrincsAccountVerifierExample {
 
     bytes32 internal constant DOMAIN_TAG = keccak256("shrincs-account-v1");
 
-    // Raised when an ERC-1271 envelope does not re-encode to its exact
-    // input bytes; isValidSignature converts it to INVALID_SIGNATURE.
-    error NonCanonicalEnvelope();
-
     event StatefulPolicySet(
         StatefulPolicy indexed policy, uint32 nextStatefulLeafIndex
     );
     event RecoveryModeEntered(uint256 indexed keyVersion);
     event KeyRotated(
-        bytes32 indexed previousShrincsPublicKey,
-        bytes32 indexed nextShrincsPublicKey,
+        bytes32 indexed previousSHRINCSPublicKey,
+        bytes32 indexed nextSHRINCSPublicKey,
         uint256 nextKeyVersion
     );
     event StatefulSignatureVerified(
@@ -101,7 +97,7 @@ contract ShrincsAccountVerifierExample {
         uint64 usedCount,
         uint256 indexed nonce,
         uint256 indexed keyVersion,
-        bytes32 indexed nextShrincsPublicKey,
+        bytes32 indexed nextSHRINCSPublicKey,
         bool fullRotation
     );
 
@@ -117,21 +113,26 @@ contract ShrincsAccountVerifierExample {
 
     /// @notice ERC-1271 compatibility view for canonical SHRINCS
     /// account-action signatures.
-    /// @dev Decodes the leading envelope mode byte, decodes the remainder as
-    /// a canonical stateful or stateless action envelope, rebuilds the
+    /// @dev Decodes the leading envelope mode byte, structurally validates
+    /// the remainder as a canonical stateful or stateless action envelope
+    /// (the SHRINCSAccountEnvelope walk, never reverting), rebuilds the
     /// current action context from wrapper-owned state, checks the supplied
     /// hash against the canonical action hash, and verifies the embedded
-    /// SHRINCS signature without mutating state. Returns 0xffffffff instead
-    /// of reverting on malformed envelopes.
-    /// @dev Minimum gas: a stateful check costs roughly 260k gas and a
-    /// stateless check roughly 3.03M gas. Each envelope is verified behind a
-    /// try/catch self-call, so an inner out-of-gas (the 63/64 rule strands
-    /// the hop while the outer frame keeps 1/64) is caught and returned as
-    /// INVALID_SIGNATURE — a valid signature then reports invalid. Callers
-    /// MUST forward gas comfortably above those figures.
+    /// SHRINCS signature without mutating state.
+    /// @dev Revert model (mirrors the SHRINCS adapter). A malformed or
+    /// non-canonical envelope returns 0xffffffff, reached only through the
+    /// non-reverting structural walk before abi.decode (which is then
+    /// infallible) — there is no try/catch. Every other failure, including
+    /// an inner out-of-gas, reverts to the caller. A single self-call hop
+    /// remains per mode: the memory->calldata bridge into the read-only
+    /// signature check (SHRINCSCore takes calldata structs), with no try
+    /// around it. Reference gas: a stateful check costs roughly 260k gas and
+    /// a stateless check roughly 3.03M gas; callers must forward comfortably
+    /// above those figures or the verification reverts.
     /// @param hash The 32-byte hash the signature must authorize.
     /// @param signature The mode-prefixed ERC-1271 envelope.
-    /// @return The ERC-1271 magic value on success, 0xffffffff on failure.
+    /// @return The ERC-1271 magic value on success, 0xffffffff on malformed
+    /// input.
     function isValidSignature(bytes32 hash, bytes calldata signature)
         external
         view
@@ -144,118 +145,71 @@ contract ShrincsAccountVerifierExample {
         bytes calldata payload = signature[1:];
 
         if (mode == ERC1271_MODE_STATEFUL_ACTION) {
-            try this.decodeAndCheckStateful1271Envelope(
-                hash, payload
-            ) returns (
-                bool ok
-            ) {
-                if (ok) return MAGIC_VALUE;
-            } catch {
+            // Structural walk first (non-reverting); abi.decode is then
+            // infallible on the validated bytes.
+            if (!SHRINCSAccountEnvelope.isCanonicalStatefulEnvelope(payload))
+            {
                 return INVALID_SIGNATURE;
             }
+            (
+                SHRINCSCore.PublicKey memory publicKey,
+                bytes32 actionType,
+                bytes32 payloadHash,
+                UXMSS.StatefulSignature memory shrincsSignature
+            ) = abi.decode(
+                payload,
+                (
+                    SHRINCSCore.PublicKey,
+                    bytes32,
+                    bytes32,
+                    UXMSS.StatefulSignature
+                )
+            );
+            // Single memory->calldata self-call hop; no try wraps it, so an
+            // out-of-gas propagates as a revert.
+            if (this.isValidStatefulActionSignatureNow(
+                    hash,
+                    publicKey,
+                    actionType,
+                    payloadHash,
+                    shrincsSignature
+                )) return MAGIC_VALUE;
             return INVALID_SIGNATURE;
         }
 
         if (mode == ERC1271_MODE_STATELESS_ACTION) {
-            try this.decodeAndCheckStateless1271Envelope(
-                hash, payload
-            ) returns (
-                bool ok
-            ) {
-                if (ok) return MAGIC_VALUE;
-            } catch {
-                return INVALID_SIGNATURE;
-            }
+            // Structural walk first (non-reverting); abi.decode is then
+            // infallible on the validated bytes.
+            if (!SHRINCSAccountEnvelope.isCanonicalStatelessEnvelope(
+                    payload
+                )) return INVALID_SIGNATURE;
+            (
+                SHRINCSCore.PublicKey memory publicKey,
+                bytes32 actionType,
+                bytes32 payloadHash,
+                SPHINCSPlusCCore.StatelessSignature memory shrincsSignature
+            ) = abi.decode(
+                payload,
+                (
+                    SHRINCSCore.PublicKey,
+                    bytes32,
+                    bytes32,
+                    SPHINCSPlusCCore.StatelessSignature
+                )
+            );
+            // Single memory->calldata self-call hop; no try wraps it, so an
+            // out-of-gas propagates as a revert.
+            if (this.isValidStatelessActionSignatureNow(
+                    hash,
+                    publicKey,
+                    actionType,
+                    payloadHash,
+                    shrincsSignature
+                )) return MAGIC_VALUE;
             return INVALID_SIGNATURE;
         }
 
         return INVALID_SIGNATURE;
-    }
-
-    /// @notice Self-call decoder for stateful ERC-1271 envelopes. onlySelf.
-    /// @dev Decodes the canonical stateful envelope, rejects non-canonical
-    /// encodings, and delegates the read-only cryptographic and policy
-    /// checks. A revert here is caught by isValidSignature and reported as
-    /// INVALID_SIGNATURE.
-    /// @param hash The 32-byte hash the signature must authorize.
-    /// @param payload The abi-encoded stateful envelope (no mode prefix).
-    /// @return True when the decoded stateful signature is valid now.
-    function decodeAndCheckStateful1271Envelope(
-        bytes32 hash,
-        bytes calldata payload
-    ) external view onlySelf returns (bool) {
-        (
-            SHRINCS.PublicKey memory publicKey,
-            bytes32 actionType,
-            bytes32 payloadHash,
-            UXMSS.StatefulSignature memory shrincsSignature
-        ) = abi.decode(
-            payload,
-            (SHRINCS.PublicKey, bytes32, bytes32, UXMSS.StatefulSignature)
-        );
-
-        // Reject non-canonical encodings: re-encoding the decoded fields
-        // must reproduce the exact envelope bytes (mirrors
-        // ShrincsCodec.decodeStatefulEnvelope). Trailing bytes or padded
-        // heads are rejected. The onlySelf revert is converted to
-        // INVALID_SIGNATURE by isValidSignature.
-        if (
-            keccak256(payload)
-                != keccak256(
-                    abi.encode(
-                        publicKey, actionType, payloadHash, shrincsSignature
-                    )
-                )
-        ) {
-            revert NonCanonicalEnvelope();
-        }
-
-        return this.isValidStatefulActionSignatureNow(
-            hash, publicKey, actionType, payloadHash, shrincsSignature
-        );
-    }
-
-    /// @notice Self-call decoder for stateless ERC-1271 envelopes. onlySelf.
-    /// @dev Decodes the canonical stateless envelope, rejects non-canonical
-    /// encodings, and delegates the read-only cryptographic and policy
-    /// checks. A revert here is caught by isValidSignature and reported as
-    /// INVALID_SIGNATURE.
-    /// @param hash The 32-byte hash the signature must authorize.
-    /// @param payload The abi-encoded stateless envelope (no mode prefix).
-    /// @return True when the decoded stateless signature is valid now.
-    function decodeAndCheckStateless1271Envelope(
-        bytes32 hash,
-        bytes calldata payload
-    ) external view onlySelf returns (bool) {
-        (
-            SHRINCS.PublicKey memory publicKey,
-            bytes32 actionType,
-            bytes32 payloadHash,
-            SPHINCSPlusCCore.StatelessSignature memory shrincsSignature
-        ) = abi.decode(
-            payload,
-            (
-                SHRINCS.PublicKey,
-                bytes32,
-                bytes32,
-                SPHINCSPlusCCore.StatelessSignature
-            )
-        );
-
-        // Reject non-canonical encodings: the payload must be the exact
-        // canonical ABI encoding of the decoded fields. Trailing bytes,
-        // non-minimal offsets, gap bytes, and dirty tail padding are
-        // rejected. The structural walk is equivalent to re-encode equality
-        // for this envelope's type shape but avoids re-materializing the
-        // ~90 KB structure (see ShrincsAccountEnvelope). The onlySelf revert
-        // is converted to INVALID_SIGNATURE by isValidSignature.
-        if (!ShrincsAccountEnvelope.isCanonicalStatelessEnvelope(payload)) {
-            revert NonCanonicalEnvelope();
-        }
-
-        return this.isValidStatelessActionSignatureNow(
-            hash, publicKey, actionType, payloadHash, shrincsSignature
-        );
     }
 
     /// @notice Install the initial key commitment and start in the default
@@ -263,13 +217,13 @@ contract ShrincsAccountVerifierExample {
     /// @dev Records the deployer as owner, installs the initial commitment,
     /// starts with monotonic stateful leaf tracking, and expects the first
     /// stateful signature to use leaf 1.
-    /// @param initialShrincsPublicKey The initial installed bundle
+    /// @param initialSHRINCSPublicKey The initial installed bundle
     /// commitment.
-    constructor(bytes32 initialShrincsPublicKey) {
+    constructor(bytes32 initialSHRINCSPublicKey) {
         // Record the deployer as the wrapper administrator.
         owner = msg.sender;
         // Install the first trusted SHRINCS public-key commitment.
-        currentShrincsPublicKey = initialShrincsPublicKey;
+        currentSHRINCSPublicKey = initialSHRINCSPublicKey;
         // Default to ordered stateful signing under monotonic leaf tracking.
         statefulPolicy = StatefulPolicy.MonotonicIndex;
         // Fresh keys begin consuming stateful leaves from index 1.
@@ -286,7 +240,7 @@ contract ShrincsAccountVerifierExample {
     // 5. Emit the usual stateful verification event without advancing the
     // wrapper nonce.
     function verifyStatefulUncheckedMessage(
-        SHRINCS.PublicKey calldata publicKey,
+        SHRINCSCore.PublicKey calldata publicKey,
         bytes calldata message,
         UXMSS.StatefulSignature calldata signature
     ) internal returns (bool) {
@@ -299,8 +253,8 @@ contract ShrincsAccountVerifierExample {
 
         // Verify the caller-supplied message directly against the current
         // installed key.
-        bool ok = SHRINCS.verifyStatefulUncheckedMessage(
-            currentShrincsPublicKey, publicKey, message, signature
+        bool ok = SHRINCSCore.verifyStatefulUncheckedMessage(
+            currentSHRINCSPublicKey, publicKey, message, signature
         );
         if (!ok) return false;
 
@@ -323,7 +277,7 @@ contract ShrincsAccountVerifierExample {
     /// @param signature The stateful signature.
     /// @return True when the action signature verifies and is consumed.
     function verifyStatefulAction(
-        SHRINCS.PublicKey calldata publicKey,
+        SHRINCSCore.PublicKey calldata publicKey,
         bytes32 actionType,
         bytes32 payloadHash,
         UXMSS.StatefulSignature calldata signature
@@ -335,8 +289,8 @@ contract ShrincsAccountVerifierExample {
 
         // Bind the action to this contract instance, nonce, and key epoch.
         // forgefmt: disable-next-line
-        SHRINCS.ActionContext memory context =
-            SHRINCS.ActionContext({
+        SHRINCSCore.ActionContext memory context =
+            SHRINCSCore.ActionContext({
                 domainSeparator: domainSeparator(),
                 nonce: nonce,
                 keyVersion: keyVersion,
@@ -346,8 +300,8 @@ contract ShrincsAccountVerifierExample {
 
         // Verify the canonical typed action under the installed key
         // commitment.
-        bool ok = SHRINCS.verifyStateful(
-            currentShrincsPublicKey, publicKey, context, signature
+        bool ok = SHRINCSCore.verifyStateful(
+            currentSHRINCSPublicKey, publicKey, context, signature
         );
         if (!ok) return false;
 
@@ -372,7 +326,7 @@ contract ShrincsAccountVerifierExample {
     /// @param signature The stateless signature.
     /// @return True when the action signature verifies and is consumed.
     function verifyStatelessAction(
-        SHRINCS.PublicKey calldata publicKey,
+        SHRINCSCore.PublicKey calldata publicKey,
         bytes32 actionType,
         bytes32 payloadHash,
         SPHINCSPlusCCore.StatelessSignature calldata signature
@@ -384,13 +338,13 @@ contract ShrincsAccountVerifierExample {
                 && !recoveryMode
         ) return false;
         // Enforce the per-key stateless usage budget.
-        uint64 limit = ShrincsParams.STATELESS_SIGNATURE_LIMIT;
+        uint64 limit = SHRINCSParams.STATELESS_SIGNATURE_LIMIT;
         if (statelessSignaturesUsed >= limit) return false;
 
         // Bind the action to this contract instance, nonce, and key epoch.
         // forgefmt: disable-next-line
-        SHRINCS.ActionContext memory context =
-            SHRINCS.ActionContext({
+        SHRINCSCore.ActionContext memory context =
+            SHRINCSCore.ActionContext({
                 domainSeparator: domainSeparator(),
                 nonce: nonce,
                 keyVersion: keyVersion,
@@ -400,8 +354,8 @@ contract ShrincsAccountVerifierExample {
 
         // Verify the canonical typed action under the installed key
         // commitment.
-        bool ok = SHRINCS.verifyStateless(
-            currentShrincsPublicKey, publicKey, context, signature
+        bool ok = SHRINCSCore.verifyStateless(
+            currentSHRINCSPublicKey, publicKey, context, signature
         );
         if (!ok) return false;
 
@@ -427,9 +381,9 @@ contract ShrincsAccountVerifierExample {
     /// @param nextKey The stateful-only rotation target.
     /// @return True when rotation succeeds.
     function rotateToFreshKey(
-        SHRINCS.PublicKey calldata currentPublicKey,
+        SHRINCSCore.PublicKey calldata currentPublicKey,
         SPHINCSPlusCCore.StatelessSignature calldata recoverySignature,
-        SHRINCS.StatefulRotationTarget calldata nextKey
+        SHRINCSCore.StatefulRotationTarget calldata nextKey
     ) external returns (bool) {
         // Fresh-key rotation is available only in the dedicated recovery
         // policy.
@@ -440,25 +394,27 @@ contract ShrincsAccountVerifierExample {
         // recovery is accepted.
         if (!recoveryMode) return false;
         // Enforce the per-key stateless usage budget.
-        uint64 limit = ShrincsParams.STATELESS_SIGNATURE_LIMIT;
+        uint64 limit = SHRINCSParams.STATELESS_SIGNATURE_LIMIT;
         if (statelessSignaturesUsed >= limit) return false;
 
         // Bind the rotation to this contract instance, nonce, and key epoch.
-        SHRINCS.RotationContext memory context = SHRINCS.RotationContext({
-            domainSeparator: domainSeparator(),
-            nonce: nonce,
-            keyVersion: keyVersion
-        });
+        SHRINCSCore.RotationContext memory context =
+            SHRINCSCore.RotationContext({
+                domainSeparator: domainSeparator(),
+                nonce: nonce,
+                keyVersion: keyVersion
+            });
 
         // Verify the stateless recovery signature and derive the next
         // installed commitment.
-        bytes32 nextCompositePublicKey = SHRINCS.rotateStatefulViaStateless(
-            currentShrincsPublicKey,
-            currentPublicKey,
-            context,
-            recoverySignature,
-            nextKey
-        );
+        bytes32 nextCompositePublicKey =
+            SHRINCSCore.rotateStatefulViaStateless(
+                currentSHRINCSPublicKey,
+                currentPublicKey,
+                context,
+                recoverySignature,
+                nextKey
+            );
         if (nextCompositePublicKey == bytes32(0)) return false;
 
         // Count and announce the consumed recovery signature before
@@ -482,9 +438,9 @@ contract ShrincsAccountVerifierExample {
     /// @param nextKey The full-key rotation target.
     /// @return True when rotation succeeds.
     function rotateFullKey(
-        SHRINCS.PublicKey calldata currentPublicKey,
+        SHRINCSCore.PublicKey calldata currentPublicKey,
         SPHINCSPlusCCore.StatelessSignature calldata recoverySignature,
-        SHRINCS.RotationTarget calldata nextKey
+        SHRINCSCore.RotationTarget calldata nextKey
     ) external returns (bool) {
         // Full-key rotation is available only in the dedicated recovery
         // policy.
@@ -495,20 +451,21 @@ contract ShrincsAccountVerifierExample {
         // recovery is accepted.
         if (!recoveryMode) return false;
         // Enforce the per-key stateless usage budget.
-        uint64 limit = ShrincsParams.STATELESS_SIGNATURE_LIMIT;
+        uint64 limit = SHRINCSParams.STATELESS_SIGNATURE_LIMIT;
         if (statelessSignaturesUsed >= limit) return false;
 
         // Bind the rotation to this contract instance, nonce, and key epoch.
-        SHRINCS.RotationContext memory context = SHRINCS.RotationContext({
-            domainSeparator: domainSeparator(),
-            nonce: nonce,
-            keyVersion: keyVersion
-        });
+        SHRINCSCore.RotationContext memory context =
+            SHRINCSCore.RotationContext({
+                domainSeparator: domainSeparator(),
+                nonce: nonce,
+                keyVersion: keyVersion
+            });
 
         // Verify the stateless recovery signature and derive the next
         // installed commitment.
-        bytes32 nextCompositePublicKey = SHRINCS.statelessRotate(
-            currentShrincsPublicKey,
+        bytes32 nextCompositePublicKey = SHRINCSCore.statelessRotate(
+            currentSHRINCSPublicKey,
             currentPublicKey,
             context,
             recoverySignature,
@@ -670,7 +627,7 @@ contract ShrincsAccountVerifierExample {
     /// @return True when the stateful signature is valid now.
     function isValidStatefulActionSignatureNow(
         bytes32 hash,
-        SHRINCS.PublicKey calldata publicKey,
+        SHRINCSCore.PublicKey calldata publicKey,
         bytes32 actionType,
         bytes32 payloadHash,
         UXMSS.StatefulSignature calldata signature
@@ -679,8 +636,8 @@ contract ShrincsAccountVerifierExample {
         if (!precheckStatefulLeafUse(leafIndex)) return false;
 
         // forgefmt: disable-next-line
-        SHRINCS.ActionContext memory context =
-            SHRINCS.ActionContext({
+        SHRINCSCore.ActionContext memory context =
+            SHRINCSCore.ActionContext({
                 domainSeparator: domainSeparator(),
                 nonce: nonce,
                 keyVersion: keyVersion,
@@ -689,12 +646,12 @@ contract ShrincsAccountVerifierExample {
             });
 
         if (
-            SHRINCS.statefulActionMessageHash(
-                    currentShrincsPublicKey, context
+            SHRINCSCore.statefulActionMessageHash(
+                    currentSHRINCSPublicKey, context
                 ) != hash
         ) return false;
-        return SHRINCS.verifyStateful(
-            currentShrincsPublicKey, publicKey, context, signature
+        return SHRINCSCore.verifyStateful(
+            currentSHRINCSPublicKey, publicKey, context, signature
         );
     }
 
@@ -712,7 +669,7 @@ contract ShrincsAccountVerifierExample {
     /// @return True when the stateless signature is valid now.
     function isValidStatelessActionSignatureNow(
         bytes32 hash,
-        SHRINCS.PublicKey calldata publicKey,
+        SHRINCSCore.PublicKey calldata publicKey,
         bytes32 actionType,
         bytes32 payloadHash,
         SPHINCSPlusCCore.StatelessSignature calldata signature
@@ -723,12 +680,12 @@ contract ShrincsAccountVerifierExample {
         ) return false;
         if (
             statelessSignaturesUsed
-                >= ShrincsParams.STATELESS_SIGNATURE_LIMIT
+                >= SHRINCSParams.STATELESS_SIGNATURE_LIMIT
         ) return false;
 
         // forgefmt: disable-next-line
-        SHRINCS.ActionContext memory context =
-            SHRINCS.ActionContext({
+        SHRINCSCore.ActionContext memory context =
+            SHRINCSCore.ActionContext({
                 domainSeparator: domainSeparator(),
                 nonce: nonce,
                 keyVersion: keyVersion,
@@ -737,12 +694,12 @@ contract ShrincsAccountVerifierExample {
             });
 
         if (
-            SHRINCS.statelessActionMessageHash(
-                    currentShrincsPublicKey, context
+            SHRINCSCore.statelessActionMessageHash(
+                    currentSHRINCSPublicKey, context
                 ) != hash
         ) return false;
-        return SHRINCS.verifyStateless(
-            currentShrincsPublicKey, publicKey, context, signature
+        return SHRINCSCore.verifyStateless(
+            currentSHRINCSPublicKey, publicKey, context, signature
         );
     }
 
@@ -820,9 +777,9 @@ contract ShrincsAccountVerifierExample {
     ) internal {
         // Preserve the previous key commitment for the rotation event
         // payload.
-        bytes32 previousShrincsPublicKey = currentShrincsPublicKey;
+        bytes32 previousSHRINCSPublicKey = currentSHRINCSPublicKey;
         // Install the next trusted SHRINCS public-key commitment.
-        currentShrincsPublicKey = nextCompositePublicKey;
+        currentSHRINCSPublicKey = nextCompositePublicKey;
         // Advance nonce and key epoch so old authorizations cannot be
         // replayed.
         nonce += 1;
@@ -842,7 +799,7 @@ contract ShrincsAccountVerifierExample {
         // Recovery mode ends once the new key has been installed.
         recoveryMode = false;
         emit KeyRotated(
-            previousShrincsPublicKey, nextCompositePublicKey, keyVersion
+            previousSHRINCSPublicKey, nextCompositePublicKey, keyVersion
         );
         emit StatefulPolicySet(statefulPolicy, nextStatefulLeafIndex);
     }

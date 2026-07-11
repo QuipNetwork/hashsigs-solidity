@@ -16,571 +16,218 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 pragma solidity ^0.8.28;
 
-import {ShrincsParams} from "shrincs-profile/ShrincsParams.sol";
-import {ShrincsCodec} from "./ShrincsCodec.sol";
-import {UXMSS} from "./UXMSS.sol";
+import {
+    IERC7913SignatureVerifier
+} from "./interfaces/IERC7913SignatureVerifier.sol";
+import {SHRINCSCore} from "./SHRINCSCore.sol";
+import {SHRINCSCodec} from "./SHRINCSCodec.sol";
 import {SPHINCSPlusCCore} from "./SPHINCSPlusCCore.sol";
+import {UXMSS} from "./UXMSS.sol";
 
-library SHRINCS {
-    // Hash-suite identifiers bound into canonical action and rotation hashes.
-    uint32 internal constant HASH_SUITE_KECCAK_256 = 1;
-    // Sentinel for an unsupported hash suite. Referenced only by tests
-    // today; kept as a named constant so fail-closed suite checks and
-    // negative tests have a stable non-keccak identifier.
-    uint32 internal constant HASH_SUITE_UNSUPPORTED = 2;
-    // Operation tags domain-separating each signed message family.
-    bytes32 internal constant OP_VERIFY_STATEFUL =
-        keccak256("shrincs-verify-stateful");
-    bytes32 internal constant OP_VERIFY_STATELESS =
-        keccak256("shrincs-verify-stateless");
-    bytes32 internal constant OP_ROTATE_STATEFUL =
-        keccak256("shrincs-rotate-stateful");
-    bytes32 internal constant OP_ROTATE_FULL =
-        keccak256("shrincs-rotate-full");
+/// @title SHRINCS
+/// @notice ERC-7913 signature verifier for the hybrid SHRINCS scheme:
+/// stateful actions via `verify`, stateless actions delegated to a pinned
+/// SPHINCSPlusC verifier via `verifyStateless`.
+/// @dev Trustless by construction: no owner, no storage, no constructor, no
+/// upgradability. `key` is the 32-byte SHRINCS publicKeyCommitment;
+/// `signature` is the SHRINCSCodec stateful envelope
+/// (abi.encode(PublicKey, StatefulSignature)) for `verify`, or the
+/// stateless envelope (abi.encode(PublicKey, StatelessSignature)) for
+/// `verifyStateless`. Verifies signature validity only.
+///
+/// Revert model (deliberate: replaces the previous try/catch swallow).
+/// A malformed key or envelope returns 0xffffffff, reached only through the
+/// non-reverting structural validation in SHRINCSCodec — there is no
+/// try/catch anywhere. Every other failure, including an inner out-of-gas,
+/// reverts to the caller; ERC-7913 permits this (the interface says a
+/// verifier SHOULD return 0xffffffff OR revert on an invalid signature).
+/// A caller that needs a boolean must treat a revert as its own policy
+/// decision. Exactly one self-call hop remains per entrypoint: the
+/// memory->calldata re-materialization bridge, since SHRINCSCore takes
+/// calldata structs and external functions cannot live in a library. No
+/// try surrounds that hop, so an out-of-gas there propagates as a revert
+/// instead of being misreported as an invalid signature.
+///
+/// Caller obligations. Every SHRINCS library is `pure` and both adapters are
+/// storage-free `view`; they verify a signature and nothing more. All
+/// statefulness is the WRAPPER contract's job: single-use tracking of
+/// stateful leaves, nonce and keyVersion replay scoping, and installing the
+/// commitment a rotation returns. SHRINCSAccountVerifierExample is the
+/// reference wrapper. Any future storage-needing helper belongs in a
+/// separate wrapper/base contract at the top of the inheritance chain, never
+/// in these libraries or adapters.
+///
+/// @dev Abstract profile base. The verify/decode logic is profile-agnostic
+/// (it takes its parameter tuple from the compile-time-selected
+/// SHRINCSParams); each build profile deploys its own concrete subclass
+/// (SHRINCS256sKeccak / SHRINCS128sQ18Keccak / SHRINCS128sQ20Keccak), which
+/// adds a PROFILE_TAG, pins its sibling SPHINCSPlusC verifier address, and is
+/// compiled under that profile's constants. This is `abstract` so the
+/// unsuffixed, profile-ambiguous artifact can never be deployed. The ABI
+/// surface (verify, verifyStateless, VERSION_TAG) is preserved on every
+/// concrete subclass.
+abstract contract SHRINCS is IERC7913SignatureVerifier {
+    // Version tag identifying this verifier's key/envelope format family.
+    // Shared across profiles: it names the ERC-7913 key/envelope format,
+    // not the parameter set. The per-profile parameter identity lives in
+    // each subclass's PROFILE_TAG. Unchanged by the adapter restructure:
+    // the key/envelope format family it names is unchanged.
+    bytes32 public constant VERSION_TAG =
+        keccak256("quip.shrincs-verifier.v1");
+    // Any non-magic value denotes signature failure.
+    bytes4 private constant INVALID_SIGNATURE = 0xffffffff;
 
-    struct PublicKey {
-        // Encoded stateful fast-path public key.
-        bytes statefulPublicKey;
-        // Commitment binding the full hybrid public-key bundle together.
-        bytes publicKeyCommitment;
-        // Stateless SPHINCS-style public seed.
-        bytes pkSeed;
-        // Stateless SPHINCS-style public root.
-        bytes hypertreeRoot;
+    modifier onlySelf() {
+        require(msg.sender == address(this), "only self");
+        _;
     }
 
-    struct SigningKey {
-        // Secret seed used to derive stateful WOTS-C chain secrets.
-        bytes32 statefulSkSeed;
-        // Secret PRF seed used to derive stateful WOTS-C message randomizers.
-        bytes32 statefulPrfSeed;
-        // Public seed used in stateful WOTS-C and stateful tree hashing.
-        bytes32 statefulPkSeed;
-        // Root of the stateful unbalanced tree committed in the public key.
-        bytes32 statefulRoot;
-        // Highest stateful leaf index this key may sign with.
-        uint32 maxStatefulSignatures;
-        // Next monotonic stateful leaf index to consume.
-        uint32 nextStatefulLeafIndex;
-        // Stateless SK.seed-style material used to derive FORS-C and
-        // hypertree WOTS-C secrets.
-        bytes32 statelessSkSeed;
-        // Stateless SK.prf-style material used to derive stateless message
-        // randomizers.
-        bytes32 statelessPrfSeed;
-        // Global public seed used in FORS-C, hypertree WOTS-C, and Merkle
-        // node hashing.
-        bytes32 pkSeed;
-        // Top hypertree root committed in the public key.
-        bytes32 hypertreeRoot;
+    /// @notice ERC-7913 verification entrypoint for stateful signatures.
+    /// @dev Decodes the 32-byte key into the installed bundle commitment and
+    /// the stateful envelope through SHRINCSCodec's non-reverting validators
+    /// (malformed key or envelope -> 0xffffffff). After validation abi.decode
+    /// is infallible, so verify itself decodes and drives the single
+    /// memory->calldata self-call hop. No try/catch: an execution failure,
+    /// including out-of-gas, reverts. See the contract-level revert model.
+    /// @param key The 32-byte SHRINCS publicKeyCommitment.
+    /// @param hash The 32-byte message hash to verify.
+    /// @param signature The SHRINCSCodec stateful envelope.
+    /// @return The verify selector on success, 0xffffffff on malformed input.
+    function verify(
+        bytes calldata key,
+        bytes32 hash,
+        bytes calldata signature
+    ) external view returns (bytes4) {
+        (bytes32 commitment, bool okKey) = SHRINCSCodec.decodeKey(key);
+        if (!okKey) return INVALID_SIGNATURE;
+
+        (
+            SHRINCSCore.PublicKey memory publicKey,
+            UXMSS.StatefulSignature memory signature_,
+            bool okEnvelope
+        ) = SHRINCSCodec.decodeStatefulEnvelope(signature);
+        if (!okEnvelope) return INVALID_SIGNATURE;
+
+        if (this.checkStateful(commitment, hash, publicKey, signature_)) {
+            return IERC7913SignatureVerifier.verify.selector;
+        }
+        return INVALID_SIGNATURE;
     }
 
-    struct StatefulRotationTarget {
-        // Replacement encoded stateful public key.
-        bytes statefulPublicKey;
-        // Commitment that should identify the next installed bundle.
-        bytes publicKeyCommitment;
-    }
-
-    struct RotationContext {
-        // Contract/application domain binding for the rotation intent.
-        bytes32 domainSeparator;
-        // Replay-protection nonce consumed by the wrapper.
-        uint256 nonce;
-        // Installed-key epoch that this rotation authorizes from.
-        uint256 keyVersion;
-    }
-
-    struct ActionContext {
-        // Contract/application domain binding for the action intent.
-        bytes32 domainSeparator;
-        // Replay-protection nonce consumed by the wrapper.
-        uint256 nonce;
-        // Installed-key epoch that this action is valid under.
-        uint256 keyVersion;
-        // Typed action discriminator chosen by the integrating account logic.
-        bytes32 actionType;
-        // Hash of the typed payload authorized by the signature.
-        bytes32 payloadHash;
-    }
-
-    struct RotationTarget {
-        // Replacement encoded stateful public key.
-        bytes statefulPublicKey;
-        // Commitment that should identify the next installed bundle.
-        bytes publicKeyCommitment;
-        // Replacement stateless public seed.
-        bytes pkSeed;
-        // Replacement stateless public root.
-        bytes hypertreeRoot;
-    }
-
-    // verifyStateful: Verify a stateful SHRINCS action signature.
-    // 1. Validate the typed action context shape.
-    // 2. Build the canonical stateful action hash from the installed key
-    // commitment and action context.
-    // 3. Verify the stateful WOTS-C / unbalanced-XMSS style signature against
-    // that message hash.
-    function verifyStateful(
-        bytes32 expectedPublicKeyCommitment,
-        SHRINCS.PublicKey calldata publicKey,
-        SHRINCS.ActionContext memory context,
+    /// @notice Self-call hop — calldata re-materialization and stateful
+    /// verification. onlySelf.
+    /// @dev Receiving the structs through an external call re-encodes the
+    /// validated memory structs into calldata (SHRINCSCore takes calldata
+    /// structs), then verifies the stateful signature over exactly the 32
+    /// hash bytes under the commitment. SHRINCSCore enforces the
+    /// commitment-vs-bundle match, bundle shape, leaf-index bounds, WOTS-C
+    /// reconstruction, and the unbalanced-tree root; nothing is added here.
+    /// No try wraps this call: an out-of-gas propagates as a revert.
+    /// @param commitment The installed bundle commitment.
+    /// @param hash The 32-byte message hash.
+    /// @param publicKey The decoded public-key bundle.
+    /// @param signature The decoded stateful signature.
+    /// @return True when the stateful signature verifies.
+    function checkStateful(
+        bytes32 commitment,
+        bytes32 hash,
+        SHRINCSCore.PublicKey calldata publicKey,
         UXMSS.StatefulSignature calldata signature
-    ) internal pure returns (bool) {
-        // Reject malformed or unscoped action contexts before hashing them.
-        if (!validActionContext(context)) return false;
-        // Canonical stateful verification signs the typed action context
-        // hash, not arbitrary caller-provided bytes.
-        bytes memory message = abi.encodePacked(
-            statefulActionMessageHash(expectedPublicKeyCommitment, context)
-        );
-        // Delegate the stateful signature equation checks to the lower-level
-        // helper.
-        return verifyStatefulUncheckedMessage(
-            expectedPublicKeyCommitment, publicKey, message, signature
+    ) external view onlySelf returns (bool) {
+        return SHRINCSCore.verifyStatefulUncheckedMessage(
+            commitment, publicKey, SHRINCSCodec.toMessage(hash), signature
         );
     }
 
-    // verifyStateless: Verify a stateless SHRINCS action signature.
-    // 1. Validate the typed action context shape.
-    // 2. Build the canonical stateless action hash from the installed key
-    // commitment and action context.
-    // 3. Verify FORS-C and then carry the reconstructed root up the hypertree
-    // to the public root.
+    /// @notice ERC-7913-style verification entrypoint for stateless
+    /// signatures, delegated to the pinned SPHINCSPlusC verifier.
+    /// @dev Decodes the 32-byte key (the installed commitment) and the
+    /// stateless envelope through SHRINCSCodec's non-reverting validators
+    /// (malformed -> 0xffffffff). Runs the bundle-vs-commitment check locally
+    /// (commitment first, then shape, mirroring the library stateless path)
+    /// through the single memory->calldata self-call hop, then delegates the
+    /// FORS-C + hypertree cryptography to the pinned SPHINCSPlusC deployment
+    /// with key = abi.encode(pkSeed, hypertreeRoot) and the stateless
+    /// signature envelope, returning that verifier's selector or 0xffffffff.
+    /// No try/catch: an execution failure in the delegate reverts.
+    /// @param key The 32-byte SHRINCS publicKeyCommitment.
+    /// @param hash The 32-byte message hash to verify.
+    /// @param signature The SHRINCSCodec stateless envelope.
+    /// @return The verify selector on success, 0xffffffff on malformed input.
     function verifyStateless(
-        bytes32 expectedPublicKeyCommitment,
-        SHRINCS.PublicKey calldata publicKey,
-        SHRINCS.ActionContext memory context,
-        SPHINCSPlusCCore.StatelessSignature calldata signature
-    ) internal pure returns (bool) {
-        // Reject malformed or unscoped action contexts before hashing them.
-        if (!validActionContext(context)) return false;
-        // Canonical stateless verification signs the typed action context
-        // hash, not arbitrary caller-provided bytes.
-        bytes memory message = abi.encodePacked(
-            statelessActionMessageHash(expectedPublicKeyCommitment, context)
-        );
-        // Delegate FORS-C plus hypertree verification to the lower-level
-        // helper.
-        return verifyStatelessUncheckedMessage(
-            expectedPublicKeyCommitment, publicKey, message, signature
-        );
+        bytes calldata key,
+        bytes32 hash,
+        bytes calldata signature
+    ) external view returns (bytes4) {
+        (bytes32 commitment, bool okKey) = SHRINCSCodec.decodeKey(key);
+        if (!okKey) return INVALID_SIGNATURE;
+
+        (
+            SHRINCSCore.PublicKey memory publicKey,
+            SPHINCSPlusCCore.StatelessSignature memory signature_,
+            bool okEnvelope
+        ) = SHRINCSCodec.decodeStatelessEnvelope(signature);
+        if (!okEnvelope) return INVALID_SIGNATURE;
+
+        (bool okBundle, bytes32 pkSeed, bytes32 hypertreeRoot) =
+            this.checkStatelessBundle(commitment, publicKey);
+        if (!okBundle) return INVALID_SIGNATURE;
+
+        return IERC7913SignatureVerifier(_pinnedSphincsPlusC())
+            .verify(
+                SHRINCSCodec.encodeStatelessKey(pkSeed, hypertreeRoot),
+                hash,
+                SHRINCSCodec.encodeStatelessSignatureEnvelope(signature_)
+            );
     }
 
-    // rotateStatefulViaStateless: Authorize replacing only the stateful
-    // subkey via a stateless recovery signature.
-    // 1. Validate the current key bundle, rotation context, and next stateful
-    // key payload.
-    // 2. Recompute the next stateful-bundle commitment and require it to
-    // match the declared commitment.
-    // 3. Build the canonical rotation message hash.
-    // 4. Verify the stateless recovery signature over that hash under the
-    // current installed key.
-    // 5. Return the next bundle commitment on success, or bytes32(0) on
-    // failure.
-    function rotateStatefulViaStateless(
-        bytes32 expectedPublicKeyCommitment,
-        SHRINCS.PublicKey calldata currentPublicKey,
-        SHRINCS.RotationContext memory context,
-        SPHINCSPlusCCore.StatelessSignature calldata recoverySignature,
-        SHRINCS.StatefulRotationTarget calldata nextStatefulKey
-    ) internal pure returns (bytes32 nextPublicKeyCommitment) {
-        if (!ShrincsCodec.validPublicKey(currentPublicKey)) {
-            return bytes32(0);
+    /// @notice Self-call hop — bundle-vs-commitment check and stateless
+    /// seed extraction. onlySelf.
+    /// @dev Re-materializes the validated bundle as calldata to run the
+    /// commitment match (commitment first) then the fixed-shape check,
+    /// mirroring SHRINCSCore.verifyStatelessUncheckedMessage's ordering, and
+    /// loads the two 32-byte stateless seed words the pinned verifier needs.
+    /// No cryptography here; the pinned SPHINCSPlusC verifier owns FORS-C and
+    /// the hypertree.
+    /// @param commitment The installed bundle commitment.
+    /// @param publicKey The decoded public-key bundle.
+    /// @return ok True when the bundle matches the commitment and shape.
+    /// @return pkSeed The stateless public seed word.
+    /// @return hypertreeRoot The stateless public root word.
+    function checkStatelessBundle(
+        bytes32 commitment,
+        SHRINCSCore.PublicKey calldata publicKey
+    )
+        external
+        view
+        onlySelf
+        returns (bool ok, bytes32 pkSeed, bytes32 hypertreeRoot)
+    {
+        // Commitment first, then shape, mirroring the library stateless path.
+        if (!SHRINCSCodec.matchesExpectedPublicKeyCommitment(
+                publicKey, commitment
+            )) return (false, bytes32(0), bytes32(0));
+        if (!SHRINCSCodec.validPublicKey(publicKey)) {
+            return (false, bytes32(0), bytes32(0));
         }
-        // The current public key must match the installed bundle commitment
-        // the caller expects.
-        if (!ShrincsCodec.matchesExpectedPublicKeyCommitment(
-                currentPublicKey, expectedPublicKeyCommitment
-            )) {
-            return bytes32(0);
-        }
-        // Rotation messages must still carry a nonzero domain binding.
-        if (!validRotationContext(context)) return bytes32(0);
-        // Stateful subkey rotation carries only a replacement stateful public
-        // key payload.
-        if (
-            nextStatefulKey.statefulPublicKey.length
-                != ShrincsParams.STATEFUL_PUBLIC_KEY_BYTES
-        ) return bytes32(0);
-        {
-            // Decode the fixed-width stateful key to check operational limits
-            // such as maxSignatures.
-            (
-                UXMSS.StatefulPublicKey memory decodedNextStatefulKey,
-                bool ok
-            ) = ShrincsCodec.decodeStatefulPublicKey(
-                nextStatefulKey.statefulPublicKey
-            );
-            if (!ok) return bytes32(0);
-            if (decodedNextStatefulKey.maxSignatures == 0) {
-                return bytes32(0);
-            }
-        }
-        // Rebuild the next installed bundle commitment using the replacement
-        // stateful key plus the current stateless seed/root, since this
-        // rotation does not replace the stateless side.
-        bytes32 computedNextPublicKeyCommitment =
-            ShrincsCodec.publicKeyCommitmentFromParts(
-                nextStatefulKey.statefulPublicKey,
-                currentPublicKey.pkSeed,
-                currentPublicKey.hypertreeRoot
-            );
-        // The declared next bundle commitment must be present and exactly 32
-        // bytes.
-        if (nextStatefulKey.publicKeyCommitment.length != 32) {
-            return bytes32(0);
-        }
-        bytes32 declaredNextPublicKeyCommitment;
-        bytes calldata declaredNextPublicKeyCommitmentBytes =
-            nextStatefulKey.publicKeyCommitment;
-        // Memory-safe: reads one calldata word into a stack variable; no
+        // validPublicKey has proven both fields are exactly 32 bytes.
+        bytes calldata seed = publicKey.pkSeed;
+        bytes calldata root = publicKey.hypertreeRoot;
+        // Memory-safe: reads two calldata words into stack variables; no
         // memory is written.
         assembly ("memory-safe") {
-            declaredNextPublicKeyCommitment := calldataload(
-                declaredNextPublicKeyCommitmentBytes.offset
-            )
+            pkSeed := calldataload(seed.offset)
+            hypertreeRoot := calldataload(root.offset)
         }
-        // Reject any mismatch between the declared and recomputed next
-        // installed-key commitment.
-        if (
-            declaredNextPublicKeyCommitment
-                != computedNextPublicKeyCommitment
-        ) return bytes32(0);
-        // Bind the current installed bundle commitment, rotation context, and
-        // next bundle commitment into one canonical recovery message.
-        bytes memory recoveryMessage = abi.encodePacked(
-            statefulRotationMessageHash(
-                expectedPublicKeyCommitment,
-                currentPublicKey,
-                context,
-                nextStatefulKey
-            )
-        );
-        // The stateless recovery signature must authorize exactly that
-        // canonical rotation message.
-        if (!verifyStatelessUncheckedMessage(
-                expectedPublicKeyCommitment,
-                currentPublicKey,
-                recoveryMessage,
-                recoverySignature
-            )) {
-            return bytes32(0);
-        }
-        // On success, return the commitment the wrapper should install as the
-        // next bundle id.
-        return computedNextPublicKeyCommitment;
+        return (true, pkSeed, hypertreeRoot);
     }
 
-    // statelessRotate: Authorize replacing the full SHRINCS bundle via a
-    // stateless recovery signature.
-    // 1. Validate the current key bundle, rotation context, and full next-key
-    // payload.
-    // 2. Recompute the next full-bundle commitment and require it to match
-    // the declared commitment.
-    // 3. Build the canonical full-rotation message hash.
-    // 4. Verify the stateless recovery signature over that hash under the
-    // current installed key.
-    // 5. Return the next bundle commitment on success, or bytes32(0) on
-    // failure.
-    function statelessRotate(
-        bytes32 expectedPublicKeyCommitment,
-        SHRINCS.PublicKey calldata currentPublicKey,
-        SHRINCS.RotationContext memory context,
-        SPHINCSPlusCCore.StatelessSignature calldata recoverySignature,
-        SHRINCS.RotationTarget calldata nextKey
-    ) internal pure returns (bytes32 nextPublicKeyCommitment) {
-        if (!ShrincsCodec.validPublicKey(currentPublicKey)) {
-            return bytes32(0);
-        }
-        // The current public key must match the installed bundle commitment
-        // the caller expects.
-        if (!ShrincsCodec.matchesExpectedPublicKeyCommitment(
-                currentPublicKey, expectedPublicKeyCommitment
-            )) {
-            return bytes32(0);
-        }
-        // Rotation messages must still carry a nonzero domain binding.
-        if (!validRotationContext(context)) return bytes32(0);
-        // The replacement bundle must contain fixed-width stateful,
-        // commitment, seed, and root fields.
-        if (
-            nextKey.statefulPublicKey.length
-                != ShrincsParams.STATEFUL_PUBLIC_KEY_BYTES
-        ) return bytes32(0);
-        if (nextKey.publicKeyCommitment.length != 32) return bytes32(0);
-        if (nextKey.pkSeed.length != 32) return bytes32(0);
-        if (nextKey.hypertreeRoot.length != 32) return bytes32(0);
-        {
-            // Decode the replacement stateful key to reject unusable
-            // zero-budget keys.
-            (
-                UXMSS.StatefulPublicKey memory decodedNextStatefulKey,
-                bool ok
-            ) = ShrincsCodec.decodeStatefulPublicKey(
-                nextKey.statefulPublicKey
-            );
-            if (!ok) return bytes32(0);
-            if (decodedNextStatefulKey.maxSignatures == 0) {
-                return bytes32(0);
-            }
-        }
-        // Rebuild the full replacement bundle commitment from all next-key
-        // components.
-        bytes32 computedNextPublicKeyCommitment =
-            ShrincsCodec.publicKeyCommitmentFromParts(
-                nextKey.statefulPublicKey,
-                nextKey.pkSeed,
-                nextKey.hypertreeRoot
-            );
-        bytes32 declaredNextPublicKeyCommitment;
-        bytes calldata declaredNextPublicKeyCommitmentBytes =
-            nextKey.publicKeyCommitment;
-        // Memory-safe: reads one calldata word into a stack variable; no
-        // memory is written.
-        assembly ("memory-safe") {
-            declaredNextPublicKeyCommitment := calldataload(
-                declaredNextPublicKeyCommitmentBytes.offset
-            )
-        }
-        // Reject any mismatch between the declared and recomputed next
-        // installed-key commitment.
-        if (
-            declaredNextPublicKeyCommitment
-                != computedNextPublicKeyCommitment
-        ) return bytes32(0);
-
-        // Bind the current installed bundle commitment, rotation context, and
-        // full next bundle commitment into one canonical recovery message.
-        bytes memory recoveryMessage = abi.encodePacked(
-            fullRotationMessageHash(
-                expectedPublicKeyCommitment,
-                currentPublicKey,
-                context,
-                nextKey
-            )
-        );
-        // The stateless recovery signature must authorize exactly that
-        // canonical full rotation.
-        if (!verifyStatelessUncheckedMessage(
-                expectedPublicKeyCommitment,
-                currentPublicKey,
-                recoveryMessage,
-                recoverySignature
-            )) {
-            return bytes32(0);
-        }
-        // On success, return the next bundle commitment the wrapper should
-        // install.
-        return computedNextPublicKeyCommitment;
-    }
-
-    // verifyStatefulUncheckedMessage: Verify a stateful signature after the
-    // caller has already constructed the exact signed message bytes.
-    // 1. Check that the public key uses the compiled fixed layout.
-    // 2. Check the installed public-key commitment and the public-key
-    // encoding.
-    // 3. Decode the compact stateful public key embedded inside the SHRINCS
-    // public bundle.
-    // 4. Delegate the cryptographic verification to the stateful component
-    // library.
-    function verifyStatefulUncheckedMessage(
-        bytes32 expectedPublicKeyCommitment,
-        SHRINCS.PublicKey calldata publicKey,
-        bytes memory message,
-        UXMSS.StatefulSignature calldata signature
-    ) internal pure returns (bool) {
-        // The public key must satisfy the compiled fixed key shape.
-        if (!ShrincsCodec.validPublicKey(publicKey)) return false;
-        // The bundled public key must match the installed public-key
-        // commitment.
-        if (!ShrincsCodec.matchesExpectedPublicKeyCommitment(
-                publicKey, expectedPublicKeyCommitment
-            )) return false;
-        // Decode the compact stateful public key fields from the public
-        // bundle.
-        (UXMSS.StatefulPublicKey memory statefulKey, bool ok) =
-            ShrincsCodec.decodeStatefulPublicKey(publicKey.statefulPublicKey);
-        if (!ok) return false;
-
-        // The component library owns the stateful WOTS-C and unbalanced-tree
-        // verification rules.
-        return UXMSS.verify(
-            statefulKey.pkSeed,
-            statefulKey.root,
-            statefulKey.maxSignatures,
-            message,
-            signature
-        );
-    }
-
-    // statefulActionMessageHash: Build the canonical stateful action message
-    // hash.
-    // 1. Bind the stateful operation tag.
-    // 2. Bind the hash suite.
-    // 3. Bind the expected installed key commitment.
-    // 4. Bind the account-layer action context fields.
-    function statefulActionMessageHash(
-        bytes32 expectedPublicKeyCommitment,
-        SHRINCS.ActionContext memory context
-    ) internal pure returns (bytes32) {
-        // The canonical hash binds an operation tag, hash suite, installed
-        // key commitment, and the account-layer action context so signatures
-        // cannot be replayed across operation families or account epochs.
-        return keccak256(
-            abi.encodePacked(
-                SHRINCS.OP_VERIFY_STATEFUL,
-                SHRINCS.HASH_SUITE_KECCAK_256,
-                expectedPublicKeyCommitment,
-                context.domainSeparator,
-                context.nonce,
-                context.keyVersion,
-                context.actionType,
-                context.payloadHash
-            )
-        );
-    }
-
-    // statelessActionMessageHash: Build the canonical stateless action
-    // message hash.
-    // 1. Bind the stateless operation tag.
-    // 2. Bind the hash suite.
-    // 3. Bind the expected installed key commitment.
-    // 4. Bind the account-layer action context fields.
-    function statelessActionMessageHash(
-        bytes32 expectedPublicKeyCommitment,
-        SHRINCS.ActionContext memory context
-    ) internal pure returns (bytes32) {
-        // The canonical hash binds an operation tag, hash suite, installed
-        // key commitment, and the account-layer action context for the
-        // stateless path.
-        return keccak256(
-            abi.encodePacked(
-                SHRINCS.OP_VERIFY_STATELESS,
-                SHRINCS.HASH_SUITE_KECCAK_256,
-                expectedPublicKeyCommitment,
-                context.domainSeparator,
-                context.nonce,
-                context.keyVersion,
-                context.actionType,
-                context.payloadHash
-            )
-        );
-    }
-
-    // statefulRotationMessageHash: Build the canonical message hash
-    // authorizing a stateless-to-stateful rotation.
-    // 1. Bind the stateful-rotation operation tag.
-    // 2. Bind the hash suite.
-    // 3. Bind the expected installed key commitment.
-    // 4. Bind the rotation context.
-    // 5. Bind the current and next bundle commitments.
-    function statefulRotationMessageHash(
-        bytes32 expectedPublicKeyCommitment,
-        SHRINCS.PublicKey calldata currentPublicKey,
-        SHRINCS.RotationContext memory context,
-        SHRINCS.StatefulRotationTarget calldata nextStatefulKey
-    ) internal pure returns (bytes32) {
-        // The canonical stateful-rotation hash binds an operation tag, hash
-        // suite, installed key commitment, rotation context, and both the
-        // current and next bundle ids.
-        return keccak256(
-            abi.encodePacked(
-                SHRINCS.OP_ROTATE_STATEFUL,
-                SHRINCS.HASH_SUITE_KECCAK_256,
-                expectedPublicKeyCommitment,
-                context.domainSeparator,
-                context.nonce,
-                context.keyVersion,
-                currentPublicKey.publicKeyCommitment,
-                nextStatefulKey.publicKeyCommitment
-            )
-        );
-    }
-
-    // fullRotationMessageHash: Build the canonical message hash authorizing a
-    // full next-key bundle.
-    // 1. Bind the full-rotation operation tag.
-    // 2. Bind the hash suite.
-    // 3. Bind the expected installed key commitment.
-    // 4. Bind the rotation context.
-    // 5. Bind the current and next bundle commitments.
-    function fullRotationMessageHash(
-        bytes32 expectedPublicKeyCommitment,
-        SHRINCS.PublicKey calldata currentPublicKey,
-        SHRINCS.RotationContext memory context,
-        SHRINCS.RotationTarget calldata nextKey
-    ) internal pure returns (bytes32) {
-        // The canonical full-rotation hash binds an operation tag, hash
-        // suite, installed key commitment, rotation context, and both the
-        // current and next bundle ids.
-        return keccak256(
-            abi.encodePacked(
-                SHRINCS.OP_ROTATE_FULL,
-                SHRINCS.HASH_SUITE_KECCAK_256,
-                expectedPublicKeyCommitment,
-                context.domainSeparator,
-                context.nonce,
-                context.keyVersion,
-                currentPublicKey.publicKeyCommitment,
-                nextKey.publicKeyCommitment
-            )
-        );
-    }
-
-    // verifyStatelessUncheckedMessage: Verify a stateless signature after the
-    // caller has already constructed the exact signed message bytes.
-    // 1. Validate the current key bundle and fixed public-key layout.
-    // 2. Delegate FORS-C plus hypertree verification to the stateless
-    // component library.
-    function verifyStatelessUncheckedMessage(
-        bytes32 expectedPublicKeyCommitment,
-        SHRINCS.PublicKey calldata publicKey,
-        bytes memory message,
-        SPHINCSPlusCCore.StatelessSignature calldata signature
-    ) internal pure returns (bool) {
-        // The current public key must match the installed bundle commitment
-        // expected by the caller.
-        if (!ShrincsCodec.matchesExpectedPublicKeyCommitment(
-                publicKey, expectedPublicKeyCommitment
-            )) return false;
-        // The current key bundle must satisfy the compiled fixed public-key
-        // shape.
-        if (!ShrincsCodec.validPublicKey(publicKey)) return false;
-
-        // The component library owns the FORS-C and hypertree verification
-        // rules over the stateless public seed and root.
-        return SPHINCSPlusCCore.verify(
-            publicKey.pkSeed, publicKey.hypertreeRoot, message, signature
-        );
-    }
-
-    // validActionContext: Perform lightweight structural checks for canonical
-    // action contexts.
-    // 1. Require a nonzero domain separator.
-    // 2. Require a nonzero action type.
-    // 3. Require a nonzero payload hash.
-    function validActionContext(SHRINCS.ActionContext memory context)
-        internal
-        pure
-        returns (bool)
-    {
-        // Domain separation must be explicit.
-        if (context.domainSeparator == bytes32(0)) return false;
-        // The action type must not be left unspecified.
-        if (context.actionType == bytes32(0)) return false;
-        // The payload must commit to some nonzero value.
-        return context.payloadHash != bytes32(0);
-    }
-
-    // validRotationContext: Perform lightweight structural checks for
-    // canonical rotation contexts.
-    // 1. Require a nonzero domain separator.
-    function validRotationContext(SHRINCS.RotationContext memory context)
-        internal
-        pure
-        returns (bool)
-    {
-        return context.domainSeparator != bytes32(0);
-    }
+    /// @notice Address of the pinned SPHINCSPlusC verifier this profile
+    /// delegates stateless verification to.
+    /// @dev The abstract base cannot know the profile, so each concrete
+    /// subclass overrides this with a compile-time constant equal to the
+    /// CREATE3 address of its SPHINCSPlusC sibling, pinned by a profile-gated
+    /// test so C8's deploy scripts cannot drift from it.
+    /// @return The pinned SPHINCSPlusC verifier address.
+    function _pinnedSphincsPlusC() internal view virtual returns (address);
 }

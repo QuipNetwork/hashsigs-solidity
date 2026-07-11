@@ -17,27 +17,29 @@
 pragma solidity ^0.8.28;
 
 import {Create3Deployer} from "./DeployBase.s.sol";
-import {ShrincsVerifier256s} from "../contracts/ShrincsVerifier256s.sol";
+import {SHRINCS128sQ20Keccak} from "../contracts/SHRINCS128sQ20Keccak.sol";
 
-/// @title DeployShrincsVerifier256s
-/// @notice Deploys the canonical 256s ShrincsVerifier via CREATE3. Run
-/// from the release commit under the 256s production profile:
-///   FOUNDRY_PROFILE=production forge script \
-///       script/DeployShrincsVerifier256s.s.sol \
+/// @title DeploySHRINCS128sQ20Keccak
+/// @notice Deploys the canonical 128s-q20 SHRINCS via CREATE3.
+/// Run from the release commit under the 128s-q20 production profile:
+///   FOUNDRY_PROFILE=production-128s-q20 forge script \
+///       script/DeploySHRINCS128sQ20Keccak.s.sol \
 ///       --rpc-url $RPC --private-key $DEPLOYER_PK --broadcast --verify
-/// Record (profile, salt, address, codehash, chain) in DEPLOYMENTS.md.
-contract DeployShrincsVerifier256s is Create3Deployer {
+/// The q20 stateless budget (2^20) wants profile security-analysis
+/// backing before production use (maintainer decision Q1). Record
+/// (profile, salt, address, codehash, chain) in DEPLOYMENTS.md.
+contract DeploySHRINCS128sQ20Keccak is Create3Deployer {
     // Per-profile CREATE3 salt. A new verifier version is a NEW salt →
     // new address; deployed artifacts are never upgraded in place.
     bytes32 internal constant SALT =
-        keccak256("QUIP:ShrincsVerifier256s:V1.0");
+        keccak256("QUIP:ShrincsVerifier128sQ20:V1.0");
 
     function run() external {
         _deploy(
-            "ShrincsVerifier256s:",
-            "production",
+            "SHRINCS128sQ20Keccak:",
+            "production-128s-q20",
             SALT,
-            type(ShrincsVerifier256s).creationCode
+            type(SHRINCS128sQ20Keccak).creationCode
         );
     }
 }

@@ -17,18 +17,16 @@
 pragma solidity ^0.8.28;
 
 import {Create3Deployer} from "./DeployBase.s.sol";
-import {
-    ShrincsVerifier128sQ18
-} from "../contracts/ShrincsVerifier128sQ18.sol";
+import {SHRINCS128sQ18Keccak} from "../contracts/SHRINCS128sQ18Keccak.sol";
 
-/// @title DeployShrincsVerifier128sQ18
-/// @notice Deploys the canonical 128s-q18 ShrincsVerifier via CREATE3.
+/// @title DeploySHRINCS128sQ18Keccak
+/// @notice Deploys the canonical 128s-q18 SHRINCS via CREATE3.
 /// Run from the release commit under the 128s-q18 production profile:
 ///   FOUNDRY_PROFILE=production-128s-q18 forge script \
-///       script/DeployShrincsVerifier128sQ18.s.sol \
+///       script/DeploySHRINCS128sQ18Keccak.s.sol \
 ///       --rpc-url $RPC --private-key $DEPLOYER_PK --broadcast --verify
 /// Record (profile, salt, address, codehash, chain) in DEPLOYMENTS.md.
-contract DeployShrincsVerifier128sQ18 is Create3Deployer {
+contract DeploySHRINCS128sQ18Keccak is Create3Deployer {
     // Per-profile CREATE3 salt. A new verifier version is a NEW salt →
     // new address; deployed artifacts are never upgraded in place.
     bytes32 internal constant SALT =
@@ -36,10 +34,10 @@ contract DeployShrincsVerifier128sQ18 is Create3Deployer {
 
     function run() external {
         _deploy(
-            "ShrincsVerifier128sQ18:",
+            "SHRINCS128sQ18Keccak:",
             "production-128s-q18",
             SALT,
-            type(ShrincsVerifier128sQ18).creationCode
+            type(SHRINCS128sQ18Keccak).creationCode
         );
     }
 }

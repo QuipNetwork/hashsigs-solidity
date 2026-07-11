@@ -17,12 +17,12 @@
 pragma solidity ^0.8.28;
 
 import {Test} from "../lib/forge-std/src/Test.sol";
-import {SHRINCS} from "../contracts/SHRINCS.sol";
+import {SHRINCSCore} from "../contracts/SHRINCSCore.sol";
 import {SPHINCSPlusCCore} from "../contracts/SPHINCSPlusCCore.sol";
 import {UXMSS} from "../contracts/UXMSS.sol";
 import {
-    ShrincsAccountVerifierExample
-} from "../contracts/examples/ShrincsAccountVerifierExample.sol";
+    SHRINCSAccountVerifierExample
+} from "../contracts/examples/SHRINCSAccountVerifierExample.sol";
 import {
     ShrincsStatelessVectorSigner
 } from "./helpers/ShrincsStatelessVectorSigner.sol";
@@ -46,8 +46,8 @@ contract ShrincsAccountVectorExportTest is Test {
         bytes32 actionType = keccak256("execute");
         bytes32 payloadHash = keccak256("payload");
         (
-            SHRINCS.SigningKey memory signingKey,
-            SHRINCS.PublicKey memory publicKey,
+            SHRINCSCore.SigningKey memory signingKey,
+            SHRINCSCore.PublicKey memory publicKey,
             bool keygenOk
         ) = ShrincsAccountSigningFacade.keygen(
             bytes("export-stateful-current-key"), 4
@@ -55,16 +55,16 @@ contract ShrincsAccountVectorExportTest is Test {
         assertTrue(keygenOk, "keygen must succeed");
 
         // forgefmt: disable-next-line
-        ShrincsAccountVerifierExample account =
-            new ShrincsAccountVerifierExample(
+        SHRINCSAccountVerifierExample account =
+            new SHRINCSAccountVerifierExample(
                 ShrincsAccountSigningFacade.publicKeyCommitmentWord(
                     publicKey
                 )
             );
 
         (
-            SHRINCS.SigningKey memory nextSigningKey,
-            SHRINCS.ActionContext memory context,
+            SHRINCSCore.SigningKey memory nextSigningKey,
+            SHRINCSCore.ActionContext memory context,
             UXMSS.StatefulSignature memory signature,
             bool signOk
         ) = ShrincsAccountSigningFacade.signStatefulActionNow(
@@ -107,8 +107,8 @@ contract ShrincsAccountVectorExportTest is Test {
         bytes32 actionType = keccak256("execute");
         bytes32 payloadHash = keccak256("payload");
         (
-            SHRINCS.SigningKey memory signingKey,
-            SHRINCS.PublicKey memory publicKey,
+            SHRINCSCore.SigningKey memory signingKey,
+            SHRINCSCore.PublicKey memory publicKey,
             bool keygenOk
         ) = ShrincsAccountSigningFacade.keygen(
             bytes("export-stateless-current-key"), 4
@@ -116,15 +116,15 @@ contract ShrincsAccountVectorExportTest is Test {
         assertTrue(keygenOk, "keygen must succeed");
 
         // forgefmt: disable-next-line
-        ShrincsAccountVerifierExample account =
-            new ShrincsAccountVerifierExample(
+        SHRINCSAccountVerifierExample account =
+            new SHRINCSAccountVerifierExample(
                 ShrincsAccountSigningFacade.publicKeyCommitmentWord(
                     publicKey
                 )
             );
 
         (
-            SHRINCS.ActionContext memory context,
+            SHRINCSCore.ActionContext memory context,
             bytes32 sessionId,
             bool signOk
         ) = ShrincsAccountSigningFacade.beginStatelessActionSessionNow(
@@ -174,8 +174,8 @@ contract ShrincsAccountVectorExportTest is Test {
 
     function testExportStatefulOnlyRotationBundle() public {
         (
-            SHRINCS.SigningKey memory currentSigningKey,
-            SHRINCS.PublicKey memory currentPublicKey,
+            SHRINCSCore.SigningKey memory currentSigningKey,
+            SHRINCSCore.PublicKey memory currentPublicKey,
             bool currentOk
         ) = ShrincsAccountSigningFacade.keygen(
             bytes("export-rotation-current-key"), 4
@@ -183,8 +183,8 @@ contract ShrincsAccountVectorExportTest is Test {
         assertTrue(currentOk, "current keygen must succeed");
 
         // forgefmt: disable-next-line
-        ShrincsAccountVerifierExample account =
-            new ShrincsAccountVerifierExample(
+        SHRINCSAccountVerifierExample account =
+            new SHRINCSAccountVerifierExample(
                 ShrincsAccountSigningFacade.publicKeyCommitmentWord(
                     currentPublicKey
                 )
@@ -193,18 +193,18 @@ contract ShrincsAccountVectorExportTest is Test {
         account.enterRecoveryMode();
 
         // line-length: allow — fmt canonical tuple head exceeds cap
-        (, SHRINCS.PublicKey memory nextPublicKey, bool nextOk) = ShrincsAccountSigningFacade.keygen(
+        (, SHRINCSCore.PublicKey memory nextPublicKey, bool nextOk) = ShrincsAccountSigningFacade.keygen(
             bytes("export-rotation-next-key"), 4
         );
         assertTrue(nextOk, "next keygen must succeed");
 
-        SHRINCS.StatefulRotationTarget memory nextKey =
+        SHRINCSCore.StatefulRotationTarget memory nextKey =
             ShrincsAccountSigningFacade.statefulRotationTarget(
                 currentPublicKey, nextPublicKey.statefulPublicKey
             );
 
         (
-            SHRINCS.RotationContext memory context,
+            SHRINCSCore.RotationContext memory context,
             bytes32 sessionId,
             bool signOk
         ) = ShrincsAccountSigningFacade.beginStatefulOnlyRotationSessionNow(
@@ -248,8 +248,8 @@ contract ShrincsAccountVectorExportTest is Test {
 
     function testExportFullRotationBundle() public {
         (
-            SHRINCS.SigningKey memory currentSigningKey,
-            SHRINCS.PublicKey memory currentPublicKey,
+            SHRINCSCore.SigningKey memory currentSigningKey,
+            SHRINCSCore.PublicKey memory currentPublicKey,
             bool currentOk
         ) = ShrincsAccountSigningFacade.keygen(
             bytes("account-aware full rotation current key"), 4
@@ -257,8 +257,8 @@ contract ShrincsAccountVectorExportTest is Test {
         assertTrue(currentOk, "current keygen must succeed");
 
         // forgefmt: disable-next-line
-        ShrincsAccountVerifierExample account =
-            new ShrincsAccountVerifierExample(
+        SHRINCSAccountVerifierExample account =
+            new SHRINCSAccountVerifierExample(
                 ShrincsAccountSigningFacade.publicKeyCommitmentWord(
                     currentPublicKey
                 )
@@ -267,16 +267,16 @@ contract ShrincsAccountVectorExportTest is Test {
         account.enterRecoveryMode();
 
         // line-length: allow — fmt canonical tuple head exceeds cap
-        (, SHRINCS.PublicKey memory nextPublicKey, bool nextOk) = ShrincsAccountSigningFacade.keygen(
+        (, SHRINCSCore.PublicKey memory nextPublicKey, bool nextOk) = ShrincsAccountSigningFacade.keygen(
             bytes("account-aware full rotation next key"), 4
         );
         assertTrue(nextOk, "next keygen must succeed");
 
-        SHRINCS.RotationTarget memory nextKey =
+        SHRINCSCore.RotationTarget memory nextKey =
             ShrincsAccountSigningFacade.fullRotationTarget(nextPublicKey);
 
         (
-            SHRINCS.RotationContext memory context,
+            SHRINCSCore.RotationContext memory context,
             bytes32 sessionId,
             bool signOk
         ) = ShrincsAccountSigningFacade.beginFullRotationSessionNow(

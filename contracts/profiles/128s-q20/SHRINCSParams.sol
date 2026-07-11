@@ -16,27 +16,26 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 pragma solidity ^0.8.28;
 
-/// @title ShrincsParams (128s-q18 profile)
+/// @title SHRINCSParams (128s-q20 profile)
 /// @notice Compile-time SHRINCS/SPHINCS parameter tuple for the
-/// 128s-q18 profile (n = 16, single-layer hypertree). One
-/// `ShrincsParams` library exists per build profile under
+/// 128s-q20 profile (n = 16, single-layer hypertree). One
+/// `SHRINCSParams` library exists per build profile under
 /// contracts/profiles/<profile>/; the active one is selected by the
 /// `shrincs-profile/` Foundry remapping. Every module imports this
 /// library directly through that remapping, so reference sites are
 /// profile-agnostic.
-/// @dev q18 fixes STATELESS_SIGNATURE_LIMIT = 2^18 (= the h = 18
-/// hypertree leaf count). Its q20 sibling shares every other constant
-/// and differs only in the limit. Node values are truncated to
+/// @dev q20 fixes STATELESS_SIGNATURE_LIMIT = 2^20; it shares every
+/// other constant with the q18 sibling. Node values are truncated to
 /// HASH_LEN = 16 bytes, high-aligned in a 32-byte slot (HASH_MASK,
 /// [DESIGN §2(b)]). Stateful side follows n (32 chains, target sum
 /// 240; maintainer decision Q6). See [DESIGN].
-library ShrincsParams {
+library SHRINCSParams {
     // PROFILE_ID: stable identifier for this compiled profile. Consumed
     // by the profile-identity test/CI guard ([DESIGN §3.5]).
     // TODO(T6): bind PROFILE_ID into the public-key commitment tag
     // ("shrincs-public-key/<profile>") during the single vector
     // regeneration event ([DESIGN §4] rider Q2). Not bound yet.
-    bytes32 internal constant PROFILE_ID = keccak256("shrincs-128s-q18");
+    bytes32 internal constant PROFILE_ID = keccak256("shrincs-128s-q20");
 
     // Encoded stateful public key layout (kept 68 bytes across all
     // profiles, [DESIGN §3.2]):
@@ -53,10 +52,14 @@ library ShrincsParams {
     // Python: 32 * (16 - 1) // 2
     uint32 internal constant WOTS_TARGET_SUM_STATEFUL = 240;
     // STATELESS_SIGNATURE_LIMIT: the stateless-signature budget for this
-    // profile = 2^18 (matches the h = 18 hypertree leaf count).
-    // -> 1 << 18 = 262144
-    // Python: 2 ** 18
-    uint64 internal constant STATELESS_SIGNATURE_LIMIT = 262_144;
+    // profile = 2^20 (~4 FORS reuses per h = 18 hypertree leaf on
+    // average). NOTE: the q20 budget wants profile security-analysis
+    // backing before production use (maintainer decision Q1,
+    // 2026-07-10); q18 is the conservative sibling with the same
+    // (a, k, h) constants.
+    // -> 1 << 20 = 1048576
+    // Python: 2 ** 20
+    uint64 internal constant STATELESS_SIGNATURE_LIMIT = 1_048_576;
     // HASH_LEN: the SPHINCS/WOTS `n` security parameter [FIPS205 §11] —
     // hash output length in bytes.
     uint16 internal constant HASH_LEN = 16;

@@ -15,13 +15,20 @@ gas_limit = "18446744073709551615" # u64::MAX
 remappings = ["shrincs-profile/=contracts/profiles/256s/"]
 # The concrete per-profile verifiers and their deploy scripts each
 # compile only under their own profile (so the artifact carries the
-# right constants). Default is 256s, so skip the 128s verifiers and
-# their deploy scripts here; [profile.production] inherits this skip.
+# right constants). Default is 256s, so skip the 128s SHRINCS and
+# SPHINCSPlusC verifiers and their deploy scripts here; each SHRINCS
+# verifier and its SPHINCSPlusC sibling build in the SAME profile (the
+# SHRINCS one pins the sibling's address). [profile.production] inherits
+# this skip.
 skip = [
-    "contracts/ShrincsVerifier128sQ18.sol",
-    "contracts/ShrincsVerifier128sQ20.sol",
-    "script/DeployShrincsVerifier128sQ18.s.sol",
-    "script/DeployShrincsVerifier128sQ20.s.sol",
+    "contracts/SHRINCS128sQ18Keccak.sol",
+    "contracts/SHRINCS128sQ20Keccak.sol",
+    "contracts/SPHINCSPlusC128sQ18Keccak.sol",
+    "contracts/SPHINCSPlusC128sQ20Keccak.sol",
+    "script/DeploySHRINCS128sQ18Keccak.s.sol",
+    "script/DeploySHRINCS128sQ20Keccak.s.sol",
+    "test/SHRINCSPinned128sQ18.t.sol",
+    "test/SHRINCSPinned128sQ20.t.sol",
 ]
 
 ffi = true
@@ -57,10 +64,12 @@ gas_limit = "18446744073709551615" # u64::MAX
 out = "out-128s-q18"
 remappings = ["shrincs-profile/=contracts/profiles/128s-q18/"]
 skip = [
-    "contracts/ShrincsVerifier256s.sol",
-    "contracts/ShrincsVerifier128sQ20.sol",
-    "script/DeployShrincsVerifier256s.s.sol",
-    "script/DeployShrincsVerifier128sQ20.s.sol",
+    "contracts/SHRINCS256sKeccak.sol",
+    "contracts/SHRINCS128sQ20Keccak.sol",
+    "contracts/SPHINCSPlusC256sKeccak.sol",
+    "contracts/SPHINCSPlusC128sQ20Keccak.sol",
+    "script/DeploySHRINCS256sKeccak.s.sol",
+    "script/DeploySHRINCS128sQ20Keccak.s.sol",
     "test/ShrincsSphincs256sVectors.t.sol",
     "test/ShrincsStatelessVectorSigner.t.sol",
     "test/ShrincsAccountEnvelopeCanonicity.t.sol",
@@ -70,16 +79,22 @@ skip = [
     "test/ShrincsAccountVerifierExample.t.sol",
     "test/ShrincsCodec.t.sol",
     "test/ShrincsStatefulPolicyExamples.t.sol",
+    "test/SHRINCSStatelessDelegation.t.sol",
+    "test/SHRINCSCodecCanonicity.t.sol",
+    "test/SHRINCSPinned256s.t.sol",
+    "test/SHRINCSPinned128sQ20.t.sol",
 ]
 
 [profile.128s-q20]
 out = "out-128s-q20"
 remappings = ["shrincs-profile/=contracts/profiles/128s-q20/"]
 skip = [
-    "contracts/ShrincsVerifier256s.sol",
-    "contracts/ShrincsVerifier128sQ18.sol",
-    "script/DeployShrincsVerifier256s.s.sol",
-    "script/DeployShrincsVerifier128sQ18.s.sol",
+    "contracts/SHRINCS256sKeccak.sol",
+    "contracts/SHRINCS128sQ18Keccak.sol",
+    "contracts/SPHINCSPlusC256sKeccak.sol",
+    "contracts/SPHINCSPlusC128sQ18Keccak.sol",
+    "script/DeploySHRINCS256sKeccak.s.sol",
+    "script/DeploySHRINCS128sQ18Keccak.s.sol",
     "test/ShrincsSphincs256sVectors.t.sol",
     "test/ShrincsStatelessVectorSigner.t.sol",
     "test/ShrincsAccountEnvelopeCanonicity.t.sol",
@@ -89,6 +104,10 @@ skip = [
     "test/ShrincsAccountVerifierExample.t.sol",
     "test/ShrincsCodec.t.sol",
     "test/ShrincsStatefulPolicyExamples.t.sol",
+    "test/SHRINCSStatelessDelegation.t.sol",
+    "test/SHRINCSCodecCanonicity.t.sol",
+    "test/SHRINCSPinned256s.t.sol",
+    "test/SHRINCSPinned128sQ18.t.sol",
 ]
 
 # Production twins of the 128s profiles: same solc/via-ir/runs pin as
@@ -104,10 +123,12 @@ gas_limit = "18446744073709551615" # u64::MAX
 out = "out-128s-q18-prod"
 remappings = ["shrincs-profile/=contracts/profiles/128s-q18/"]
 skip = [
-    "contracts/ShrincsVerifier256s.sol",
-    "contracts/ShrincsVerifier128sQ20.sol",
-    "script/DeployShrincsVerifier256s.s.sol",
-    "script/DeployShrincsVerifier128sQ20.s.sol",
+    "contracts/SHRINCS256sKeccak.sol",
+    "contracts/SHRINCS128sQ20Keccak.sol",
+    "contracts/SPHINCSPlusC256sKeccak.sol",
+    "contracts/SPHINCSPlusC128sQ20Keccak.sol",
+    "script/DeploySHRINCS256sKeccak.s.sol",
+    "script/DeploySHRINCS128sQ20Keccak.s.sol",
 ]
 
 [profile.production-128s-q20]
@@ -119,10 +140,12 @@ gas_limit = "18446744073709551615" # u64::MAX
 out = "out-128s-q20-prod"
 remappings = ["shrincs-profile/=contracts/profiles/128s-q20/"]
 skip = [
-    "contracts/ShrincsVerifier256s.sol",
-    "contracts/ShrincsVerifier128sQ18.sol",
-    "script/DeployShrincsVerifier256s.s.sol",
-    "script/DeployShrincsVerifier128sQ18.s.sol",
+    "contracts/SHRINCS256sKeccak.sol",
+    "contracts/SHRINCS128sQ18Keccak.sol",
+    "contracts/SPHINCSPlusC256sKeccak.sol",
+    "contracts/SPHINCSPlusC128sQ18Keccak.sol",
+    "script/DeploySHRINCS256sKeccak.s.sol",
+    "script/DeploySHRINCS128sQ18Keccak.s.sol",
 ]
 
 # Per-MR security gate: the 256s (default) profile plus bounded,

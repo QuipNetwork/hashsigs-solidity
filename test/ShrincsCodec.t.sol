@@ -20,11 +20,11 @@ import {Test} from "../lib/forge-std/src/Test.sol";
 import {
     IERC7913SignatureVerifier
 } from "../contracts/interfaces/IERC7913SignatureVerifier.sol";
-import {ShrincsCodec} from "../contracts/ShrincsCodec.sol";
-import {SHRINCS} from "../contracts/SHRINCS.sol";
+import {SHRINCSCodec} from "../contracts/SHRINCSCodec.sol";
+import {SHRINCSCore} from "../contracts/SHRINCSCore.sol";
 import {UXMSS} from "../contracts/UXMSS.sol";
-import {ShrincsParams} from "shrincs-profile/ShrincsParams.sol";
-import {ShrincsVerifier} from "../contracts/ShrincsVerifier.sol";
+import {SHRINCSParams} from "shrincs-profile/SHRINCSParams.sol";
+import {SHRINCS} from "../contracts/SHRINCS.sol";
 import {ShrincsTestSigner} from "./helpers/ShrincsTestSigner.sol";
 
 contract CodecERC7913ConsumerHarness {
@@ -141,8 +141,14 @@ contract CodecNonMagicERC7913Verifier is IERC7913SignatureVerifier {
 }
 
 // Minimal concrete instance of the abstract profile base for the codec
-// integration test (the real per-profile subclasses are empty too).
-contract CodecShrincsVerifierHarness is ShrincsVerifier {}
+// integration test (the real per-profile subclasses are empty too). The
+// pinned SPHINCSPlusC address is unused on the stateful path exercised
+// here, so it returns the zero address.
+contract CodecShrincsVerifierHarness is SHRINCS {
+    function _pinnedSphincsPlusC() internal pure override returns (address) {
+        return address(0);
+    }
+}
 
 // Exposes the internal codec library through external functions so tests
 // exercise the real calldata-facing decode paths.
@@ -152,25 +158,26 @@ contract ShrincsCodecHarness {
         pure
         returns (bytes32 commitment, bool ok)
     {
-        return ShrincsCodec.decodeKey(key);
+        return SHRINCSCodec.decodeKey(key);
     }
 
     function decodeStatefulEnvelope(bytes calldata envelope)
         external
         pure
         returns (
-            SHRINCS.PublicKey memory publicKey,
-            UXMSS.StatefulSignature memory signature
+            SHRINCSCore.PublicKey memory publicKey,
+            UXMSS.StatefulSignature memory signature,
+            bool ok
         )
     {
-        return ShrincsCodec.decodeStatefulEnvelope(envelope);
+        return SHRINCSCodec.decodeStatefulEnvelope(envelope);
     }
 
     function encodeStatefulEnvelope(
-        SHRINCS.PublicKey memory publicKey,
+        SHRINCSCore.PublicKey memory publicKey,
         UXMSS.StatefulSignature memory signature
     ) external pure returns (bytes memory envelope) {
-        return ShrincsCodec.encodeStatefulEnvelope(publicKey, signature);
+        return SHRINCSCodec.encodeStatefulEnvelope(publicKey, signature);
     }
 
     function toMessage(bytes32 hash)
@@ -178,7 +185,7 @@ contract ShrincsCodecHarness {
         pure
         returns (bytes memory message)
     {
-        return ShrincsCodec.toMessage(hash);
+        return SHRINCSCodec.toMessage(hash);
     }
 }
 
@@ -194,9 +201,9 @@ contract ShrincsCodecTest is Test {
     function buildSamplePublicKey()
         internal
         pure
-        returns (SHRINCS.PublicKey memory publicKey)
+        returns (SHRINCSCore.PublicKey memory publicKey)
     {
-        publicKey = SHRINCS.PublicKey({
+        publicKey = SHRINCSCore.PublicKey({
             statefulPublicKey: abi.encodePacked(
                 keccak256("codec stateful pk seed"),
                 keccak256("codec stateful root"),
@@ -222,7 +229,7 @@ contract ShrincsCodecTest is Test {
     {
         signature.randomizer = keccak256("codec stateful randomizer");
         signature.counter = 42;
-        signature.chains = new bytes32[](ShrincsParams.WOTS_CHAINS_STATEFUL);
+        signature.chains = new bytes32[](SHRINCSParams.WOTS_CHAINS_STATEFUL);
         for (uint256 i = 0; i < signature.chains.length; i++) {
             signature.chains[i] =
                 keccak256(abi.encode("codec stateful chain", i));
@@ -264,15 +271,17 @@ contract ShrincsCodecTest is Test {
     }
 
     function testStatefulEnvelopeRoundTripPreservesEveryField() public view {
-        SHRINCS.PublicKey memory publicKey = buildSamplePublicKey();
+        SHRINCSCore.PublicKey memory publicKey = buildSamplePublicKey();
         UXMSS.StatefulSignature memory signature = buildSampleSignature();
 
         bytes memory envelope =
             codec.encodeStatefulEnvelope(publicKey, signature);
         (
-            SHRINCS.PublicKey memory decodedKey,
-            UXMSS.StatefulSignature memory decodedSig
+            SHRINCSCore.PublicKey memory decodedKey,
+            UXMSS.StatefulSignature memory decodedSig,
+            bool ok
         ) = codec.decodeStatefulEnvelope(envelope);
+        assertTrue(ok, "canonical envelope must decode");
 
         // The envelope layout is exactly abi.encode(PublicKey,
         // StatefulSignature).
@@ -323,47 +332,62 @@ contract ShrincsCodecTest is Test {
         }
     }
 
+    // decodeMalformedOk: run the non-reverting decoder and return only its
+    // ok flag. The walk-B validator reports non-canonical input through the
+    // flag instead of reverting (revert policy belongs to the caller).
+    function decodeMalformedOk(bytes memory malformed)
+        internal
+        view
+        returns (bool ok)
+    {
+        (,, ok) = codec.decodeStatefulEnvelope(malformed);
+    }
+
     // Checks that extra bytes at the end of the envelope are rejected.
-    function testDecodeStatefulEnvelopeRejectsTrailingBytes() public {
+    function testDecodeStatefulEnvelopeRejectsTrailingBytes() public view {
         bytes memory envelope = validEnvelope();
         bytes memory malformed = bytes.concat(envelope, hex"00");
-
-        vm.expectRevert(ShrincsCodec.InvalidEnvelope.selector);
-        codec.decodeStatefulEnvelope(malformed);
+        assertFalse(
+            decodeMalformedOk(malformed), "trailing bytes must be rejected"
+        );
     }
 
     // Checks that unused bytes inside the public key part are rejected.
     // line-length: allow — test name is one unbreakable token
     function testDecodeStatefulEnvelopeRejectsNestedTrailingBytesInsidePublicKey()
         public
+        view
     {
         bytes memory malformed =
             insertGapBeforePublicKeyCommitment(validEnvelope());
-
-        vm.expectRevert(ShrincsCodec.InvalidEnvelope.selector);
-        codec.decodeStatefulEnvelope(malformed);
+        assertFalse(
+            decodeMalformedOk(malformed), "nested gap must be rejected"
+        );
     }
 
     // Checks that a bad pointer inside the encoded signature is rejected.
     function testDecodeStatefulEnvelopeRejectsMalformedDynamicOffset()
         public
+        view
     {
         bytes memory malformed =
             overwriteSignatureChainsOffset(validEnvelope(), 0x81);
-
-        vm.expectRevert();
-        codec.decodeStatefulEnvelope(malformed);
+        assertFalse(
+            decodeMalformedOk(malformed), "bad dynamic offset must fail"
+        );
     }
 
     // Checks that reused pointers inside the encoded public key are rejected.
     function testDecodeStatefulEnvelopeRejectsDuplicatedInternalOffsets()
         public
+        view
     {
         bytes memory malformed =
             duplicatePublicKeyCommitmentOffset(validEnvelope());
-
-        vm.expectRevert(ShrincsCodec.InvalidEnvelope.selector);
-        codec.decodeStatefulEnvelope(malformed);
+        assertFalse(
+            decodeMalformedOk(malformed),
+            "duplicated internal offsets must fail"
+        );
     }
 
     // Checks that out-of-order ABI pointers are rejected even if abi.decode
@@ -371,34 +395,40 @@ contract ShrincsCodecTest is Test {
     // line-length: allow — test name is one unbreakable token
     function testDecodeStatefulEnvelopeRejectsOutOfOrderOffsetsThatStillDecode()
         public
+        view
     {
         bytes memory malformed =
             reorderPublicKeyStatefulAndCommitmentData(validEnvelope());
-
-        vm.expectRevert(ShrincsCodec.InvalidEnvelope.selector);
-        codec.decodeStatefulEnvelope(malformed);
+        assertFalse(
+            decodeMalformedOk(malformed), "out-of-order offsets must fail"
+        );
     }
 
     // Checks that a stateful signature must have exactly 64 WOTS-C chain
     // values.
     function testDecodeStatefulEnvelopeRejectsOversizedDeclaredChainArray()
         public
+        view
     {
         bytes memory malformed =
             overwriteSignatureChainsLength(validEnvelope(), 65);
-
-        vm.expectRevert();
-        codec.decodeStatefulEnvelope(malformed);
+        assertFalse(
+            decodeMalformedOk(malformed),
+            "non-canonical chain length must fail"
+        );
     }
 
     // Checks that a huge claimed auth path length is rejected before the
     // decoded value is accepted.
-    function testDecodeStatefulEnvelopeRejectsHugeAuthPathLength() public {
+    function testDecodeStatefulEnvelopeRejectsHugeAuthPathLength()
+        public
+        view
+    {
         bytes memory malformed =
             overwriteSignatureAuthPathLength(validEnvelope(), 10_000);
-
-        vm.expectRevert();
-        codec.decodeStatefulEnvelope(malformed);
+        assertFalse(
+            decodeMalformedOk(malformed), "huge auth path length must fail"
+        );
     }
 
     function testToMessageIsThePackedHash() public view {
@@ -608,7 +638,7 @@ contract ShrincsCodecERC7913IntegrationTest is Test {
     string internal constant VECTOR_PATH =
         "test/test_vectors/shrincs_sphincs_256s_keccak.json";
 
-    ShrincsVerifier internal verifier;
+    SHRINCS internal verifier;
     CodecERC7913ConsumerHarness internal consumer;
     CodecMockERC1271Signer internal erc1271Signer;
     CodecNonMagicERC7913Verifier internal nonMagicVerifier;
@@ -638,8 +668,8 @@ contract ShrincsCodecERC7913IntegrationTest is Test {
         vectors = vm.readFile(VECTOR_PATH);
 
         (
-            SHRINCS.SigningKey memory signingKey,
-            SHRINCS.PublicKey memory publicKey,
+            SHRINCSCore.SigningKey memory signingKey,
+            SHRINCSCore.PublicKey memory publicKey,
             bool keygenOk
         ) = ShrincsTestSigner.keygen(
             bytes("shrincs erc7913 stateful verifier seed"), 4
@@ -661,7 +691,7 @@ contract ShrincsCodecERC7913IntegrationTest is Test {
 
         validKey = abi.encodePacked(commitmentWord);
         validEnvelope =
-            ShrincsCodec.encodeStatefulEnvelope(publicKey, signature);
+            SHRINCSCodec.encodeStatefulEnvelope(publicKey, signature);
         erc1271Signer = new CodecMockERC1271Signer(signedHash, validEnvelope);
     }
 
@@ -671,12 +701,12 @@ contract ShrincsCodecERC7913IntegrationTest is Test {
         public
     {
         (
-            SHRINCS.PublicKey memory publicKey,
+            SHRINCSCore.PublicKey memory publicKey,
             bytes32 hash,
             UXMSS.StatefulSignature memory signature
         ) = decodeRustStatefulVector();
         bytes memory envelope =
-            ShrincsCodec.encodeStatefulEnvelope(publicKey, signature);
+            SHRINCSCodec.encodeStatefulEnvelope(publicKey, signature);
 
         assertEq(
             verifier.verify(publicKey.publicKeyCommitment, hash, envelope),
@@ -779,7 +809,7 @@ contract ShrincsCodecERC7913IntegrationTest is Test {
     function decodeRustStatefulVector()
         internal
         returns (
-            SHRINCS.PublicKey memory publicKey,
+            SHRINCSCore.PublicKey memory publicKey,
             bytes32 hash,
             UXMSS.StatefulSignature memory signature
         )
@@ -826,7 +856,7 @@ contract ShrincsCodecERC7913IntegrationTest is Test {
         bytes memory statefulPublicKey,
         bytes memory pkSeed,
         bytes memory hypertreeRoot
-    ) internal pure returns (SHRINCS.PublicKey memory) {
+    ) internal pure returns (SHRINCSCore.PublicKey memory) {
         bytes32 commitment = keccak256(
             abi.encodePacked(
                 "shrincs-public-key",
@@ -835,7 +865,7 @@ contract ShrincsCodecERC7913IntegrationTest is Test {
                 hypertreeRoot
             )
         );
-        return SHRINCS.PublicKey({
+        return SHRINCSCore.PublicKey({
             statefulPublicKey: statefulPublicKey,
             publicKeyCommitment: abi.encodePacked(commitment),
             pkSeed: pkSeed,

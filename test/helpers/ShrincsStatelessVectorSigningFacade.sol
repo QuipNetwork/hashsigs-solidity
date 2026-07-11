@@ -19,7 +19,7 @@ pragma solidity ^0.8.28;
 import {
     ShrincsStatelessVectorSigner
 } from "./ShrincsStatelessVectorSigner.sol";
-import {SHRINCS} from "../../contracts/SHRINCS.sol";
+import {SHRINCSCore} from "../../contracts/SHRINCSCore.sol";
 import {SPHINCSPlusCCore} from "../../contracts/SPHINCSPlusCCore.sol";
 
 /// @notice TEST-ONLY orchestration facade for the staged stateless signer.
@@ -35,7 +35,7 @@ library ShrincsStatelessVectorSigningFacade {
     )
         internal
         returns (
-            SHRINCS.PublicKey memory publicKey,
+            SHRINCSCore.PublicKey memory publicKey,
             SPHINCSPlusCCore.StatelessSignature memory signature,
             bool ok
         )
@@ -54,7 +54,7 @@ library ShrincsStatelessVectorSigningFacade {
     )
         internal
         returns (
-            SHRINCS.PublicKey memory publicKey,
+            SHRINCSCore.PublicKey memory publicKey,
             SPHINCSPlusCCore.StatelessSignature memory signature,
             bool ok
         )

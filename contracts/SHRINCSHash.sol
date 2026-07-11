@@ -16,15 +16,16 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 pragma solidity ^0.8.28;
 
-import {ShrincsParams} from "shrincs-profile/ShrincsParams.sol";
+import {SHRINCSParams} from "shrincs-profile/SHRINCSParams.sol";
 
 /// @title SHRINCSHash
 /// @notice Profile-independent hash and bit primitives shared by every
 /// SHRINCS module: address-word packing, hash-output masking, base-w digit
-/// extraction, and the memory-safe bit readers.
-/// @dev This library is the compile-time hash-suite seam. The current suite
-/// is keccak-256; a future SHA-256 suite plugs in here via remapping without
-/// touching the verifier logic that calls these helpers.
+/// extraction, and the memory-safe bit readers. This library is the
+/// compile-time hash-suite seam.
+/// @dev The current suite is keccak-256; a future SHA-256 suite plugs in
+/// here via remapping without touching the verifier logic that calls these
+/// helpers.
 library SHRINCSHash {
     // addressWord32: Pack the SPHINCS/XMSS-style address components into one
     // 32-byte word.
@@ -73,7 +74,7 @@ library SHRINCSHash {
     // For the 256s profile HASH_MASK is all-ones, so this folds to a
     // no-op under via-ir.
     function maskHash(bytes32 hashValue) internal pure returns (bytes32) {
-        return hashValue & ShrincsParams.HASH_MASK;
+        return hashValue & SHRINCSParams.HASH_MASK;
     }
 
     // baseWDigit: Read one base-w digit from a digest, supporting both

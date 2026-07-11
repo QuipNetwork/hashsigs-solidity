@@ -16,7 +16,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 pragma solidity ^0.8.28;
 
-import {ShrincsParams} from "shrincs-profile/ShrincsParams.sol";
+import {SHRINCSParams} from "shrincs-profile/SHRINCSParams.sol";
 import {SHRINCSHash} from "./SHRINCSHash.sol";
 import {WOTSPlusC} from "./WOTSPlusC.sol";
 
@@ -25,9 +25,8 @@ import {WOTSPlusC} from "./WOTSPlusC.sol";
 /// WOTS-C digit reconstruction and unbalanced authentication-path
 /// verification. Uses the `uxmss-*` keyed-hash tag family.
 library UXMSS {
-    // Address-type words for the SPHINCS-style keyed hash inputs. These
-    // are the ADRS type constants [FIPS205 §4.2]: WOTS+ hash (0), tree
-    // (2), and FORS tree (3).
+    // AddressTypeWotsHash: the WOTS+ hash ADRS type constant
+    // [FIPS205 §4.2] (value 0) for the SPHINCS-style keyed hash inputs.
     uint32 internal constant AddressTypeWotsHash = 0;
 
     struct StatefulPublicKey {
@@ -77,7 +76,7 @@ library UXMSS {
         // budget.
         if (leafIndex > maxSignatures) return false;
         // Stateful WOTS-C always reveals a fixed number of chains.
-        if (signature.chains.length != ShrincsParams.WOTS_CHAINS_STATEFUL) {
+        if (signature.chains.length != SHRINCSParams.WOTS_CHAINS_STATEFUL) {
             return false;
         }
 
@@ -136,7 +135,7 @@ library UXMSS {
         uint32 digitSum;
         // Reserve one 32-byte slot per reconstructed WOTS chain endpoint.
         bytes memory segments =
-            new bytes(ShrincsParams.WOTS_CHAINS_STATEFUL * 32);
+            new bytes(SHRINCSParams.WOTS_CHAINS_STATEFUL * 32);
         // Shared WOTS-C key address base for this stateful leaf: the WOTS-
         // hash address type (0) in bits 96..127 and the leaf index in bits
         // 64..95; layer and tree are 0 for the stateful subtree. The
@@ -145,7 +144,7 @@ library UXMSS {
         // path previously built via SHRINCSHash.addressWord32.
         uint256 addressBase = (uint256(AddressTypeWotsHash) << 96)
             | (uint256(leafIndex) << 64);
-        for (uint256 i = 0; i < ShrincsParams.WOTS_CHAINS_STATEFUL;) {
+        for (uint256 i = 0; i < SHRINCSParams.WOTS_CHAINS_STATEFUL;) {
             // Read the base-16 digit that chooses where this chain stopped
             // during signing.
             uint32 digit = WOTSPlusC.baseW16Digit32(digest, i);
@@ -165,7 +164,7 @@ library UXMSS {
             bytes32 segment = WOTSPlusC.wotsChainNoMaskBase(
                 WOTSPlusC.WOTS_C_CHAIN_TAG,
                 WOTSPlusC.WOTS_C_CHAIN_TAG_LEN,
-                ShrincsParams.WOTS_BASE_STATEFUL,
+                SHRINCSParams.WOTS_BASE_STATEFUL,
                 pkSeed,
                 addressBase,
                 chainIndex,
@@ -182,7 +181,7 @@ library UXMSS {
 
         // Reject messages whose reconstructed digit sum does not hit the
         // fixed target.
-        if (digitSum != ShrincsParams.WOTS_TARGET_SUM_STATEFUL) {
+        if (digitSum != SHRINCSParams.WOTS_TARGET_SUM_STATEFUL) {
             return (bytes32(0), false);
         }
         // Hash the reconstructed endpoints into the compact stateful WOTS

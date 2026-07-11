@@ -18,12 +18,17 @@ pragma solidity ^0.8.28;
 
 import {Test} from "../lib/forge-std/src/Test.sol";
 import {Vm} from "../lib/forge-std/src/Vm.sol";
-import {SHRINCS} from "../contracts/SHRINCS.sol";
+import {
+    IERC7913SignatureVerifier
+} from "../contracts/interfaces/IERC7913SignatureVerifier.sol";
+import {SHRINCSCodec} from "../contracts/SHRINCSCodec.sol";
+import {SHRINCSCore} from "../contracts/SHRINCSCore.sol";
 import {SPHINCSPlusCCore} from "../contracts/SPHINCSPlusCCore.sol";
+import {SHRINCS256sKeccak} from "../contracts/SHRINCS256sKeccak.sol";
 import {UXMSS} from "../contracts/UXMSS.sol";
 import {
-    ShrincsAccountVerifierExample
-} from "../contracts/examples/ShrincsAccountVerifierExample.sol";
+    SHRINCSAccountVerifierExample
+} from "../contracts/examples/SHRINCSAccountVerifierExample.sol";
 import {
     ShrincsAccountSigningFacade
 } from "./helpers/ShrincsAccountSigningFacade.sol";
@@ -32,6 +37,14 @@ import {
 } from "./helpers/ShrincsStatelessVectorSigner.sol";
 
 contract MeasurementAccountSigningHarness is ShrincsStatelessVectorSigner {}
+
+/// @dev Exposes the internal pinned SPHINCSPlusC address so the delegation
+/// measurement can deploy the sibling where verifyStateless delegates.
+contract MeasurementDelegationHarness is SHRINCS256sKeccak {
+    function pinned() external pure returns (address) {
+        return _pinnedSphincsPlusC();
+    }
+}
 
 contract ShrincsMeasurementsTest is Test {
     address internal constant STATEFUL_VECTOR_ACCOUNT =
@@ -42,20 +55,20 @@ contract ShrincsMeasurementsTest is Test {
         keccak256("measurement payload");
 
     struct StatefulCase {
-        SHRINCS.PublicKey publicKey;
-        SHRINCS.ActionContext context;
+        SHRINCSCore.PublicKey publicKey;
+        SHRINCSCore.ActionContext context;
         UXMSS.StatefulSignature signature;
-        ShrincsAccountVerifierExample account;
+        SHRINCSAccountVerifierExample account;
         bytes message;
         bytes32 hash;
         bytes envelope;
     }
 
     struct StatelessCase {
-        SHRINCS.PublicKey publicKey;
-        SHRINCS.ActionContext context;
+        SHRINCSCore.PublicKey publicKey;
+        SHRINCSCore.ActionContext context;
         SPHINCSPlusCCore.StatelessSignature signature;
-        ShrincsAccountVerifierExample account;
+        SHRINCSAccountVerifierExample account;
         bytes message;
         bytes32 hash;
         bytes envelope;
@@ -168,22 +181,22 @@ contract ShrincsMeasurementsTest is Test {
         returns (StatefulCase memory c)
     {
         (
-            SHRINCS.SigningKey memory signingKey,
-            SHRINCS.PublicKey memory publicKey,
+            SHRINCSCore.SigningKey memory signingKey,
+            SHRINCSCore.PublicKey memory publicKey,
             bool keygenOk
         ) = ShrincsAccountSigningFacade.keygen(seedMaterial, 4);
         assertTrue(keygenOk, "stateful keygen must succeed");
         deployCodeTo(
-            "ShrincsAccountVerifierExample.sol:ShrincsAccountVerifierExample",
+            "SHRINCSAccountVerifierExample.sol:SHRINCSAccountVerifierExample",
             abi.encode(publicKeyCommitmentWord(publicKey)),
             STATEFUL_VECTOR_ACCOUNT
         );
-        ShrincsAccountVerifierExample account =
-            ShrincsAccountVerifierExample(STATEFUL_VECTOR_ACCOUNT);
+        SHRINCSAccountVerifierExample account =
+            SHRINCSAccountVerifierExample(STATEFUL_VECTOR_ACCOUNT);
 
         (
             ,
-            SHRINCS.ActionContext memory context,
+            SHRINCSCore.ActionContext memory context,
             UXMSS.StatefulSignature memory signature,
             bool signOk
         ) = ShrincsAccountSigningFacade.signStatefulActionNow(
@@ -194,8 +207,8 @@ contract ShrincsMeasurementsTest is Test {
             uint32(signature.authPath.length)
         );
 
-        bytes32 hash = SHRINCS.statefulActionMessageHash(
-            account.currentShrincsPublicKey(), context
+        bytes32 hash = SHRINCSCore.statefulActionMessageHash(
+            account.currentSHRINCSPublicKey(), context
         );
         bytes memory message = abi.encodePacked(hash);
 
@@ -215,15 +228,15 @@ contract ShrincsMeasurementsTest is Test {
         returns (StatelessCase memory c)
     {
         (
-            SHRINCS.SigningKey memory signingKey,
-            SHRINCS.PublicKey memory publicKey,
+            SHRINCSCore.SigningKey memory signingKey,
+            SHRINCSCore.PublicKey memory publicKey,
             bool ok
         ) = ShrincsAccountSigningFacade.keygen(seedMaterial, 4);
         assertTrue(ok, "stateless keygen must succeed");
 
         // forgefmt: disable-next-line
-        ShrincsAccountVerifierExample account =
-            new ShrincsAccountVerifierExample(
+        SHRINCSAccountVerifierExample account =
+            new SHRINCSAccountVerifierExample(
                 publicKeyCommitmentWord(publicKey)
             );
         bytes32 sessionId;
@@ -247,12 +260,12 @@ contract ShrincsMeasurementsTest is Test {
         );
         assertTrue(completeOk, "stateless signing must complete");
 
-        SHRINCS.ActionContext memory context =
+        SHRINCSCore.ActionContext memory context =
             ShrincsAccountSigningFacade.actionContext(
                 account, ACTION_TYPE, PAYLOAD_HASH
             );
-        bytes32 hash = SHRINCS.statelessActionMessageHash(
-            account.currentShrincsPublicKey(), context
+        bytes32 hash = SHRINCSCore.statelessActionMessageHash(
+            account.currentSHRINCSPublicKey(), context
         );
         bytes memory message = abi.encodePacked(hash);
 
@@ -267,7 +280,78 @@ contract ShrincsMeasurementsTest is Test {
         );
     }
 
-    function publicKeyCommitmentWord(SHRINCS.PublicKey memory publicKey)
+    function testMeasureVerifyStatelessDelegationGas() public {
+        vm.pauseGasMetering();
+        (
+            MeasurementDelegationHarness verifier,
+            bytes memory key,
+            bytes memory envelope,
+            bytes32 hash
+        ) = prepareVerifyStatelessDelegation(
+            bytes("measure verifyStateless delegation seed")
+        );
+        bytes memory callData =
+            abi.encodeCall(verifier.verifyStateless, (key, hash, envelope));
+        vm.resumeGasMetering();
+
+        (bool success, bytes memory returnData) =
+            address(verifier).call(callData);
+        Vm.Gas memory gas = vm.lastCallGas();
+
+        vm.pauseGasMetering();
+        assertTrue(success, "verifyStateless delegation must not revert");
+        assertEq(
+            abi.decode(returnData, (bytes4)),
+            IERC7913SignatureVerifier.verify.selector,
+            "verifyStateless delegation must verify"
+        );
+        emit log_named_uint(
+            "stateless.verify_stateless_delegation_gas", gas.gasTotalUsed
+        );
+    }
+
+    function prepareVerifyStatelessDelegation(bytes memory seedMaterial)
+        internal
+        returns (
+            MeasurementDelegationHarness verifier,
+            bytes memory key,
+            bytes memory envelope,
+            bytes32 hash
+        )
+    {
+        (
+            SHRINCSCore.SigningKey memory signingKey,
+            SHRINCSCore.PublicKey memory publicKey,
+            bool ok
+        ) = ShrincsAccountSigningFacade.keygen(seedMaterial, 4);
+        assertTrue(ok, "delegation keygen must succeed");
+
+        hash = keccak256("verifyStateless delegation message");
+        bytes32 sessionId;
+        (sessionId, ok) = accountSigner.beginSession(
+            signingKey, publicKey, abi.encodePacked(hash)
+        );
+        assertTrue(ok, "delegation session must begin");
+        // line-length: allow — fmt canonical tuple head exceeds cap
+        (
+            SPHINCSPlusCCore.StatelessSignature memory signature,
+            bool completeOk
+        ) = ShrincsAccountSigningFacade.completeStatelessSession(
+            accountSigner, sessionId
+        );
+        assertTrue(completeOk, "delegation signing must complete");
+
+        verifier = new MeasurementDelegationHarness();
+        deployCodeTo(
+            "SPHINCSPlusC256sKeccak.sol:SPHINCSPlusC256sKeccak",
+            "",
+            verifier.pinned()
+        );
+        key = abi.encodePacked(publicKeyCommitmentWord(publicKey));
+        envelope = SHRINCSCodec.encodeStatelessEnvelope(publicKey, signature);
+    }
+
+    function publicKeyCommitmentWord(SHRINCSCore.PublicKey memory publicKey)
         internal
         pure
         returns (bytes32 out)

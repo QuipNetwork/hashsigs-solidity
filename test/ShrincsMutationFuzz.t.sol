@@ -20,20 +20,26 @@ import {Test} from "../lib/forge-std/src/Test.sol";
 import {
     IERC7913SignatureVerifier
 } from "../contracts/interfaces/IERC7913SignatureVerifier.sol";
-import {SHRINCS} from "../contracts/SHRINCS.sol";
-import {ShrincsCodec} from "../contracts/ShrincsCodec.sol";
+import {SHRINCSCore} from "../contracts/SHRINCSCore.sol";
+import {SHRINCSCodec} from "../contracts/SHRINCSCodec.sol";
 import {UXMSS} from "../contracts/UXMSS.sol";
-import {ShrincsVerifier} from "../contracts/ShrincsVerifier.sol";
+import {SHRINCS} from "../contracts/SHRINCS.sol";
 import {
-    ShrincsAccountVerifierExample
-} from "../contracts/examples/ShrincsAccountVerifierExample.sol";
+    SHRINCSAccountVerifierExample
+} from "../contracts/examples/SHRINCSAccountVerifierExample.sol";
 import {
     ShrincsAccountSigningFacade
 } from "./helpers/ShrincsAccountSigningFacade.sol";
 import {ShrincsTestSigner} from "./helpers/ShrincsTestSigner.sol";
 
 /// @dev Concrete instance of the abstract profile base for the raw path.
-contract MutationVerifierHarness is ShrincsVerifier {}
+/// The pinned SPHINCSPlusC address is unused on the stateful path, so it
+/// returns the zero address.
+contract MutationVerifierHarness is SHRINCS {
+    function _pinnedSphincsPlusC() internal pure override returns (address) {
+        return address(0);
+    }
+}
 
 /// @title ShrincsMutationFuzzTest
 /// @notice Mutation-malleability fuzz (security-testing plan P4). Starting
@@ -50,7 +56,7 @@ contract ShrincsMutationFuzzTest is Test {
     bytes4 internal constant MAGIC_VALUE = 0x1626ba7e;
     bytes4 internal constant INVALID_SIGNATURE = 0xffffffff;
 
-    ShrincsAccountVerifierExample internal account;
+    SHRINCSAccountVerifierExample internal account;
     MutationVerifierHarness internal rawVerifier;
 
     // Valid ERC-1271 stateful-action envelope and the hash it authorizes.
@@ -65,15 +71,15 @@ contract ShrincsMutationFuzzTest is Test {
     function setUp() public {
         rawVerifier = new MutationVerifierHarness();
         (
-            SHRINCS.SigningKey memory signingKey,
-            SHRINCS.PublicKey memory publicKey,
+            SHRINCSCore.SigningKey memory signingKey,
+            SHRINCSCore.PublicKey memory publicKey,
             bool keygenOk
         ) = ShrincsTestSigner.keygen(bytes("shrincs mutation fuzz seed"), 4);
         assertTrue(keygenOk, "keygen");
 
         bytes32 commitment =
             ShrincsAccountSigningFacade.publicKeyCommitmentWord(publicKey);
-        account = new ShrincsAccountVerifierExample(commitment);
+        account = new SHRINCSAccountVerifierExample(commitment);
 
         _buildWrapperEnvelope(signingKey, publicKey);
         _buildRawEnvelope(signingKey, publicKey, commitment);
@@ -134,16 +140,16 @@ contract ShrincsMutationFuzzTest is Test {
         bytes32 flip
     ) public view {
         (
-            SHRINCS.PublicKey memory publicKey,
+            SHRINCSCore.PublicKey memory publicKey,
             UXMSS.StatefulSignature memory signature
         ) = abi.decode(
-            rawEnvelope, (SHRINCS.PublicKey, UXMSS.StatefulSignature)
+            rawEnvelope, (SHRINCSCore.PublicKey, UXMSS.StatefulSignature)
         );
         uint256 index = bound(chainSelector, 0, signature.chains.length - 1);
         signature.chains[index] =
             bytes32(uint256(signature.chains[index]) ^ (uint256(flip) | 1));
         bytes memory mutated =
-            ShrincsCodec.encodeStatefulEnvelope(publicKey, signature);
+            SHRINCSCodec.encodeStatefulEnvelope(publicKey, signature);
         assertEq(
             rawVerifier.verify(rawKey, rawHash, mutated),
             INVALID_SIGNATURE,
@@ -154,16 +160,16 @@ contract ShrincsMutationFuzzTest is Test {
     // Perturbing the WOTS-C grind counter breaks the target-sum digest.
     function testFuzz_rawCounterMutationRejected(uint32 delta) public view {
         (
-            SHRINCS.PublicKey memory publicKey,
+            SHRINCSCore.PublicKey memory publicKey,
             UXMSS.StatefulSignature memory signature
         ) = abi.decode(
-            rawEnvelope, (SHRINCS.PublicKey, UXMSS.StatefulSignature)
+            rawEnvelope, (SHRINCSCore.PublicKey, UXMSS.StatefulSignature)
         );
         uint32 bump = delta == 0 ? 1 : delta;
         // XOR flips at least one counter bit without overflowing uint32.
         signature.counter = signature.counter ^ bump;
         bytes memory mutated =
-            ShrincsCodec.encodeStatefulEnvelope(publicKey, signature);
+            SHRINCSCodec.encodeStatefulEnvelope(publicKey, signature);
         assertEq(
             rawVerifier.verify(rawKey, rawHash, mutated),
             INVALID_SIGNATURE,
@@ -174,22 +180,22 @@ contract ShrincsMutationFuzzTest is Test {
     // _buildWrapperEnvelope: sign the first stateful action against the fresh
     // wrapper and encode the canonical mode-1 ERC-1271 envelope.
     function _buildWrapperEnvelope(
-        SHRINCS.SigningKey memory signingKey,
-        SHRINCS.PublicKey memory publicKey
+        SHRINCSCore.SigningKey memory signingKey,
+        SHRINCSCore.PublicKey memory publicKey
     ) internal {
         bytes32 actionType = keccak256("shrincs-mutation-action");
         bytes32 payloadHash = keccak256("shrincs-mutation-payload");
         (
             ,
-            SHRINCS.ActionContext memory context,
+            SHRINCSCore.ActionContext memory context,
             UXMSS.StatefulSignature memory signature,
             bool ok
         ) = ShrincsAccountSigningFacade.signStatefulActionNow(
             account, signingKey, actionType, payloadHash
         );
         assertTrue(ok, "wrapper sign");
-        wrapperHash = SHRINCS.statefulActionMessageHash(
-            account.currentShrincsPublicKey(), context
+        wrapperHash = SHRINCSCore.statefulActionMessageHash(
+            account.currentSHRINCSPublicKey(), context
         );
         wrapperEnvelope =
             ShrincsAccountSigningFacade.encodeStateful1271Envelope(
@@ -200,8 +206,8 @@ contract ShrincsMutationFuzzTest is Test {
     // _buildRawEnvelope: sign the fixed hash at leaf 1 and encode the raw
     // ERC-7913 stateful envelope.
     function _buildRawEnvelope(
-        SHRINCS.SigningKey memory signingKey,
-        SHRINCS.PublicKey memory publicKey,
+        SHRINCSCore.SigningKey memory signingKey,
+        SHRINCSCore.PublicKey memory publicKey,
         bytes32 commitment
     ) internal {
         rawHash = keccak256("shrincs mutation raw vector");
@@ -213,7 +219,7 @@ contract ShrincsMutationFuzzTest is Test {
         assertTrue(ok, "raw sign");
         rawKey = abi.encodePacked(commitment);
         rawEnvelope =
-            ShrincsCodec.encodeStatefulEnvelope(publicKey, signature);
+            SHRINCSCodec.encodeStatefulEnvelope(publicKey, signature);
     }
 
     function _clone(bytes memory input)
