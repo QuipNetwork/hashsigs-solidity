@@ -178,12 +178,19 @@ graph TD
 
     WP["WOTSPlus.sol<br/>(standalone library —<br/>no SHRINCS dependency)"]
 
-    EX --> VF
+    EX --> FA
+    EX --> SC
+    EX --> ST
+    EX --> PA
     EX --> EN
     VF --> CO
     VF --> FA
+    VF --> ST
+    VF --> SC
     VF -. stateless delegate .-> SP
+    SP --> CO
     SP --> SC
+    FA --> CO
     FA --> ST
     FA --> SC
     SC --> FO
