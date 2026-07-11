@@ -22,7 +22,6 @@ import {
 } from "../contracts/interfaces/IERC7913SignatureVerifier.sol";
 import {SHRINCS} from "../contracts/SHRINCS.sol";
 import {SHRINCSCodec} from "../contracts/SHRINCSCodec.sol";
-import {UXMSS} from "../contracts/UXMSS.sol";
 import {SHRINCSVerifier} from "../contracts/SHRINCSVerifier.sol";
 import {
     SHRINCSAccountVerifierExample
@@ -141,10 +140,8 @@ contract SHRINCSMutationFuzzTest is Test {
     ) public view {
         (
             SHRINCS.PublicKey memory publicKey,
-            UXMSS.StatefulSignature memory signature
-        ) = abi.decode(
-            rawEnvelope, (SHRINCS.PublicKey, UXMSS.StatefulSignature)
-        );
+            SHRINCS.Signature memory signature
+        ) = abi.decode(rawEnvelope, (SHRINCS.PublicKey, SHRINCS.Signature));
         uint256 index = bound(chainSelector, 0, signature.chains.length - 1);
         signature.chains[index] =
             bytes32(uint256(signature.chains[index]) ^ (uint256(flip) | 1));
@@ -161,10 +158,8 @@ contract SHRINCSMutationFuzzTest is Test {
     function testFuzz_rawCounterMutationRejected(uint32 delta) public view {
         (
             SHRINCS.PublicKey memory publicKey,
-            UXMSS.StatefulSignature memory signature
-        ) = abi.decode(
-            rawEnvelope, (SHRINCS.PublicKey, UXMSS.StatefulSignature)
-        );
+            SHRINCS.Signature memory signature
+        ) = abi.decode(rawEnvelope, (SHRINCS.PublicKey, SHRINCS.Signature));
         uint32 bump = delta == 0 ? 1 : delta;
         // XOR flips at least one counter bit without overflowing uint32.
         signature.counter = signature.counter ^ bump;
@@ -188,7 +183,7 @@ contract SHRINCSMutationFuzzTest is Test {
         (
             ,
             SHRINCS.ActionContext memory context,
-            UXMSS.StatefulSignature memory signature,
+            SHRINCS.Signature memory signature,
             bool ok
         ) = SHRINCSAccountSigningFacade.signStatefulActionNow(
             account, signingKey, actionType, payloadHash
@@ -211,7 +206,7 @@ contract SHRINCSMutationFuzzTest is Test {
         bytes32 commitment
     ) internal {
         rawHash = keccak256("shrincs mutation raw vector");
-        UXMSS.StatefulSignature memory signature;
+        SHRINCS.Signature memory signature;
         bool ok;
         (signature, ok) = SHRINCSTestSigner.signStatefulRawAtLeaf(
             signingKey, 1, abi.encodePacked(rawHash)

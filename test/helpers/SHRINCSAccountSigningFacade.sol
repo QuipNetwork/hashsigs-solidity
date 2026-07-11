@@ -18,7 +18,6 @@ pragma solidity ^0.8.28;
 
 import {SHRINCS} from "../../contracts/SHRINCS.sol";
 import {SPHINCSPlusC} from "../../contracts/SPHINCSPlusC.sol";
-import {UXMSS} from "../../contracts/UXMSS.sol";
 import {SHRINCSCodec} from "../../contracts/SHRINCSCodec.sol";
 import {
     SHRINCSAccountVerifierExample
@@ -91,7 +90,7 @@ library SHRINCSAccountSigningFacade {
         returns (
             SHRINCS.SigningKey memory nextSigningKey,
             SHRINCS.ActionContext memory context,
-            UXMSS.StatefulSignature memory signature,
+            SHRINCS.Signature memory signature,
             bool ok
         )
     {
@@ -227,7 +226,7 @@ library SHRINCSAccountSigningFacade {
         SHRINCS.PublicKey memory publicKey,
         bytes32 actionType,
         bytes32 payloadHash,
-        UXMSS.StatefulSignature memory signature
+        SHRINCS.Signature memory signature
     ) internal pure returns (bytes memory) {
         return abi.encodePacked(
             bytes1(ERC1271_MODE_STATEFUL_ACTION),
@@ -239,7 +238,7 @@ library SHRINCSAccountSigningFacade {
         SHRINCS.PublicKey memory publicKey,
         bytes32 actionType,
         bytes32 payloadHash,
-        SPHINCSPlusC.StatelessSignature memory signature
+        SPHINCSPlusC.Signature memory signature
     ) internal pure returns (bytes memory) {
         return abi.encodePacked(
             bytes1(ERC1271_MODE_STATELESS_ACTION),
@@ -278,10 +277,7 @@ library SHRINCSAccountSigningFacade {
     function completeStatelessSession(
         SHRINCSStatelessVectorSigner signer,
         bytes32 sessionId
-    )
-        internal
-        returns (SPHINCSPlusC.StatelessSignature memory signature, bool ok)
-    {
+    ) internal returns (SPHINCSPlusC.Signature memory signature, bool ok) {
         (, signature, ok) =
             SHRINCSStatelessVectorSigningFacade.completeSession(
                 signer, sessionId

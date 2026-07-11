@@ -19,7 +19,6 @@ pragma solidity ^0.8.28;
 import {Test} from "../lib/forge-std/src/Test.sol";
 import {SHRINCS} from "../contracts/SHRINCS.sol";
 import {SHRINCSTestSigner} from "./helpers/SHRINCSTestSigner.sol";
-import {UXMSS} from "../contracts/UXMSS.sol";
 import {SHRINCSParams} from "shrincs-profile/SHRINCSParams.sol";
 
 contract SHRINCSStatefulSignerHarness {
@@ -37,11 +36,7 @@ contract SHRINCSStatefulSignerHarness {
     )
         external
         pure
-        returns (
-            SHRINCS.SigningKey memory,
-            UXMSS.StatefulSignature memory,
-            bool
-        )
+        returns (SHRINCS.SigningKey memory, SHRINCS.Signature memory, bool)
     {
         return SHRINCSTestSigner.signStatefulRaw(signingKey, message);
     }
@@ -50,7 +45,7 @@ contract SHRINCSStatefulSignerHarness {
         bytes32 expectedPublicKeyCommitment,
         SHRINCS.PublicKey calldata publicKey,
         bytes calldata message,
-        UXMSS.StatefulSignature calldata signature
+        SHRINCS.Signature calldata signature
     ) external pure returns (bool) {
         return SHRINCS.verifyStatefulUncheckedMessage(
             expectedPublicKeyCommitment, publicKey, message, signature
@@ -80,7 +75,7 @@ contract SHRINCSSignerStatefulTest is Test {
             abi.encodePacked(keccak256("solidity stateful signer message"));
         (
             SHRINCS.SigningKey memory nextSigningKey,
-            UXMSS.StatefulSignature memory signature,
+            SHRINCS.Signature memory signature,
             bool signOk
         ) = harness.signStatefulRaw(signingKey, message);
 

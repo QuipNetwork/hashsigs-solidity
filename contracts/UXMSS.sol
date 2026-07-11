@@ -38,7 +38,12 @@ library UXMSS {
         uint32 maxSignatures;
     }
 
-    struct StatefulSignature {
+    // TWIN of SHRINCS.Signature: the field list here and in SHRINCS.Signature
+    // must stay identical. SHRINCS re-tags a SHRINCS.Signature pointer to
+    // this type at its single call boundary (SHRINCS._toUxmss) rather than
+    // copying; the twin-drift test asserts abi.encode equality so any layout
+    // change here that is not mirrored in SHRINCS.Signature fails closed.
+    struct Signature {
         // Per-signature randomizer committed into the stateful message
         // digest.
         bytes32 randomizer;
@@ -65,7 +70,7 @@ library UXMSS {
         bytes32 root,
         uint32 maxSignatures,
         bytes memory message,
-        UXMSS.StatefulSignature memory signature
+        UXMSS.Signature memory signature
     ) internal pure returns (bool) {
         // In this unbalanced stateful tree, the leaf index is encoded by
         // auth-path length.
@@ -113,7 +118,7 @@ library UXMSS {
         bytes32 pkSeed,
         uint32 leafIndex,
         bytes memory message,
-        UXMSS.StatefulSignature memory signature
+        UXMSS.Signature memory signature
     ) internal pure returns (bytes32 pkHash, bool ok) {
         // Bind the stateful WOTS-C digest to the seed, leaf, randomizer,
         // counter, and signed message.

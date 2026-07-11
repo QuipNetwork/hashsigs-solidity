@@ -107,7 +107,7 @@ library SHRINCSTestSigner {
         pure
         returns (
             SHRINCS.SigningKey memory nextSigningKey,
-            UXMSS.StatefulSignature memory signature,
+            SHRINCS.Signature memory signature,
             bool ok
         )
     {
@@ -135,7 +135,7 @@ library SHRINCSTestSigner {
         pure
         returns (
             SHRINCS.SigningKey memory nextSigningKey,
-            UXMSS.StatefulSignature memory signature,
+            SHRINCS.Signature memory signature,
             bool ok
         )
     {
@@ -167,11 +167,7 @@ library SHRINCSTestSigner {
         SHRINCS.SigningKey memory signingKey,
         uint32 leafIndex,
         bytes memory message
-    )
-        internal
-        pure
-        returns (UXMSS.StatefulSignature memory signature, bool ok)
-    {
+    ) internal pure returns (SHRINCS.Signature memory signature, bool ok) {
         if (leafIndex == 0) return (signature, false);
         if (leafIndex > signingKey.maxStatefulSignatures) {
             return (signature, false);
@@ -265,11 +261,7 @@ library SHRINCSTestSigner {
         bytes32 pkSeed,
         uint32 leafIndex,
         bytes memory message
-    )
-        internal
-        pure
-        returns (UXMSS.StatefulSignature memory signature, bool ok)
-    {
+    ) internal pure returns (SHRINCS.Signature memory signature, bool ok) {
         bytes32 randomizer = keccak256(
             abi.encodePacked(
                 "uxmss-wots-randomizer", prfSeed, leafIndex, message
@@ -308,7 +300,7 @@ library SHRINCSTestSigner {
                 }
             }
             if (digitSum == SHRINCSParams.WOTS_TARGET_SUM_STATEFUL) {
-                signature = UXMSS.StatefulSignature({
+                signature = SHRINCS.Signature({
                     randomizer: randomizer,
                     counter: counter,
                     chains: chains,

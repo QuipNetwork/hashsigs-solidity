@@ -19,7 +19,6 @@ pragma solidity ^0.8.28;
 import {
     IERC7913SignatureVerifier
 } from "./interfaces/IERC7913SignatureVerifier.sol";
-import {SHRINCSCodec} from "./SHRINCSCodec.sol";
 import {SPHINCSPlusC} from "./SPHINCSPlusC.sol";
 
 /// @title SPHINCSPlusCVerifier
@@ -28,16 +27,16 @@ import {SPHINCSPlusC} from "./SPHINCSPlusC.sol";
 /// layers to a pinned public root.
 /// @dev Trustless by construction: no owner, no storage, no constructor, no
 /// upgradability. `key` is abi.encode(bytes32 pkSeed, bytes32 hypertreeRoot)
-/// (64 bytes); `signature` is the SHRINCSCodec stateless-signature envelope
-/// (abi.encode(StatelessSignature)). No commitment logic anywhere in it:
+/// (64 bytes); `signature` is the stateless-signature envelope
+/// (abi.encode(SPHINCSPlusC.Signature)). No commitment logic anywhere in it:
 /// the caller (or the SHRINCSVerifier delegating here) owns the bundle and
 /// commitment binding.
 ///
 /// Revert model (same as the SHRINCSVerifier). A malformed key or envelope
-/// returns 0xffffffff, reached only through SHRINCSCodec's non-reverting
-/// structural validation — no try/catch anywhere. Every other failure,
-/// including an inner out-of-gas, reverts to the caller; ERC-7913 permits
-/// this. verify runs entirely in-contract through the memory-typed
+/// returns 0xffffffff, reached only through the SPHINCSPlusC facade's
+/// non-reverting structural validation — no try/catch anywhere. Every other
+/// failure, including an inner out-of-gas, reverts to the caller; ERC-7913
+/// permits this. verify runs entirely in-contract through the memory-typed
 /// SPHINCSPlusC library, with no external call.
 ///
 /// Caller obligations. Every SPHINCSPlusC library is `pure` and this
@@ -70,18 +69,17 @@ abstract contract SPHINCSPlusCVerifier is IERC7913SignatureVerifier {
     /// @notice ERC-7913 verification entrypoint for stateless SPHINCSPlusC
     /// signatures.
     /// @dev Decodes the 64-byte key into the two stateless seed words and the
-    /// stateless-signature envelope through SHRINCSCodec's non-reverting
-    /// validators (malformed key or envelope -> 0xffffffff). After validation
-    /// abi.decode is infallible, so verify re-materializes the two seed words
-    /// as 32-byte `bytes memory` and hands them, with the decoded signature,
-    /// straight to the memory-typed SPHINCSPlusC library, which verifies
-    /// FORS-C plus the hypertree over exactly the 32 hash bytes under the
-    /// public seed and root. No external call, no try/catch: an execution
-    /// failure, including out-of-gas, reverts. See the contract-level revert
-    /// model.
+    /// stateless-signature envelope through the SPHINCSPlusC facade's
+    /// non-reverting decoders (malformed -> 0xffffffff). After validation
+    /// abi.decode is infallible, so verify hands the two seed words and the
+    /// decoded signature to the memory-typed SPHINCSPlusC library, which
+    /// verifies FORS-C plus the hypertree over the 32 hash bytes under the
+    /// public seed and root. No external call, no try/catch: an
+    /// execution failure, including out-of-gas, reverts. See the
+    /// contract-level revert model.
     /// @param key abi.encode(bytes32 pkSeed, bytes32 hypertreeRoot).
     /// @param hash The 32-byte message hash to verify.
-    /// @param signature The SHRINCSCodec stateless-signature envelope.
+    /// @param signature The stateless-signature envelope.
     /// @return The verify selector on success; 0xffffffff for a
     /// malformed key or envelope, or a well-formed but invalid
     /// signature. Execution failures revert.
@@ -91,24 +89,16 @@ abstract contract SPHINCSPlusCVerifier is IERC7913SignatureVerifier {
         bytes calldata signature
     ) external pure returns (bytes4) {
         (bytes32 pkSeed, bytes32 hypertreeRoot, bool okKey) =
-            SHRINCSCodec.decodeStatelessKey(key);
+            SPHINCSPlusC.decodeKey(key);
         if (!okKey) return INVALID_SIGNATURE;
 
-        (
-            SPHINCSPlusC.StatelessSignature memory signature_,
-            bool okEnvelope
-        ) = SHRINCSCodec.decodeStatelessSignatureEnvelope(signature);
+        (SPHINCSPlusC.Signature memory signature_, bool okEnvelope) =
+            SPHINCSPlusC.decodeSignatureEnvelope(signature);
         if (!okEnvelope) return INVALID_SIGNATURE;
 
-        // The two seed words become 32-byte `bytes memory` for the
-        // memory-typed SPHINCSPlusC library call.
-        bool valid = SPHINCSPlusC.verify(
-            abi.encodePacked(pkSeed),
-            abi.encodePacked(hypertreeRoot),
-            SHRINCSCodec.toMessage(hash),
-            signature_
-        );
-        if (valid) return IERC7913SignatureVerifier.verify.selector;
+        if (SPHINCSPlusC.verify(pkSeed, hypertreeRoot, hash, signature_)) {
+            return IERC7913SignatureVerifier.verify.selector;
+        }
         return INVALID_SIGNATURE;
     }
 }

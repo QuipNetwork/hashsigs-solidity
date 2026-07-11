@@ -20,7 +20,6 @@ import {Test} from "../lib/forge-std/src/Test.sol";
 import {SHRINCSCodec} from "../contracts/SHRINCSCodec.sol";
 import {SHRINCS} from "../contracts/SHRINCS.sol";
 import {SPHINCSPlusC} from "../contracts/SPHINCSPlusC.sol";
-import {UXMSS} from "../contracts/UXMSS.sol";
 import {
     SHRINCSAccountVerifierExample
 } from "../contracts/examples/SHRINCSAccountVerifierExample.sol";
@@ -73,8 +72,8 @@ contract CodecCanonicityHarness {
     {
         (
             SHRINCS.PublicKey memory publicKey,
-            UXMSS.StatefulSignature memory signature
-        ) = abi.decode(payload, (SHRINCS.PublicKey, UXMSS.StatefulSignature));
+            SHRINCS.Signature memory signature
+        ) = abi.decode(payload, (SHRINCS.PublicKey, SHRINCS.Signature));
         return
             keccak256(payload) == keccak256(abi.encode(publicKey, signature));
     }
@@ -86,10 +85,8 @@ contract CodecCanonicityHarness {
     {
         (
             SHRINCS.PublicKey memory publicKey,
-            SPHINCSPlusC.StatelessSignature memory signature
-        ) = abi.decode(
-            payload, (SHRINCS.PublicKey, SPHINCSPlusC.StatelessSignature)
-        );
+            SPHINCSPlusC.Signature memory signature
+        ) = abi.decode(payload, (SHRINCS.PublicKey, SPHINCSPlusC.Signature));
         return
             keccak256(payload) == keccak256(abi.encode(publicKey, signature));
     }
@@ -99,8 +96,8 @@ contract CodecCanonicityHarness {
         pure
         returns (bool)
     {
-        SPHINCSPlusC.StatelessSignature memory signature =
-            abi.decode(payload, (SPHINCSPlusC.StatelessSignature));
+        SPHINCSPlusC.Signature memory signature =
+            abi.decode(payload, (SPHINCSPlusC.Signature));
         return keccak256(payload) == keccak256(abi.encode(signature));
     }
 }
@@ -289,7 +286,7 @@ contract SHRINCSCodecCanonicityTest is Test {
         require(ok, "stateful keygen");
         bytes memory message =
             abi.encodePacked(keccak256("codec stateful message"));
-        (UXMSS.StatefulSignature memory signature, bool signOk) =
+        (SHRINCS.Signature memory signature, bool signOk) =
             SHRINCSTestSigner.signStatefulRawAtLeaf(signingKey, 1, message);
         require(signOk, "stateful sign");
         return abi.encode(publicKey, signature);
@@ -325,10 +322,10 @@ contract SHRINCSCodecCanonicityTest is Test {
                 PAYLOAD_HASH
             );
         require(ok, "begin stateless");
-        (
-            SPHINCSPlusC.StatelessSignature memory signature,
-            bool completeOk
-        ) = SHRINCSAccountSigningFacade.completeStatelessSession(
+        SPHINCSPlusC.Signature memory signature;
+        bool completeOk;
+        (signature, completeOk) =
+            SHRINCSAccountSigningFacade.completeStatelessSession(
                 signer, sessionId
             );
         require(completeOk, "complete stateless");

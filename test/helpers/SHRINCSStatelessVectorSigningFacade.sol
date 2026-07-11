@@ -36,7 +36,7 @@ library SHRINCSStatelessVectorSigningFacade {
         internal
         returns (
             SHRINCS.PublicKey memory publicKey,
-            SPHINCSPlusC.StatelessSignature memory signature,
+            SPHINCSPlusC.Signature memory signature,
             bool ok
         )
     {
@@ -55,7 +55,7 @@ library SHRINCSStatelessVectorSigningFacade {
         internal
         returns (
             SHRINCS.PublicKey memory publicKey,
-            SPHINCSPlusC.StatelessSignature memory signature,
+            SPHINCSPlusC.Signature memory signature,
             bool ok
         )
     {
@@ -72,8 +72,7 @@ library SHRINCSStatelessVectorSigningFacade {
 
         bytes memory encodedSignature = signer.finalizeSignature(sessionId);
         publicKey = signer.sessionPublicKey(sessionId);
-        signature =
-            abi.decode(encodedSignature, (SPHINCSPlusC.StatelessSignature));
+        signature = abi.decode(encodedSignature, (SPHINCSPlusC.Signature));
         return (publicKey, signature, true);
     }
 }

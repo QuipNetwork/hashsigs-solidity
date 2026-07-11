@@ -19,7 +19,6 @@ pragma solidity ^0.8.28;
 import {Test} from "../lib/forge-std/src/Test.sol";
 import {SHRINCS} from "../contracts/SHRINCS.sol";
 import {SHRINCSTestSigner} from "./helpers/SHRINCSTestSigner.sol";
-import {UXMSS} from "../contracts/UXMSS.sol";
 
 contract SHRINCSStatefulActionSignerHarness {
     function keygen(bytes memory seedMaterial, uint32 maxStatefulSignatures)
@@ -37,22 +36,18 @@ contract SHRINCSStatefulActionSignerHarness {
     )
         external
         pure
-        returns (
-            SHRINCS.SigningKey memory,
-            UXMSS.StatefulSignature memory,
-            bool
-        )
+        returns (SHRINCS.SigningKey memory, SHRINCS.Signature memory, bool)
     {
         return SHRINCSTestSigner.signStatefulAction(
-                signingKey, publicKey, context
-            );
+            signingKey, publicKey, context
+        );
     }
 
     function verify(
         bytes32 expectedPublicKeyCommitment,
         SHRINCS.PublicKey calldata publicKey,
         SHRINCS.ActionContext calldata context,
-        UXMSS.StatefulSignature calldata signature
+        SHRINCS.Signature calldata signature
     ) external pure returns (bool) {
         return SHRINCS.verifyStateful(
             expectedPublicKeyCommitment, publicKey, context, signature
@@ -90,7 +85,7 @@ contract SHRINCSSignerStatefulActionTest is Test {
 
         (
             SHRINCS.SigningKey memory nextSigningKey,
-            UXMSS.StatefulSignature memory signature,
+            SHRINCS.Signature memory signature,
             bool signOk
         ) = harness.signStatefulAction(signingKey, publicKey, context);
 

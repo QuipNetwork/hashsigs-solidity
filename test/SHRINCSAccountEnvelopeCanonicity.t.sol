@@ -59,15 +59,10 @@ contract CanonicityHarness {
             SHRINCS.PublicKey memory publicKey,
             bytes32 actionType,
             bytes32 payloadHash,
-            SPHINCSPlusC.StatelessSignature memory signature
+            SPHINCSPlusC.Signature memory signature
         ) = abi.decode(
             payload,
-            (
-                SHRINCS.PublicKey,
-                bytes32,
-                bytes32,
-                SPHINCSPlusC.StatelessSignature
-            )
+            (SHRINCS.PublicKey, bytes32, bytes32, SPHINCSPlusC.Signature)
         );
         return keccak256(payload)
             == keccak256(
@@ -269,12 +264,9 @@ contract SHRINCSAccountEnvelopeCanonicityTest is Test {
             );
         require(ok, "begin");
         // line-length: allow — fmt canonical tuple head exceeds cap
-        (
-            SPHINCSPlusC.StatelessSignature memory signature,
-            bool completeOk
-        ) = SHRINCSAccountSigningFacade.completeStatelessSession(
-                signer, sessionId
-            );
+        (SPHINCSPlusC.Signature memory signature, bool completeOk) = SHRINCSAccountSigningFacade.completeStatelessSession(
+            signer, sessionId
+        );
         require(completeOk, "complete");
         return abi.encode(publicKey, ACTION_TYPE, PAYLOAD_HASH, signature);
     }

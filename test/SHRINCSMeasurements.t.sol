@@ -25,7 +25,6 @@ import {SHRINCSCodec} from "../contracts/SHRINCSCodec.sol";
 import {SHRINCS} from "../contracts/SHRINCS.sol";
 import {SPHINCSPlusC} from "../contracts/SPHINCSPlusC.sol";
 import {SHRINCS256sKeccak} from "../contracts/SHRINCS256sKeccak.sol";
-import {UXMSS} from "../contracts/UXMSS.sol";
 import {
     SHRINCSAccountVerifierExample
 } from "../contracts/examples/SHRINCSAccountVerifierExample.sol";
@@ -57,7 +56,7 @@ contract SHRINCSMeasurementsTest is Test {
     struct StatefulCase {
         SHRINCS.PublicKey publicKey;
         SHRINCS.ActionContext context;
-        UXMSS.StatefulSignature signature;
+        SHRINCS.Signature signature;
         SHRINCSAccountVerifierExample account;
         bytes message;
         bytes32 hash;
@@ -67,7 +66,7 @@ contract SHRINCSMeasurementsTest is Test {
     struct StatelessCase {
         SHRINCS.PublicKey publicKey;
         SHRINCS.ActionContext context;
-        SPHINCSPlusC.StatelessSignature signature;
+        SPHINCSPlusC.Signature signature;
         SHRINCSAccountVerifierExample account;
         bytes message;
         bytes32 hash;
@@ -197,7 +196,7 @@ contract SHRINCSMeasurementsTest is Test {
         (
             ,
             SHRINCS.ActionContext memory context,
-            UXMSS.StatefulSignature memory signature,
+            SHRINCS.Signature memory signature,
             bool signOk
         ) = SHRINCSAccountSigningFacade.signStatefulActionNow(
             account, signingKey, ACTION_TYPE, PAYLOAD_HASH
@@ -252,12 +251,9 @@ contract SHRINCSMeasurementsTest is Test {
         assertTrue(ok, "stateless session must begin");
 
         // line-length: allow — fmt canonical tuple head exceeds cap
-        (
-            SPHINCSPlusC.StatelessSignature memory signature,
-            bool completeOk
-        ) = SHRINCSAccountSigningFacade.completeStatelessSession(
-                accountSigner, sessionId
-            );
+        (SPHINCSPlusC.Signature memory signature, bool completeOk) = SHRINCSAccountSigningFacade.completeStatelessSession(
+            accountSigner, sessionId
+        );
         assertTrue(completeOk, "stateless signing must complete");
 
         SHRINCS.ActionContext memory context =
@@ -333,12 +329,9 @@ contract SHRINCSMeasurementsTest is Test {
         );
         assertTrue(ok, "delegation session must begin");
         // line-length: allow — fmt canonical tuple head exceeds cap
-        (
-            SPHINCSPlusC.StatelessSignature memory signature,
-            bool completeOk
-        ) = SHRINCSAccountSigningFacade.completeStatelessSession(
-                accountSigner, sessionId
-            );
+        (SPHINCSPlusC.Signature memory signature, bool completeOk) = SHRINCSAccountSigningFacade.completeStatelessSession(
+            accountSigner, sessionId
+        );
         assertTrue(completeOk, "delegation signing must complete");
 
         verifier = new MeasurementDelegationHarness();

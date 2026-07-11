@@ -51,9 +51,12 @@ library SHRINCSCodec {
     /// loads it from calldata. Never reverts; malformed keys are reported
     /// through the ok flag.
     /// @param key The ERC-7913 key bytes (exactly 32 bytes).
-    /// @return commitment The decoded 32-byte publicKeyCommitment.
+    /// @return commitment The decoded 32-byte publicKeyCommitment. Named
+    /// `commitment` here only to avoid shadowing this library's
+    /// publicKeyCommitment(...) helper; the SHRINCS facade and the verifiers
+    /// carry it in a `publicKeyCommitment` local.
     /// @return ok False when the key length is not 32.
-    function decodeKey(bytes calldata key)
+    function decodePublicKeyCommitment(bytes calldata key)
         internal
         pure
         returns (bytes32 commitment, bool ok)
@@ -72,7 +75,7 @@ library SHRINCSCodec {
 
     /// @notice Decode the ERC-7913 `signature` envelope into typed SHRINCS
     /// structs.
-    /// @dev Envelope layout is abi.encode(PublicKey, StatefulSignature) with
+    /// @dev Envelope layout is abi.encode(PublicKey, SHRINCS.Signature) with
     /// no mode prefix. Never reverts: the structural walk over calldata
     /// (SHAPE_STATEFUL_ENVELOPE) rejects any non-canonical encoding through
     /// the `ok` flag before abi.decode, which is then infallible on the
@@ -86,16 +89,15 @@ library SHRINCSCodec {
         pure
         returns (
             SHRINCS.PublicKey memory publicKey,
-            UXMSS.StatefulSignature memory signature,
+            SHRINCS.Signature memory signature,
             bool ok
         )
     {
         if (!_isCanonicalEnvelope(envelope, SHAPE_STATEFUL_ENVELOPE)) {
             return (publicKey, signature, false);
         }
-        (publicKey, signature) = abi.decode(
-            envelope, (SHRINCS.PublicKey, UXMSS.StatefulSignature)
-        );
+        (publicKey, signature) =
+            abi.decode(envelope, (SHRINCS.PublicKey, SHRINCS.Signature));
         return (publicKey, signature, true);
     }
 
@@ -108,14 +110,14 @@ library SHRINCSCodec {
     /// @return envelope The abi-encoded stateful envelope bytes.
     function encodeStatefulEnvelope(
         SHRINCS.PublicKey memory publicKey,
-        UXMSS.StatefulSignature memory signature
+        SHRINCS.Signature memory signature
     ) internal pure returns (bytes memory envelope) {
         return abi.encode(publicKey, signature);
     }
 
     /// @notice Decode the SHRINCSVerifier stateless envelope into typed
     /// structs.
-    /// @dev Envelope layout is abi.encode(PublicKey, StatelessSignature)
+    /// @dev Envelope layout is abi.encode(PublicKey, SPHINCSPlusC.Signature)
     /// with no mode prefix. Never reverts: the structural walk over calldata
     /// (SHAPE_STATELESS_ENVELOPE) rejects any non-canonical encoding through
     /// the `ok` flag before abi.decode.
@@ -128,7 +130,7 @@ library SHRINCSCodec {
         pure
         returns (
             SHRINCS.PublicKey memory publicKey,
-            SPHINCSPlusC.StatelessSignature memory signature,
+            SPHINCSPlusC.Signature memory signature,
             bool ok
         )
     {
@@ -136,7 +138,7 @@ library SHRINCSCodec {
             return (publicKey, signature, false);
         }
         (publicKey, signature) = abi.decode(
-            envelope, (SHRINCS.PublicKey, SPHINCSPlusC.StatelessSignature)
+            envelope, (SHRINCS.PublicKey, SPHINCSPlusC.Signature)
         );
         return (publicKey, signature, true);
     }
@@ -149,7 +151,7 @@ library SHRINCSCodec {
     /// @return envelope The abi-encoded stateless envelope bytes.
     function encodeStatelessEnvelope(
         SHRINCS.PublicKey memory publicKey,
-        SPHINCSPlusC.StatelessSignature memory signature
+        SPHINCSPlusC.Signature memory signature
     ) internal pure returns (bytes memory envelope) {
         return abi.encode(publicKey, signature);
     }
@@ -194,8 +196,8 @@ library SHRINCSCodec {
 
     /// @notice Decode the SPHINCSPlusCVerifier envelope into a typed
     /// stateless signature.
-    /// @dev Envelope layout is abi.encode(StatelessSignature) with no mode
-    /// prefix. Never reverts: the structural walk over calldata
+    /// @dev Envelope layout is abi.encode(SPHINCSPlusC.Signature) with no
+    /// mode prefix. Never reverts: the structural walk over calldata
     /// (SHAPE_STATELESS_SIGNATURE) rejects any non-canonical encoding through
     /// the `ok` flag before abi.decode.
     /// @param envelope The abi-encoded stateless-signature envelope bytes.
@@ -204,12 +206,12 @@ library SHRINCSCodec {
     function decodeStatelessSignatureEnvelope(bytes calldata envelope)
         internal
         pure
-        returns (SPHINCSPlusC.StatelessSignature memory signature, bool ok)
+        returns (SPHINCSPlusC.Signature memory signature, bool ok)
     {
         if (!_isCanonicalEnvelope(envelope, SHAPE_STATELESS_SIGNATURE)) {
             return (signature, false);
         }
-        signature = abi.decode(envelope, (SPHINCSPlusC.StatelessSignature));
+        signature = abi.decode(envelope, (SPHINCSPlusC.Signature));
         return (signature, true);
     }
 
@@ -220,7 +222,7 @@ library SHRINCSCodec {
     /// @param signature The stateless signature.
     /// @return envelope The abi-encoded stateless-signature envelope bytes.
     function encodeStatelessSignatureEnvelope(
-        SPHINCSPlusC.StatelessSignature memory signature
+        SPHINCSPlusC.Signature memory signature
     ) internal pure returns (bytes memory envelope) {
         return abi.encode(signature);
     }

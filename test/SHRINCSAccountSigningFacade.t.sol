@@ -19,7 +19,6 @@ pragma solidity ^0.8.28;
 import {Test} from "../lib/forge-std/src/Test.sol";
 import {SHRINCS} from "../contracts/SHRINCS.sol";
 import {SPHINCSPlusC} from "../contracts/SPHINCSPlusC.sol";
-import {UXMSS} from "../contracts/UXMSS.sol";
 import {
     SHRINCSAccountVerifierExample
 } from "../contracts/examples/SHRINCSAccountVerifierExample.sol";
@@ -67,7 +66,7 @@ contract SHRINCSAccountSigningFacadeTest is Test {
         (
             SHRINCS.SigningKey memory nextSigningKey,
             SHRINCS.ActionContext memory context,
-            UXMSS.StatefulSignature memory signature,
+            SHRINCS.Signature memory signature,
             bool signOk
         ) = SHRINCSAccountSigningFacade.signStatefulActionNow(
             account, signingKey, actionType, payloadHash
@@ -123,7 +122,7 @@ contract SHRINCSAccountSigningFacadeTest is Test {
         (
             ,
             SHRINCS.ActionContext memory context,
-            UXMSS.StatefulSignature memory signature,
+            SHRINCS.Signature memory signature,
             bool signOk
         ) = SHRINCSAccountSigningFacade.signStatefulActionNow(
             account, signingKey, actionType, payloadHash
@@ -183,7 +182,7 @@ contract SHRINCSAccountSigningFacadeTest is Test {
         (
             ,
             SHRINCS.ActionContext memory context,
-            UXMSS.StatefulSignature memory signature,
+            SHRINCS.Signature memory signature,
             bool signOk
         ) = SHRINCSAccountSigningFacade.signStatefulActionNow(
             account, signingKey, actionType, payloadHash
@@ -253,10 +252,10 @@ contract SHRINCSAccountSigningFacadeTest is Test {
         );
 
         // line-length: allow — fmt canonical tuple head exceeds cap
-        (
-            SPHINCSPlusC.StatelessSignature memory signature,
-            bool completeOk
-        ) = SHRINCSAccountSigningFacade.completeStatelessSession(
+        SPHINCSPlusC.Signature memory signature;
+        bool completeOk;
+        (signature, completeOk) =
+            SHRINCSAccountSigningFacade.completeStatelessSession(
                 signer, sessionId
             );
         assertTrue(completeOk, "stateless session completion must succeed");
@@ -316,10 +315,10 @@ contract SHRINCSAccountSigningFacadeTest is Test {
         assertTrue(signOk, "stateless action signing must succeed");
 
         // line-length: allow — fmt canonical tuple head exceeds cap
-        (
-            SPHINCSPlusC.StatelessSignature memory signature,
-            bool completeOk
-        ) = SHRINCSAccountSigningFacade.completeStatelessSession(
+        SPHINCSPlusC.Signature memory signature;
+        bool completeOk;
+        (signature, completeOk) =
+            SHRINCSAccountSigningFacade.completeStatelessSession(
                 signer, sessionId
             );
         assertTrue(completeOk, "stateless session completion must succeed");
@@ -389,10 +388,10 @@ contract SHRINCSAccountSigningFacadeTest is Test {
         assertTrue(signOk, "stateless action signing must succeed");
 
         // line-length: allow — fmt canonical tuple head exceeds cap
-        (
-            SPHINCSPlusC.StatelessSignature memory signature,
-            bool completeOk
-        ) = SHRINCSAccountSigningFacade.completeStatelessSession(
+        SPHINCSPlusC.Signature memory signature;
+        bool completeOk;
+        (signature, completeOk) =
+            SHRINCSAccountSigningFacade.completeStatelessSession(
                 signer, sessionId
             );
         assertTrue(completeOk, "stateless session completion must succeed");
@@ -467,12 +466,12 @@ contract SHRINCSAccountSigningFacadeTest is Test {
             "rotation should sign the current wrapper nonce"
         );
 
-        (
-            SPHINCSPlusC.StatelessSignature memory recoverySignature,
-            bool completeOk
-        ) = SHRINCSAccountSigningFacade.completeStatelessSession(
-            signer, sessionId
-        );
+        SPHINCSPlusC.Signature memory recoverySignature;
+        bool completeOk;
+        (recoverySignature, completeOk) =
+            SHRINCSAccountSigningFacade.completeStatelessSession(
+                signer, sessionId
+            );
         assertTrue(
             completeOk,
             "stateful-only rotation session completion must succeed"
@@ -544,12 +543,12 @@ contract SHRINCSAccountSigningFacadeTest is Test {
             "rotation should sign the current wrapper nonce"
         );
 
-        (
-            SPHINCSPlusC.StatelessSignature memory recoverySignature,
-            bool completeOk
-        ) = SHRINCSAccountSigningFacade.completeStatelessSession(
-            signer, sessionId
-        );
+        SPHINCSPlusC.Signature memory recoverySignature;
+        bool completeOk;
+        (recoverySignature, completeOk) =
+            SHRINCSAccountSigningFacade.completeStatelessSession(
+                signer, sessionId
+            );
         assertTrue(
             completeOk, "full rotation session completion must succeed"
         );

@@ -34,7 +34,7 @@ contract SHRINCSStatelessVectorSignerHarness is
         bytes32 expectedPublicKeyCommitment,
         SHRINCS.PublicKey calldata publicKey,
         bytes calldata message,
-        SPHINCSPlusC.StatelessSignature calldata signature
+        SPHINCSPlusC.Signature calldata signature
     ) external pure returns (bool) {
         return SHRINCS.verifyStatelessUncheckedMessage(
             expectedPublicKeyCommitment, publicKey, message, signature
@@ -117,8 +117,8 @@ contract SHRINCSStatelessVectorSignerTest is Test {
         );
 
         bytes memory encodedSignature = signer.finalizeSignature(sessionId);
-        SPHINCSPlusC.StatelessSignature memory signature =
-            abi.decode(encodedSignature, (SPHINCSPlusC.StatelessSignature));
+        SPHINCSPlusC.Signature memory signature =
+            abi.decode(encodedSignature, (SPHINCSPlusC.Signature));
         SHRINCS.PublicKey memory publicKey =
             signer.sessionPublicKey(sessionId);
         bytes memory signedMessage = signer.sessionMessage(sessionId);
@@ -159,7 +159,7 @@ contract SHRINCSStatelessVectorSignerTest is Test {
         );
         (
             SHRINCS.PublicKey memory publicKey,
-            SPHINCSPlusC.StatelessSignature memory signature,
+            SPHINCSPlusC.Signature memory signature,
             bool ok
         ) = signer.signFromSeed(
             bytes("high level stateless vector seed"), 4, message
@@ -206,7 +206,7 @@ contract SHRINCSStatelessVectorSignerTest is Test {
         }
         (
             SHRINCS.PublicKey memory publicKey,
-            SPHINCSPlusC.StatelessSignature memory signature,
+            SPHINCSPlusC.Signature memory signature,
             bool ok
         ) = signer.signFromSeed(
             bytes("forsDigestBytes overhang regression seed"), 4, message

@@ -184,10 +184,10 @@ contract SHRINCSStatelessDelegationTest is Test {
             signingKey, publicKey, abi.encodePacked(hash)
         );
         require(beginOk, "begin");
-        (
-            SPHINCSPlusC.StatelessSignature memory signature,
-            bool completeOk
-        ) = SHRINCSAccountSigningFacade.completeStatelessSession(
+        SPHINCSPlusC.Signature memory signature;
+        bool completeOk;
+        (signature, completeOk) =
+            SHRINCSAccountSigningFacade.completeStatelessSession(
                 signer, sessionId
             );
         require(completeOk, "complete");

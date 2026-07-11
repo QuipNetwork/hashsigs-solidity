@@ -17,7 +17,6 @@
 pragma solidity ^0.8.28;
 
 import {SHRINCS} from "../../contracts/SHRINCS.sol";
-import {UXMSS} from "../../contracts/UXMSS.sol";
 import {SHRINCSParams} from "shrincs-profile/SHRINCSParams.sol";
 import {
     SHRINCSAccountVerifierExample
@@ -34,7 +33,7 @@ contract MedusaAccountHarness is SHRINCSAccountVerifierExample {
     function verifyStatefulUncheckedForTest(
         SHRINCS.PublicKey calldata publicKey,
         bytes calldata message,
-        UXMSS.StatefulSignature calldata signature
+        SHRINCS.Signature calldata signature
     ) external returns (bool) {
         return verifyStatefulUncheckedMessage(publicKey, message, signature);
     }
@@ -69,7 +68,7 @@ contract SHRINCSMedusaHarness {
 
     MedusaAccountHarness internal account;
     SHRINCS.PublicKey internal publicKey;
-    mapping(uint32 => UXMSS.StatefulSignature) internal signatureOf;
+    mapping(uint32 => SHRINCS.Signature) internal signatureOf;
 
     bool internal purityViolated;
     bool internal mutationAccepted;
@@ -84,7 +83,7 @@ contract SHRINCSMedusaHarness {
             SHRINCSTestSigner.keygen(bytes("shrincs-medusa-key"), MAX_LEAF);
         require(keygenOk, "medusa keygen");
         for (uint32 leaf = 1; leaf <= MAX_LEAF; leaf++) {
-            UXMSS.StatefulSignature memory signature;
+            SHRINCS.Signature memory signature;
             bool signOk;
             (signature, signOk) = SHRINCSTestSigner.signStatefulRawAtLeaf(
                 signingKey, leaf, abi.encodePacked(FIXED_MESSAGE)
@@ -118,7 +117,7 @@ contract SHRINCSMedusaHarness {
         // leafSelector % MAX_LEAF is < MAX_LEAF, so the cast cannot truncate
         // forge-lint: disable-next-line(unsafe-typecast)
         uint32 leaf = uint32(1 + (leafSelector % MAX_LEAF));
-        UXMSS.StatefulSignature memory signature = signatureOf[leaf];
+        SHRINCS.Signature memory signature = signatureOf[leaf];
         signature.chains[0] =
             bytes32(uint256(signature.chains[0]) ^ (uint256(flip) | 1));
         bytes32 digestBefore = _stateDigest();

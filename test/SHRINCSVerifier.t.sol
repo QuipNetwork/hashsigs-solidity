@@ -22,7 +22,6 @@ import {
 } from "../contracts/interfaces/IERC7913SignatureVerifier.sol";
 import {SHRINCSCodec} from "../contracts/SHRINCSCodec.sol";
 import {SHRINCS} from "../contracts/SHRINCS.sol";
-import {UXMSS} from "../contracts/UXMSS.sol";
 import {SHRINCSVerifier} from "../contracts/SHRINCSVerifier.sol";
 import {SHRINCSTestSigner} from "./helpers/SHRINCSTestSigner.sol";
 
@@ -70,10 +69,10 @@ contract SHRINCSVerifierTest is Test {
         signedHash = keccak256("shrincs erc7913 stateful verifier vector");
         bytes memory message = abi.encodePacked(signedHash);
 
-        (UXMSS.StatefulSignature memory leafOneSignature, bool leafOneOk) =
+        (SHRINCS.Signature memory leafOneSignature, bool leafOneOk) =
             SHRINCSTestSigner.signStatefulRawAtLeaf(signingKey, 1, message);
         assertTrue(leafOneOk, "leaf-1 signing must succeed");
-        (UXMSS.StatefulSignature memory leafTwoSignature, bool leafTwoOk) =
+        (SHRINCS.Signature memory leafTwoSignature, bool leafTwoOk) =
             SHRINCSTestSigner.signStatefulRawAtLeaf(signingKey, 2, message);
         assertTrue(leafTwoOk, "leaf-2 signing must succeed");
 
@@ -101,11 +100,11 @@ contract SHRINCSVerifierTest is Test {
         view
         returns (
             SHRINCS.PublicKey memory publicKey,
-            UXMSS.StatefulSignature memory signature
+            SHRINCS.Signature memory signature
         )
     {
         return abi.decode(
-            validEnvelope, (SHRINCS.PublicKey, UXMSS.StatefulSignature)
+            validEnvelope, (SHRINCS.PublicKey, SHRINCS.Signature)
         );
     }
 
@@ -181,7 +180,7 @@ contract SHRINCSVerifierTest is Test {
     function testRejectsTamperedChainValue() public view {
         (
             SHRINCS.PublicKey memory publicKey,
-            UXMSS.StatefulSignature memory signature
+            SHRINCS.Signature memory signature
         ) = decodeStoredEnvelope();
         signature.chains[0] = bytes32(uint256(signature.chains[0]) ^ 1);
         bytes memory envelope =
@@ -196,7 +195,7 @@ contract SHRINCSVerifierTest is Test {
     function testRejectsTamperedAuthPath() public view {
         (
             SHRINCS.PublicKey memory publicKey,
-            UXMSS.StatefulSignature memory signature
+            SHRINCS.Signature memory signature
         ) = decodeStoredEnvelope();
         signature.authPath[0] = bytes32(uint256(signature.authPath[0]) ^ 1);
         bytes memory envelope =
@@ -249,7 +248,7 @@ contract SHRINCSVerifierTest is Test {
         // that commitment.
         (
             SHRINCS.PublicKey memory publicKey,
-            UXMSS.StatefulSignature memory signature
+            SHRINCS.Signature memory signature
         ) = decodeStoredEnvelope();
         bytes32 fakeCommitment = keccak256("mismatched bundle commitment");
         publicKey.publicKeyCommitment = abi.encodePacked(fakeCommitment);

@@ -18,6 +18,7 @@ pragma solidity ^0.8.28;
 
 import {FORSMinusC} from "./FORSMinusC.sol";
 import {Hypertree} from "./Hypertree.sol";
+import {SHRINCSCodec} from "./SHRINCSCodec.sol";
 
 /// @title SPHINCSPlusC
 /// @notice Stateless SPHINCS+C-style verification ([SPHINCSPLUSC]): a FORS-C
@@ -30,12 +31,56 @@ import {Hypertree} from "./Hypertree.sol";
 /// FORS-C, hypertree). Commitments, contexts, and the stateful side belong
 /// to the hybrid SHRINCS library above it.
 library SPHINCSPlusC {
-    struct StatelessSignature {
+    /// @notice The stateless SPHINCS+C signature.
+    /// @dev A SHRINCS stateless signature is a SPHINCSPlusC.Signature:
+    /// SHRINCS declares no stateless struct of its own (Solidity cannot alias
+    /// structs), so the SHRINCS library handles the stateless path with this
+    /// type directly.
+    struct Signature {
         // Message-signing few-time signature at the bottom of the stateless
         // path.
         FORSMinusC.ForsSignature fors;
         // Hypertree layers authenticating the FORS root to the public root.
         Hypertree.HypertreeLayerSignature[] hypertree;
+    }
+
+    // decodeKey: Facade forward decoding the SPHINCSPlusCVerifier 64-byte key
+    // into its two stateless seed words. Keeps the adapter's only import edge
+    // pointed at this parent library.
+    function decodeKey(bytes calldata key)
+        internal
+        pure
+        returns (bytes32 pkSeed, bytes32 hypertreeRoot, bool ok)
+    {
+        return SHRINCSCodec.decodeStatelessKey(key);
+    }
+
+    // decodeSignatureEnvelope: Facade forward decoding the
+    // SPHINCSPlusCVerifier stateless-signature envelope into a typed
+    // Signature. Keeps the adapter's only import edge pointed here.
+    function decodeSignatureEnvelope(bytes calldata envelope)
+        internal
+        pure
+        returns (Signature memory signature, bool ok)
+    {
+        return SHRINCSCodec.decodeStatelessSignatureEnvelope(envelope);
+    }
+
+    // verify: Facade verify over a 32-byte hash and the two seed words. Wraps
+    // the message-bytes verify below by widening the seed words to 32-byte
+    // `bytes` and packing the ERC-7913 hash into the signed message bytes.
+    function verify(
+        bytes32 pkSeed,
+        bytes32 hypertreeRoot,
+        bytes32 hash,
+        Signature memory signature
+    ) internal pure returns (bool) {
+        return verify(
+            abi.encodePacked(pkSeed),
+            abi.encodePacked(hypertreeRoot),
+            SHRINCSCodec.toMessage(hash),
+            signature
+        );
     }
 
     // verify: Verify a stateless signature after the caller has already
@@ -48,7 +93,7 @@ library SPHINCSPlusC {
         bytes memory pkSeed,
         bytes memory hypertreeRoot,
         bytes memory message,
-        StatelessSignature memory signature
+        Signature memory signature
     ) internal pure returns (bool) {
         // The stateless public seed is always one hash output wide.
         if (pkSeed.length != 32) return false;

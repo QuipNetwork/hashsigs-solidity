@@ -61,7 +61,7 @@ contract SHRINCSStatelessVectorSigner {
         bytes32 currentLayerSkSeed;
         bytes32 currentLayerPkHash;
         bytes32 currentLayerRandomizer;
-        SPHINCSPlusC.StatelessSignature signature;
+        SPHINCSPlusC.Signature signature;
     }
 
     uint256 internal nextSessionNonce;
@@ -552,9 +552,11 @@ contract SHRINCSStatelessVectorSigner {
         out.hypertreeRoot = publicKey.hypertreeRoot;
     }
 
-    function copyStatelessSignature(
-        SPHINCSPlusC.StatelessSignature storage signature
-    ) internal view returns (SPHINCSPlusC.StatelessSignature memory out) {
+    function copyStatelessSignature(SPHINCSPlusC.Signature storage signature)
+        internal
+        view
+        returns (SPHINCSPlusC.Signature memory out)
+    {
         out.fors.randomizer = signature.fors.randomizer;
         out.fors.counter = signature.fors.counter;
         out.fors.entries =

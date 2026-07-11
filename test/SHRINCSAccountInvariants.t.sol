@@ -19,7 +19,6 @@ pragma solidity ^0.8.28;
 import {Test} from "../lib/forge-std/src/Test.sol";
 import {SHRINCS} from "../contracts/SHRINCS.sol";
 import {SPHINCSPlusC} from "../contracts/SPHINCSPlusC.sol";
-import {UXMSS} from "../contracts/UXMSS.sol";
 import {SHRINCSParams} from "shrincs-profile/SHRINCSParams.sol";
 import {
     SHRINCSAccountVerifierExample
@@ -42,7 +41,7 @@ contract InvariantAccountHarness is SHRINCSAccountVerifierExample {
     function verifyStatefulUncheckedForTest(
         SHRINCS.PublicKey calldata publicKey,
         bytes calldata message,
-        UXMSS.StatefulSignature calldata signature
+        SHRINCS.Signature calldata signature
     ) external returns (bool) {
         return verifyStatefulUncheckedMessage(publicKey, message, signature);
     }
@@ -83,7 +82,7 @@ contract SHRINCSAccountHandler is Test {
     // Pre-signed material, keyed by [keyIndex][leafIndex].
     mapping(uint256 => SHRINCS.PublicKey) internal publicKeyOf;
     mapping(uint256 => bytes32) internal commitmentOf;
-    mapping(uint256 => mapping(uint32 => UXMSS.StatefulSignature)) internal
+    mapping(uint256 => mapping(uint32 => SHRINCS.Signature)) internal
         signatureOf;
 
     // Monotonicity high-water marks and latched violations (I1, I2). The
@@ -131,7 +130,7 @@ contract SHRINCSAccountHandler is Test {
         publicKeyOf[keyIndex] = publicKey;
         commitmentOf[keyIndex] = _commitmentWord(publicKey);
         for (uint32 leaf = 1; leaf <= MAX_LEAF; leaf++) {
-            UXMSS.StatefulSignature memory signature;
+            SHRINCS.Signature memory signature;
             bool signOk;
             (signature, signOk) = SHRINCSTestSigner.signStatefulRawAtLeaf(
                 signingKey, leaf, abi.encodePacked(FIXED_MESSAGE)
@@ -200,8 +199,7 @@ contract SHRINCSAccountHandler is Test {
         (uint256 keyIndex, bool found) = _currentKeyIndex();
         if (!found) return;
         uint32 leaf = uint32(bound(leafSelector, 1, MAX_LEAF));
-        UXMSS.StatefulSignature memory signature =
-            signatureOf[keyIndex][leaf];
+        SHRINCS.Signature memory signature = signatureOf[keyIndex][leaf];
         signature.chains[0] =
             bytes32(uint256(signature.chains[0]) ^ (uint256(flip) | 1));
 
@@ -222,7 +220,7 @@ contract SHRINCSAccountHandler is Test {
     function actGarbageStateless(bytes32 actionType, bytes32 payloadHash)
         external
     {
-        SPHINCSPlusC.StatelessSignature memory signature;
+        SPHINCSPlusC.Signature memory signature;
         bytes32 digestBefore = _stateDigest();
         bool ok = account.verifyStatelessAction(
             publicKeyOf[0], actionType, payloadHash, signature
@@ -243,7 +241,7 @@ contract SHRINCSAccountHandler is Test {
         (uint256 keyIndex, bool found) = _currentKeyIndex();
         if (!found) return;
         uint256 targetIndex = bound(targetSelector, 0, KEY_COUNT - 1);
-        SPHINCSPlusC.StatelessSignature memory signature;
+        SPHINCSPlusC.Signature memory signature;
         bytes32 digestBefore = _stateDigest();
         bool ok = account.rotateFullKey(
             publicKeyOf[keyIndex], signature, _fullTarget(targetIndex)
