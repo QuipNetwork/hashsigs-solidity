@@ -16,7 +16,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 pragma solidity ^0.8.28;
 
-import {SPHINCSPlusC} from "./SPHINCSPlusC.sol";
+import {SPHINCSPlusCVerifier} from "./SPHINCSPlusCVerifier.sol";
 
 /// @title SPHINCSPlusC128sQ20Keccak
 /// @notice Concrete 128s-q20-profile SPHINCSPlusC verifier. Deploy this
@@ -29,7 +29,7 @@ import {SPHINCSPlusC} from "./SPHINCSPlusC.sol";
 /// wants profile security-analysis backing before production use (maintainer
 /// decision Q1). The SHRINCS128sQ20Keccak verifier pins this contract's
 /// CREATE3 address for stateless delegation.
-contract SPHINCSPlusC128sQ20Keccak is SPHINCSPlusC {
+contract SPHINCSPlusC128sQ20Keccak is SPHINCSPlusCVerifier {
     // PROFILE_TAG: the compiled parameter-set identifier for this
     // verifier. Matches SHRINCSParams.PROFILE_ID for the 128s-q20
     // profile (stateless-signature budget 2^20).

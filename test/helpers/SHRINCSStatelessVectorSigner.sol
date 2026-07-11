@@ -17,8 +17,8 @@
 pragma solidity ^0.8.28;
 
 import {SHRINCSTestSigner} from "./SHRINCSTestSigner.sol";
-import {SHRINCSCore} from "../../contracts/SHRINCSCore.sol";
-import {SPHINCSPlusCCore} from "../../contracts/SPHINCSPlusCCore.sol";
+import {SHRINCS} from "../../contracts/SHRINCS.sol";
+import {SPHINCSPlusC} from "../../contracts/SPHINCSPlusC.sol";
 import {FORSMinusC} from "../../contracts/FORSMinusC.sol";
 import {Hypertree} from "../../contracts/Hypertree.sol";
 import {UXMSS} from "../../contracts/UXMSS.sol";
@@ -43,8 +43,8 @@ contract SHRINCSStatelessVectorSigner {
         bool hypertreeLayerStarted;
         bool hypertreeWotsDone;
         bool hypertreeAuthPathDone;
-        SHRINCSCore.SigningKey signingKey;
-        SHRINCSCore.PublicKey publicKey;
+        SHRINCS.SigningKey signingKey;
+        SHRINCS.PublicKey publicKey;
         bytes message;
         bytes forsDigest;
         uint64 bottomTreeIndex;
@@ -61,7 +61,7 @@ contract SHRINCSStatelessVectorSigner {
         bytes32 currentLayerSkSeed;
         bytes32 currentLayerPkHash;
         bytes32 currentLayerRandomizer;
-        SPHINCSPlusCCore.StatelessSignature signature;
+        SPHINCSPlusC.StatelessSignature signature;
     }
 
     uint256 internal nextSessionNonce;
@@ -72,8 +72,8 @@ contract SHRINCSStatelessVectorSigner {
         uint32 maxStatefulSignatures,
         bytes memory message
     ) external returns (bytes32 sessionId, bool ok) {
-        SHRINCSCore.SigningKey memory signingKey;
-        SHRINCSCore.PublicKey memory publicKey;
+        SHRINCS.SigningKey memory signingKey;
+        SHRINCS.PublicKey memory publicKey;
         (signingKey, publicKey, ok) =
             SHRINCSTestSigner.keygen(seedMaterial, maxStatefulSignatures);
         if (!ok) return (bytes32(0), false);
@@ -81,8 +81,8 @@ contract SHRINCSStatelessVectorSigner {
     }
 
     function beginSession(
-        SHRINCSCore.SigningKey memory signingKey,
-        SHRINCSCore.PublicKey memory publicKey,
+        SHRINCS.SigningKey memory signingKey,
+        SHRINCS.PublicKey memory publicKey,
         bytes memory message
     ) public returns (bytes32 sessionId, bool ok) {
         sessionId = keccak256(
@@ -503,7 +503,7 @@ contract SHRINCSStatelessVectorSigner {
     function sessionPublicKey(bytes32 sessionId)
         external
         view
-        returns (SHRINCSCore.PublicKey memory publicKey)
+        returns (SHRINCS.PublicKey memory publicKey)
     {
         Session storage session = sessions[sessionId];
         require(session.active, "unknown session");
@@ -541,10 +541,10 @@ contract SHRINCSStatelessVectorSigner {
         );
     }
 
-    function copyPublicKey(SHRINCSCore.PublicKey storage publicKey)
+    function copyPublicKey(SHRINCS.PublicKey storage publicKey)
         internal
         view
-        returns (SHRINCSCore.PublicKey memory out)
+        returns (SHRINCS.PublicKey memory out)
     {
         out.statefulPublicKey = publicKey.statefulPublicKey;
         out.publicKeyCommitment = publicKey.publicKeyCommitment;
@@ -553,12 +553,8 @@ contract SHRINCSStatelessVectorSigner {
     }
 
     function copyStatelessSignature(
-        SPHINCSPlusCCore.StatelessSignature storage signature
-    )
-        internal
-        view
-        returns (SPHINCSPlusCCore.StatelessSignature memory out)
-    {
+        SPHINCSPlusC.StatelessSignature storage signature
+    ) internal view returns (SPHINCSPlusC.StatelessSignature memory out) {
         out.fors.randomizer = signature.fors.randomizer;
         out.fors.counter = signature.fors.counter;
         out.fors.entries =

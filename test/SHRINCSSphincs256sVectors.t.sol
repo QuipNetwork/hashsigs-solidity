@@ -17,8 +17,8 @@
 pragma solidity ^0.8.28;
 
 import {Test} from "../lib/forge-std/src/Test.sol";
-import {SHRINCSCore} from "../contracts/SHRINCSCore.sol";
-import {SPHINCSPlusCCore} from "../contracts/SPHINCSPlusCCore.sol";
+import {SHRINCS} from "../contracts/SHRINCS.sol";
+import {SPHINCSPlusC} from "../contracts/SPHINCSPlusC.sol";
 import {FORSMinusC} from "../contracts/FORSMinusC.sol";
 import {Hypertree} from "../contracts/Hypertree.sol";
 import {UXMSS} from "../contracts/UXMSS.sol";
@@ -27,31 +27,31 @@ import {WOTSPlusC} from "../contracts/WOTSPlusC.sol";
 contract StatefulHarness {
     function verifyUnsafeRaw(
         bytes32 expectedCompositePublicKey,
-        SHRINCSCore.PublicKey calldata publicKey,
+        SHRINCS.PublicKey calldata publicKey,
         bytes calldata message,
         UXMSS.StatefulSignature calldata signature
     ) external pure returns (bool) {
-        return SHRINCSCore.verifyStatefulUncheckedMessage(
+        return SHRINCS.verifyStatefulUncheckedMessage(
             expectedCompositePublicKey, publicKey, message, signature
         );
     }
 
     function verify(
         bytes32 expectedCompositePublicKey,
-        SHRINCSCore.PublicKey calldata publicKey,
-        SHRINCSCore.ActionContext calldata context,
+        SHRINCS.PublicKey calldata publicKey,
+        SHRINCS.ActionContext calldata context,
         UXMSS.StatefulSignature calldata signature
     ) external pure returns (bool) {
-        return SHRINCSCore.verifyStateful(
+        return SHRINCS.verifyStateful(
             expectedCompositePublicKey, publicKey, context, signature
         );
     }
 
     function actionMessageHash(
         bytes32 expectedCompositePublicKey,
-        SHRINCSCore.ActionContext calldata context
+        SHRINCS.ActionContext calldata context
     ) external pure returns (bytes32) {
-        return SHRINCSCore.statefulActionMessageHash(
+        return SHRINCS.statefulActionMessageHash(
             expectedCompositePublicKey, context
         );
     }
@@ -60,31 +60,31 @@ contract StatefulHarness {
 contract StatelessHarness {
     function verifyUnsafeRaw(
         bytes32 expectedCompositePublicKey,
-        SHRINCSCore.PublicKey calldata publicKey,
+        SHRINCS.PublicKey calldata publicKey,
         bytes calldata message,
-        SPHINCSPlusCCore.StatelessSignature calldata signature
+        SPHINCSPlusC.StatelessSignature calldata signature
     ) external pure returns (bool) {
-        return SHRINCSCore.verifyStatelessUncheckedMessage(
+        return SHRINCS.verifyStatelessUncheckedMessage(
             expectedCompositePublicKey, publicKey, message, signature
         );
     }
 
     function verify(
         bytes32 expectedCompositePublicKey,
-        SHRINCSCore.PublicKey calldata publicKey,
-        SHRINCSCore.ActionContext calldata context,
-        SPHINCSPlusCCore.StatelessSignature calldata signature
+        SHRINCS.PublicKey calldata publicKey,
+        SHRINCS.ActionContext calldata context,
+        SPHINCSPlusC.StatelessSignature calldata signature
     ) external pure returns (bool) {
-        return SHRINCSCore.verifyStateless(
+        return SHRINCS.verifyStateless(
             expectedCompositePublicKey, publicKey, context, signature
         );
     }
 
     function actionMessageHash(
         bytes32 expectedCompositePublicKey,
-        SHRINCSCore.ActionContext calldata context
+        SHRINCS.ActionContext calldata context
     ) external pure returns (bytes32) {
-        return SHRINCSCore.statelessActionMessageHash(
+        return SHRINCS.statelessActionMessageHash(
             expectedCompositePublicKey, context
         );
     }
@@ -93,11 +93,11 @@ contract StatelessHarness {
 contract RotationHarness {
     function statefulRotationMessageHash(
         bytes32 expectedCompositePublicKey,
-        SHRINCSCore.PublicKey calldata currentPublicKey,
-        SHRINCSCore.RotationContext calldata context,
-        SHRINCSCore.StatefulRotationTarget calldata nextStatefulKey
+        SHRINCS.PublicKey calldata currentPublicKey,
+        SHRINCS.RotationContext calldata context,
+        SHRINCS.StatefulRotationTarget calldata nextStatefulKey
     ) external pure returns (bytes32) {
-        return SHRINCSCore.statefulRotationMessageHash(
+        return SHRINCS.statefulRotationMessageHash(
             expectedCompositePublicKey,
             currentPublicKey,
             context,
@@ -107,23 +107,23 @@ contract RotationHarness {
 
     function fullRotationMessageHash(
         bytes32 expectedCompositePublicKey,
-        SHRINCSCore.PublicKey calldata currentPublicKey,
-        SHRINCSCore.RotationContext calldata context,
-        SHRINCSCore.RotationTarget calldata nextKey
+        SHRINCS.PublicKey calldata currentPublicKey,
+        SHRINCS.RotationContext calldata context,
+        SHRINCS.RotationTarget calldata nextKey
     ) external pure returns (bytes32) {
-        return SHRINCSCore.fullRotationMessageHash(
+        return SHRINCS.fullRotationMessageHash(
             expectedCompositePublicKey, currentPublicKey, context, nextKey
         );
     }
 
     function rotateStatefulViaStateless(
         bytes32 expectedCompositePublicKey,
-        SHRINCSCore.PublicKey calldata currentPublicKey,
-        SHRINCSCore.RotationContext calldata context,
-        SPHINCSPlusCCore.StatelessSignature calldata recoverySignature,
-        SHRINCSCore.StatefulRotationTarget calldata nextStatefulKey
+        SHRINCS.PublicKey calldata currentPublicKey,
+        SHRINCS.RotationContext calldata context,
+        SPHINCSPlusC.StatelessSignature calldata recoverySignature,
+        SHRINCS.StatefulRotationTarget calldata nextStatefulKey
     ) external pure returns (bytes32) {
-        return SHRINCSCore.rotateStatefulViaStateless(
+        return SHRINCS.rotateStatefulViaStateless(
             expectedCompositePublicKey,
             currentPublicKey,
             context,
@@ -134,12 +134,12 @@ contract RotationHarness {
 
     function statelessRotate(
         bytes32 expectedCompositePublicKey,
-        SHRINCSCore.PublicKey calldata currentPublicKey,
-        SHRINCSCore.RotationContext calldata context,
-        SPHINCSPlusCCore.StatelessSignature calldata recoverySignature,
-        SHRINCSCore.RotationTarget calldata nextKey
+        SHRINCS.PublicKey calldata currentPublicKey,
+        SHRINCS.RotationContext calldata context,
+        SPHINCSPlusC.StatelessSignature calldata recoverySignature,
+        SHRINCS.RotationTarget calldata nextKey
     ) external pure returns (bytes32) {
-        return SHRINCSCore.statelessRotate(
+        return SHRINCS.statelessRotate(
             expectedCompositePublicKey,
             currentPublicKey,
             context,
@@ -216,7 +216,7 @@ contract SHRINCSSphincs256sVectorsTest is Test {
 
     function testStatefulSphincs256sValidSignatureVerifies() public {
         (
-            SHRINCSCore.PublicKey memory publicKey,
+            SHRINCS.PublicKey memory publicKey,
             bytes memory message,
             UXMSS.StatefulSignature memory signature
         ) = decodeStatefulVector(".stateful.cases.valid.calldata");
@@ -234,7 +234,7 @@ contract SHRINCSSphincs256sVectorsTest is Test {
 
     function testStatefulSphincs256sRejectsWrongMessage() public {
         (
-            SHRINCSCore.PublicKey memory publicKey,
+            SHRINCS.PublicKey memory publicKey,
             bytes memory message,
             UXMSS.StatefulSignature memory signature
         ) = decodeStatefulVector(".stateful.cases.wrongMessage.calldata");
@@ -252,7 +252,7 @@ contract SHRINCSSphincs256sVectorsTest is Test {
 
     function testStatefulSphincs256sRejectsWrongPublicKey() public {
         (
-            SHRINCSCore.PublicKey memory publicKey,
+            SHRINCS.PublicKey memory publicKey,
             bytes memory message,
             UXMSS.StatefulSignature memory signature
         ) = decodeStatefulVector(".stateful.cases.wrongPublicKey.calldata");
@@ -272,7 +272,7 @@ contract SHRINCSSphincs256sVectorsTest is Test {
         public
     {
         (
-            SHRINCSCore.PublicKey memory publicKey,
+            SHRINCS.PublicKey memory publicKey,
             bytes memory message,
             UXMSS.StatefulSignature memory signature
         ) = decodeStatefulVector(".stateful.cases.valid.calldata");
@@ -292,7 +292,7 @@ contract SHRINCSSphincs256sVectorsTest is Test {
 
     function testStatefulSphincs256sRejectsMismatchedStatelessRoot() public {
         (
-            SHRINCSCore.PublicKey memory publicKey,
+            SHRINCS.PublicKey memory publicKey,
             bytes memory message,
             UXMSS.StatefulSignature memory signature
         ) = decodeStatefulVector(".stateful.cases.valid.calldata");
@@ -312,7 +312,7 @@ contract SHRINCSSphincs256sVectorsTest is Test {
         public
     {
         (
-            SHRINCSCore.PublicKey memory publicKey,
+            SHRINCS.PublicKey memory publicKey,
             bytes memory message,
             UXMSS.StatefulSignature memory signature
         ) = decodeStatefulVector(".stateful.cases.valid.calldata");
@@ -327,7 +327,7 @@ contract SHRINCSSphincs256sVectorsTest is Test {
 
     function testStatefulSphincs256sRejectsCorruptedSignature() public {
         (
-            SHRINCSCore.PublicKey memory publicKey,
+            SHRINCS.PublicKey memory publicKey,
             bytes memory message,
             UXMSS.StatefulSignature memory signature
         ) = decodeStatefulVector(
@@ -347,7 +347,7 @@ contract SHRINCSSphincs256sVectorsTest is Test {
 
     function testStatefulSphincs256sRejectsTamperedAuthPath() public {
         (
-            SHRINCSCore.PublicKey memory publicKey,
+            SHRINCS.PublicKey memory publicKey,
             bytes memory message,
             UXMSS.StatefulSignature memory signature
         ) = decodeStatefulVector(".stateful.cases.valid.calldata");
@@ -366,7 +366,7 @@ contract SHRINCSSphincs256sVectorsTest is Test {
 
     function testStatefulSphincs256sAcceptsMaxSignaturesBoundary() public {
         (
-            SHRINCSCore.PublicKey memory publicKey,
+            SHRINCS.PublicKey memory publicKey,
             bytes memory message,
             UXMSS.StatefulSignature memory signature
         ) = decodeStatefulVector(".stateful.cases.valid.calldata");
@@ -387,7 +387,7 @@ contract SHRINCSSphincs256sVectorsTest is Test {
 
     function testStatefulSphincs256sRejectsExceededMaxSignatures() public {
         (
-            SHRINCSCore.PublicKey memory publicKey,
+            SHRINCS.PublicKey memory publicKey,
             bytes memory message,
             UXMSS.StatefulSignature memory signature
         ) = decodeStatefulVector(".stateful.cases.valid.calldata");
@@ -408,7 +408,7 @@ contract SHRINCSSphincs256sVectorsTest is Test {
 
     function testStatefulSphincs256sRejectsMalformedPkSeedLength() public {
         (
-            SHRINCSCore.PublicKey memory publicKey,
+            SHRINCS.PublicKey memory publicKey,
             bytes memory message,
             UXMSS.StatefulSignature memory signature
         ) = decodeStatefulVector(".stateful.cases.valid.calldata");
@@ -427,7 +427,7 @@ contract SHRINCSSphincs256sVectorsTest is Test {
 
     function testStatefulSphincs256sRejectsWrongWotsChainCount() public {
         (
-            SHRINCSCore.PublicKey memory publicKey,
+            SHRINCS.PublicKey memory publicKey,
             bytes memory message,
             UXMSS.StatefulSignature memory signature
         ) = decodeStatefulVector(".stateful.cases.valid.calldata");
@@ -446,7 +446,7 @@ contract SHRINCSSphincs256sVectorsTest is Test {
 
     function testStatefulSphincs256sRejectsEmptyAuthPath() public {
         (
-            SHRINCSCore.PublicKey memory publicKey,
+            SHRINCS.PublicKey memory publicKey,
             bytes memory message,
             UXMSS.StatefulSignature memory signature
         ) = decodeStatefulVector(".stateful.cases.valid.calldata");
@@ -467,7 +467,7 @@ contract SHRINCSSphincs256sVectorsTest is Test {
         public
     {
         (
-            SHRINCSCore.PublicKey memory publicKey,
+            SHRINCS.PublicKey memory publicKey,
             bytes memory message,
             UXMSS.StatefulSignature memory signature
         ) = decodeStatefulVector(".stateful.cases.valid.calldata");
@@ -486,9 +486,9 @@ contract SHRINCSSphincs256sVectorsTest is Test {
 
     function testStatelessSphincs256sValidSignatureVerifies() public {
         (
-            SHRINCSCore.PublicKey memory publicKey,
+            SHRINCS.PublicKey memory publicKey,
             bytes memory message,
-            SPHINCSPlusCCore.StatelessSignature memory signature
+            SPHINCSPlusC.StatelessSignature memory signature
         ) = decodeStatelessVector(".stateless.cases.valid.calldata");
         assertEq(
             stateless.verifyUnsafeRaw(
@@ -504,9 +504,9 @@ contract SHRINCSSphincs256sVectorsTest is Test {
 
     function testStatelessSphincs256sRejectsWrongMessage() public {
         (
-            SHRINCSCore.PublicKey memory publicKey,
+            SHRINCS.PublicKey memory publicKey,
             bytes memory message,
-            SPHINCSPlusCCore.StatelessSignature memory signature
+            SPHINCSPlusC.StatelessSignature memory signature
         ) = decodeStatelessVector(".stateless.cases.wrongMessage.calldata");
         assertEq(
             stateless.verifyUnsafeRaw(
@@ -522,9 +522,9 @@ contract SHRINCSSphincs256sVectorsTest is Test {
 
     function testStatelessSphincs256sRejectsTamperedFors() public {
         (
-            SHRINCSCore.PublicKey memory publicKey,
+            SHRINCS.PublicKey memory publicKey,
             bytes memory message,
-            SPHINCSPlusCCore.StatelessSignature memory signature
+            SPHINCSPlusC.StatelessSignature memory signature
         ) = decodeStatelessVector(".stateless.cases.tamperedFors.calldata");
         assertEq(
             stateless.verifyUnsafeRaw(
@@ -542,9 +542,9 @@ contract SHRINCSSphincs256sVectorsTest is Test {
         public
     {
         (
-            SHRINCSCore.PublicKey memory publicKey,
+            SHRINCS.PublicKey memory publicKey,
             bytes memory message,
-            SPHINCSPlusCCore.StatelessSignature memory signature
+            SPHINCSPlusC.StatelessSignature memory signature
         ) = decodeStatelessVector(
             ".stateless.cases.tamperedHypertreeWotsPkHash.calldata"
         );
@@ -562,9 +562,9 @@ contract SHRINCSSphincs256sVectorsTest is Test {
 
     function testStatelessSphincs256sRejectsTamperedHypertreeAuth() public {
         (
-            SHRINCSCore.PublicKey memory publicKey,
+            SHRINCS.PublicKey memory publicKey,
             bytes memory message,
-            SPHINCSPlusCCore.StatelessSignature memory signature
+            SPHINCSPlusC.StatelessSignature memory signature
         ) = decodeStatelessVector(
             ".stateless.cases.tamperedHypertreeAuth.calldata"
         );
@@ -584,9 +584,9 @@ contract SHRINCSSphincs256sVectorsTest is Test {
         public
     {
         (
-            SHRINCSCore.PublicKey memory publicKey,
+            SHRINCS.PublicKey memory publicKey,
             bytes memory message,
-            SPHINCSPlusCCore.StatelessSignature memory signature
+            SPHINCSPlusC.StatelessSignature memory signature
         ) = decodeStatelessVector(".stateless.cases.valid.calldata");
         bytes32 wrongExpectedCompositePublicKey =
             compositePublicKeyWord(publicKey) ^ bytes32(uint256(1));
@@ -604,9 +604,9 @@ contract SHRINCSSphincs256sVectorsTest is Test {
 
     function testStatelessSphincs256sRejectsMismatchedPublicRoot() public {
         (
-            SHRINCSCore.PublicKey memory publicKey,
+            SHRINCS.PublicKey memory publicKey,
             bytes memory message,
-            SPHINCSPlusCCore.StatelessSignature memory signature
+            SPHINCSPlusC.StatelessSignature memory signature
         ) = decodeStatelessVector(".stateless.cases.valid.calldata");
         bytes32 arbitraryCommitment =
             keccak256("arbitrary-stateless-commitment");
@@ -624,9 +624,9 @@ contract SHRINCSSphincs256sVectorsTest is Test {
         public
     {
         (
-            SHRINCSCore.PublicKey memory publicKey,
+            SHRINCS.PublicKey memory publicKey,
             bytes memory message,
-            SPHINCSPlusCCore.StatelessSignature memory signature
+            SPHINCSPlusC.StatelessSignature memory signature
         ) = decodeStatelessVector(".stateless.cases.valid.calldata");
         assertEq(
             stateless.verifyUnsafeRaw(
@@ -642,9 +642,9 @@ contract SHRINCSSphincs256sVectorsTest is Test {
         public
     {
         (
-            SHRINCSCore.PublicKey memory publicKey,
+            SHRINCS.PublicKey memory publicKey,
             bytes memory message,
-            SPHINCSPlusCCore.StatelessSignature memory signature
+            SPHINCSPlusC.StatelessSignature memory signature
         ) = decodeStatelessVector(".stateless.cases.valid.calldata");
         publicKey.hypertreeRoot = hex"1234";
         assertEq(
@@ -658,9 +658,9 @@ contract SHRINCSSphincs256sVectorsTest is Test {
 
     function testStatelessSphincs256sRejectsMalformedPkSeedLength() public {
         (
-            SHRINCSCore.PublicKey memory publicKey,
+            SHRINCS.PublicKey memory publicKey,
             bytes memory message,
-            SPHINCSPlusCCore.StatelessSignature memory signature
+            SPHINCSPlusC.StatelessSignature memory signature
         ) = decodeStatelessVector(".stateless.cases.valid.calldata");
         publicKey.pkSeed = hex"1234";
         assertEq(
@@ -679,9 +679,9 @@ contract SHRINCSSphincs256sVectorsTest is Test {
         public
     {
         (
-            SHRINCSCore.PublicKey memory publicKey,
+            SHRINCS.PublicKey memory publicKey,
             bytes memory message,
-            SPHINCSPlusCCore.StatelessSignature memory signature
+            SPHINCSPlusC.StatelessSignature memory signature
         ) = decodeStatelessVector(".stateless.cases.valid.calldata");
         bytes32 expectedPublicRoot = compositePublicKeyWord(publicKey);
         publicKey.hypertreeRoot = hex"1234";
@@ -696,9 +696,9 @@ contract SHRINCSSphincs256sVectorsTest is Test {
 
     function testStatelessSphincs256sRejectsWrongPublicRootVector() public {
         (
-            SHRINCSCore.PublicKey memory publicKey,
+            SHRINCS.PublicKey memory publicKey,
             bytes memory message,
-            SPHINCSPlusCCore.StatelessSignature memory signature
+            SPHINCSPlusC.StatelessSignature memory signature
         ) = decodeStatelessVector(
             ".stateless.cases.wrongPublicRoot.calldata"
         );
@@ -718,9 +718,9 @@ contract SHRINCSSphincs256sVectorsTest is Test {
         public
     {
         (
-            SHRINCSCore.PublicKey memory publicKey,
+            SHRINCS.PublicKey memory publicKey,
             bytes memory message,
-            SPHINCSPlusCCore.StatelessSignature memory signature
+            SPHINCSPlusC.StatelessSignature memory signature
         ) = decodeStatelessVector(
             ".stateless.cases.tamperedComponentPublicKey.calldata"
         );
@@ -738,9 +738,9 @@ contract SHRINCSSphincs256sVectorsTest is Test {
 
     function testStatelessSphincs256sRejectsEmptyHypertree() public {
         (
-            SHRINCSCore.PublicKey memory publicKey,
+            SHRINCS.PublicKey memory publicKey,
             bytes memory message,
-            SPHINCSPlusCCore.StatelessSignature memory signature
+            SPHINCSPlusC.StatelessSignature memory signature
         ) = decodeStatelessVector(".stateless.cases.valid.calldata");
         signature.hypertree = new Hypertree.HypertreeLayerSignature[](0);
         assertEq(
@@ -757,9 +757,9 @@ contract SHRINCSSphincs256sVectorsTest is Test {
 
     function testStatelessSphincs256sRejectsDroppedHypertreeLayer() public {
         (
-            SHRINCSCore.PublicKey memory publicKey,
+            SHRINCS.PublicKey memory publicKey,
             bytes memory message,
-            SPHINCSPlusCCore.StatelessSignature memory signature
+            SPHINCSPlusC.StatelessSignature memory signature
         ) = decodeStatelessVector(".stateless.cases.valid.calldata");
         // forgefmt: disable-next-line
         Hypertree.HypertreeLayerSignature[] memory shortened =
@@ -783,9 +783,9 @@ contract SHRINCSSphincs256sVectorsTest is Test {
 
     function testStatelessSphincs256sRejectsDroppedForsEntry() public {
         (
-            SHRINCSCore.PublicKey memory publicKey,
+            SHRINCS.PublicKey memory publicKey,
             bytes memory message,
-            SPHINCSPlusCCore.StatelessSignature memory signature
+            SPHINCSPlusC.StatelessSignature memory signature
         ) = decodeStatelessVector(".stateless.cases.valid.calldata");
         signature.fors.entries = dropLastForsEntries(signature.fors.entries);
         assertEq(
@@ -802,9 +802,9 @@ contract SHRINCSSphincs256sVectorsTest is Test {
 
     function testStatelessSphincs256sRejectsShortForsRandomizer() public {
         (
-            SHRINCSCore.PublicKey memory publicKey,
+            SHRINCS.PublicKey memory publicKey,
             bytes memory message,
-            SPHINCSPlusCCore.StatelessSignature memory signature
+            SPHINCSPlusC.StatelessSignature memory signature
         ) = decodeStatelessVector(".stateless.cases.valid.calldata");
         signature.fors.randomizer = hex"1234";
         assertEq(
@@ -821,9 +821,9 @@ contract SHRINCSSphincs256sVectorsTest is Test {
 
     function testStatelessSphincs256sRejectsShortForsSecretLeaf() public {
         (
-            SHRINCSCore.PublicKey memory publicKey,
+            SHRINCS.PublicKey memory publicKey,
             bytes memory message,
-            SPHINCSPlusCCore.StatelessSignature memory signature
+            SPHINCSPlusC.StatelessSignature memory signature
         ) = decodeStatelessVector(".stateless.cases.valid.calldata");
         signature.fors.entries[0].secretLeaf = hex"1234";
         assertEq(
@@ -840,9 +840,9 @@ contract SHRINCSSphincs256sVectorsTest is Test {
 
     function testStatelessSphincs256sRejectsTruncatedForsAuthPath() public {
         (
-            SHRINCSCore.PublicKey memory publicKey,
+            SHRINCS.PublicKey memory publicKey,
             bytes memory message,
-            SPHINCSPlusCCore.StatelessSignature memory signature
+            SPHINCSPlusC.StatelessSignature memory signature
         ) = decodeStatelessVector(".stateless.cases.valid.calldata");
         signature.fors.entries[0].authPath =
             dropLastBytes(signature.fors.entries[0].authPath);
@@ -860,9 +860,9 @@ contract SHRINCSSphincs256sVectorsTest is Test {
 
     function testStatelessSphincs256sRejectsShortForsAuthNode() public {
         (
-            SHRINCSCore.PublicKey memory publicKey,
+            SHRINCS.PublicKey memory publicKey,
             bytes memory message,
-            SPHINCSPlusCCore.StatelessSignature memory signature
+            SPHINCSPlusC.StatelessSignature memory signature
         ) = decodeStatelessVector(".stateless.cases.valid.calldata");
         signature.fors.entries[0].authPath[0] = hex"1234";
         assertEq(
@@ -881,9 +881,9 @@ contract SHRINCSSphincs256sVectorsTest is Test {
         public
     {
         (
-            SHRINCSCore.PublicKey memory publicKey,
+            SHRINCS.PublicKey memory publicKey,
             bytes memory message,
-            SPHINCSPlusCCore.StatelessSignature memory signature
+            SPHINCSPlusC.StatelessSignature memory signature
         ) = decodeStatelessVector(".stateless.cases.valid.calldata");
         signature.hypertree[0].leafIndex = 256;
         assertEq(
@@ -903,9 +903,9 @@ contract SHRINCSSphincs256sVectorsTest is Test {
         public
     {
         (
-            SHRINCSCore.PublicKey memory publicKey,
+            SHRINCS.PublicKey memory publicKey,
             bytes memory message,
-            SPHINCSPlusCCore.StatelessSignature memory signature
+            SPHINCSPlusC.StatelessSignature memory signature
         ) = decodeStatelessVector(".stateless.cases.valid.calldata");
         signature.hypertree[0].wotsCSignature.chains[0] = hex"1234";
         assertEq(
@@ -924,9 +924,9 @@ contract SHRINCSSphincs256sVectorsTest is Test {
         public
     {
         (
-            SHRINCSCore.PublicKey memory publicKey,
+            SHRINCS.PublicKey memory publicKey,
             bytes memory message,
-            SPHINCSPlusCCore.StatelessSignature memory signature
+            SPHINCSPlusC.StatelessSignature memory signature
         ) = decodeStatelessVector(".stateless.cases.valid.calldata");
         signature.hypertree[0].authPath =
             dropLastBytes(signature.hypertree[0].authPath);
@@ -943,11 +943,11 @@ contract SHRINCSSphincs256sVectorsTest is Test {
     }
 
     function testStatefulActionMessageHashBindsContext() public {
-        (SHRINCSCore.PublicKey memory publicKey,,) =
+        (SHRINCS.PublicKey memory publicKey,,) =
             decodeStatefulVector(".stateful.cases.valid.calldata");
         bytes32 expectedCompositePublicKey =
             compositePublicKeyWord(publicKey);
-        SHRINCSCore.ActionContext memory first = SHRINCSCore.ActionContext({
+        SHRINCS.ActionContext memory first = SHRINCS.ActionContext({
             domainSeparator: keccak256("shrincs-account"),
             nonce: 1,
             keyVersion: 3,
@@ -955,8 +955,8 @@ contract SHRINCSSphincs256sVectorsTest is Test {
             payloadHash: keccak256("payload-a")
         });
         // forgefmt: disable-next-line
-        SHRINCSCore.ActionContext memory second =
-            SHRINCSCore.ActionContext({
+        SHRINCS.ActionContext memory second =
+            SHRINCS.ActionContext({
                 domainSeparator: first.domainSeparator,
                 nonce: first.nonce,
                 keyVersion: first.keyVersion,
@@ -975,15 +975,15 @@ contract SHRINCSSphincs256sVectorsTest is Test {
 
     function testStatefulVerifyRejectsZeroDomainSeparator() public {
         (
-            SHRINCSCore.PublicKey memory publicKey,
+            SHRINCS.PublicKey memory publicKey,
             bytes memory message,
             UXMSS.StatefulSignature memory signature
         ) = decodeStatefulVector(".stateful.cases.valid.calldata");
         bytes32 expectedCompositePublicKey =
             compositePublicKeyWord(publicKey);
         // forgefmt: disable-next-line
-        SHRINCSCore.ActionContext memory context =
-            SHRINCSCore.ActionContext({
+        SHRINCS.ActionContext memory context =
+            SHRINCS.ActionContext({
                 domainSeparator: bytes32(0),
                 nonce: 1,
                 keyVersion: 1,
@@ -1002,14 +1002,14 @@ contract SHRINCSSphincs256sVectorsTest is Test {
 
     function testStatefulVerifyRejectsZeroActionType() public {
         (
-            SHRINCSCore.PublicKey memory publicKey,,
+            SHRINCS.PublicKey memory publicKey,,
             UXMSS.StatefulSignature memory signature
         ) = decodeStatefulVector(".stateful.cases.valid.calldata");
         bytes32 expectedCompositePublicKey =
             compositePublicKeyWord(publicKey);
         // forgefmt: disable-next-line
-        SHRINCSCore.ActionContext memory context =
-            SHRINCSCore.ActionContext({
+        SHRINCS.ActionContext memory context =
+            SHRINCS.ActionContext({
                 domainSeparator: keccak256("shrincs-account"),
                 nonce: 1,
                 keyVersion: 1,
@@ -1027,14 +1027,14 @@ contract SHRINCSSphincs256sVectorsTest is Test {
 
     function testStatefulVerifyRejectsZeroPayloadHash() public {
         (
-            SHRINCSCore.PublicKey memory publicKey,,
+            SHRINCS.PublicKey memory publicKey,,
             UXMSS.StatefulSignature memory signature
         ) = decodeStatefulVector(".stateful.cases.valid.calldata");
         bytes32 expectedCompositePublicKey =
             compositePublicKeyWord(publicKey);
         // forgefmt: disable-next-line
-        SHRINCSCore.ActionContext memory context =
-            SHRINCSCore.ActionContext({
+        SHRINCS.ActionContext memory context =
+            SHRINCS.ActionContext({
                 domainSeparator: keccak256("shrincs-account"),
                 nonce: 1,
                 keyVersion: 1,
@@ -1051,11 +1051,11 @@ contract SHRINCSSphincs256sVectorsTest is Test {
     }
 
     function testStatelessActionMessageHashBindsContext() public {
-        (SHRINCSCore.PublicKey memory publicKey,,) =
+        (SHRINCS.PublicKey memory publicKey,,) =
             decodeStatelessVector(".stateless.cases.valid.calldata");
         bytes32 expectedCompositePublicKey =
             compositePublicKeyWord(publicKey);
-        SHRINCSCore.ActionContext memory first = SHRINCSCore.ActionContext({
+        SHRINCS.ActionContext memory first = SHRINCS.ActionContext({
             domainSeparator: keccak256("shrincs-account"),
             nonce: 9,
             keyVersion: 4,
@@ -1063,8 +1063,8 @@ contract SHRINCSSphincs256sVectorsTest is Test {
             payloadHash: keccak256("payload")
         });
         // forgefmt: disable-next-line
-        SHRINCSCore.ActionContext memory second =
-            SHRINCSCore.ActionContext({
+        SHRINCS.ActionContext memory second =
+            SHRINCS.ActionContext({
                 domainSeparator: first.domainSeparator,
                 nonce: 10,
                 keyVersion: first.keyVersion,
@@ -1083,14 +1083,14 @@ contract SHRINCSSphincs256sVectorsTest is Test {
 
     function testStatelessVerifyRejectsZeroDomainSeparator() public {
         (
-            SHRINCSCore.PublicKey memory publicKey,,
-            SPHINCSPlusCCore.StatelessSignature memory signature
+            SHRINCS.PublicKey memory publicKey,,
+            SPHINCSPlusC.StatelessSignature memory signature
         ) = decodeStatelessVector(".stateless.cases.valid.calldata");
         bytes32 expectedCompositePublicKey =
             compositePublicKeyWord(publicKey);
         // forgefmt: disable-next-line
-        SHRINCSCore.ActionContext memory context =
-            SHRINCSCore.ActionContext({
+        SHRINCS.ActionContext memory context =
+            SHRINCS.ActionContext({
                 domainSeparator: bytes32(0),
                 nonce: 1,
                 keyVersion: 1,
@@ -1108,14 +1108,14 @@ contract SHRINCSSphincs256sVectorsTest is Test {
 
     function testStatelessVerifyRejectsZeroActionType() public {
         (
-            SHRINCSCore.PublicKey memory publicKey,,
-            SPHINCSPlusCCore.StatelessSignature memory signature
+            SHRINCS.PublicKey memory publicKey,,
+            SPHINCSPlusC.StatelessSignature memory signature
         ) = decodeStatelessVector(".stateless.cases.valid.calldata");
         bytes32 expectedCompositePublicKey =
             compositePublicKeyWord(publicKey);
         // forgefmt: disable-next-line
-        SHRINCSCore.ActionContext memory context =
-            SHRINCSCore.ActionContext({
+        SHRINCS.ActionContext memory context =
+            SHRINCS.ActionContext({
                 domainSeparator: keccak256("shrincs-account"),
                 nonce: 1,
                 keyVersion: 1,
@@ -1133,14 +1133,14 @@ contract SHRINCSSphincs256sVectorsTest is Test {
 
     function testStatelessVerifyRejectsZeroPayloadHash() public {
         (
-            SHRINCSCore.PublicKey memory publicKey,,
-            SPHINCSPlusCCore.StatelessSignature memory signature
+            SHRINCS.PublicKey memory publicKey,,
+            SPHINCSPlusC.StatelessSignature memory signature
         ) = decodeStatelessVector(".stateless.cases.valid.calldata");
         bytes32 expectedCompositePublicKey =
             compositePublicKeyWord(publicKey);
         // forgefmt: disable-next-line
-        SHRINCSCore.ActionContext memory context =
-            SHRINCSCore.ActionContext({
+        SHRINCS.ActionContext memory context =
+            SHRINCS.ActionContext({
                 domainSeparator: keccak256("shrincs-account"),
                 nonce: 1,
                 keyVersion: 1,
@@ -1159,20 +1159,19 @@ contract SHRINCSSphincs256sVectorsTest is Test {
     function testRotateStatefulViaStatelessMessageHashBindsNextStatefulKey()
         public
     {
-        (SHRINCSCore.PublicKey memory publicKey,,) =
+        (SHRINCS.PublicKey memory publicKey,,) =
             decodeStatelessVector(".stateless.cases.valid.calldata");
 
-        SHRINCSCore.RotationContext memory context =
-            SHRINCSCore.RotationContext({
-                domainSeparator: keccak256("shrincs-test"),
-                nonce: 7,
-                keyVersion: 1
-            });
+        SHRINCS.RotationContext memory context = SHRINCS.RotationContext({
+            domainSeparator: keccak256("shrincs-test"),
+            nonce: 7,
+            keyVersion: 1
+        });
         bytes memory nextStatefulPublicKey =
             bytes.concat(publicKey.statefulPublicKey);
         nextStatefulPublicKey[0] =
             bytes1(uint8(nextStatefulPublicKey[0]) ^ 0x01);
-        SHRINCSCore.StatefulRotationTarget memory target =
+        SHRINCS.StatefulRotationTarget memory target =
             statefulRotationTargetFromParts(publicKey, nextStatefulPublicKey);
         bytes32 first = rotation.statefulRotationMessageHash(
             compositePublicKeyWord(publicKey), publicKey, context, target
@@ -1195,17 +1194,16 @@ contract SHRINCSSphincs256sVectorsTest is Test {
         public
     {
         (
-            SHRINCSCore.PublicKey memory publicKey,,
-            SPHINCSPlusCCore.StatelessSignature memory signature
+            SHRINCS.PublicKey memory publicKey,,
+            SPHINCSPlusC.StatelessSignature memory signature
         ) = decodeStatelessVector(".stateless.cases.valid.calldata");
 
-        SHRINCSCore.RotationContext memory context =
-            SHRINCSCore.RotationContext({
-                domainSeparator: keccak256("shrincs-test"),
-                nonce: 7,
-                keyVersion: 1
-            });
-        SHRINCSCore.StatefulRotationTarget memory target =
+        SHRINCS.RotationContext memory context = SHRINCS.RotationContext({
+            domainSeparator: keccak256("shrincs-test"),
+            nonce: 7,
+            keyVersion: 1
+        });
+        SHRINCS.StatefulRotationTarget memory target =
             statefulRotationTargetFromParts(
                 publicKey, publicKey.statefulPublicKey
             );
@@ -1224,17 +1222,16 @@ contract SHRINCSSphincs256sVectorsTest is Test {
         public
     {
         (
-            SHRINCSCore.PublicKey memory publicKey,,
-            SPHINCSPlusCCore.StatelessSignature memory signature
+            SHRINCS.PublicKey memory publicKey,,
+            SPHINCSPlusC.StatelessSignature memory signature
         ) = decodeStatelessVector(".stateless.cases.valid.calldata");
 
-        SHRINCSCore.RotationContext memory context =
-            SHRINCSCore.RotationContext({
-                domainSeparator: keccak256("shrincs-test"),
-                nonce: 7,
-                keyVersion: 1
-            });
-        SHRINCSCore.StatefulRotationTarget memory target =
+        SHRINCS.RotationContext memory context = SHRINCS.RotationContext({
+            domainSeparator: keccak256("shrincs-test"),
+            nonce: 7,
+            keyVersion: 1
+        });
+        SHRINCS.StatefulRotationTarget memory target =
             statefulRotationTargetFromParts(publicKey, hex"1234");
 
         bytes32 result = rotation.rotateStatefulViaStateless(
@@ -1251,15 +1248,14 @@ contract SHRINCSSphincs256sVectorsTest is Test {
         public
     {
         (
-            SHRINCSCore.PublicKey memory publicKey,,
-            SPHINCSPlusCCore.StatelessSignature memory signature
+            SHRINCS.PublicKey memory publicKey,,
+            SPHINCSPlusC.StatelessSignature memory signature
         ) = decodeStatelessVector(".stateless.cases.valid.calldata");
 
-        SHRINCSCore.RotationContext memory context =
-            SHRINCSCore.RotationContext({
-                domainSeparator: bytes32(0), nonce: 7, keyVersion: 1
-            });
-        SHRINCSCore.StatefulRotationTarget memory target =
+        SHRINCS.RotationContext memory context = SHRINCS.RotationContext({
+            domainSeparator: bytes32(0), nonce: 7, keyVersion: 1
+        });
+        SHRINCS.StatefulRotationTarget memory target =
             statefulRotationTargetFromParts(
                 publicKey, publicKey.statefulPublicKey
             );
@@ -1279,23 +1275,22 @@ contract SHRINCSSphincs256sVectorsTest is Test {
         public
     {
         (
-            SHRINCSCore.PublicKey memory publicKey,,
-            SPHINCSPlusCCore.StatelessSignature memory signature
+            SHRINCS.PublicKey memory publicKey,,
+            SPHINCSPlusC.StatelessSignature memory signature
         ) = decodeStatelessVector(".stateless.cases.valid.calldata");
 
-        SHRINCSCore.RotationContext memory context =
-            SHRINCSCore.RotationContext({
-                domainSeparator: keccak256("shrincs-test"),
-                nonce: 7,
-                keyVersion: 1
-            });
+        SHRINCS.RotationContext memory context = SHRINCS.RotationContext({
+            domainSeparator: keccak256("shrincs-test"),
+            nonce: 7,
+            keyVersion: 1
+        });
         bytes memory nextStatefulPublicKey =
             bytes.concat(publicKey.statefulPublicKey);
         nextStatefulPublicKey[64] = bytes1(0);
         nextStatefulPublicKey[65] = bytes1(0);
         nextStatefulPublicKey[66] = bytes1(0);
         nextStatefulPublicKey[67] = bytes1(0);
-        SHRINCSCore.StatefulRotationTarget memory target =
+        SHRINCS.StatefulRotationTarget memory target =
             statefulRotationTargetFromParts(publicKey, nextStatefulPublicKey);
 
         bytes32 result = rotation.rotateStatefulViaStateless(
@@ -1309,15 +1304,14 @@ contract SHRINCSSphincs256sVectorsTest is Test {
     }
 
     function testRotateFullSHRINCSKeyMessageHashBindsNextKeyBundle() public {
-        (SHRINCSCore.PublicKey memory publicKey,,) =
+        (SHRINCS.PublicKey memory publicKey,,) =
             decodeStatelessVector(".stateless.cases.valid.calldata");
 
-        SHRINCSCore.RotationContext memory context =
-            SHRINCSCore.RotationContext({
-                domainSeparator: keccak256("shrincs-test"),
-                nonce: 11,
-                keyVersion: 2
-            });
+        SHRINCS.RotationContext memory context = SHRINCS.RotationContext({
+            domainSeparator: keccak256("shrincs-test"),
+            nonce: 11,
+            keyVersion: 2
+        });
         bytes memory nextStatefulPublicKey =
             bytes.concat(publicKey.statefulPublicKey);
         nextStatefulPublicKey[0] =
@@ -1328,7 +1322,7 @@ contract SHRINCSSphincs256sVectorsTest is Test {
             bytes.concat(publicKey.hypertreeRoot);
         nextHypertreeRoot[0] = bytes1(uint8(nextHypertreeRoot[0]) ^ 0x01);
 
-        SHRINCSCore.RotationTarget memory target = rotationTargetFromParts(
+        SHRINCS.RotationTarget memory target = rotationTargetFromParts(
             nextStatefulPublicKey, nextPkSeed, nextHypertreeRoot
         );
         bytes32 first = rotation.fullRotationMessageHash(
@@ -1350,17 +1344,16 @@ contract SHRINCSSphincs256sVectorsTest is Test {
         public
     {
         (
-            SHRINCSCore.PublicKey memory publicKey,,
-            SPHINCSPlusCCore.StatelessSignature memory signature
+            SHRINCS.PublicKey memory publicKey,,
+            SPHINCSPlusC.StatelessSignature memory signature
         ) = decodeStatelessVector(".stateless.cases.valid.calldata");
 
-        SHRINCSCore.RotationContext memory context =
-            SHRINCSCore.RotationContext({
-                domainSeparator: keccak256("shrincs-test"),
-                nonce: 11,
-                keyVersion: 2
-            });
-        SHRINCSCore.RotationTarget memory target = rotationTargetFromParts(
+        SHRINCS.RotationContext memory context = SHRINCS.RotationContext({
+            domainSeparator: keccak256("shrincs-test"),
+            nonce: 11,
+            keyVersion: 2
+        });
+        SHRINCS.RotationTarget memory target = rotationTargetFromParts(
             publicKey.statefulPublicKey,
             publicKey.pkSeed,
             publicKey.hypertreeRoot
@@ -1380,17 +1373,16 @@ contract SHRINCSSphincs256sVectorsTest is Test {
         public
     {
         (
-            SHRINCSCore.PublicKey memory publicKey,,
-            SPHINCSPlusCCore.StatelessSignature memory signature
+            SHRINCS.PublicKey memory publicKey,,
+            SPHINCSPlusC.StatelessSignature memory signature
         ) = decodeStatelessVector(".stateless.cases.valid.calldata");
 
-        SHRINCSCore.RotationContext memory context =
-            SHRINCSCore.RotationContext({
-                domainSeparator: keccak256("shrincs-test"),
-                nonce: 11,
-                keyVersion: 2
-            });
-        SHRINCSCore.RotationTarget memory target = rotationTargetFromParts(
+        SHRINCS.RotationContext memory context = SHRINCS.RotationContext({
+            domainSeparator: keccak256("shrincs-test"),
+            nonce: 11,
+            keyVersion: 2
+        });
+        SHRINCS.RotationTarget memory target = rotationTargetFromParts(
             publicKey.statefulPublicKey,
             publicKey.pkSeed,
             publicKey.hypertreeRoot
@@ -1408,15 +1400,14 @@ contract SHRINCSSphincs256sVectorsTest is Test {
 
     function testRotateFullSHRINCSKeyRejectsZeroDomainSeparator() public {
         (
-            SHRINCSCore.PublicKey memory publicKey,,
-            SPHINCSPlusCCore.StatelessSignature memory signature
+            SHRINCS.PublicKey memory publicKey,,
+            SPHINCSPlusC.StatelessSignature memory signature
         ) = decodeStatelessVector(".stateless.cases.valid.calldata");
 
-        SHRINCSCore.RotationContext memory context =
-            SHRINCSCore.RotationContext({
-                domainSeparator: bytes32(0), nonce: 11, keyVersion: 2
-            });
-        SHRINCSCore.RotationTarget memory target = rotationTargetFromParts(
+        SHRINCS.RotationContext memory context = SHRINCS.RotationContext({
+            domainSeparator: bytes32(0), nonce: 11, keyVersion: 2
+        });
+        SHRINCS.RotationTarget memory target = rotationTargetFromParts(
             publicKey.statefulPublicKey,
             publicKey.pkSeed,
             publicKey.hypertreeRoot
@@ -1436,23 +1427,22 @@ contract SHRINCSSphincs256sVectorsTest is Test {
         public
     {
         (
-            SHRINCSCore.PublicKey memory publicKey,,
-            SPHINCSPlusCCore.StatelessSignature memory signature
+            SHRINCS.PublicKey memory publicKey,,
+            SPHINCSPlusC.StatelessSignature memory signature
         ) = decodeStatelessVector(".stateless.cases.valid.calldata");
 
-        SHRINCSCore.RotationContext memory context =
-            SHRINCSCore.RotationContext({
-                domainSeparator: keccak256("shrincs-test"),
-                nonce: 11,
-                keyVersion: 2
-            });
+        SHRINCS.RotationContext memory context = SHRINCS.RotationContext({
+            domainSeparator: keccak256("shrincs-test"),
+            nonce: 11,
+            keyVersion: 2
+        });
         bytes memory nextStatefulPublicKey =
             bytes.concat(publicKey.statefulPublicKey);
         nextStatefulPublicKey[64] = bytes1(0);
         nextStatefulPublicKey[65] = bytes1(0);
         nextStatefulPublicKey[66] = bytes1(0);
         nextStatefulPublicKey[67] = bytes1(0);
-        SHRINCSCore.RotationTarget memory target = rotationTargetFromParts(
+        SHRINCS.RotationTarget memory target = rotationTargetFromParts(
             nextStatefulPublicKey, publicKey.pkSeed, publicKey.hypertreeRoot
         );
 
@@ -1466,7 +1456,7 @@ contract SHRINCSSphincs256sVectorsTest is Test {
         assertEq(result, bytes32(0));
     }
 
-    function compositePublicKeyWord(SHRINCSCore.PublicKey memory publicKey)
+    function compositePublicKeyWord(SHRINCS.PublicKey memory publicKey)
         internal
         pure
         returns (bytes32 word)
@@ -1484,7 +1474,7 @@ contract SHRINCSSphincs256sVectorsTest is Test {
     function decodeStatefulVector(string memory vectorKey)
         internal
         returns (
-            SHRINCSCore.PublicKey memory publicKey,
+            SHRINCS.PublicKey memory publicKey,
             bytes memory message,
             UXMSS.StatefulSignature memory signature
         )
@@ -1498,7 +1488,7 @@ contract SHRINCSSphincs256sVectorsTest is Test {
             args, (LegacyStatefulPublicKey, bytes, LegacyStatefulSignature)
         );
 
-        (SHRINCSCore.PublicKey memory statelessPublicKey,,) =
+        (SHRINCS.PublicKey memory statelessPublicKey,,) =
             decodeStatelessVector(".stateless.cases.valid.calldata");
 
         bytes memory encodedStatefulKey = abi.encodePacked(
@@ -1523,9 +1513,9 @@ contract SHRINCSSphincs256sVectorsTest is Test {
     function decodeStatelessVector(string memory vectorKey)
         internal
         returns (
-            SHRINCSCore.PublicKey memory publicKey,
+            SHRINCS.PublicKey memory publicKey,
             bytes memory message,
-            SPHINCSPlusCCore.StatelessSignature memory signature
+            SPHINCSPlusC.StatelessSignature memory signature
         )
     {
         bytes memory args = vectorArgs(vectorKey);
@@ -1559,7 +1549,7 @@ contract SHRINCSSphincs256sVectorsTest is Test {
     function convertLegacyStatelessSignature(LegacyStatelessSignature memory legacy)
         internal
         pure
-        returns (SPHINCSPlusCCore.StatelessSignature memory signature)
+        returns (SPHINCSPlusC.StatelessSignature memory signature)
     {
         FORSMinusC.ForsEntry[] memory entries =
             new FORSMinusC.ForsEntry[](legacy.fors.entries.length);
@@ -1588,7 +1578,7 @@ contract SHRINCSSphincs256sVectorsTest is Test {
             });
         }
 
-        signature = SPHINCSPlusCCore.StatelessSignature({
+        signature = SPHINCSPlusC.StatelessSignature({
             fors: FORSMinusC.ForsSignature({
                 randomizer: legacy.fors.randomizer,
                 counter: legacy.fors.counter,
@@ -1610,7 +1600,7 @@ contract SHRINCSSphincs256sVectorsTest is Test {
     }
 
     function setStatefulMaxSignatures(
-        SHRINCSCore.PublicKey memory publicKey,
+        SHRINCS.PublicKey memory publicKey,
         uint32 maxSignatures
     ) internal pure {
         // casting to 'uint8' is safe because each assigned byte extracts only
@@ -1637,7 +1627,7 @@ contract SHRINCSSphincs256sVectorsTest is Test {
         bytes memory statefulPublicKey,
         bytes memory pkSeed,
         bytes memory hypertreeRoot
-    ) internal pure returns (SHRINCSCore.PublicKey memory) {
+    ) internal pure returns (SHRINCS.PublicKey memory) {
         bytes32 commitment = keccak256(
             abi.encodePacked(
                 "shrincs-public-key",
@@ -1646,7 +1636,7 @@ contract SHRINCSSphincs256sVectorsTest is Test {
                 hypertreeRoot
             )
         );
-        return SHRINCSCore.PublicKey({
+        return SHRINCS.PublicKey({
             statefulPublicKey: statefulPublicKey,
             publicKeyCommitment: abi.encodePacked(commitment),
             pkSeed: pkSeed,
@@ -1655,9 +1645,9 @@ contract SHRINCSSphincs256sVectorsTest is Test {
     }
 
     function statefulRotationTargetFromParts(
-        SHRINCSCore.PublicKey memory currentPublicKey,
+        SHRINCS.PublicKey memory currentPublicKey,
         bytes memory statefulPublicKey
-    ) internal pure returns (SHRINCSCore.StatefulRotationTarget memory) {
+    ) internal pure returns (SHRINCS.StatefulRotationTarget memory) {
         bytes32 commitment = keccak256(
             abi.encodePacked(
                 "shrincs-public-key",
@@ -1666,7 +1656,7 @@ contract SHRINCSSphincs256sVectorsTest is Test {
                 currentPublicKey.hypertreeRoot
             )
         );
-        return SHRINCSCore.StatefulRotationTarget({
+        return SHRINCS.StatefulRotationTarget({
             statefulPublicKey: statefulPublicKey,
             publicKeyCommitment: abi.encodePacked(commitment)
         });
@@ -1676,7 +1666,7 @@ contract SHRINCSSphincs256sVectorsTest is Test {
         bytes memory statefulPublicKey,
         bytes memory pkSeed,
         bytes memory hypertreeRoot
-    ) internal pure returns (SHRINCSCore.RotationTarget memory) {
+    ) internal pure returns (SHRINCS.RotationTarget memory) {
         bytes32 commitment = keccak256(
             abi.encodePacked(
                 "shrincs-public-key",
@@ -1685,7 +1675,7 @@ contract SHRINCSSphincs256sVectorsTest is Test {
                 hypertreeRoot
             )
         );
-        return SHRINCSCore.RotationTarget({
+        return SHRINCS.RotationTarget({
             statefulPublicKey: statefulPublicKey,
             publicKeyCommitment: abi.encodePacked(commitment),
             pkSeed: pkSeed,

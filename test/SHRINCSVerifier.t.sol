@@ -21,9 +21,9 @@ import {
     IERC7913SignatureVerifier
 } from "../contracts/interfaces/IERC7913SignatureVerifier.sol";
 import {SHRINCSCodec} from "../contracts/SHRINCSCodec.sol";
-import {SHRINCSCore} from "../contracts/SHRINCSCore.sol";
-import {UXMSS} from "../contracts/UXMSS.sol";
 import {SHRINCS} from "../contracts/SHRINCS.sol";
+import {UXMSS} from "../contracts/UXMSS.sol";
+import {SHRINCSVerifier} from "../contracts/SHRINCSVerifier.sol";
 import {SHRINCSTestSigner} from "./helpers/SHRINCSTestSigner.sol";
 
 /// @dev Minimal concrete instance of the abstract profile base, used to
@@ -34,7 +34,7 @@ import {SHRINCSTestSigner} from "./helpers/SHRINCSTestSigner.sol";
 /// address is irrelevant here (the stateful path never reads it), so it
 /// returns the zero address; verifyStateless delegation is covered by the
 /// profile-gated SHRINCSStatelessDelegation suite against a real deployable.
-contract SHRINCSVerifierHarness is SHRINCS {
+contract SHRINCSVerifierHarness is SHRINCSVerifier {
     function _pinnedSphincsPlusC() internal pure override returns (address) {
         return address(0);
     }
@@ -43,7 +43,7 @@ contract SHRINCSVerifierHarness is SHRINCS {
 contract SHRINCSVerifierTest is Test {
     bytes4 internal constant INVALID_SIGNATURE = 0xffffffff;
 
-    SHRINCS internal verifier;
+    SHRINCSVerifier internal verifier;
 
     // One stateful key is generated in setUp; signatures at two in-budget
     // leaves are shared across the happy-path and mutation tests.
@@ -57,8 +57,8 @@ contract SHRINCSVerifierTest is Test {
         verifier = new SHRINCSVerifierHarness();
 
         (
-            SHRINCSCore.SigningKey memory signingKey,
-            SHRINCSCore.PublicKey memory publicKey,
+            SHRINCS.SigningKey memory signingKey,
+            SHRINCS.PublicKey memory publicKey,
             bool keygenOk
         ) = SHRINCSTestSigner.keygen(
             bytes("shrincs erc7913 stateful verifier seed"), 4
@@ -100,12 +100,12 @@ contract SHRINCSVerifierTest is Test {
         internal
         view
         returns (
-            SHRINCSCore.PublicKey memory publicKey,
+            SHRINCS.PublicKey memory publicKey,
             UXMSS.StatefulSignature memory signature
         )
     {
         return abi.decode(
-            validEnvelope, (SHRINCSCore.PublicKey, UXMSS.StatefulSignature)
+            validEnvelope, (SHRINCS.PublicKey, UXMSS.StatefulSignature)
         );
     }
 
@@ -180,7 +180,7 @@ contract SHRINCSVerifierTest is Test {
 
     function testRejectsTamperedChainValue() public view {
         (
-            SHRINCSCore.PublicKey memory publicKey,
+            SHRINCS.PublicKey memory publicKey,
             UXMSS.StatefulSignature memory signature
         ) = decodeStoredEnvelope();
         signature.chains[0] = bytes32(uint256(signature.chains[0]) ^ 1);
@@ -195,7 +195,7 @@ contract SHRINCSVerifierTest is Test {
 
     function testRejectsTamperedAuthPath() public view {
         (
-            SHRINCSCore.PublicKey memory publicKey,
+            SHRINCS.PublicKey memory publicKey,
             UXMSS.StatefulSignature memory signature
         ) = decodeStoredEnvelope();
         signature.authPath[0] = bytes32(uint256(signature.authPath[0]) ^ 1);
@@ -248,7 +248,7 @@ contract SHRINCSVerifierTest is Test {
         // field DOES match the key, but the bundle no longer recomputes to
         // that commitment.
         (
-            SHRINCSCore.PublicKey memory publicKey,
+            SHRINCS.PublicKey memory publicKey,
             UXMSS.StatefulSignature memory signature
         ) = decodeStoredEnvelope();
         bytes32 fakeCommitment = keccak256("mismatched bundle commitment");
@@ -266,7 +266,7 @@ contract SHRINCSVerifierTest is Test {
 
     function testCheckStatefulRejectsNonSelfCaller() public {
         (
-            SHRINCSCore.PublicKey memory publicKey,
+            SHRINCS.PublicKey memory publicKey,
             UXMSS.StatefulSignature memory signature
         ) = decodeStoredEnvelope();
         vm.expectRevert(bytes("only self"));
@@ -276,7 +276,7 @@ contract SHRINCSVerifierTest is Test {
     }
 
     function testCheckStatelessBundleRejectsNonSelfCaller() public {
-        (SHRINCSCore.PublicKey memory publicKey,) = decodeStoredEnvelope();
+        (SHRINCS.PublicKey memory publicKey,) = decodeStoredEnvelope();
         vm.expectRevert(bytes("only self"));
         verifier.checkStatelessBundle(keyCommitment, publicKey);
     }
@@ -304,7 +304,10 @@ contract SHRINCSVerifierTest is Test {
         (bool success, bytes memory ret) = address(verifier)
         .call{gas: happyGas * 3 / 4}(
             abi.encodeWithSelector(
-                SHRINCS.verify.selector, validKey, signedHash, validEnvelope
+                SHRINCSVerifier.verify.selector,
+                validKey,
+                signedHash,
+                validEnvelope
             )
         );
         assertFalse(

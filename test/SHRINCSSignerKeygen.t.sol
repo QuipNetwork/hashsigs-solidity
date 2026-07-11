@@ -18,7 +18,7 @@ pragma solidity ^0.8.28;
 
 import {Test} from "../lib/forge-std/src/Test.sol";
 import {SHRINCSTestSigner} from "./helpers/SHRINCSTestSigner.sol";
-import {SHRINCSCore} from "../contracts/SHRINCSCore.sol";
+import {SHRINCS} from "../contracts/SHRINCS.sol";
 import {UXMSS} from "../contracts/UXMSS.sol";
 import {SHRINCSParams} from "shrincs-profile/SHRINCSParams.sol";
 import {SHRINCSCodec} from "../contracts/SHRINCSCodec.sol";
@@ -27,11 +27,7 @@ contract SHRINCSSignerHarness {
     function keygen(bytes memory seedMaterial, uint32 maxStatefulSignatures)
         external
         pure
-        returns (
-            SHRINCSCore.SigningKey memory,
-            SHRINCSCore.PublicKey memory,
-            bool
-        )
+        returns (SHRINCS.SigningKey memory, SHRINCS.PublicKey memory, bool)
     {
         return SHRINCSTestSigner.keygen(seedMaterial, maxStatefulSignatures);
     }
@@ -85,13 +81,13 @@ contract SHRINCSSignerKeygenTest is Test {
 
     function testKeygenIsDeterministicForSameSeed() public view {
         (
-            SHRINCSCore.SigningKey memory signingKeyA,
-            SHRINCSCore.PublicKey memory publicKeyA,
+            SHRINCS.SigningKey memory signingKeyA,
+            SHRINCS.PublicKey memory publicKeyA,
             bool okA
         ) = harness.keygen(bytes("solidity keygen seed"), 8);
         (
-            SHRINCSCore.SigningKey memory signingKeyB,
-            SHRINCSCore.PublicKey memory publicKeyB,
+            SHRINCS.SigningKey memory signingKeyB,
+            SHRINCS.PublicKey memory publicKeyB,
             bool okB
         ) = harness.keygen(bytes("solidity keygen seed"), 8);
 
@@ -129,8 +125,8 @@ contract SHRINCSSignerKeygenTest is Test {
 
     function testKeygenBuildsConsistentPublicKeyBundle() public view {
         (
-            SHRINCSCore.SigningKey memory signingKey,
-            SHRINCSCore.PublicKey memory publicKey,
+            SHRINCS.SigningKey memory signingKey,
+            SHRINCS.PublicKey memory publicKey,
             bool ok
         ) = harness.keygen(bytes("solidity public key seed"), 4);
 
@@ -185,8 +181,8 @@ contract SHRINCSSignerKeygenTest is Test {
         // run everywhere.
         vm.skip(SHRINCSParams.HASH_LEN != 32);
         (
-            SHRINCSCore.SigningKey memory signingKey,
-            SHRINCSCore.PublicKey memory publicKey,
+            SHRINCS.SigningKey memory signingKey,
+            SHRINCS.PublicKey memory publicKey,
             bool ok
         ) = harness.keygen(bytes("solidity public key seed"), 4);
 

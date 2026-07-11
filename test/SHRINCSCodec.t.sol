@@ -21,10 +21,10 @@ import {
     IERC7913SignatureVerifier
 } from "../contracts/interfaces/IERC7913SignatureVerifier.sol";
 import {SHRINCSCodec} from "../contracts/SHRINCSCodec.sol";
-import {SHRINCSCore} from "../contracts/SHRINCSCore.sol";
+import {SHRINCS} from "../contracts/SHRINCS.sol";
 import {UXMSS} from "../contracts/UXMSS.sol";
 import {SHRINCSParams} from "shrincs-profile/SHRINCSParams.sol";
-import {SHRINCS} from "../contracts/SHRINCS.sol";
+import {SHRINCSVerifier} from "../contracts/SHRINCSVerifier.sol";
 import {SHRINCSTestSigner} from "./helpers/SHRINCSTestSigner.sol";
 
 contract CodecERC7913ConsumerHarness {
@@ -144,7 +144,7 @@ contract CodecNonMagicERC7913Verifier is IERC7913SignatureVerifier {
 // integration test (the real per-profile subclasses are empty too). The
 // pinned SPHINCSPlusC address is unused on the stateful path exercised
 // here, so it returns the zero address.
-contract CodecSHRINCSVerifierHarness is SHRINCS {
+contract CodecSHRINCSVerifierHarness is SHRINCSVerifier {
     function _pinnedSphincsPlusC() internal pure override returns (address) {
         return address(0);
     }
@@ -165,7 +165,7 @@ contract SHRINCSCodecHarness {
         external
         pure
         returns (
-            SHRINCSCore.PublicKey memory publicKey,
+            SHRINCS.PublicKey memory publicKey,
             UXMSS.StatefulSignature memory signature,
             bool ok
         )
@@ -174,7 +174,7 @@ contract SHRINCSCodecHarness {
     }
 
     function encodeStatefulEnvelope(
-        SHRINCSCore.PublicKey memory publicKey,
+        SHRINCS.PublicKey memory publicKey,
         UXMSS.StatefulSignature memory signature
     ) external pure returns (bytes memory envelope) {
         return SHRINCSCodec.encodeStatefulEnvelope(publicKey, signature);
@@ -201,9 +201,9 @@ contract SHRINCSCodecTest is Test {
     function buildSamplePublicKey()
         internal
         pure
-        returns (SHRINCSCore.PublicKey memory publicKey)
+        returns (SHRINCS.PublicKey memory publicKey)
     {
-        publicKey = SHRINCSCore.PublicKey({
+        publicKey = SHRINCS.PublicKey({
             statefulPublicKey: abi.encodePacked(
                 keccak256("codec stateful pk seed"),
                 keccak256("codec stateful root"),
@@ -271,13 +271,13 @@ contract SHRINCSCodecTest is Test {
     }
 
     function testStatefulEnvelopeRoundTripPreservesEveryField() public view {
-        SHRINCSCore.PublicKey memory publicKey = buildSamplePublicKey();
+        SHRINCS.PublicKey memory publicKey = buildSamplePublicKey();
         UXMSS.StatefulSignature memory signature = buildSampleSignature();
 
         bytes memory envelope =
             codec.encodeStatefulEnvelope(publicKey, signature);
         (
-            SHRINCSCore.PublicKey memory decodedKey,
+            SHRINCS.PublicKey memory decodedKey,
             UXMSS.StatefulSignature memory decodedSig,
             bool ok
         ) = codec.decodeStatefulEnvelope(envelope);
@@ -638,7 +638,7 @@ contract SHRINCSCodecERC7913IntegrationTest is Test {
     string internal constant VECTOR_PATH =
         "test/test_vectors/shrincs_sphincs_256s_keccak.json";
 
-    SHRINCS internal verifier;
+    SHRINCSVerifier internal verifier;
     CodecERC7913ConsumerHarness internal consumer;
     CodecMockERC1271Signer internal erc1271Signer;
     CodecNonMagicERC7913Verifier internal nonMagicVerifier;
@@ -668,8 +668,8 @@ contract SHRINCSCodecERC7913IntegrationTest is Test {
         vectors = vm.readFile(VECTOR_PATH);
 
         (
-            SHRINCSCore.SigningKey memory signingKey,
-            SHRINCSCore.PublicKey memory publicKey,
+            SHRINCS.SigningKey memory signingKey,
+            SHRINCS.PublicKey memory publicKey,
             bool keygenOk
         ) = SHRINCSTestSigner.keygen(
             bytes("shrincs erc7913 stateful verifier seed"), 4
@@ -701,7 +701,7 @@ contract SHRINCSCodecERC7913IntegrationTest is Test {
         public
     {
         (
-            SHRINCSCore.PublicKey memory publicKey,
+            SHRINCS.PublicKey memory publicKey,
             bytes32 hash,
             UXMSS.StatefulSignature memory signature
         ) = decodeRustStatefulVector();
@@ -809,7 +809,7 @@ contract SHRINCSCodecERC7913IntegrationTest is Test {
     function decodeRustStatefulVector()
         internal
         returns (
-            SHRINCSCore.PublicKey memory publicKey,
+            SHRINCS.PublicKey memory publicKey,
             bytes32 hash,
             UXMSS.StatefulSignature memory signature
         )
@@ -856,7 +856,7 @@ contract SHRINCSCodecERC7913IntegrationTest is Test {
         bytes memory statefulPublicKey,
         bytes memory pkSeed,
         bytes memory hypertreeRoot
-    ) internal pure returns (SHRINCSCore.PublicKey memory) {
+    ) internal pure returns (SHRINCS.PublicKey memory) {
         bytes32 commitment = keccak256(
             abi.encodePacked(
                 "shrincs-public-key",
@@ -865,7 +865,7 @@ contract SHRINCSCodecERC7913IntegrationTest is Test {
                 hypertreeRoot
             )
         );
-        return SHRINCSCore.PublicKey({
+        return SHRINCS.PublicKey({
             statefulPublicKey: statefulPublicKey,
             publicKeyCommitment: abi.encodePacked(commitment),
             pkSeed: pkSeed,

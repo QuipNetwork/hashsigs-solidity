@@ -16,7 +16,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 pragma solidity ^0.8.28;
 
-import {SPHINCSPlusC} from "./SPHINCSPlusC.sol";
+import {SPHINCSPlusCVerifier} from "./SPHINCSPlusCVerifier.sol";
 
 /// @title SPHINCSPlusC256sKeccak
 /// @notice Concrete 256s-profile SPHINCSPlusC verifier. Deploy this artifact
@@ -29,7 +29,7 @@ import {SPHINCSPlusC} from "./SPHINCSPlusC.sol";
 /// shared format-family tag (constants cannot be virtual/override, so the
 /// profile tag lives here). The SHRINCS256sKeccak verifier pins this
 /// contract's CREATE3 address for stateless delegation.
-contract SPHINCSPlusC256sKeccak is SPHINCSPlusC {
+contract SPHINCSPlusC256sKeccak is SPHINCSPlusCVerifier {
     // PROFILE_TAG: the compiled parameter-set identifier for this
     // verifier. Matches SHRINCSParams.PROFILE_ID for the 256s profile.
     bytes32 public constant PROFILE_TAG = keccak256("shrincs-256s-keccak");

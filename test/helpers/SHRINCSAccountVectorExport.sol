@@ -16,8 +16,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 pragma solidity ^0.8.28;
 
-import {SHRINCSCore} from "../../contracts/SHRINCSCore.sol";
-import {SPHINCSPlusCCore} from "../../contracts/SPHINCSPlusCCore.sol";
+import {SHRINCS} from "../../contracts/SHRINCS.sol";
+import {SPHINCSPlusC} from "../../contracts/SPHINCSPlusC.sol";
 import {UXMSS} from "../../contracts/UXMSS.sol";
 import {
     SHRINCSAccountVerifierExample
@@ -31,8 +31,8 @@ import {
 library SHRINCSAccountVectorExport {
     struct StatefulActionVector {
         bytes32 currentSHRINCSPublicKey;
-        SHRINCSCore.PublicKey publicKey;
-        SHRINCSCore.ActionContext context;
+        SHRINCS.PublicKey publicKey;
+        SHRINCS.ActionContext context;
         bytes32 actionType;
         bytes32 payloadHash;
         UXMSS.StatefulSignature signature;
@@ -43,11 +43,11 @@ library SHRINCSAccountVectorExport {
 
     struct StatelessActionVector {
         bytes32 currentSHRINCSPublicKey;
-        SHRINCSCore.PublicKey publicKey;
-        SHRINCSCore.ActionContext context;
+        SHRINCS.PublicKey publicKey;
+        SHRINCS.ActionContext context;
         bytes32 actionType;
         bytes32 payloadHash;
-        SPHINCSPlusCCore.StatelessSignature signature;
+        SPHINCSPlusC.StatelessSignature signature;
         bytes message;
         bytes verifyCalldata;
         bytes erc1271Envelope;
@@ -55,35 +55,35 @@ library SHRINCSAccountVectorExport {
 
     struct StatefulOnlyRotationVector {
         bytes32 currentSHRINCSPublicKey;
-        SHRINCSCore.PublicKey currentPublicKey;
-        SHRINCSCore.RotationContext context;
-        SHRINCSCore.StatefulRotationTarget nextKey;
-        SPHINCSPlusCCore.StatelessSignature recoverySignature;
+        SHRINCS.PublicKey currentPublicKey;
+        SHRINCS.RotationContext context;
+        SHRINCS.StatefulRotationTarget nextKey;
+        SPHINCSPlusC.StatelessSignature recoverySignature;
         bytes message;
         bytes rotateCalldata;
     }
 
     struct FullRotationVector {
         bytes32 currentSHRINCSPublicKey;
-        SHRINCSCore.PublicKey currentPublicKey;
-        SHRINCSCore.RotationContext context;
-        SHRINCSCore.RotationTarget nextKey;
-        SPHINCSPlusCCore.StatelessSignature recoverySignature;
+        SHRINCS.PublicKey currentPublicKey;
+        SHRINCS.RotationContext context;
+        SHRINCS.RotationTarget nextKey;
+        SPHINCSPlusC.StatelessSignature recoverySignature;
         bytes message;
         bytes rotateCalldata;
     }
 
     function statefulActionVector(
         SHRINCSAccountVerifierExample account,
-        SHRINCSCore.PublicKey memory publicKey,
-        SHRINCSCore.ActionContext memory context,
+        SHRINCS.PublicKey memory publicKey,
+        SHRINCS.ActionContext memory context,
         bytes32 actionType,
         bytes32 payloadHash,
         UXMSS.StatefulSignature memory signature
     ) internal view returns (StatefulActionVector memory vector_) {
         bytes32 current = account.currentSHRINCSPublicKey();
         bytes memory message = abi.encodePacked(
-            SHRINCSCore.statefulActionMessageHash(current, context)
+            SHRINCS.statefulActionMessageHash(current, context)
         );
         vector_ = StatefulActionVector({
             currentSHRINCSPublicKey: current,
@@ -106,15 +106,15 @@ library SHRINCSAccountVectorExport {
 
     function statelessActionVector(
         SHRINCSAccountVerifierExample account,
-        SHRINCSCore.PublicKey memory publicKey,
-        SHRINCSCore.ActionContext memory context,
+        SHRINCS.PublicKey memory publicKey,
+        SHRINCS.ActionContext memory context,
         bytes32 actionType,
         bytes32 payloadHash,
-        SPHINCSPlusCCore.StatelessSignature memory signature
+        SPHINCSPlusC.StatelessSignature memory signature
     ) internal view returns (StatelessActionVector memory vector_) {
         bytes32 current = account.currentSHRINCSPublicKey();
         bytes memory message = abi.encodePacked(
-            SHRINCSCore.statelessActionMessageHash(current, context)
+            SHRINCS.statelessActionMessageHash(current, context)
         );
         vector_ = StatelessActionVector({
             currentSHRINCSPublicKey: current,
@@ -137,17 +137,17 @@ library SHRINCSAccountVectorExport {
 
     function statefulOnlyRotationVector(
         SHRINCSAccountVerifierExample account,
-        SHRINCSCore.PublicKey memory currentPublicKey,
-        SHRINCSCore.RotationContext memory context,
-        SHRINCSCore.StatefulRotationTarget memory nextKey,
-        SPHINCSPlusCCore.StatelessSignature memory recoverySignature
+        SHRINCS.PublicKey memory currentPublicKey,
+        SHRINCS.RotationContext memory context,
+        SHRINCS.StatefulRotationTarget memory nextKey,
+        SPHINCSPlusC.StatelessSignature memory recoverySignature
     ) internal view returns (StatefulOnlyRotationVector memory vector_) {
         bytes32 current = account.currentSHRINCSPublicKey();
         bytes memory message = abi.encodePacked(
             keccak256(
                 abi.encodePacked(
-                    SHRINCSCore.OP_ROTATE_STATEFUL,
-                    SHRINCSCore.HASH_SUITE_KECCAK_256,
+                    SHRINCS.OP_ROTATE_STATEFUL,
+                    SHRINCS.HASH_SUITE_KECCAK_256,
                     current,
                     context.domainSeparator,
                     context.nonce,
@@ -173,17 +173,17 @@ library SHRINCSAccountVectorExport {
 
     function fullRotationVector(
         SHRINCSAccountVerifierExample account,
-        SHRINCSCore.PublicKey memory currentPublicKey,
-        SHRINCSCore.RotationContext memory context,
-        SHRINCSCore.RotationTarget memory nextKey,
-        SPHINCSPlusCCore.StatelessSignature memory recoverySignature
+        SHRINCS.PublicKey memory currentPublicKey,
+        SHRINCS.RotationContext memory context,
+        SHRINCS.RotationTarget memory nextKey,
+        SPHINCSPlusC.StatelessSignature memory recoverySignature
     ) internal view returns (FullRotationVector memory vector_) {
         bytes32 current = account.currentSHRINCSPublicKey();
         bytes memory message = abi.encodePacked(
             keccak256(
                 abi.encodePacked(
-                    SHRINCSCore.OP_ROTATE_FULL,
-                    SHRINCSCore.HASH_SUITE_KECCAK_256,
+                    SHRINCS.OP_ROTATE_FULL,
+                    SHRINCS.HASH_SUITE_KECCAK_256,
                     current,
                     context.domainSeparator,
                     context.nonce,

@@ -16,7 +16,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 pragma solidity ^0.8.28;
 
-import {SHRINCSCore} from "../../contracts/SHRINCSCore.sol";
+import {SHRINCS} from "../../contracts/SHRINCS.sol";
 import {UXMSS} from "../../contracts/UXMSS.sol";
 import {SHRINCSParams} from "shrincs-profile/SHRINCSParams.sol";
 import {SHRINCSCodec} from "../../contracts/SHRINCSCodec.sol";
@@ -37,8 +37,8 @@ library SHRINCSTestSigner {
         internal
         pure
         returns (
-            SHRINCSCore.SigningKey memory signingKey,
-            SHRINCSCore.PublicKey memory publicKey,
+            SHRINCS.SigningKey memory signingKey,
+            SHRINCS.PublicKey memory publicKey,
             bool ok
         )
     {
@@ -68,7 +68,7 @@ library SHRINCSTestSigner {
         bytes32 pkSeed = derive32("shrincs-pk-seed", seedMaterial, "");
         bytes32 hypertreeRoot = hypertreePublicRoot(statelessSkSeed, pkSeed);
 
-        signingKey = SHRINCSCore.SigningKey({
+        signingKey = SHRINCS.SigningKey({
             statefulSkSeed: statefulSkSeed,
             statefulPrfSeed: statefulPrfSeed,
             statefulPkSeed: statefulPkSeed,
@@ -90,7 +90,7 @@ library SHRINCSTestSigner {
                 abi.encodePacked(pkSeed),
                 abi.encodePacked(hypertreeRoot)
             );
-        publicKey = SHRINCSCore.PublicKey({
+        publicKey = SHRINCS.PublicKey({
             statefulPublicKey: statefulPublicKey,
             publicKeyCommitment: abi.encodePacked(publicKeyCommitment),
             pkSeed: abi.encodePacked(pkSeed),
@@ -100,13 +100,13 @@ library SHRINCSTestSigner {
     }
 
     function signStatefulRaw(
-        SHRINCSCore.SigningKey memory signingKey,
+        SHRINCS.SigningKey memory signingKey,
         bytes memory message
     )
         internal
         pure
         returns (
-            SHRINCSCore.SigningKey memory nextSigningKey,
+            SHRINCS.SigningKey memory nextSigningKey,
             UXMSS.StatefulSignature memory signature,
             bool ok
         )
@@ -127,14 +127,14 @@ library SHRINCSTestSigner {
     }
 
     function signStatefulAction(
-        SHRINCSCore.SigningKey memory signingKey,
-        SHRINCSCore.PublicKey memory publicKey,
-        SHRINCSCore.ActionContext memory context
+        SHRINCS.SigningKey memory signingKey,
+        SHRINCS.PublicKey memory publicKey,
+        SHRINCS.ActionContext memory context
     )
         internal
         pure
         returns (
-            SHRINCSCore.SigningKey memory nextSigningKey,
+            SHRINCS.SigningKey memory nextSigningKey,
             UXMSS.StatefulSignature memory signature,
             bool ok
         )
@@ -148,7 +148,7 @@ library SHRINCSTestSigner {
             expectedPublicKeyCommitment := mload(add(commitmentBytes, 32))
         }
         bytes memory message = abi.encodePacked(
-            SHRINCSCore.statefulActionMessageHash(
+            SHRINCS.statefulActionMessageHash(
                 expectedPublicKeyCommitment, context
             )
         );
@@ -164,7 +164,7 @@ library SHRINCSTestSigner {
     }
 
     function signStatefulRawAtLeaf(
-        SHRINCSCore.SigningKey memory signingKey,
+        SHRINCS.SigningKey memory signingKey,
         uint32 leafIndex,
         bytes memory message
     )

@@ -17,8 +17,8 @@
 pragma solidity ^0.8.28;
 
 import {Test} from "../lib/forge-std/src/Test.sol";
-import {SHRINCSCore} from "../contracts/SHRINCSCore.sol";
-import {SPHINCSPlusCCore} from "../contracts/SPHINCSPlusCCore.sol";
+import {SHRINCS} from "../contracts/SHRINCS.sol";
+import {SPHINCSPlusC} from "../contracts/SPHINCSPlusC.sol";
 import {UXMSS} from "../contracts/UXMSS.sol";
 import {
     SHRINCSAccountVerifierExample
@@ -46,8 +46,8 @@ contract SHRINCSAccountSigningFacadeTest is Test {
 
     function testAccountAwareStatefulActionSignerFeedsWrapper() public {
         (
-            SHRINCSCore.SigningKey memory signingKey,
-            SHRINCSCore.PublicKey memory publicKey,
+            SHRINCS.SigningKey memory signingKey,
+            SHRINCS.PublicKey memory publicKey,
             bool keygenOk
         ) = SHRINCSAccountSigningFacade.keygen(
             bytes("account-aware current key"), 4
@@ -65,8 +65,8 @@ contract SHRINCSAccountSigningFacadeTest is Test {
         bytes32 payloadHash = keccak256("payload");
 
         (
-            SHRINCSCore.SigningKey memory nextSigningKey,
-            SHRINCSCore.ActionContext memory context,
+            SHRINCS.SigningKey memory nextSigningKey,
+            SHRINCS.ActionContext memory context,
             UXMSS.StatefulSignature memory signature,
             bool signOk
         ) = SHRINCSAccountSigningFacade.signStatefulActionNow(
@@ -102,8 +102,8 @@ contract SHRINCSAccountSigningFacadeTest is Test {
         public
     {
         (
-            SHRINCSCore.SigningKey memory signingKey,
-            SHRINCSCore.PublicKey memory publicKey,
+            SHRINCS.SigningKey memory signingKey,
+            SHRINCS.PublicKey memory publicKey,
             bool keygenOk
         ) = SHRINCSAccountSigningFacade.keygen(
             bytes("account-aware 1271 stateful current key"), 4
@@ -122,7 +122,7 @@ contract SHRINCSAccountSigningFacadeTest is Test {
 
         (
             ,
-            SHRINCSCore.ActionContext memory context,
+            SHRINCS.ActionContext memory context,
             UXMSS.StatefulSignature memory signature,
             bool signOk
         ) = SHRINCSAccountSigningFacade.signStatefulActionNow(
@@ -130,7 +130,7 @@ contract SHRINCSAccountSigningFacadeTest is Test {
         );
         assertTrue(signOk, "stateful action signing must succeed");
 
-        bytes32 hash = SHRINCSCore.statefulActionMessageHash(
+        bytes32 hash = SHRINCS.statefulActionMessageHash(
             account.currentSHRINCSPublicKey(), context
         );
         bytes memory envelope =
@@ -162,8 +162,8 @@ contract SHRINCSAccountSigningFacadeTest is Test {
         public
     {
         (
-            SHRINCSCore.SigningKey memory signingKey,
-            SHRINCSCore.PublicKey memory publicKey,
+            SHRINCS.SigningKey memory signingKey,
+            SHRINCS.PublicKey memory publicKey,
             bool keygenOk
         ) = SHRINCSAccountSigningFacade.keygen(
             bytes("account-aware 1271 stateful trailing key"), 4
@@ -182,7 +182,7 @@ contract SHRINCSAccountSigningFacadeTest is Test {
 
         (
             ,
-            SHRINCSCore.ActionContext memory context,
+            SHRINCS.ActionContext memory context,
             UXMSS.StatefulSignature memory signature,
             bool signOk
         ) = SHRINCSAccountSigningFacade.signStatefulActionNow(
@@ -190,7 +190,7 @@ contract SHRINCSAccountSigningFacadeTest is Test {
         );
         assertTrue(signOk, "stateful action signing must succeed");
 
-        bytes32 hash = SHRINCSCore.statefulActionMessageHash(
+        bytes32 hash = SHRINCS.statefulActionMessageHash(
             account.currentSHRINCSPublicKey(), context
         );
         bytes memory envelope =
@@ -214,8 +214,8 @@ contract SHRINCSAccountSigningFacadeTest is Test {
 
     function testAccountAwareStatelessActionSignerFeedsWrapper() public {
         (
-            SHRINCSCore.SigningKey memory signingKey,
-            SHRINCSCore.PublicKey memory publicKey,
+            SHRINCS.SigningKey memory signingKey,
+            SHRINCS.PublicKey memory publicKey,
             bool keygenOk
         ) = SHRINCSAccountSigningFacade.keygen(
             bytes("account-aware stateless current key"), 4
@@ -233,7 +233,7 @@ contract SHRINCSAccountSigningFacadeTest is Test {
         bytes32 payloadHash = keccak256("payload");
 
         (
-            SHRINCSCore.ActionContext memory context,
+            SHRINCS.ActionContext memory context,
             bytes32 sessionId,
             bool signOk
         ) = SHRINCSAccountSigningFacade.beginStatelessActionSessionNow(
@@ -254,11 +254,11 @@ contract SHRINCSAccountSigningFacadeTest is Test {
 
         // line-length: allow — fmt canonical tuple head exceeds cap
         (
-            SPHINCSPlusCCore.StatelessSignature memory signature,
+            SPHINCSPlusC.StatelessSignature memory signature,
             bool completeOk
         ) = SHRINCSAccountSigningFacade.completeStatelessSession(
-            signer, sessionId
-        );
+                signer, sessionId
+            );
         assertTrue(completeOk, "stateless session completion must succeed");
 
         bool verifyOk = account.verifyStatelessAction(
@@ -283,8 +283,8 @@ contract SHRINCSAccountSigningFacadeTest is Test {
         public
     {
         (
-            SHRINCSCore.SigningKey memory signingKey,
-            SHRINCSCore.PublicKey memory publicKey,
+            SHRINCS.SigningKey memory signingKey,
+            SHRINCS.PublicKey memory publicKey,
             bool keygenOk
         ) = SHRINCSAccountSigningFacade.keygen(
             bytes("account-aware 1271 stateless current key"), 4
@@ -302,7 +302,7 @@ contract SHRINCSAccountSigningFacadeTest is Test {
         bytes32 payloadHash = keccak256("payload");
 
         (
-            SHRINCSCore.ActionContext memory context,
+            SHRINCS.ActionContext memory context,
             bytes32 sessionId,
             bool signOk
         ) = SHRINCSAccountSigningFacade.beginStatelessActionSessionNow(
@@ -317,14 +317,14 @@ contract SHRINCSAccountSigningFacadeTest is Test {
 
         // line-length: allow — fmt canonical tuple head exceeds cap
         (
-            SPHINCSPlusCCore.StatelessSignature memory signature,
+            SPHINCSPlusC.StatelessSignature memory signature,
             bool completeOk
         ) = SHRINCSAccountSigningFacade.completeStatelessSession(
-            signer, sessionId
-        );
+                signer, sessionId
+            );
         assertTrue(completeOk, "stateless session completion must succeed");
 
-        bytes32 hash = SHRINCSCore.statelessActionMessageHash(
+        bytes32 hash = SHRINCS.statelessActionMessageHash(
             account.currentSHRINCSPublicKey(), context
         );
         bytes memory envelope =
@@ -356,8 +356,8 @@ contract SHRINCSAccountSigningFacadeTest is Test {
         public
     {
         (
-            SHRINCSCore.SigningKey memory signingKey,
-            SHRINCSCore.PublicKey memory publicKey,
+            SHRINCS.SigningKey memory signingKey,
+            SHRINCS.PublicKey memory publicKey,
             bool keygenOk
         ) = SHRINCSAccountSigningFacade.keygen(
             bytes("account-aware 1271 stateless trailing key"), 4
@@ -375,7 +375,7 @@ contract SHRINCSAccountSigningFacadeTest is Test {
         bytes32 payloadHash = keccak256("payload");
 
         (
-            SHRINCSCore.ActionContext memory context,
+            SHRINCS.ActionContext memory context,
             bytes32 sessionId,
             bool signOk
         ) = SHRINCSAccountSigningFacade.beginStatelessActionSessionNow(
@@ -390,14 +390,14 @@ contract SHRINCSAccountSigningFacadeTest is Test {
 
         // line-length: allow — fmt canonical tuple head exceeds cap
         (
-            SPHINCSPlusCCore.StatelessSignature memory signature,
+            SPHINCSPlusC.StatelessSignature memory signature,
             bool completeOk
         ) = SHRINCSAccountSigningFacade.completeStatelessSession(
-            signer, sessionId
-        );
+                signer, sessionId
+            );
         assertTrue(completeOk, "stateless session completion must succeed");
 
-        bytes32 hash = SHRINCSCore.statelessActionMessageHash(
+        bytes32 hash = SHRINCS.statelessActionMessageHash(
             account.currentSHRINCSPublicKey(), context
         );
         bytes memory envelope =
@@ -423,8 +423,8 @@ contract SHRINCSAccountSigningFacadeTest is Test {
         public
     {
         (
-            SHRINCSCore.SigningKey memory currentSigningKey,
-            SHRINCSCore.PublicKey memory currentPublicKey,
+            SHRINCS.SigningKey memory currentSigningKey,
+            SHRINCS.PublicKey memory currentPublicKey,
             bool currentOk
         ) = SHRINCSAccountSigningFacade.keygen(
             bytes("account-aware rotation current key"), 4
@@ -442,18 +442,18 @@ contract SHRINCSAccountSigningFacadeTest is Test {
         account.enterRecoveryMode();
 
         // line-length: allow — fmt canonical tuple head exceeds cap
-        (, SHRINCSCore.PublicKey memory nextPublicKey, bool nextOk) = SHRINCSAccountSigningFacade.keygen(
+        (, SHRINCS.PublicKey memory nextPublicKey, bool nextOk) = SHRINCSAccountSigningFacade.keygen(
             bytes("account-aware rotation next key"), 4
         );
         assertTrue(nextOk, "next keygen must succeed");
 
-        SHRINCSCore.StatefulRotationTarget memory nextKey =
+        SHRINCS.StatefulRotationTarget memory nextKey =
             SHRINCSAccountSigningFacade.statefulRotationTarget(
                 currentPublicKey, nextPublicKey.statefulPublicKey
             );
 
         (
-            SHRINCSCore.RotationContext memory context,
+            SHRINCS.RotationContext memory context,
             bytes32 sessionId,
             bool signOk
         ) = SHRINCSAccountSigningFacade.beginStatefulOnlyRotationSessionNow(
@@ -468,7 +468,7 @@ contract SHRINCSAccountSigningFacadeTest is Test {
         );
 
         (
-            SPHINCSPlusCCore.StatelessSignature memory recoverySignature,
+            SPHINCSPlusC.StatelessSignature memory recoverySignature,
             bool completeOk
         ) = SHRINCSAccountSigningFacade.completeStatelessSession(
             signer, sessionId
@@ -502,8 +502,8 @@ contract SHRINCSAccountSigningFacadeTest is Test {
 
     function testAccountAwareFullRotationSignerFeedsWrapper() public {
         (
-            SHRINCSCore.SigningKey memory currentSigningKey,
-            SHRINCSCore.PublicKey memory currentPublicKey,
+            SHRINCS.SigningKey memory currentSigningKey,
+            SHRINCS.PublicKey memory currentPublicKey,
             bool currentOk
         ) = SHRINCSAccountSigningFacade.keygen(
             bytes("account-aware full rotation current key"), 4
@@ -521,16 +521,16 @@ contract SHRINCSAccountSigningFacadeTest is Test {
         account.enterRecoveryMode();
 
         // line-length: allow — fmt canonical tuple head exceeds cap
-        (, SHRINCSCore.PublicKey memory nextPublicKey, bool nextOk) = SHRINCSAccountSigningFacade.keygen(
+        (, SHRINCS.PublicKey memory nextPublicKey, bool nextOk) = SHRINCSAccountSigningFacade.keygen(
             bytes("account-aware full rotation next key"), 4
         );
         assertTrue(nextOk, "next keygen must succeed");
 
-        SHRINCSCore.RotationTarget memory nextKey =
+        SHRINCS.RotationTarget memory nextKey =
             SHRINCSAccountSigningFacade.fullRotationTarget(nextPublicKey);
 
         (
-            SHRINCSCore.RotationContext memory context,
+            SHRINCS.RotationContext memory context,
             bytes32 sessionId,
             bool signOk
         ) = SHRINCSAccountSigningFacade.beginFullRotationSessionNow(
@@ -545,7 +545,7 @@ contract SHRINCSAccountSigningFacadeTest is Test {
         );
 
         (
-            SPHINCSPlusCCore.StatelessSignature memory recoverySignature,
+            SPHINCSPlusC.StatelessSignature memory recoverySignature,
             bool completeOk
         ) = SHRINCSAccountSigningFacade.completeStatelessSession(
             signer, sessionId

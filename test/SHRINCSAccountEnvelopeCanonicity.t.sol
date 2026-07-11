@@ -17,8 +17,8 @@
 pragma solidity ^0.8.28;
 
 import {Test} from "../lib/forge-std/src/Test.sol";
-import {SHRINCSCore} from "../contracts/SHRINCSCore.sol";
-import {SPHINCSPlusCCore} from "../contracts/SPHINCSPlusCCore.sol";
+import {SHRINCS} from "../contracts/SHRINCS.sol";
+import {SPHINCSPlusC} from "../contracts/SPHINCSPlusC.sol";
 import {
     SHRINCSAccountEnvelope
 } from "../contracts/examples/SHRINCSAccountEnvelope.sol";
@@ -56,17 +56,17 @@ contract CanonicityHarness {
         returns (bool)
     {
         (
-            SHRINCSCore.PublicKey memory publicKey,
+            SHRINCS.PublicKey memory publicKey,
             bytes32 actionType,
             bytes32 payloadHash,
-            SPHINCSPlusCCore.StatelessSignature memory signature
+            SPHINCSPlusC.StatelessSignature memory signature
         ) = abi.decode(
             payload,
             (
-                SHRINCSCore.PublicKey,
+                SHRINCS.PublicKey,
                 bytes32,
                 bytes32,
-                SPHINCSPlusCCore.StatelessSignature
+                SPHINCSPlusC.StatelessSignature
             )
         );
         return keccak256(payload)
@@ -243,8 +243,8 @@ contract SHRINCSAccountEnvelopeCanonicityTest is Test {
 
     function _buildEnvelope() internal returns (bytes memory) {
         (
-            SHRINCSCore.SigningKey memory signingKey,
-            SHRINCSCore.PublicKey memory publicKey,
+            SHRINCS.SigningKey memory signingKey,
+            SHRINCS.PublicKey memory publicKey,
             bool ok
         ) = SHRINCSAccountSigningFacade.keygen(
             bytes("canonicity stateless fixture seed"), 4
@@ -270,11 +270,11 @@ contract SHRINCSAccountEnvelopeCanonicityTest is Test {
         require(ok, "begin");
         // line-length: allow — fmt canonical tuple head exceeds cap
         (
-            SPHINCSPlusCCore.StatelessSignature memory signature,
+            SPHINCSPlusC.StatelessSignature memory signature,
             bool completeOk
         ) = SHRINCSAccountSigningFacade.completeStatelessSession(
-            signer, sessionId
-        );
+                signer, sessionId
+            );
         require(completeOk, "complete");
         return abi.encode(publicKey, ACTION_TYPE, PAYLOAD_HASH, signature);
     }

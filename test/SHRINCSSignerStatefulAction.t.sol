@@ -17,7 +17,7 @@
 pragma solidity ^0.8.28;
 
 import {Test} from "../lib/forge-std/src/Test.sol";
-import {SHRINCSCore} from "../contracts/SHRINCSCore.sol";
+import {SHRINCS} from "../contracts/SHRINCS.sol";
 import {SHRINCSTestSigner} from "./helpers/SHRINCSTestSigner.sol";
 import {UXMSS} from "../contracts/UXMSS.sol";
 
@@ -25,24 +25,20 @@ contract SHRINCSStatefulActionSignerHarness {
     function keygen(bytes memory seedMaterial, uint32 maxStatefulSignatures)
         external
         pure
-        returns (
-            SHRINCSCore.SigningKey memory,
-            SHRINCSCore.PublicKey memory,
-            bool
-        )
+        returns (SHRINCS.SigningKey memory, SHRINCS.PublicKey memory, bool)
     {
         return SHRINCSTestSigner.keygen(seedMaterial, maxStatefulSignatures);
     }
 
     function signStatefulAction(
-        SHRINCSCore.SigningKey memory signingKey,
-        SHRINCSCore.PublicKey memory publicKey,
-        SHRINCSCore.ActionContext memory context
+        SHRINCS.SigningKey memory signingKey,
+        SHRINCS.PublicKey memory publicKey,
+        SHRINCS.ActionContext memory context
     )
         external
         pure
         returns (
-            SHRINCSCore.SigningKey memory,
+            SHRINCS.SigningKey memory,
             UXMSS.StatefulSignature memory,
             bool
         )
@@ -54,11 +50,11 @@ contract SHRINCSStatefulActionSignerHarness {
 
     function verify(
         bytes32 expectedPublicKeyCommitment,
-        SHRINCSCore.PublicKey calldata publicKey,
-        SHRINCSCore.ActionContext calldata context,
+        SHRINCS.PublicKey calldata publicKey,
+        SHRINCS.ActionContext calldata context,
         UXMSS.StatefulSignature calldata signature
     ) external pure returns (bool) {
-        return SHRINCSCore.verifyStateful(
+        return SHRINCS.verifyStateful(
             expectedPublicKeyCommitment, publicKey, context, signature
         );
     }
@@ -76,15 +72,15 @@ contract SHRINCSSignerStatefulActionTest is Test {
         view
     {
         (
-            SHRINCSCore.SigningKey memory signingKey,
-            SHRINCSCore.PublicKey memory publicKey,
+            SHRINCS.SigningKey memory signingKey,
+            SHRINCS.PublicKey memory publicKey,
             bool keygenOk
         ) = harness.keygen(bytes("solidity stateful action signer seed"), 4);
         assertTrue(keygenOk, "keygen must succeed");
 
         // forgefmt: disable-next-line
-        SHRINCSCore.ActionContext memory context =
-            SHRINCSCore.ActionContext({
+        SHRINCS.ActionContext memory context =
+            SHRINCS.ActionContext({
                 domainSeparator: keccak256("domain"),
                 nonce: 7,
                 keyVersion: 3,
@@ -93,7 +89,7 @@ contract SHRINCSSignerStatefulActionTest is Test {
             });
 
         (
-            SHRINCSCore.SigningKey memory nextSigningKey,
+            SHRINCS.SigningKey memory nextSigningKey,
             UXMSS.StatefulSignature memory signature,
             bool signOk
         ) = harness.signStatefulAction(signingKey, publicKey, context);
@@ -125,8 +121,8 @@ contract SHRINCSSignerStatefulActionTest is Test {
         view
     {
         (
-            SHRINCSCore.SigningKey memory signingKey,
-            SHRINCSCore.PublicKey memory publicKey,
+            SHRINCS.SigningKey memory signingKey,
+            SHRINCS.PublicKey memory publicKey,
             bool keygenOk
         ) = harness.keygen(bytes("stateful malformed public key seed"), 4);
         assertTrue(keygenOk, "keygen must succeed");
@@ -134,8 +130,8 @@ contract SHRINCSSignerStatefulActionTest is Test {
         publicKey.publicKeyCommitment = hex"1234";
 
         // forgefmt: disable-next-line
-        SHRINCSCore.ActionContext memory context =
-            SHRINCSCore.ActionContext({
+        SHRINCS.ActionContext memory context =
+            SHRINCS.ActionContext({
                 domainSeparator: keccak256("domain"),
                 nonce: 1,
                 keyVersion: 1,

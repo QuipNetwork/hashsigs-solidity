@@ -17,8 +17,8 @@
 pragma solidity ^0.8.28;
 
 import {Test} from "../lib/forge-std/src/Test.sol";
-import {SHRINCSCore} from "../contracts/SHRINCSCore.sol";
-import {SPHINCSPlusCCore} from "../contracts/SPHINCSPlusCCore.sol";
+import {SHRINCS} from "../contracts/SHRINCS.sol";
+import {SPHINCSPlusC} from "../contracts/SPHINCSPlusC.sol";
 import {UXMSS} from "../contracts/UXMSS.sol";
 import {SHRINCSParams} from "shrincs-profile/SHRINCSParams.sol";
 import {
@@ -40,7 +40,7 @@ contract InvariantAccountHarness is SHRINCSAccountVerifierExample {
     {}
 
     function verifyStatefulUncheckedForTest(
-        SHRINCSCore.PublicKey calldata publicKey,
+        SHRINCS.PublicKey calldata publicKey,
         bytes calldata message,
         UXMSS.StatefulSignature calldata signature
     ) external returns (bool) {
@@ -81,7 +81,7 @@ contract SHRINCSAccountHandler is Test {
     InvariantAccountHarness public account;
 
     // Pre-signed material, keyed by [keyIndex][leafIndex].
-    mapping(uint256 => SHRINCSCore.PublicKey) internal publicKeyOf;
+    mapping(uint256 => SHRINCS.PublicKey) internal publicKeyOf;
     mapping(uint256 => bytes32) internal commitmentOf;
     mapping(uint256 => mapping(uint32 => UXMSS.StatefulSignature)) internal
         signatureOf;
@@ -123,8 +123,8 @@ contract SHRINCSAccountHandler is Test {
         bytes memory seed =
             abi.encodePacked("shrincs-invariant-key", keyIndex);
         (
-            SHRINCSCore.SigningKey memory signingKey,
-            SHRINCSCore.PublicKey memory publicKey,
+            SHRINCS.SigningKey memory signingKey,
+            SHRINCS.PublicKey memory publicKey,
             bool keygenOk
         ) = SHRINCSTestSigner.keygen(seed, MAX_LEAF);
         require(keygenOk, "handler keygen");
@@ -222,7 +222,7 @@ contract SHRINCSAccountHandler is Test {
     function actGarbageStateless(bytes32 actionType, bytes32 payloadHash)
         external
     {
-        SPHINCSPlusCCore.StatelessSignature memory signature;
+        SPHINCSPlusC.StatelessSignature memory signature;
         bytes32 digestBefore = _stateDigest();
         bool ok = account.verifyStatelessAction(
             publicKeyOf[0], actionType, payloadHash, signature
@@ -243,7 +243,7 @@ contract SHRINCSAccountHandler is Test {
         (uint256 keyIndex, bool found) = _currentKeyIndex();
         if (!found) return;
         uint256 targetIndex = bound(targetSelector, 0, KEY_COUNT - 1);
-        SPHINCSPlusCCore.StatelessSignature memory signature;
+        SPHINCSPlusC.StatelessSignature memory signature;
         bytes32 digestBefore = _stateDigest();
         bool ok = account.rotateFullKey(
             publicKeyOf[keyIndex], signature, _fullTarget(targetIndex)
@@ -393,10 +393,10 @@ contract SHRINCSAccountHandler is Test {
     function _fullTarget(uint256 keyIndex)
         internal
         view
-        returns (SHRINCSCore.RotationTarget memory target)
+        returns (SHRINCS.RotationTarget memory target)
     {
-        SHRINCSCore.PublicKey memory publicKey = publicKeyOf[keyIndex];
-        target = SHRINCSCore.RotationTarget({
+        SHRINCS.PublicKey memory publicKey = publicKeyOf[keyIndex];
+        target = SHRINCS.RotationTarget({
             statefulPublicKey: publicKey.statefulPublicKey,
             publicKeyCommitment: publicKey.publicKeyCommitment,
             pkSeed: publicKey.pkSeed,
@@ -451,7 +451,7 @@ contract SHRINCSAccountHandler is Test {
         );
     }
 
-    function _commitmentWord(SHRINCSCore.PublicKey memory publicKey)
+    function _commitmentWord(SHRINCS.PublicKey memory publicKey)
         internal
         pure
         returns (bytes32 word)

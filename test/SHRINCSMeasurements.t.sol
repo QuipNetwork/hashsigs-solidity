@@ -22,8 +22,8 @@ import {
     IERC7913SignatureVerifier
 } from "../contracts/interfaces/IERC7913SignatureVerifier.sol";
 import {SHRINCSCodec} from "../contracts/SHRINCSCodec.sol";
-import {SHRINCSCore} from "../contracts/SHRINCSCore.sol";
-import {SPHINCSPlusCCore} from "../contracts/SPHINCSPlusCCore.sol";
+import {SHRINCS} from "../contracts/SHRINCS.sol";
+import {SPHINCSPlusC} from "../contracts/SPHINCSPlusC.sol";
 import {SHRINCS256sKeccak} from "../contracts/SHRINCS256sKeccak.sol";
 import {UXMSS} from "../contracts/UXMSS.sol";
 import {
@@ -55,8 +55,8 @@ contract SHRINCSMeasurementsTest is Test {
         keccak256("measurement payload");
 
     struct StatefulCase {
-        SHRINCSCore.PublicKey publicKey;
-        SHRINCSCore.ActionContext context;
+        SHRINCS.PublicKey publicKey;
+        SHRINCS.ActionContext context;
         UXMSS.StatefulSignature signature;
         SHRINCSAccountVerifierExample account;
         bytes message;
@@ -65,9 +65,9 @@ contract SHRINCSMeasurementsTest is Test {
     }
 
     struct StatelessCase {
-        SHRINCSCore.PublicKey publicKey;
-        SHRINCSCore.ActionContext context;
-        SPHINCSPlusCCore.StatelessSignature signature;
+        SHRINCS.PublicKey publicKey;
+        SHRINCS.ActionContext context;
+        SPHINCSPlusC.StatelessSignature signature;
         SHRINCSAccountVerifierExample account;
         bytes message;
         bytes32 hash;
@@ -181,8 +181,8 @@ contract SHRINCSMeasurementsTest is Test {
         returns (StatefulCase memory c)
     {
         (
-            SHRINCSCore.SigningKey memory signingKey,
-            SHRINCSCore.PublicKey memory publicKey,
+            SHRINCS.SigningKey memory signingKey,
+            SHRINCS.PublicKey memory publicKey,
             bool keygenOk
         ) = SHRINCSAccountSigningFacade.keygen(seedMaterial, 4);
         assertTrue(keygenOk, "stateful keygen must succeed");
@@ -196,7 +196,7 @@ contract SHRINCSMeasurementsTest is Test {
 
         (
             ,
-            SHRINCSCore.ActionContext memory context,
+            SHRINCS.ActionContext memory context,
             UXMSS.StatefulSignature memory signature,
             bool signOk
         ) = SHRINCSAccountSigningFacade.signStatefulActionNow(
@@ -207,7 +207,7 @@ contract SHRINCSMeasurementsTest is Test {
             uint32(signature.authPath.length)
         );
 
-        bytes32 hash = SHRINCSCore.statefulActionMessageHash(
+        bytes32 hash = SHRINCS.statefulActionMessageHash(
             account.currentSHRINCSPublicKey(), context
         );
         bytes memory message = abi.encodePacked(hash);
@@ -228,8 +228,8 @@ contract SHRINCSMeasurementsTest is Test {
         returns (StatelessCase memory c)
     {
         (
-            SHRINCSCore.SigningKey memory signingKey,
-            SHRINCSCore.PublicKey memory publicKey,
+            SHRINCS.SigningKey memory signingKey,
+            SHRINCS.PublicKey memory publicKey,
             bool ok
         ) = SHRINCSAccountSigningFacade.keygen(seedMaterial, 4);
         assertTrue(ok, "stateless keygen must succeed");
@@ -253,18 +253,18 @@ contract SHRINCSMeasurementsTest is Test {
 
         // line-length: allow — fmt canonical tuple head exceeds cap
         (
-            SPHINCSPlusCCore.StatelessSignature memory signature,
+            SPHINCSPlusC.StatelessSignature memory signature,
             bool completeOk
         ) = SHRINCSAccountSigningFacade.completeStatelessSession(
-            accountSigner, sessionId
-        );
+                accountSigner, sessionId
+            );
         assertTrue(completeOk, "stateless signing must complete");
 
-        SHRINCSCore.ActionContext memory context =
+        SHRINCS.ActionContext memory context =
             SHRINCSAccountSigningFacade.actionContext(
                 account, ACTION_TYPE, PAYLOAD_HASH
             );
-        bytes32 hash = SHRINCSCore.statelessActionMessageHash(
+        bytes32 hash = SHRINCS.statelessActionMessageHash(
             account.currentSHRINCSPublicKey(), context
         );
         bytes memory message = abi.encodePacked(hash);
@@ -320,8 +320,8 @@ contract SHRINCSMeasurementsTest is Test {
         )
     {
         (
-            SHRINCSCore.SigningKey memory signingKey,
-            SHRINCSCore.PublicKey memory publicKey,
+            SHRINCS.SigningKey memory signingKey,
+            SHRINCS.PublicKey memory publicKey,
             bool ok
         ) = SHRINCSAccountSigningFacade.keygen(seedMaterial, 4);
         assertTrue(ok, "delegation keygen must succeed");
@@ -334,11 +334,11 @@ contract SHRINCSMeasurementsTest is Test {
         assertTrue(ok, "delegation session must begin");
         // line-length: allow — fmt canonical tuple head exceeds cap
         (
-            SPHINCSPlusCCore.StatelessSignature memory signature,
+            SPHINCSPlusC.StatelessSignature memory signature,
             bool completeOk
         ) = SHRINCSAccountSigningFacade.completeStatelessSession(
-            accountSigner, sessionId
-        );
+                accountSigner, sessionId
+            );
         assertTrue(completeOk, "delegation signing must complete");
 
         verifier = new MeasurementDelegationHarness();
@@ -351,7 +351,7 @@ contract SHRINCSMeasurementsTest is Test {
         envelope = SHRINCSCodec.encodeStatelessEnvelope(publicKey, signature);
     }
 
-    function publicKeyCommitmentWord(SHRINCSCore.PublicKey memory publicKey)
+    function publicKeyCommitmentWord(SHRINCS.PublicKey memory publicKey)
         internal
         pure
         returns (bytes32 out)

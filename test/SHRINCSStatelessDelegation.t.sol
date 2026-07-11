@@ -21,8 +21,8 @@ import {
     IERC7913SignatureVerifier
 } from "../contracts/interfaces/IERC7913SignatureVerifier.sol";
 import {SHRINCSCodec} from "../contracts/SHRINCSCodec.sol";
-import {SHRINCSCore} from "../contracts/SHRINCSCore.sol";
-import {SPHINCSPlusCCore} from "../contracts/SPHINCSPlusCCore.sol";
+import {SHRINCS} from "../contracts/SHRINCS.sol";
+import {SPHINCSPlusC} from "../contracts/SPHINCSPlusC.sol";
 import {SHRINCS256sKeccak} from "../contracts/SHRINCS256sKeccak.sol";
 import {
     SHRINCSAccountSigningFacade
@@ -41,7 +41,7 @@ contract SHRINCS256sDelegationHarness is SHRINCS256sKeccak {
     }
 }
 
-/// @notice Exercises the SHRINCS adapter's verifyStateless delegation to a
+/// @notice Exercises the SHRINCSVerifier's verifyStateless delegation to a
 /// locally deployed SPHINCSPlusC sibling at the pinned CREATE3 address.
 /// Profile-gated (256s); the stateless signature is produced in-Solidity.
 contract SHRINCSStatelessDelegationTest is Test {
@@ -128,8 +128,8 @@ contract SHRINCSStatelessDelegationTest is Test {
         returns (bytes memory key, bytes memory envelope, bytes32 hash)
     {
         (
-            SHRINCSCore.SigningKey memory signingKey,
-            SHRINCSCore.PublicKey memory publicKey,
+            SHRINCS.SigningKey memory signingKey,
+            SHRINCS.PublicKey memory publicKey,
             bool ok
         ) = SHRINCSAccountSigningFacade.keygen(
             bytes("stateless delegation fixture"), 4
@@ -142,11 +142,11 @@ contract SHRINCSStatelessDelegationTest is Test {
         );
         require(beginOk, "begin");
         (
-            SPHINCSPlusCCore.StatelessSignature memory signature,
+            SPHINCSPlusC.StatelessSignature memory signature,
             bool completeOk
         ) = SHRINCSAccountSigningFacade.completeStatelessSession(
-            signer, sessionId
-        );
+                signer, sessionId
+            );
         require(completeOk, "complete");
 
         key = abi.encodePacked(

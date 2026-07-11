@@ -19,8 +19,8 @@ pragma solidity ^0.8.28;
 import {
     SHRINCSStatelessVectorSigner
 } from "./SHRINCSStatelessVectorSigner.sol";
-import {SHRINCSCore} from "../../contracts/SHRINCSCore.sol";
-import {SPHINCSPlusCCore} from "../../contracts/SPHINCSPlusCCore.sol";
+import {SHRINCS} from "../../contracts/SHRINCS.sol";
+import {SPHINCSPlusC} from "../../contracts/SPHINCSPlusC.sol";
 
 /// @notice TEST-ONLY orchestration facade for the staged stateless signer.
 /// @dev This library keeps the actual signing work in the storage-backed
@@ -35,8 +35,8 @@ library SHRINCSStatelessVectorSigningFacade {
     )
         internal
         returns (
-            SHRINCSCore.PublicKey memory publicKey,
-            SPHINCSPlusCCore.StatelessSignature memory signature,
+            SHRINCS.PublicKey memory publicKey,
+            SPHINCSPlusC.StatelessSignature memory signature,
             bool ok
         )
     {
@@ -54,8 +54,8 @@ library SHRINCSStatelessVectorSigningFacade {
     )
         internal
         returns (
-            SHRINCSCore.PublicKey memory publicKey,
-            SPHINCSPlusCCore.StatelessSignature memory signature,
+            SHRINCS.PublicKey memory publicKey,
+            SPHINCSPlusC.StatelessSignature memory signature,
             bool ok
         )
     {
@@ -72,9 +72,8 @@ library SHRINCSStatelessVectorSigningFacade {
 
         bytes memory encodedSignature = signer.finalizeSignature(sessionId);
         publicKey = signer.sessionPublicKey(sessionId);
-        signature = abi.decode(
-            encodedSignature, (SPHINCSPlusCCore.StatelessSignature)
-        );
+        signature =
+            abi.decode(encodedSignature, (SPHINCSPlusC.StatelessSignature));
         return (publicKey, signature, true);
     }
 }

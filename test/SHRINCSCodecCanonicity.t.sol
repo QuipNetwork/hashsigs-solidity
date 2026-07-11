@@ -18,8 +18,8 @@ pragma solidity ^0.8.28;
 
 import {Test} from "../lib/forge-std/src/Test.sol";
 import {SHRINCSCodec} from "../contracts/SHRINCSCodec.sol";
-import {SHRINCSCore} from "../contracts/SHRINCSCore.sol";
-import {SPHINCSPlusCCore} from "../contracts/SPHINCSPlusCCore.sol";
+import {SHRINCS} from "../contracts/SHRINCS.sol";
+import {SPHINCSPlusC} from "../contracts/SPHINCSPlusC.sol";
 import {UXMSS} from "../contracts/UXMSS.sol";
 import {
     SHRINCSAccountVerifierExample
@@ -72,11 +72,9 @@ contract CodecCanonicityHarness {
         returns (bool)
     {
         (
-            SHRINCSCore.PublicKey memory publicKey,
+            SHRINCS.PublicKey memory publicKey,
             UXMSS.StatefulSignature memory signature
-        ) = abi.decode(
-            payload, (SHRINCSCore.PublicKey, UXMSS.StatefulSignature)
-        );
+        ) = abi.decode(payload, (SHRINCS.PublicKey, UXMSS.StatefulSignature));
         return
             keccak256(payload) == keccak256(abi.encode(publicKey, signature));
     }
@@ -87,11 +85,10 @@ contract CodecCanonicityHarness {
         returns (bool)
     {
         (
-            SHRINCSCore.PublicKey memory publicKey,
-            SPHINCSPlusCCore.StatelessSignature memory signature
+            SHRINCS.PublicKey memory publicKey,
+            SPHINCSPlusC.StatelessSignature memory signature
         ) = abi.decode(
-            payload,
-            (SHRINCSCore.PublicKey, SPHINCSPlusCCore.StatelessSignature)
+            payload, (SHRINCS.PublicKey, SPHINCSPlusC.StatelessSignature)
         );
         return
             keccak256(payload) == keccak256(abi.encode(publicKey, signature));
@@ -102,8 +99,8 @@ contract CodecCanonicityHarness {
         pure
         returns (bool)
     {
-        SPHINCSPlusCCore.StatelessSignature memory signature =
-            abi.decode(payload, (SPHINCSPlusCCore.StatelessSignature));
+        SPHINCSPlusC.StatelessSignature memory signature =
+            abi.decode(payload, (SPHINCSPlusC.StatelessSignature));
         return keccak256(payload) == keccak256(abi.encode(signature));
     }
 }
@@ -285,8 +282,8 @@ contract SHRINCSCodecCanonicityTest is Test {
 
     function buildStatefulEnvelope() external pure returns (bytes memory) {
         (
-            SHRINCSCore.SigningKey memory signingKey,
-            SHRINCSCore.PublicKey memory publicKey,
+            SHRINCS.SigningKey memory signingKey,
+            SHRINCS.PublicKey memory publicKey,
             bool ok
         ) = SHRINCSTestSigner.keygen(bytes("codec stateful fixture"), 4);
         require(ok, "stateful keygen");
@@ -303,8 +300,8 @@ contract SHRINCSCodecCanonicityTest is Test {
         returns (bytes memory statelessEnv, bytes memory statelessSigEnv)
     {
         (
-            SHRINCSCore.SigningKey memory signingKey,
-            SHRINCSCore.PublicKey memory publicKey,
+            SHRINCS.SigningKey memory signingKey,
+            SHRINCS.PublicKey memory publicKey,
             bool ok
         ) = SHRINCSAccountSigningFacade.keygen(
             bytes("codec stateless fixture"), 4
@@ -329,11 +326,11 @@ contract SHRINCSCodecCanonicityTest is Test {
             );
         require(ok, "begin stateless");
         (
-            SPHINCSPlusCCore.StatelessSignature memory signature,
+            SPHINCSPlusC.StatelessSignature memory signature,
             bool completeOk
         ) = SHRINCSAccountSigningFacade.completeStatelessSession(
-            signer, sessionId
-        );
+                signer, sessionId
+            );
         require(completeOk, "complete stateless");
         statelessEnv = abi.encode(publicKey, signature);
         statelessSigEnv = abi.encode(signature);

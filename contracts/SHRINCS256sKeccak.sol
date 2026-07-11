@@ -16,7 +16,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 pragma solidity ^0.8.28;
 
-import {SHRINCS} from "./SHRINCS.sol";
+import {SHRINCSVerifier} from "./SHRINCSVerifier.sol";
 
 /// @title SHRINCS256sKeccak
 /// @notice Concrete 256s-profile SHRINCS. Deploy this artifact
@@ -29,7 +29,7 @@ import {SHRINCS} from "./SHRINCS.sol";
 /// and registry cross-checks; the base VERSION_TAG stays the shared
 /// format-family tag (constants cannot be virtual/override, so the profile
 /// tag lives here).
-contract SHRINCS256sKeccak is SHRINCS {
+contract SHRINCS256sKeccak is SHRINCSVerifier {
     // PROFILE_TAG: the compiled parameter-set identifier for this
     // verifier. Matches SHRINCSParams.PROFILE_ID for the 256s profile.
     bytes32 public constant PROFILE_TAG = keccak256("shrincs-256s-keccak");

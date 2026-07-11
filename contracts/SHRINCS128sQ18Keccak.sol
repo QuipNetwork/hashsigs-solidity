@@ -16,7 +16,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 pragma solidity ^0.8.28;
 
-import {SHRINCS} from "./SHRINCS.sol";
+import {SHRINCSVerifier} from "./SHRINCSVerifier.sol";
 
 /// @title SHRINCS128sQ18Keccak
 /// @notice Concrete 128s-q18-profile SHRINCS. Deploy this
@@ -27,7 +27,7 @@ import {SHRINCS} from "./SHRINCS.sol";
 /// parameter tuple from the compile-time SHRINCSParams selected by the build
 /// profile. PROFILE_TAG identifies the compiled parameter set for on-chain
 /// and registry cross-checks.
-contract SHRINCS128sQ18Keccak is SHRINCS {
+contract SHRINCS128sQ18Keccak is SHRINCSVerifier {
     // PROFILE_TAG: the compiled parameter-set identifier for this
     // verifier. Matches SHRINCSParams.PROFILE_ID for the 128s-q18
     // profile (stateless-signature budget 2^18).

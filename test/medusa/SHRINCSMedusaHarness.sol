@@ -16,7 +16,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 pragma solidity ^0.8.28;
 
-import {SHRINCSCore} from "../../contracts/SHRINCSCore.sol";
+import {SHRINCS} from "../../contracts/SHRINCS.sol";
 import {UXMSS} from "../../contracts/UXMSS.sol";
 import {SHRINCSParams} from "shrincs-profile/SHRINCSParams.sol";
 import {
@@ -32,7 +32,7 @@ contract MedusaAccountHarness is SHRINCSAccountVerifierExample {
     {}
 
     function verifyStatefulUncheckedForTest(
-        SHRINCSCore.PublicKey calldata publicKey,
+        SHRINCS.PublicKey calldata publicKey,
         bytes calldata message,
         UXMSS.StatefulSignature calldata signature
     ) external returns (bool) {
@@ -68,7 +68,7 @@ contract SHRINCSMedusaHarness {
     uint32 internal constant MAX_LEAF = 4;
 
     MedusaAccountHarness internal account;
-    SHRINCSCore.PublicKey internal publicKey;
+    SHRINCS.PublicKey internal publicKey;
     mapping(uint32 => UXMSS.StatefulSignature) internal signatureOf;
 
     bool internal purityViolated;
@@ -78,7 +78,7 @@ contract SHRINCSMedusaHarness {
     bool internal keyVersionDecreased;
 
     constructor() {
-        SHRINCSCore.SigningKey memory signingKey;
+        SHRINCS.SigningKey memory signingKey;
         bool keygenOk;
         (signingKey, publicKey, keygenOk) =
             SHRINCSTestSigner.keygen(bytes("shrincs-medusa-key"), MAX_LEAF);
@@ -192,7 +192,7 @@ contract SHRINCSMedusaHarness {
         );
     }
 
-    function _commitmentWord(SHRINCSCore.PublicKey memory key)
+    function _commitmentWord(SHRINCS.PublicKey memory key)
         internal
         pure
         returns (bytes32 word)

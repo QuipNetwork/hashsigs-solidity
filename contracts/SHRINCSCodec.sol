@@ -16,9 +16,9 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 pragma solidity ^0.8.28;
 
-import {SHRINCSCore} from "./SHRINCSCore.sol";
+import {SHRINCS} from "./SHRINCS.sol";
 import {UXMSS} from "./UXMSS.sol";
-import {SPHINCSPlusCCore} from "./SPHINCSPlusCCore.sol";
+import {SPHINCSPlusC} from "./SPHINCSPlusC.sol";
 import {SHRINCSParams} from "shrincs-profile/SHRINCSParams.sol";
 
 /// @notice Byte-format definitions bridging ERC-7913 opaque bytes to typed
@@ -85,7 +85,7 @@ library SHRINCSCodec {
         internal
         pure
         returns (
-            SHRINCSCore.PublicKey memory publicKey,
+            SHRINCS.PublicKey memory publicKey,
             UXMSS.StatefulSignature memory signature,
             bool ok
         )
@@ -94,7 +94,7 @@ library SHRINCSCodec {
             return (publicKey, signature, false);
         }
         (publicKey, signature) = abi.decode(
-            envelope, (SHRINCSCore.PublicKey, UXMSS.StatefulSignature)
+            envelope, (SHRINCS.PublicKey, UXMSS.StatefulSignature)
         );
         return (publicKey, signature, true);
     }
@@ -107,13 +107,13 @@ library SHRINCSCodec {
     /// @param signature The stateful signature.
     /// @return envelope The abi-encoded stateful envelope bytes.
     function encodeStatefulEnvelope(
-        SHRINCSCore.PublicKey memory publicKey,
+        SHRINCS.PublicKey memory publicKey,
         UXMSS.StatefulSignature memory signature
     ) internal pure returns (bytes memory envelope) {
         return abi.encode(publicKey, signature);
     }
 
-    /// @notice Decode the SHRINCS stateless-adapter envelope into typed
+    /// @notice Decode the SHRINCSVerifier stateless envelope into typed
     /// structs.
     /// @dev Envelope layout is abi.encode(PublicKey, StatelessSignature)
     /// with no mode prefix. Never reverts: the structural walk over calldata
@@ -127,8 +127,8 @@ library SHRINCSCodec {
         internal
         pure
         returns (
-            SHRINCSCore.PublicKey memory publicKey,
-            SPHINCSPlusCCore.StatelessSignature memory signature,
+            SHRINCS.PublicKey memory publicKey,
+            SPHINCSPlusC.StatelessSignature memory signature,
             bool ok
         )
     {
@@ -136,8 +136,7 @@ library SHRINCSCodec {
             return (publicKey, signature, false);
         }
         (publicKey, signature) = abi.decode(
-            envelope,
-            (SHRINCSCore.PublicKey, SPHINCSPlusCCore.StatelessSignature)
+            envelope, (SHRINCS.PublicKey, SPHINCSPlusC.StatelessSignature)
         );
         return (publicKey, signature, true);
     }
@@ -149,13 +148,13 @@ library SHRINCSCodec {
     /// @param signature The stateless signature.
     /// @return envelope The abi-encoded stateless envelope bytes.
     function encodeStatelessEnvelope(
-        SHRINCSCore.PublicKey memory publicKey,
-        SPHINCSPlusCCore.StatelessSignature memory signature
+        SHRINCS.PublicKey memory publicKey,
+        SPHINCSPlusC.StatelessSignature memory signature
     ) internal pure returns (bytes memory envelope) {
         return abi.encode(publicKey, signature);
     }
 
-    /// @notice Decode the SPHINCSPlusC-adapter key into its two seed words.
+    /// @notice Decode the SPHINCSPlusCVerifier key into its two seed words.
     /// @dev Key layout is abi.encode(bytes32 pkSeed, bytes32 hypertreeRoot),
     /// exactly 64 bytes of static words with no framing freedom, so a length
     /// check plus two calldata loads is a complete canonicity check. Never
@@ -181,7 +180,7 @@ library SHRINCSCodec {
     }
 
     /// @notice Inverse of decodeStatelessKey.
-    /// @dev Builds the SPHINCSPlusC-adapter key the sub-call verify expects.
+    /// @dev Builds the SPHINCSPlusCVerifier key the sub-call verify expects.
     /// @param pkSeed The stateless SPHINCS-style public seed.
     /// @param hypertreeRoot The stateless SPHINCS-style public root.
     /// @return key The abi-encoded stateless key bytes (64 bytes).
@@ -193,7 +192,7 @@ library SHRINCSCodec {
         return abi.encode(pkSeed, hypertreeRoot);
     }
 
-    /// @notice Decode the SPHINCSPlusC-adapter envelope into a typed
+    /// @notice Decode the SPHINCSPlusCVerifier envelope into a typed
     /// stateless signature.
     /// @dev Envelope layout is abi.encode(StatelessSignature) with no mode
     /// prefix. Never reverts: the structural walk over calldata
@@ -205,27 +204,23 @@ library SHRINCSCodec {
     function decodeStatelessSignatureEnvelope(bytes calldata envelope)
         internal
         pure
-        returns (
-            SPHINCSPlusCCore.StatelessSignature memory signature,
-            bool ok
-        )
+        returns (SPHINCSPlusC.StatelessSignature memory signature, bool ok)
     {
         if (!_isCanonicalEnvelope(envelope, SHAPE_STATELESS_SIGNATURE)) {
             return (signature, false);
         }
-        signature =
-            abi.decode(envelope, (SPHINCSPlusCCore.StatelessSignature));
+        signature = abi.decode(envelope, (SPHINCSPlusC.StatelessSignature));
         return (signature, true);
     }
 
     /// @notice Inverse of decodeStatelessSignatureEnvelope.
-    /// @dev Builds the SPHINCSPlusC-adapter signature envelope the sub-call
+    /// @dev Builds the SPHINCSPlusCVerifier signature envelope the sub-call
     /// verify expects, so the delegation path re-encodes through one format
     /// definition.
     /// @param signature The stateless signature.
     /// @return envelope The abi-encoded stateless-signature envelope bytes.
     function encodeStatelessSignatureEnvelope(
-        SPHINCSPlusCCore.StatelessSignature memory signature
+        SPHINCSPlusC.StatelessSignature memory signature
     ) internal pure returns (bytes memory envelope) {
         return abi.encode(signature);
     }
@@ -250,7 +245,7 @@ library SHRINCSCodec {
     // 2. Bind the stateful public key, stateless public seed, and hypertree
     // root.
     // 3. Return the installed public-key commitment.
-    function publicKeyCommitment(SHRINCSCore.PublicKey calldata publicKey)
+    function publicKeyCommitment(SHRINCS.PublicKey calldata publicKey)
         internal
         pure
         returns (bytes32)
@@ -294,7 +289,7 @@ library SHRINCSCodec {
     // 4. Check it against the caller-supplied expected commitment.
     // 5. Recompute the bundle commitment and require it to match too.
     function matchesExpectedPublicKeyCommitment(
-        SHRINCSCore.PublicKey calldata publicKey,
+        SHRINCS.PublicKey calldata publicKey,
         bytes32 expectedPublicKeyCommitment
     ) internal pure returns (bool) {
         // A missing installed-key commitment is always invalid.
@@ -324,7 +319,7 @@ library SHRINCSCodec {
     // 3. Load the embedded commitment from calldata.
     // 4. Recompute the bundle commitment and require it to match the embedded
     // field.
-    function validPublicKey(SHRINCSCore.PublicKey calldata publicKey)
+    function validPublicKey(SHRINCS.PublicKey calldata publicKey)
         internal
         pure
         returns (bool)
