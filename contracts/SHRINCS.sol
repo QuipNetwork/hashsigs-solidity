@@ -92,7 +92,9 @@ abstract contract SHRINCS is IERC7913SignatureVerifier {
     /// @param key The 32-byte SHRINCS publicKeyCommitment.
     /// @param hash The 32-byte message hash to verify.
     /// @param signature The SHRINCSCodec stateful envelope.
-    /// @return The verify selector on success, 0xffffffff on malformed input.
+    /// @return The verify selector on success; 0xffffffff for a
+    /// malformed key or envelope, or a well-formed but invalid
+    /// signature. Execution failures revert.
     function verify(
         bytes calldata key,
         bytes32 hash,
@@ -156,7 +158,9 @@ abstract contract SHRINCS is IERC7913SignatureVerifier {
     /// @param key The 32-byte SHRINCS publicKeyCommitment.
     /// @param hash The 32-byte message hash to verify.
     /// @param signature The SHRINCSCodec stateless envelope.
-    /// @return The verify selector on success, 0xffffffff on malformed input.
+    /// @return The verify selector on success; 0xffffffff for a
+    /// malformed key or envelope, or a well-formed but invalid
+    /// signature. Execution failures revert.
     function verifyStateless(
         bytes calldata key,
         bytes32 hash,

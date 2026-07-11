@@ -82,7 +82,9 @@ abstract contract SPHINCSPlusC is IERC7913SignatureVerifier {
     /// @param key abi.encode(bytes32 pkSeed, bytes32 hypertreeRoot).
     /// @param hash The 32-byte message hash to verify.
     /// @param signature The SHRINCSCodec stateless-signature envelope.
-    /// @return The verify selector on success, 0xffffffff on malformed input.
+    /// @return The verify selector on success; 0xffffffff for a
+    /// malformed key or envelope, or a well-formed but invalid
+    /// signature. Execution failures revert.
     function verify(
         bytes calldata key,
         bytes32 hash,

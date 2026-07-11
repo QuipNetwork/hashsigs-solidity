@@ -1021,6 +1021,12 @@ delegation figure is `verifyStateless` calling its SPHINCS+C sibling.
 | stateless, ERC-1271               | 2,970,497 |
 | stateless delegation, ERC-7913    | 4,014,578 |
 
+For the stateful profile the ERC-1271 figure falls below the canonical
+wrapper call: the wrapper builds and validates the typed `ActionContext`
+and canonical hash on-chain, whereas the ERC-1271 path verifies a
+precomputed hash, and the envelope walk now costs less than that context
+machinery.
+
 Reproduce with:
 
 ```bash

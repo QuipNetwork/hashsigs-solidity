@@ -1,5 +1,11 @@
 # SHRINCS profile parameterization design
 
+This document predates the modularization. Its names and mechanisms
+describe the earlier tree (`ShrincsTypes` constant aliases,
+`ShrincsVerifier*` contracts, CREATE2 salts). The current layout lives
+in README.md and DEPLOYMENTS.md. Section numbers stay fixed because the
+verifier source cites them as `[DESIGN §x]`.
+
 Scope: compile/deploy-time profile selection for the SHRINCS verifier
 (256s baseline plus the 128s-q18/128s-q20 profiles). This is the
 committed design reference for the profile mechanics, hazards, and
