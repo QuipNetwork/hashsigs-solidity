@@ -188,7 +188,7 @@ contract ShrincsAccountVectorExportTest is Test {
         account.setStatefulPolicyRecoveryRotation();
         account.enterRecoveryMode();
 
-        // line-length: allow â fmt canonical tuple head exceeds cap
+        // line-length: allow — fmt canonical tuple head exceeds cap
         (, SHRINCS.PublicKey memory nextPublicKey, bool nextOk) = ShrincsAccountSigningFacade.keygen(
             bytes("export-rotation-next-key"), 4
         );
@@ -262,7 +262,7 @@ contract ShrincsAccountVectorExportTest is Test {
         account.setStatefulPolicyRecoveryRotation();
         account.enterRecoveryMode();
 
-        // line-length: allow â fmt canonical tuple head exceeds cap
+        // line-length: allow — fmt canonical tuple head exceeds cap
         (, SHRINCS.PublicKey memory nextPublicKey, bool nextOk) = ShrincsAccountSigningFacade.keygen(
             bytes("account-aware full rotation next key"), 4
         );

@@ -96,7 +96,7 @@ contract ShrincsAccountSigningFacadeTest is Test {
 
     // Checks that a stateful ERC-1271 signature works now, then fails after
     // the nonce is used.
-    // line-length: allow â test name is one unbreakable token
+    // line-length: allow — test name is one unbreakable token
     function testAccountAwareStateful1271SnapshotIsValidBeforeNonceUseAndInvalidAfter()
         public
     {
@@ -156,7 +156,7 @@ contract ShrincsAccountSigningFacadeTest is Test {
 
     // Checks that trailing bytes appended to a stateful ERC-1271 envelope
     // are rejected by the re-encode canonicity check.
-    // line-length: allow â test name is one unbreakable token
+    // line-length: allow — test name is one unbreakable token
     function testAccountAwareStateful1271EnvelopeRejectsTrailingBytes()
         public
     {
@@ -274,7 +274,7 @@ contract ShrincsAccountSigningFacadeTest is Test {
 
     // Checks that a stateless ERC-1271 signature works now, then fails after
     // the nonce is used.
-    // line-length: allow â test name is one unbreakable token
+    // line-length: allow — test name is one unbreakable token
     function testAccountAwareStateless1271SnapshotIsValidBeforeNonceUseAndInvalidAfter()
         public
     {
@@ -344,7 +344,7 @@ contract ShrincsAccountSigningFacadeTest is Test {
 
     // Checks that trailing bytes appended to a stateless ERC-1271 envelope
     // are rejected by the re-encode canonicity check.
-    // line-length: allow â test name is one unbreakable token
+    // line-length: allow — test name is one unbreakable token
     function testAccountAwareStateless1271EnvelopeRejectsTrailingBytes()
         public
     {
@@ -431,7 +431,7 @@ contract ShrincsAccountSigningFacadeTest is Test {
         account.setStatefulPolicyRecoveryRotation();
         account.enterRecoveryMode();
 
-        // line-length: allow â fmt canonical tuple head exceeds cap
+        // line-length: allow — fmt canonical tuple head exceeds cap
         (, SHRINCS.PublicKey memory nextPublicKey, bool nextOk) = ShrincsAccountSigningFacade.keygen(
             bytes("account-aware rotation next key"), 4
         );
@@ -510,7 +510,7 @@ contract ShrincsAccountSigningFacadeTest is Test {
         account.setStatefulPolicyRecoveryRotation();
         account.enterRecoveryMode();
 
-        // line-length: allow â fmt canonical tuple head exceeds cap
+        // line-length: allow — fmt canonical tuple head exceeds cap
         (, SHRINCS.PublicKey memory nextPublicKey, bool nextOk) = ShrincsAccountSigningFacade.keygen(
             bytes("account-aware full rotation next key"), 4
         );
