@@ -23,12 +23,29 @@ import {SHRINCS256sKeccak} from "../contracts/SHRINCS256sKeccak.sol";
 import {
     SPHINCSPlusC256sKeccak
 } from "../contracts/SPHINCSPlusC256sKeccak.sol";
+import {
+    DeploySHRINCS256sKeccak
+} from "../script/DeploySHRINCS256sKeccak.s.sol";
 
 /// @dev Exposes the internal pinned SPHINCSPlusC address of the concrete
 /// 256s deployable so the pin test can compare it to the CREATE3 derivation.
 contract SHRINCS256sPinHarness is SHRINCS256sKeccak {
     function pinned() external pure returns (address) {
         return _pinnedSphincsPlusC();
+    }
+}
+
+/// @dev Exposes the deploy script's SPHINCSPlusC sibling salt/address
+/// constants (both internal) so the pin test can assert they match the
+/// CREATE3 derivation. The script validates these only at deploy time, so
+/// a typo would otherwise reach production; this makes it fail CI.
+contract DeploySHRINCS256sProbe is DeploySHRINCS256sKeccak {
+    function siblingSalt() external pure returns (bytes32) {
+        return SPHINCS_PLUS_C_SALT;
+    }
+
+    function siblingAddr() external pure returns (address) {
+        return SPHINCS_PLUS_C;
     }
 }
 
@@ -59,6 +76,20 @@ contract SHRINCSPinned256sTest is Test {
             harness.pinned(),
             expected,
             "pinned SPHINCSPlusC256sKeccak address must match CREATE3"
+        );
+
+        // Mirror the deploy script's sibling constants against the same
+        // derivation so a typo in the script fails CI, not just deploy.
+        DeploySHRINCS256sProbe probe = new DeploySHRINCS256sProbe();
+        assertEq(
+            probe.siblingSalt(),
+            CHILD_SALT,
+            "deploy script SPHINCS_PLUS_C_SALT must match pin test"
+        );
+        assertEq(
+            probe.siblingAddr(),
+            expected,
+            "deploy script SPHINCS_PLUS_C must match CREATE3 derivation"
         );
     }
 

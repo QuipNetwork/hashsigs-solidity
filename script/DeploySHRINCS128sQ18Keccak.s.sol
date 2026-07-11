@@ -46,6 +46,11 @@ contract DeploySHRINCS128sQ18Keccak is Create3Deployer {
         0xBc7Fefc3D757Fa81E3C7d65905e32722b1a044A6;
 
     function run() external {
+        // Assert the build profile FIRST: _requireSibling reaches
+        // _factory() (and its init-code-drift check), so a wrong-profile
+        // run must fail with "wrong FOUNDRY_PROFILE", not "factory
+        // init-code drift".
+        _requireProfile("production-128s-q18");
         _requireSibling(SPHINCS_PLUS_C_SALT, SPHINCS_PLUS_C);
         _deploy(
             "SHRINCS128sQ18Keccak:",

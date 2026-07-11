@@ -74,12 +74,17 @@ abstract contract Create3Deployer is Script {
     function _factory() internal returns (Create3Factory factory) {
         // The canonical deploy runs under a production profile, whose
         // metadata-free factory creation code hashes to
-        // FACTORY_INITCODE_HASH. Assert it, so a Create3.sol change (which
-        // would move the factory and every child address) fails the deploy
-        // instead of silently landing at a different address.
+        // FACTORY_INITCODE_HASH. Log the computed hash (this is the value
+        // the pin-regeneration procedure above reads) BEFORE asserting it,
+        // so the hash is printed even when the drift check reverts. The
+        // assert makes a Create3.sol change (which would move the factory
+        // and every child address) fail the deploy instead of silently
+        // landing at a different address.
+        bytes32 initCodeHash = keccak256(type(Create3Factory).creationCode);
+        console.log("Create3Factory init-code hash:");
+        console.logBytes32(initCodeHash);
         require(
-            keccak256(type(Create3Factory).creationCode)
-                == FACTORY_INITCODE_HASH,
+            initCodeHash == FACTORY_INITCODE_HASH,
             "deploy: factory init-code drift"
         );
         address predicted = vm.computeCreate2Address(

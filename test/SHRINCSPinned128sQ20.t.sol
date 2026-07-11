@@ -23,6 +23,9 @@ import {SHRINCS128sQ20Keccak} from "../contracts/SHRINCS128sQ20Keccak.sol";
 import {
     SPHINCSPlusC128sQ20Keccak
 } from "../contracts/SPHINCSPlusC128sQ20Keccak.sol";
+import {
+    DeploySHRINCS128sQ20Keccak
+} from "../script/DeploySHRINCS128sQ20Keccak.s.sol";
 
 /// @dev Exposes the internal pinned SPHINCSPlusC address of the concrete
 /// 128s-q20 deployable so the pin test can compare it to the CREATE3
@@ -30,6 +33,20 @@ import {
 contract SHRINCS128sQ20PinHarness is SHRINCS128sQ20Keccak {
     function pinned() external pure returns (address) {
         return _pinnedSphincsPlusC();
+    }
+}
+
+/// @dev Exposes the deploy script's SPHINCSPlusC sibling salt/address
+/// constants (both internal) so the pin test can assert they match the
+/// CREATE3 derivation. The script validates these only at deploy time, so
+/// a typo would otherwise reach production; this makes it fail CI.
+contract DeploySHRINCS128sQ20Probe is DeploySHRINCS128sQ20Keccak {
+    function siblingSalt() external pure returns (bytes32) {
+        return SPHINCS_PLUS_C_SALT;
+    }
+
+    function siblingAddr() external pure returns (address) {
+        return SPHINCS_PLUS_C;
     }
 }
 
@@ -60,6 +77,20 @@ contract SHRINCSPinned128sQ20Test is Test {
             harness.pinned(),
             expected,
             "pinned SPHINCSPlusC128sQ20Keccak address must match CREATE3"
+        );
+
+        // Mirror the deploy script's sibling constants against the same
+        // derivation so a typo in the script fails CI, not just deploy.
+        DeploySHRINCS128sQ20Probe probe = new DeploySHRINCS128sQ20Probe();
+        assertEq(
+            probe.siblingSalt(),
+            CHILD_SALT,
+            "deploy script SPHINCS_PLUS_C_SALT must match pin test"
+        );
+        assertEq(
+            probe.siblingAddr(),
+            expected,
+            "deploy script SPHINCS_PLUS_C must match CREATE3 derivation"
         );
     }
 
