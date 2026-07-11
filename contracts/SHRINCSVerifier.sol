@@ -42,14 +42,16 @@ import {UXMSS} from "./UXMSS.sol";
 /// reverts to the caller; ERC-7913 permits this (the interface says a
 /// verifier SHOULD return 0xffffffff OR revert on an invalid signature).
 /// A caller that needs a boolean must treat a revert as its own policy
-/// decision. Exactly one self-call hop remains per entrypoint: the
-/// memory->calldata re-materialization bridge, since SHRINCS takes
-/// calldata structs and external functions cannot live in a library. No
-/// try surrounds that hop, so an out-of-gas there propagates as a revert
-/// instead of being misreported as an invalid signature.
+/// decision. The stateful `verify` path runs entirely in-contract through
+/// the memory-typed SHRINCS library, with no external call. The only
+/// remaining external call is `verifyStateless`'s delegation to the pinned
+/// SPHINCSPlusC sibling; no try surrounds it, so an out-of-gas there
+/// propagates as a revert instead of being misreported as an invalid
+/// signature.
 ///
-/// Caller obligations. Every SHRINCS library is `pure` and both adapters are
-/// storage-free `view`; they verify a signature and nothing more. All
+/// Caller obligations. Every SHRINCS library is `pure` and both adapters
+/// are storage-free (their entrypoints are `view` or `pure`); they verify a
+/// signature and nothing more. All
 /// statefulness is the WRAPPER contract's job: single-use tracking of
 /// stateful leaves, nonce and keyVersion replay scoping, and installing the
 /// commitment a rotation returns. SHRINCSAccountVerifierExample is the
@@ -77,18 +79,16 @@ abstract contract SHRINCSVerifier is IERC7913SignatureVerifier {
     // Any non-magic value denotes signature failure.
     bytes4 private constant INVALID_SIGNATURE = 0xffffffff;
 
-    modifier onlySelf() {
-        require(msg.sender == address(this), "only self");
-        _;
-    }
-
     /// @notice ERC-7913 verification entrypoint for stateful signatures.
     /// @dev Decodes the 32-byte key into the installed bundle commitment and
     /// the stateful envelope through SHRINCSCodec's non-reverting validators
     /// (malformed key or envelope -> 0xffffffff). After validation abi.decode
-    /// is infallible, so verify itself decodes and drives the single
-    /// memory->calldata self-call hop. No try/catch: an execution failure,
-    /// including out-of-gas, reverts. See the contract-level revert model.
+    /// is infallible, so verify hands the decoded memory structs straight to
+    /// the memory-typed SHRINCS library, which enforces the
+    /// commitment-vs-bundle match, bundle shape, leaf-index bounds, WOTS-C
+    /// reconstruction, and the unbalanced-tree root over exactly the 32 hash
+    /// bytes. No external call, no try/catch: an execution failure, including
+    /// out-of-gas, reverts. See the contract-level revert model.
     /// @param key The 32-byte SHRINCS publicKeyCommitment.
     /// @param hash The 32-byte message hash to verify.
     /// @param signature The SHRINCSCodec stateful envelope.
@@ -99,7 +99,7 @@ abstract contract SHRINCSVerifier is IERC7913SignatureVerifier {
         bytes calldata key,
         bytes32 hash,
         bytes calldata signature
-    ) external view returns (bytes4) {
+    ) external pure returns (bytes4) {
         (bytes32 commitment, bool okKey) = SHRINCSCodec.decodeKey(key);
         if (!okKey) return INVALID_SIGNATURE;
 
@@ -110,51 +110,32 @@ abstract contract SHRINCSVerifier is IERC7913SignatureVerifier {
         ) = SHRINCSCodec.decodeStatefulEnvelope(signature);
         if (!okEnvelope) return INVALID_SIGNATURE;
 
-        if (this.checkStateful(commitment, hash, publicKey, signature_)) {
+        if (SHRINCS.verifyStatefulUncheckedMessage(
+                commitment,
+                publicKey,
+                SHRINCSCodec.toMessage(hash),
+                signature_
+            )) {
             return IERC7913SignatureVerifier.verify.selector;
         }
         return INVALID_SIGNATURE;
-    }
-
-    /// @notice Self-call hop — calldata re-materialization and stateful
-    /// verification. onlySelf.
-    /// @dev Receiving the structs through an external call re-encodes the
-    /// validated memory structs into calldata (SHRINCS takes calldata
-    /// structs), then verifies the stateful signature over exactly the 32
-    /// hash bytes under the commitment. SHRINCS enforces the
-    /// commitment-vs-bundle match, bundle shape, leaf-index bounds, WOTS-C
-    /// reconstruction, and the unbalanced-tree root; nothing is added here.
-    /// No try wraps this call: an out-of-gas propagates as a revert.
-    /// @param commitment The installed bundle commitment.
-    /// @param hash The 32-byte message hash.
-    /// @param publicKey The decoded public-key bundle.
-    /// @param signature The decoded stateful signature.
-    /// @return True when the stateful signature verifies.
-    function checkStateful(
-        bytes32 commitment,
-        bytes32 hash,
-        SHRINCS.PublicKey calldata publicKey,
-        UXMSS.StatefulSignature calldata signature
-    ) external view onlySelf returns (bool) {
-        return SHRINCS.verifyStatefulUncheckedMessage(
-            commitment, publicKey, SHRINCSCodec.toMessage(hash), signature
-        );
     }
 
     /// @notice ERC-7913-style verification entrypoint for stateless
     /// signatures, delegated to the pinned SPHINCSPlusC verifier.
     /// @dev Decodes the 32-byte key (the installed commitment) and the
     /// stateless envelope through SHRINCSCodec's non-reverting validators
-    /// (malformed -> 0xffffffff). Runs the bundle-vs-commitment check locally
-    /// (commitment first, then shape, mirroring the library stateless path)
-    /// through the single memory->calldata self-call hop, then delegates the
-    /// FORS-C + hypertree cryptography to the pinned SPHINCSPlusC deployment
-    /// with key = abi.encode(pkSeed, hypertreeRoot) and the stateless
-    /// signature envelope, returning that verifier's selector or 0xffffffff.
-    /// No try/catch: an execution failure in the delegate reverts.
-    /// This is a high-level bytes4-returning call, so solc's extcodesize and
-    /// return-data-length checks make a call to an undeployed or
-    /// short-returning sibling revert, never a false 0xffffffff.
+    /// (malformed -> 0xffffffff). Runs the bundle-vs-commitment check inline
+    /// on the decoded memory bundle (commitment first, then shape, mirroring
+    /// the library stateless path) and loads the two 32-byte stateless seed
+    /// words, then delegates the FORS-C + hypertree cryptography to the
+    /// pinned SPHINCSPlusC deployment with key = abi.encode(pkSeed,
+    /// hypertreeRoot) and the stateless signature envelope, returning that
+    /// verifier's selector or 0xffffffff. No try/catch: an execution failure
+    /// in the delegate reverts. This is a high-level bytes4-returning call,
+    /// so solc's extcodesize and return-data-length checks make a call to an
+    /// undeployed or short-returning sibling revert, never a false
+    /// 0xffffffff.
     /// @param key The 32-byte SHRINCS publicKeyCommitment.
     /// @param hash The 32-byte message hash to verify.
     /// @param signature The SHRINCSCodec stateless envelope.
@@ -176,9 +157,24 @@ abstract contract SHRINCSVerifier is IERC7913SignatureVerifier {
         ) = SHRINCSCodec.decodeStatelessEnvelope(signature);
         if (!okEnvelope) return INVALID_SIGNATURE;
 
-        (bool okBundle, bytes32 pkSeed, bytes32 hypertreeRoot) =
-            this.checkStatelessBundle(commitment, publicKey);
-        if (!okBundle) return INVALID_SIGNATURE;
+        // Commitment first, then shape, mirroring the library stateless path.
+        if (!SHRINCSCodec.matchesExpectedPublicKeyCommitment(
+                publicKey, commitment
+            )) return INVALID_SIGNATURE;
+        if (!SHRINCSCodec.validPublicKey(publicKey)) {
+            return INVALID_SIGNATURE;
+        }
+        // validPublicKey has proven both fields are exactly 32 bytes.
+        bytes memory seed = publicKey.pkSeed;
+        bytes memory root = publicKey.hypertreeRoot;
+        bytes32 pkSeed;
+        bytes32 hypertreeRoot;
+        // Memory-safe: reads two memory words into stack variables; no
+        // memory is written.
+        assembly ("memory-safe") {
+            pkSeed := mload(add(seed, 32))
+            hypertreeRoot := mload(add(root, 32))
+        }
 
         return IERC7913SignatureVerifier(_pinnedSphincsPlusC())
             .verify(
@@ -186,47 +182,6 @@ abstract contract SHRINCSVerifier is IERC7913SignatureVerifier {
                 hash,
                 SHRINCSCodec.encodeStatelessSignatureEnvelope(signature_)
             );
-    }
-
-    /// @notice Self-call hop — bundle-vs-commitment check and stateless
-    /// seed extraction. onlySelf.
-    /// @dev Re-materializes the validated bundle as calldata to run the
-    /// commitment match (commitment first) then the fixed-shape check,
-    /// mirroring SHRINCS.verifyStatelessUncheckedMessage's ordering, and
-    /// loads the two 32-byte stateless seed words the pinned verifier needs.
-    /// No cryptography here; the pinned SPHINCSPlusC verifier owns FORS-C and
-    /// the hypertree.
-    /// @param commitment The installed bundle commitment.
-    /// @param publicKey The decoded public-key bundle.
-    /// @return ok True when the bundle matches the commitment and shape.
-    /// @return pkSeed The stateless public seed word.
-    /// @return hypertreeRoot The stateless public root word.
-    function checkStatelessBundle(
-        bytes32 commitment,
-        SHRINCS.PublicKey calldata publicKey
-    )
-        external
-        view
-        onlySelf
-        returns (bool ok, bytes32 pkSeed, bytes32 hypertreeRoot)
-    {
-        // Commitment first, then shape, mirroring the library stateless path.
-        if (!SHRINCSCodec.matchesExpectedPublicKeyCommitment(
-                publicKey, commitment
-            )) return (false, bytes32(0), bytes32(0));
-        if (!SHRINCSCodec.validPublicKey(publicKey)) {
-            return (false, bytes32(0), bytes32(0));
-        }
-        // validPublicKey has proven both fields are exactly 32 bytes.
-        bytes calldata seed = publicKey.pkSeed;
-        bytes calldata root = publicKey.hypertreeRoot;
-        // Memory-safe: reads two calldata words into stack variables; no
-        // memory is written.
-        assembly ("memory-safe") {
-            pkSeed := calldataload(seed.offset)
-            hypertreeRoot := calldataload(root.offset)
-        }
-        return (true, pkSeed, hypertreeRoot);
     }
 
     /// @notice Address of the pinned SPHINCSPlusC verifier this profile

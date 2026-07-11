@@ -33,6 +33,16 @@ import {SPHINCSPlusC} from "./SPHINCSPlusC.sol";
 /// returns. SHRINCSAccountVerifierExample is the reference wrapper. Any
 /// future storage-needing helper belongs in a separate wrapper/base contract
 /// at the top of the inheritance chain, never in these libraries.
+/// @dev Calldata/memory split. The verify path takes `memory` structs so the
+/// ERC-7913 adapters can call it directly with their decoded envelopes, with
+/// no self-call bridge to re-materialize calldata: verifyStateful/
+/// verifyStatelessUncheckedMessage and the whole component stack below them
+/// (UXMSS, SPHINCSPlusC, FORSMinusC, Hypertree, and the Codec public-key
+/// checks) are `memory`-typed. The rotation/context helpers
+/// (rotateStatefulViaStateless, statelessRotate, and their message-hash
+/// builders) stay `calldata`-typed: wrapper contracts call them with genuine
+/// calldata, and any `memory` leaves they hand to the shared verify helpers
+/// are copied implicitly at the call boundary.
 library SHRINCS {
     // Hash-suite identifiers bound into canonical action and rotation hashes.
     uint32 internal constant HASH_SUITE_KECCAK_256 = 1;
@@ -398,9 +408,9 @@ library SHRINCS {
     // library.
     function verifyStatefulUncheckedMessage(
         bytes32 expectedPublicKeyCommitment,
-        SHRINCS.PublicKey calldata publicKey,
+        SHRINCS.PublicKey memory publicKey,
         bytes memory message,
-        UXMSS.StatefulSignature calldata signature
+        UXMSS.StatefulSignature memory signature
     ) internal pure returns (bool) {
         // The public key must satisfy the compiled fixed key shape.
         if (!SHRINCSCodec.validPublicKey(publicKey)) return false;
@@ -547,9 +557,9 @@ library SHRINCS {
     // component library.
     function verifyStatelessUncheckedMessage(
         bytes32 expectedPublicKeyCommitment,
-        SHRINCS.PublicKey calldata publicKey,
+        SHRINCS.PublicKey memory publicKey,
         bytes memory message,
-        SPHINCSPlusC.StatelessSignature calldata signature
+        SPHINCSPlusC.StatelessSignature memory signature
     ) internal pure returns (bool) {
         // The current public key must match the installed bundle commitment
         // expected by the caller.

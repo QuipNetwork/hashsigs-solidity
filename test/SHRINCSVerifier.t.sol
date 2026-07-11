@@ -264,60 +264,14 @@ contract SHRINCSVerifierTest is Test {
         );
     }
 
-    function testCheckStatefulRejectsNonSelfCaller() public {
-        (
-            SHRINCS.PublicKey memory publicKey,
-            UXMSS.StatefulSignature memory signature
-        ) = decodeStoredEnvelope();
-        vm.expectRevert(bytes("only self"));
-        verifier.checkStateful(
-            keyCommitment, signedHash, publicKey, signature
-        );
-    }
-
-    function testCheckStatelessBundleRejectsNonSelfCaller() public {
-        (SHRINCS.PublicKey memory publicKey,) = decodeStoredEnvelope();
-        vm.expectRevert(bytes("only self"));
-        verifier.checkStatelessBundle(keyCommitment, publicKey);
-    }
-
-    /// @dev The deliberate revert-model change: with the try/catch removed,
-    /// an inner out-of-gas is no longer swallowed to 0xffffffff. Stranding
-    /// the single self-call hop under the 63/64 rule on a VALID signature
-    /// makes the outer verify REVERT, so a genuine signature can never be
-    /// misreported as invalid because of a gas shortfall.
-    function testVerifyRevertsWhenInnerHopStrandedOnValidSig() public {
-        // Full gas: the valid signature verifies.
-        assertEq(
-            verifier.verify(validKey, signedHash, validEnvelope),
-            IERC7913SignatureVerifier.verify.selector,
-            "control: valid signature verifies with ample gas"
-        );
-
-        // Measure the happy-path cost, then forward a fraction that lets the
-        // key/envelope decode complete but strands the ~260k stateful hop
-        // (which is the bulk of the work) under the 63/64 forwarding rule.
-        uint256 gasBefore = gasleft();
-        verifier.verify(validKey, signedHash, validEnvelope);
-        uint256 happyGas = gasBefore - gasleft();
-
-        (bool success, bytes memory ret) = address(verifier)
-        .call{gas: happyGas * 3 / 4}(
-            abi.encodeWithSelector(
-                SHRINCSVerifier.verify.selector,
-                validKey,
-                signedHash,
-                validEnvelope
-            )
-        );
-        assertFalse(
-            success,
-            "stranded inner hop must revert, not swallow to 0xffffffff"
-        );
-        assertEq(
-            ret.length, 0, "an out-of-gas revert carries no return data"
-        );
-    }
+    // The stateful `verify` path no longer makes any external call (the
+    // memory->calldata self-call hops and their onlySelf modifier were
+    // removed when SHRINCS became memory-typed), so there is no inner hop to
+    // strand here. The equivalent out-of-gas revert-model property now lives
+    // on the one remaining external call — verifyStateless's delegation to
+    // the pinned SPHINCSPlusC sibling — and is exercised against a real
+    // deployed sibling by SHRINCSStatelessDelegationTest's
+    // testVerifyStatelessRevertsWhenDelegationStrandedOnValidSig.
 
     function testFuzzVerifyNeverReverts(
         bytes calldata key,

@@ -37,12 +37,13 @@ import {SPHINCSPlusC} from "./SPHINCSPlusC.sol";
 /// returns 0xffffffff, reached only through SHRINCSCodec's non-reverting
 /// structural validation — no try/catch anywhere. Every other failure,
 /// including an inner out-of-gas, reverts to the caller; ERC-7913 permits
-/// this. Exactly one self-call hop remains: the memory->calldata
-/// re-materialization bridge, since SPHINCSPlusC takes calldata structs
-/// and external functions cannot live in a library. No try surrounds it.
+/// this. verify runs entirely in-contract through the memory-typed
+/// SPHINCSPlusC library, with no external call.
 ///
-/// Caller obligations. Every SPHINCSPlusC library is `pure` and this adapter
-/// is a storage-free `view`; it verifies a signature and nothing more. All
+/// Caller obligations. Every SPHINCSPlusC library is `pure` and this
+/// adapter's `verify` is likewise storage-free and `pure` (removing the
+/// self-call hop left no external call); it verifies a signature and nothing
+/// more. All
 /// statefulness — stateless-budget accounting, nonce/keyVersion replay
 /// scoping, installing a rotated key — is the WRAPPER contract's job.
 /// SHRINCSAccountVerifierExample is the reference wrapper. Any future
@@ -66,19 +67,18 @@ abstract contract SPHINCSPlusCVerifier is IERC7913SignatureVerifier {
     // Any non-magic value denotes signature failure.
     bytes4 private constant INVALID_SIGNATURE = 0xffffffff;
 
-    modifier onlySelf() {
-        require(msg.sender == address(this), "only self");
-        _;
-    }
-
     /// @notice ERC-7913 verification entrypoint for stateless SPHINCSPlusC
     /// signatures.
     /// @dev Decodes the 64-byte key into the two stateless seed words and the
     /// stateless-signature envelope through SHRINCSCodec's non-reverting
     /// validators (malformed key or envelope -> 0xffffffff). After validation
-    /// abi.decode is infallible, so verify drives the single memory->calldata
-    /// self-call hop. No try/catch: an execution failure, including
-    /// out-of-gas, reverts. See the contract-level revert model.
+    /// abi.decode is infallible, so verify re-materializes the two seed words
+    /// as 32-byte `bytes memory` and hands them, with the decoded signature,
+    /// straight to the memory-typed SPHINCSPlusC library, which verifies
+    /// FORS-C plus the hypertree over exactly the 32 hash bytes under the
+    /// public seed and root. No external call, no try/catch: an execution
+    /// failure, including out-of-gas, reverts. See the contract-level revert
+    /// model.
     /// @param key abi.encode(bytes32 pkSeed, bytes32 hypertreeRoot).
     /// @param hash The 32-byte message hash to verify.
     /// @param signature The SHRINCSCodec stateless-signature envelope.
@@ -89,7 +89,7 @@ abstract contract SPHINCSPlusCVerifier is IERC7913SignatureVerifier {
         bytes calldata key,
         bytes32 hash,
         bytes calldata signature
-    ) external view returns (bytes4) {
+    ) external pure returns (bytes4) {
         (bytes32 pkSeed, bytes32 hypertreeRoot, bool okKey) =
             SHRINCSCodec.decodeStatelessKey(key);
         if (!okKey) return INVALID_SIGNATURE;
@@ -100,38 +100,15 @@ abstract contract SPHINCSPlusCVerifier is IERC7913SignatureVerifier {
         ) = SHRINCSCodec.decodeStatelessSignatureEnvelope(signature);
         if (!okEnvelope) return INVALID_SIGNATURE;
 
-        // The two seed words become 32-byte `bytes`; the self-call
-        // re-materializes them as calldata for SPHINCSPlusC.
-        bool valid = this.checkStateless(
+        // The two seed words become 32-byte `bytes memory` for the
+        // memory-typed SPHINCSPlusC library call.
+        bool valid = SPHINCSPlusC.verify(
             abi.encodePacked(pkSeed),
             abi.encodePacked(hypertreeRoot),
-            hash,
+            SHRINCSCodec.toMessage(hash),
             signature_
         );
         if (valid) return IERC7913SignatureVerifier.verify.selector;
         return INVALID_SIGNATURE;
-    }
-
-    /// @notice Self-call hop — calldata re-materialization and stateless
-    /// verification. onlySelf.
-    /// @dev Receiving the seeds and signature through an external call
-    /// re-encodes the validated memory data into calldata (SPHINCSPlusC
-    /// takes calldata), then verifies FORS-C plus the hypertree over exactly
-    /// the 32 hash bytes under the public seed and root. No try wraps this
-    /// call: an out-of-gas propagates as a revert.
-    /// @param pkSeed The 32-byte stateless public seed.
-    /// @param hypertreeRoot The 32-byte stateless public root.
-    /// @param hash The 32-byte message hash.
-    /// @param signature The decoded stateless signature.
-    /// @return True when the stateless signature verifies.
-    function checkStateless(
-        bytes calldata pkSeed,
-        bytes calldata hypertreeRoot,
-        bytes32 hash,
-        SPHINCSPlusC.StatelessSignature calldata signature
-    ) external view onlySelf returns (bool) {
-        return SPHINCSPlusC.verify(
-            pkSeed, hypertreeRoot, SHRINCSCodec.toMessage(hash), signature
-        );
     }
 }

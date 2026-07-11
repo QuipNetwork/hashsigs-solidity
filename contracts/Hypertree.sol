@@ -52,10 +52,10 @@ library Hypertree {
     // 6. Accept only if the final reconstructed root matches the installed
     // hypertree root.
     function verifyHypertree(
-        bytes calldata pkSeed,
-        bytes calldata hypertreeRoot,
+        bytes memory pkSeed,
+        bytes memory hypertreeRoot,
         bytes32 forsRoot,
-        Hypertree.HypertreeLayerSignature[] calldata layers
+        Hypertree.HypertreeLayerSignature[] memory layers
     ) internal pure returns (bool) {
         // Every hypertree layer must be present exactly once.
         if (layers.length != SHRINCSParams.NUM_HYPERTREE_LAYERS) {
@@ -82,8 +82,7 @@ library Hypertree {
         bytes32 current = forsRoot;
 
         for (uint256 layer = 0; layer < layers.length;) {
-            Hypertree.HypertreeLayerSignature calldata layerSig =
-                layers[layer];
+            Hypertree.HypertreeLayerSignature memory layerSig = layers[layer];
             // Deviates from [FIPS205 §8.2]: SHRINCS chains the hypertree
             // coordinates sequentially per layer instead of following the
             // FIPS-205 tree/leaf index recurrence. Layer 0 starts from the
@@ -122,14 +121,14 @@ library Hypertree {
                     layerSig.wotsCSignature
                 )) return false;
 
-            bytes calldata wotsPkHash = layerSig.wotsCPkHash;
+            bytes memory wotsPkHash = layerSig.wotsCPkHash;
             bytes32 leaf;
-            // Memory-safe: reads one calldata word into a stack variable;
+            // Memory-safe: reads one memory word into a stack variable;
             // no memory is written.
             assembly ("memory-safe") {
                 // Load the 32-byte WOTS-C public-key hash that becomes the
                 // subtree leaf value.
-                leaf := calldataload(wotsPkHash.offset)
+                leaf := mload(add(wotsPkHash, 32))
             }
 
             // casting to 'uint32' is safe because layer is bounded by the
@@ -165,13 +164,14 @@ library Hypertree {
             }
         }
 
-        bytes calldata expectedRootBytes = hypertreeRoot;
+        bytes memory expectedRootBytes = hypertreeRoot;
         bytes32 expectedRoot;
-        // Memory-safe: reads one calldata word into a stack variable; no
+        // Memory-safe: reads one memory word into a stack variable; no
         // memory is written.
         assembly ("memory-safe") {
-            // Load the installed 32-byte hypertree root from calldata.
-            expectedRoot := calldataload(expectedRootBytes.offset)
+            // Load the installed 32-byte hypertree root from the bytes
+            // payload.
+            expectedRoot := mload(add(expectedRootBytes, 32))
         }
         // All tree-index bits must be consumed exactly by the time the top
         // layer is reached. Always false for the balanced layout (a uint64
@@ -198,13 +198,13 @@ library Hypertree {
     // 6. Hash the reconstructed segments and compare them to the expected
     // public-key hash.
     function verifyWotsC32(
-        bytes calldata pkSeedBytes,
+        bytes memory pkSeedBytes,
         uint32 layer,
         uint64 tree,
         uint32 keypair,
-        bytes calldata expectedPkHashBytes,
+        bytes memory expectedPkHashBytes,
         bytes32 message,
-        WOTSPlusC.WotsCSignature calldata signature
+        WOTSPlusC.WotsCSignature memory signature
     ) internal pure returns (bool) {
         uint256 chainCount = uint256(SHRINCSParams.NUM_WOTS_CHAINS);
         // The WOTS-C randomizer is always one hash output wide.
@@ -221,20 +221,21 @@ library Hypertree {
         // profile wotsDigestBytes() <= 32, so this folds to false.
         if (wotsDigestBytes() > 32) return false;
 
-        bytes calldata randomizerBytes = signature.randomizer;
+        bytes memory randomizerBytes = signature.randomizer;
         bytes32 pkSeed;
         bytes32 expectedPkHash;
         bytes32 randomizer;
-        // Memory-safe: reads three calldata words into stack variables; no
+        // Memory-safe: reads three memory words into stack variables; no
         // memory is written.
         assembly ("memory-safe") {
-            // Load the 32-byte public seed from calldata.
-            pkSeed := calldataload(pkSeedBytes.offset)
-            // Load the expected compressed WOTS-C public-key hash from
-            // calldata.
-            expectedPkHash := calldataload(expectedPkHashBytes.offset)
-            // Load the 32-byte per-signature randomizer from calldata.
-            randomizer := calldataload(randomizerBytes.offset)
+            // Load the 32-byte public seed from the bytes payload.
+            pkSeed := mload(add(pkSeedBytes, 32))
+            // Load the expected compressed WOTS-C public-key hash from the
+            // bytes payload.
+            expectedPkHash := mload(add(expectedPkHashBytes, 32))
+            // Load the 32-byte per-signature randomizer from the bytes
+            // payload.
+            randomizer := mload(add(randomizerBytes, 32))
         }
 
         // Recompute the digest whose base-w digits determine chain stopping
@@ -278,18 +279,19 @@ library Hypertree {
         uint32 digitSum;
         for (uint256 i = 0; i < chainCount;) {
             // Read the revealed starting value for this chain.
-            bytes calldata chain = signature.chains[i];
+            bytes memory chain = signature.chains[i];
             if (chain.length != 32) return false;
             // Read the digest-selected base-w digit for this chain.
             uint32 digit = WOTSPlusC.baseW16Digit32(digest, i);
             // Accumulate the fixed WOTS-C target-sum check.
             digitSum += digit;
             bytes32 chainValue;
-            // Memory-safe: reads one calldata word into a stack variable; no
+            // Memory-safe: reads one memory word into a stack variable; no
             // memory is written.
             assembly ("memory-safe") {
-                // Load the revealed 32-byte chain value from calldata.
-                chainValue := calldataload(chain.offset)
+                // Load the revealed 32-byte chain value from the bytes
+                // payload.
+                chainValue := mload(add(chain, 32))
             }
             // Complete the chain from the revealed value to its endpoint.
             bytes32 segment = WOTSPlusC.wotsChainNoMaskBase(
@@ -404,22 +406,22 @@ library Hypertree {
     // 5. Return the reconstructed subtree root and success flag.
     function hypertreeRootFromPath32(
         uint32 height,
-        bytes calldata pkSeed,
+        bytes memory pkSeed,
         uint32 layer,
         uint64 treeIndex,
         uint32 leafIndex,
         bytes32 leaf,
-        bytes[] calldata authPath
+        bytes[] memory authPath
     ) internal pure returns (bytes32 node, bool ok) {
         // Every subtree auth path must contain one node per subtree level.
         if (authPath.length != height) return (bytes32(0), false);
         bytes32 pkSeedWord;
-        // Memory-safe: reads one calldata word into a stack variable; no
+        // Memory-safe: reads one memory word into a stack variable; no
         // memory is written.
         assembly ("memory-safe") {
-            // Load the 32-byte public seed from calldata once for repeated
-            // subtree hashing.
-            pkSeedWord := calldataload(pkSeed.offset)
+            // Load the 32-byte public seed from the bytes payload once for
+            // repeated subtree hashing.
+            pkSeedWord := mload(add(pkSeed, 32))
         }
         // Encode the hypertree layer in the shared address prefix.
         uint256 shiftedLayer = uint256(layer) << 224;
@@ -435,14 +437,14 @@ library Hypertree {
         uint256 index = leafIndex;
         for (uint256 level = 0; level < height;) {
             // Read the sibling node supplied for this subtree level.
-            bytes calldata authNode = authPath[level];
+            bytes memory authNode = authPath[level];
             if (authNode.length != 32) return (bytes32(0), false);
             bytes32 sibling;
-            // Memory-safe: reads one calldata word into a stack variable;
+            // Memory-safe: reads one memory word into a stack variable;
             // no memory is written.
             assembly ("memory-safe") {
-                // Load the 32-byte sibling node directly from calldata.
-                sibling := calldataload(authNode.offset)
+                // Load the 32-byte sibling node from the bytes payload.
+                sibling := mload(add(authNode, 32))
             }
             // Place the current node and sibling in canonical left/right
             // order for this level.

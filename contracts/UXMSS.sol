@@ -65,7 +65,7 @@ library UXMSS {
         bytes32 root,
         uint32 maxSignatures,
         bytes memory message,
-        UXMSS.StatefulSignature calldata signature
+        UXMSS.StatefulSignature memory signature
     ) internal pure returns (bool) {
         // In this unbalanced stateful tree, the leaf index is encoded by
         // auth-path length.
@@ -113,7 +113,7 @@ library UXMSS {
         bytes32 pkSeed,
         uint32 leafIndex,
         bytes memory message,
-        UXMSS.StatefulSignature calldata signature
+        UXMSS.StatefulSignature memory signature
     ) internal pure returns (bytes32 pkHash, bool ok) {
         // Bind the stateful WOTS-C digest to the seed, leaf, randomizer,
         // counter, and signed message.
@@ -212,7 +212,7 @@ library UXMSS {
         bytes32 pkSeed,
         uint32 leafIndex,
         bytes32 leaf,
-        bytes32[] calldata authPath
+        bytes32[] memory authPath
     ) internal pure returns (bytes32 root, bool ok) {
         // This unbalanced tree encodes the leaf index as the auth-path
         // length.

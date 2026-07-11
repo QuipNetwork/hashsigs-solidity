@@ -245,7 +245,7 @@ library SHRINCSCodec {
     // 2. Bind the stateful public key, stateless public seed, and hypertree
     // root.
     // 3. Return the installed public-key commitment.
-    function publicKeyCommitment(SHRINCS.PublicKey calldata publicKey)
+    function publicKeyCommitment(SHRINCS.PublicKey memory publicKey)
         internal
         pure
         returns (bytes32)
@@ -285,24 +285,24 @@ library SHRINCSCodec {
     // matches an installed commitment.
     // 1. Require a nonzero expected installed-key commitment.
     // 2. Require a 32-byte encoded commitment field inside the public key.
-    // 3. Load the declared commitment from calldata.
+    // 3. Load the declared commitment from memory.
     // 4. Check it against the caller-supplied expected commitment.
     // 5. Recompute the bundle commitment and require it to match too.
     function matchesExpectedPublicKeyCommitment(
-        SHRINCS.PublicKey calldata publicKey,
+        SHRINCS.PublicKey memory publicKey,
         bytes32 expectedPublicKeyCommitment
     ) internal pure returns (bool) {
         // A missing installed-key commitment is always invalid.
         if (expectedPublicKeyCommitment == bytes32(0)) return false;
         // The encoded commitment field must always be one hash output wide.
         if (publicKey.publicKeyCommitment.length != 32) return false;
-        bytes calldata encodedCommitment = publicKey.publicKeyCommitment;
+        bytes memory encodedCommitment = publicKey.publicKeyCommitment;
         bytes32 actualCommitment;
-        // Memory-safe: reads one calldata word into a stack variable; no
+        // Memory-safe: reads one memory word into a stack variable; no
         // memory is written.
         assembly ("memory-safe") {
-            // Load the declared 32-byte commitment directly from calldata.
-            actualCommitment := calldataload(encodedCommitment.offset)
+            // Load the declared 32-byte commitment from the bytes payload.
+            actualCommitment := mload(add(encodedCommitment, 32))
         }
         // First require the declared field to match the expected installed
         // commitment.
@@ -316,10 +316,10 @@ library SHRINCSCodec {
     // embedded commitment is correct.
     // 1. Check the encoded stateful public-key length.
     // 2. Check the commitment, public-seed, and hypertree-root lengths.
-    // 3. Load the embedded commitment from calldata.
+    // 3. Load the embedded commitment from memory.
     // 4. Recompute the bundle commitment and require it to match the embedded
     // field.
-    function validPublicKey(SHRINCS.PublicKey calldata publicKey)
+    function validPublicKey(SHRINCS.PublicKey memory publicKey)
         internal
         pure
         returns (bool)
@@ -335,13 +335,13 @@ library SHRINCSCodec {
         if (publicKey.pkSeed.length != 32) return false;
         // The hypertree root is always one hash output wide.
         if (publicKey.hypertreeRoot.length != 32) return false;
-        bytes calldata encodedCommitment = publicKey.publicKeyCommitment;
+        bytes memory encodedCommitment = publicKey.publicKeyCommitment;
         bytes32 expectedCommitment;
-        // Memory-safe: reads one calldata word into a stack variable; no
+        // Memory-safe: reads one memory word into a stack variable; no
         // memory is written.
         assembly ("memory-safe") {
-            // Load the embedded 32-byte commitment directly from calldata.
-            expectedCommitment := calldataload(encodedCommitment.offset)
+            // Load the embedded 32-byte commitment from the bytes payload.
+            expectedCommitment := mload(add(encodedCommitment, 32))
         }
         return publicKeyCommitment(publicKey) == expectedCommitment;
     }
@@ -351,9 +351,9 @@ library SHRINCSCodec {
     // 1. Check the exact packed byte width of the encoded stateful public
     // key.
     // 2. Allocate the decoded struct in memory.
-    // 3. Copy the public seed, root, and max-signatures fields from calldata.
+    // 3. Copy the public seed, root, and max-signatures fields from memory.
     // 4. Return the decoded struct together with a success flag.
-    function decodeStatefulPublicKey(bytes calldata encoded)
+    function decodeStatefulPublicKey(bytes memory encoded)
         internal
         pure
         returns (UXMSS.StatefulPublicKey memory publicKey, bool ok)
@@ -366,24 +366,23 @@ library SHRINCSCodec {
         //   [0x00..0x20) pkSeed
         //   [0x20..0x40) root
         //   [0x40..0x60) maxSignatures (high 4 bytes of the last input word)
+        // The final input word (encoded+0x60) reads the last, word-padded
+        // slot of the `encoded` payload: STATEFUL_PUBLIC_KEY_BYTES rounds up
+        // to a whole number of words, so this word is allocated and readable;
+        // only its high 4 bytes carry maxSignatures and the shr discards the
+        // trailing padding.
         // Memory-safe: allocates 0x60 bytes and advances the free-memory
-        // pointer past them.
+        // pointer past them; reads stay inside the `encoded` buffer.
         assembly ("memory-safe") {
             // Allocate the decoded struct starting at the free-memory
             // pointer.
             publicKey := mload(0x40)
             // Copy the first 32 bytes as the stateful public seed.
-            mstore(publicKey, calldataload(encoded.offset))
+            mstore(publicKey, mload(add(encoded, 32)))
             // Copy the next 32 bytes as the stateful root.
-            mstore(
-                add(publicKey, 0x20),
-                calldataload(add(encoded.offset, 32))
-            )
+            mstore(add(publicKey, 0x20), mload(add(encoded, 64)))
             // Copy the high 4 bytes of the final word as maxSignatures.
-            mstore(
-                add(publicKey, 0x40),
-                shr(224, calldataload(add(encoded.offset, 64)))
-            )
+            mstore(add(publicKey, 0x40), shr(224, mload(add(encoded, 96))))
             // Bump the free-memory pointer past the decoded struct.
             mstore(0x40, add(publicKey, 0x60))
         }

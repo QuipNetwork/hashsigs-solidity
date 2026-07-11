@@ -45,10 +45,10 @@ library SPHINCSPlusC {
     // proof.
     // 3. Carry that root up the hypertree and compare it to the public root.
     function verify(
-        bytes calldata pkSeed,
-        bytes calldata hypertreeRoot,
+        bytes memory pkSeed,
+        bytes memory hypertreeRoot,
         bytes memory message,
-        StatelessSignature calldata signature
+        StatelessSignature memory signature
     ) internal pure returns (bool) {
         // The stateless public seed is always one hash output wide.
         if (pkSeed.length != 32) return false;

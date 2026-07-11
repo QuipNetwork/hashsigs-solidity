@@ -119,6 +119,49 @@ contract SHRINCSStatelessDelegationTest is Test {
         );
     }
 
+    /// @dev The deliberate revert-model property, on the one external call
+    /// the memory restructure left in the verifier surface. With no try/catch
+    /// around the stateless delegation, an out-of-gas in the pinned
+    /// SPHINCSPlusC sibling is not swallowed to 0xffffffff: stranding that
+    /// delegation hop under the 63/64 rule on a VALID signature makes the
+    /// outer verifyStateless REVERT, so a genuine signature can never be
+    /// misreported as invalid because of a gas shortfall. (The stateful
+    /// verify path no longer makes any external call, so it has no equivalent
+    /// hop to strand.)
+    function testVerifyStatelessRevertsWhenDelegationStrandedOnValidSig()
+        public
+    {
+        // Full gas: the valid stateless signature delegates and verifies.
+        assertEq(
+            verifier.verifyStateless(validKey, signedHash, validEnvelope),
+            IERC7913SignatureVerifier.verify.selector,
+            "control: valid stateless signature verifies with ample gas"
+        );
+
+        // Measure the happy-path cost, then forward a fraction that lets the
+        // key/envelope decode and bundle check complete but strands the
+        // delegation into the pinned sibling (the bulk of the work) under the
+        // 63/64 forwarding rule.
+        uint256 gasBefore = gasleft();
+        verifier.verifyStateless(validKey, signedHash, validEnvelope);
+        uint256 happyGas = gasBefore - gasleft();
+
+        (bool success, bytes memory ret) = address(verifier)
+        .call{gas: happyGas * 3 / 4}(
+            abi.encodeCall(
+                verifier.verifyStateless,
+                (validKey, signedHash, validEnvelope)
+            )
+        );
+        assertFalse(
+            success,
+            "stranded delegation hop must revert, not swallow to 0xffffffff"
+        );
+        assertEq(
+            ret.length, 0, "an out-of-gas revert carries no return data"
+        );
+    }
+
     /// @dev Builds a stateless signature over the raw 32-byte hash message
     /// (exactly what verifyStateless passes to the pinned verifier) and the
     /// matching ERC-7913 key (the 32-byte bundle commitment). External so it
