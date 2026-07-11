@@ -18,7 +18,7 @@ pragma solidity ^0.8.28;
 
 import {ShrincsTestSigner} from "./ShrincsTestSigner.sol";
 import {ShrincsTypes} from "../../contracts/ShrincsTypes.sol";
-import {ShrincsUtils} from "../../contracts/ShrincsUtils.sol";
+import {SHRINCSHash} from "../../contracts/SHRINCSHash.sol";
 
 /// @notice TEST-ONLY staged stateless SHRINCS signer for on-demand vector
 /// generation.
@@ -661,7 +661,7 @@ contract ShrincsStatelessVectorSigner {
         if (digestBytes <= 32) {
             out = new bytes(digestBytes);
             bytes32 digestWord = keccak256(base);
-            ShrincsUtils.setHashChunk(out, digestWord, 0, digestBytes);
+            SHRINCSHash.setHashChunk(out, digestWord, 0, digestBytes);
             return out;
         }
 
@@ -673,7 +673,7 @@ contract ShrincsStatelessVectorSigner {
                 keccak256(abi.encodePacked(base, blockCounter));
             uint256 chunk = digestBytes - offset;
             if (chunk > 32) chunk = 32;
-            ShrincsUtils.setHashChunk(out, digestWord, offset, chunk);
+            SHRINCSHash.setHashChunk(out, digestWord, offset, chunk);
             offset += chunk;
             unchecked {
                 ++blockCounter;
@@ -1014,7 +1014,7 @@ contract ShrincsStatelessVectorSigner {
     ) internal pure returns (bytes32 out) {
         out = value;
         for (uint32 step = start; step < start + steps;) {
-            bytes32 addressWord = ShrincsUtils.addressWord32(
+            bytes32 addressWord = SHRINCSHash.addressWord32(
                 layer,
                 tree,
                 ShrincsTypes.AddressTypeWotsHash,

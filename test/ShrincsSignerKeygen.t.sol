@@ -19,7 +19,7 @@ pragma solidity ^0.8.28;
 import {Test} from "../lib/forge-std/src/Test.sol";
 import {ShrincsTestSigner} from "./helpers/ShrincsTestSigner.sol";
 import {ShrincsTypes} from "../contracts/ShrincsTypes.sol";
-import {ShrincsUtils} from "../contracts/ShrincsUtils.sol";
+import {ShrincsCodec} from "../contracts/ShrincsCodec.sol";
 
 contract ShrincsSignerHarness {
     function keygen(bytes memory seedMaterial, uint32 maxStatefulSignatures)
@@ -39,7 +39,7 @@ contract ShrincsSignerHarness {
         pure
         returns (ShrincsTypes.StatefulPublicKey memory, bool)
     {
-        return ShrincsUtils.decodeStatefulPublicKey(encoded);
+        return ShrincsCodec.decodeStatefulPublicKey(encoded);
     }
 }
 
@@ -147,7 +147,7 @@ contract ShrincsSignerKeygenTest is Test {
         assertEq(publicKey.hypertreeRoot.length, 32);
 
         // line-length: allow — fmt canonical call head exceeds cap
-        bytes32 expectedCommitment = ShrincsUtils.publicKeyCommitmentFromParts(
+        bytes32 expectedCommitment = ShrincsCodec.publicKeyCommitmentFromParts(
             publicKey.statefulPublicKey,
             publicKey.pkSeed,
             publicKey.hypertreeRoot

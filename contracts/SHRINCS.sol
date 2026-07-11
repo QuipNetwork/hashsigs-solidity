@@ -17,7 +17,7 @@
 pragma solidity ^0.8.28;
 
 import {ShrincsTypes} from "./ShrincsTypes.sol";
-import {ShrincsUtils} from "./ShrincsUtils.sol";
+import {ShrincsCodec} from "./ShrincsCodec.sol";
 import {ShrincsStateful} from "./ShrincsStateful.sol";
 import {ShrincsForsC} from "./ShrincsForsC.sol";
 import {ShrincsHypertree} from "./ShrincsHypertree.sol";
@@ -36,7 +36,7 @@ library SHRINCS {
         ShrincsTypes.StatefulSignature calldata signature
     ) internal pure returns (bool) {
         // Reject malformed or unscoped action contexts before hashing them.
-        if (!ShrincsUtils.validActionContext(context)) return false;
+        if (!validActionContext(context)) return false;
         // Canonical stateful verification signs the typed action context
         // hash, not arbitrary caller-provided bytes.
         bytes memory message = abi.encodePacked(
@@ -62,7 +62,7 @@ library SHRINCS {
         ShrincsTypes.StatelessSignature calldata signature
     ) internal pure returns (bool) {
         // Reject malformed or unscoped action contexts before hashing them.
-        if (!ShrincsUtils.validActionContext(context)) return false;
+        if (!validActionContext(context)) return false;
         // Canonical stateless verification signs the typed action context
         // hash, not arbitrary caller-provided bytes.
         bytes memory message = abi.encodePacked(
@@ -93,18 +93,18 @@ library SHRINCS {
         ShrincsTypes.StatelessSignature calldata recoverySignature,
         ShrincsTypes.StatefulRotationTarget calldata nextStatefulKey
     ) internal pure returns (bytes32 nextPublicKeyCommitment) {
-        if (!ShrincsUtils.validPublicKey(currentPublicKey)) {
+        if (!ShrincsCodec.validPublicKey(currentPublicKey)) {
             return bytes32(0);
         }
         // The current public key must match the installed bundle commitment
         // the caller expects.
-        if (!ShrincsUtils.matchesExpectedPublicKeyCommitment(
+        if (!ShrincsCodec.matchesExpectedPublicKeyCommitment(
                 currentPublicKey, expectedPublicKeyCommitment
             )) {
             return bytes32(0);
         }
         // Rotation messages must still carry a nonzero domain binding.
-        if (!ShrincsUtils.validRotationContext(context)) return bytes32(0);
+        if (!validRotationContext(context)) return bytes32(0);
         // Stateful subkey rotation carries only a replacement stateful public
         // key payload.
         if (
@@ -117,7 +117,7 @@ library SHRINCS {
             (
                 ShrincsTypes.StatefulPublicKey memory decodedNextStatefulKey,
                 bool ok
-            ) = ShrincsUtils.decodeStatefulPublicKey(
+            ) = ShrincsCodec.decodeStatefulPublicKey(
                 nextStatefulKey.statefulPublicKey
             );
             if (!ok) return bytes32(0);
@@ -129,7 +129,7 @@ library SHRINCS {
         // stateful key plus the current stateless seed/root, since this
         // rotation does not replace the stateless side.
         bytes32 computedNextPublicKeyCommitment =
-            ShrincsUtils.publicKeyCommitmentFromParts(
+            ShrincsCodec.publicKeyCommitmentFromParts(
                 nextStatefulKey.statefulPublicKey,
                 currentPublicKey.pkSeed,
                 currentPublicKey.hypertreeRoot
@@ -198,18 +198,18 @@ library SHRINCS {
         ShrincsTypes.StatelessSignature calldata recoverySignature,
         ShrincsTypes.RotationTarget calldata nextKey
     ) internal pure returns (bytes32 nextPublicKeyCommitment) {
-        if (!ShrincsUtils.validPublicKey(currentPublicKey)) {
+        if (!ShrincsCodec.validPublicKey(currentPublicKey)) {
             return bytes32(0);
         }
         // The current public key must match the installed bundle commitment
         // the caller expects.
-        if (!ShrincsUtils.matchesExpectedPublicKeyCommitment(
+        if (!ShrincsCodec.matchesExpectedPublicKeyCommitment(
                 currentPublicKey, expectedPublicKeyCommitment
             )) {
             return bytes32(0);
         }
         // Rotation messages must still carry a nonzero domain binding.
-        if (!ShrincsUtils.validRotationContext(context)) return bytes32(0);
+        if (!validRotationContext(context)) return bytes32(0);
         // The replacement bundle must contain fixed-width stateful,
         // commitment, seed, and root fields.
         if (
@@ -225,7 +225,7 @@ library SHRINCS {
             (
                 ShrincsTypes.StatefulPublicKey memory decodedNextStatefulKey,
                 bool ok
-            ) = ShrincsUtils.decodeStatefulPublicKey(
+            ) = ShrincsCodec.decodeStatefulPublicKey(
                 nextKey.statefulPublicKey
             );
             if (!ok) return bytes32(0);
@@ -236,7 +236,7 @@ library SHRINCS {
         // Rebuild the full replacement bundle commitment from all next-key
         // components.
         bytes32 computedNextPublicKeyCommitment =
-            ShrincsUtils.publicKeyCommitmentFromParts(
+            ShrincsCodec.publicKeyCommitmentFromParts(
                 nextKey.statefulPublicKey,
                 nextKey.pkSeed,
                 nextKey.hypertreeRoot
@@ -429,12 +429,12 @@ library SHRINCS {
     ) internal pure returns (bool) {
         // The current public key must match the installed bundle commitment
         // expected by the caller.
-        if (!ShrincsUtils.matchesExpectedPublicKeyCommitment(
+        if (!ShrincsCodec.matchesExpectedPublicKeyCommitment(
                 publicKey, expectedPublicKeyCommitment
             )) return false;
         // The current key bundle must satisfy the compiled fixed public-key
         // shape.
-        if (!ShrincsUtils.validPublicKey(publicKey)) return false;
+        if (!ShrincsCodec.validPublicKey(publicKey)) return false;
         // A stateless signature must carry at least one hypertree layer.
         if (signature.hypertree.length == 0) return false;
 
@@ -453,5 +453,32 @@ library SHRINCS {
         return ShrincsHypertree.verifyHypertree(
             publicKey, forsRoot, signature.hypertree
         );
+    }
+
+    // validActionContext: Perform lightweight structural checks for canonical
+    // action contexts.
+    // 1. Require a nonzero domain separator.
+    // 2. Require a nonzero action type.
+    // 3. Require a nonzero payload hash.
+    function validActionContext(ShrincsTypes.ActionContext memory context)
+        internal
+        pure
+        returns (bool)
+    {
+        // Domain separation must be explicit.
+        if (context.domainSeparator == bytes32(0)) return false;
+        // The action type must not be left unspecified.
+        if (context.actionType == bytes32(0)) return false;
+        // The payload must commit to some nonzero value.
+        return context.payloadHash != bytes32(0);
+    }
+
+    // validRotationContext: Perform lightweight structural checks for
+    // canonical rotation contexts.
+    // 1. Require a nonzero domain separator.
+    function validRotationContext(
+        ShrincsTypes.RotationContext memory context
+    ) internal pure returns (bool) {
+        return context.domainSeparator != bytes32(0);
     }
 }

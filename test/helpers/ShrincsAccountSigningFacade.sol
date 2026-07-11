@@ -18,7 +18,7 @@ pragma solidity ^0.8.28;
 
 import {SHRINCS} from "../../contracts/SHRINCS.sol";
 import {ShrincsTypes} from "../../contracts/ShrincsTypes.sol";
-import {ShrincsUtils} from "../../contracts/ShrincsUtils.sol";
+import {ShrincsCodec} from "../../contracts/ShrincsCodec.sol";
 import {
     ShrincsAccountVerifierExample
 } from "../../contracts/examples/ShrincsAccountVerifierExample.sol";
@@ -202,7 +202,7 @@ library ShrincsAccountSigningFacade {
         pure
         returns (ShrincsTypes.StatefulRotationTarget memory nextKey)
     {
-        bytes32 commitment = ShrincsUtils.publicKeyCommitmentFromParts(
+        bytes32 commitment = ShrincsCodec.publicKeyCommitmentFromParts(
             nextStatefulPublicKey,
             currentPublicKey.pkSeed,
             currentPublicKey.hypertreeRoot

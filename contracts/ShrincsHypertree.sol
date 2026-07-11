@@ -17,7 +17,7 @@
 pragma solidity ^0.8.28;
 
 import {ShrincsTypes} from "./ShrincsTypes.sol";
-import {ShrincsUtils} from "./ShrincsUtils.sol";
+import {SHRINCSHash} from "./SHRINCSHash.sol";
 
 library ShrincsHypertree {
     // verifyHypertree: Verify every SHRINCS hypertree layer from the FORS
@@ -301,7 +301,7 @@ library ShrincsHypertree {
             // WOTS-C public-key hash.
             computedPkHash := keccak256(pkInput, pkInputLen)
         }
-        return ShrincsUtils.maskHash(computedPkHash) == expectedPkHash;
+        return SHRINCSHash.maskHash(computedPkHash) == expectedPkHash;
     }
 
     // wotsDigest32: Derive the WOTS-C message digest that determines chain
@@ -448,7 +448,7 @@ library ShrincsHypertree {
             // Hash the complete WOTS-C chain-step preimage.
             out := keccak256(ptr, 108)
         }
-        out = ShrincsUtils.maskHash(out);
+        out = SHRINCSHash.maskHash(out);
     }
 
     // wotsDigestBytes: Return the number of bytes needed to encode all WOTS-C
@@ -578,6 +578,6 @@ library ShrincsHypertree {
             // Hash the complete hypertree internal-node preimage.
             out := keccak256(ptr, 142)
         }
-        out = ShrincsUtils.maskHash(out);
+        out = SHRINCSHash.maskHash(out);
     }
 }

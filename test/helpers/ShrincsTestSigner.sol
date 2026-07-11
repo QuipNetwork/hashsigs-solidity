@@ -18,7 +18,8 @@ pragma solidity ^0.8.28;
 
 import {SHRINCS} from "../../contracts/SHRINCS.sol";
 import {ShrincsTypes} from "../../contracts/ShrincsTypes.sol";
-import {ShrincsUtils} from "../../contracts/ShrincsUtils.sol";
+import {ShrincsCodec} from "../../contracts/ShrincsCodec.sol";
+import {SHRINCSHash} from "../../contracts/SHRINCSHash.sol";
 
 /// @notice TEST-ONLY Solidity signer helpers that mirror the Rust signer for
 /// stateful flows.
@@ -83,7 +84,7 @@ library ShrincsTestSigner {
             statefulPkSeed, statefulRoot, maxStatefulSignatures
         );
         bytes32 publicKeyCommitment =
-            ShrincsUtils.publicKeyCommitmentFromParts(
+            ShrincsCodec.publicKeyCommitmentFromParts(
                 statefulPublicKey,
                 abi.encodePacked(pkSeed),
                 abi.encodePacked(hypertreeRoot)
@@ -248,7 +249,7 @@ library ShrincsTestSigner {
         // Mirror the verifier's high-aligned truncation (maskHash): the
         // reconstructed stateful WOTS-C leaf is masked, so the signer's
         // leaf must be too. No-op at 256s (all-ones mask).
-        return ShrincsUtils.maskHash(
+        return SHRINCSHash.maskHash(
             keccak256(
                 abi.encodePacked(
                     "uxmss-wots-pk", pkSeed, leafIndex, endpoints
@@ -348,7 +349,7 @@ library ShrincsTestSigner {
     ) internal pure returns (bytes32 out) {
         out = value;
         for (uint32 stepOffset = 0; stepOffset < steps;) {
-            bytes32 addressWord = ShrincsUtils.addressWord32(
+            bytes32 addressWord = SHRINCSHash.addressWord32(
                 0,
                 0,
                 ShrincsTypes.AddressTypeWotsHash,
@@ -358,7 +359,7 @@ library ShrincsTestSigner {
             );
             // Truncate each chain step, mirroring the verifier's
             // hashStatefulWotsCChainNoMask32 maskHash. No-op at 256s.
-            out = ShrincsUtils.maskHash(
+            out = SHRINCSHash.maskHash(
                 keccak256(
                     abi.encodePacked(
                         "wots-c-chain", pkSeed, addressWord, out
@@ -379,7 +380,7 @@ library ShrincsTestSigner {
     ) internal pure returns (bytes32) {
         // Truncate the parent node, mirroring the verifier's
         // statefulParentHash maskHash. No-op at 256s.
-        return ShrincsUtils.maskHash(
+        return SHRINCSHash.maskHash(
             keccak256(
                 abi.encodePacked(
                     "uxmss-node", pkSeed, leftLeafIndex, left, right
@@ -479,7 +480,7 @@ library ShrincsTestSigner {
             hypertreeAddressWord(layer, tree, height, index);
         // Truncate the hypertree node, mirroring the verifier's
         // hashHypertreeNode32 maskHash. No-op at 256s.
-        return ShrincsUtils.maskHash(
+        return SHRINCSHash.maskHash(
             keccak256(
                 abi.encodePacked(
                     "hypertree-node", pkSeed, addressWord, left, right
@@ -532,7 +533,7 @@ library ShrincsTestSigner {
         }
         // Truncate the WOTS-C public-key hash, mirroring the verifier's
         // verifyWotsC32 maskHash. No-op at 256s.
-        return ShrincsUtils.maskHash(
+        return SHRINCSHash.maskHash(
             keccak256(abi.encodePacked("wots-c-pk", pkSeed, endpoints))
         );
     }
@@ -557,7 +558,7 @@ library ShrincsTestSigner {
     ) internal pure returns (bytes32 out) {
         out = value;
         for (uint32 step = start; step < start + steps;) {
-            bytes32 addressWord = ShrincsUtils.addressWord32(
+            bytes32 addressWord = SHRINCSHash.addressWord32(
                 layer,
                 tree,
                 ShrincsTypes.AddressTypeWotsHash,
@@ -568,7 +569,7 @@ library ShrincsTestSigner {
             // Truncate each stateless chain step, mirroring the
             // verifier's hashStatelessWotsCChainNoMask32 maskHash.
             // No-op at 256s.
-            out = ShrincsUtils.maskHash(
+            out = SHRINCSHash.maskHash(
                 keccak256(
                     abi.encodePacked(
                         "wots-c-chain", pkSeed, addressWord, out

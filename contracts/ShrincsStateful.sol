@@ -17,7 +17,8 @@
 pragma solidity ^0.8.28;
 
 import {ShrincsTypes} from "./ShrincsTypes.sol";
-import {ShrincsUtils} from "./ShrincsUtils.sol";
+import {ShrincsCodec} from "./ShrincsCodec.sol";
+import {SHRINCSHash} from "./SHRINCSHash.sol";
 
 library ShrincsStateful {
     // verifyStatefulUncheckedMessage: Verify a stateful signature against an
@@ -42,16 +43,16 @@ library ShrincsStateful {
         ShrincsTypes.StatefulSignature calldata signature
     ) internal pure returns (bool) {
         // The public key must satisfy the compiled fixed key shape.
-        if (!ShrincsUtils.validPublicKey(publicKey)) return false;
+        if (!ShrincsCodec.validPublicKey(publicKey)) return false;
         // The bundled public key must match the installed public-key
         // commitment.
-        if (!ShrincsUtils.matchesExpectedPublicKeyCommitment(
+        if (!ShrincsCodec.matchesExpectedPublicKeyCommitment(
                 publicKey, expectedPublicKeyCommitment
             )) return false;
         // Decode the compact stateful public key fields from the public
         // bundle.
         (ShrincsTypes.StatefulPublicKey memory statefulKey, bool ok) =
-            ShrincsUtils.decodeStatefulPublicKey(publicKey.statefulPublicKey);
+            ShrincsCodec.decodeStatefulPublicKey(publicKey.statefulPublicKey);
         if (!ok) return false;
 
         // In this unbalanced stateful tree, the leaf index is encoded by
@@ -161,7 +162,7 @@ library ShrincsStateful {
         // public-key hash. Output truncated to HASH_LEN bytes, high-
         // aligned (maskHash); for 256s this folds to a no-op.
         return (
-            ShrincsUtils.maskHash(
+            SHRINCSHash.maskHash(
                 keccak256(
                     abi.encodePacked(
                         "uxmss-wots-pk", pkSeed, leafIndex, segments
@@ -255,7 +256,7 @@ library ShrincsStateful {
             // Hash the complete parent-node preimage.
             out := keccak256(ptr, 110)
         }
-        out = ShrincsUtils.maskHash(out);
+        out = SHRINCSHash.maskHash(out);
     }
 
     // statefulChainNoMask: Advance one stateful WOTS-C chain for a chosen
@@ -277,7 +278,7 @@ library ShrincsStateful {
         for (uint32 j = 0; j < steps;) {
             // Rebuild the WOTS chain-step address for this leaf, chain, and
             // step index.
-            bytes32 addressWord = ShrincsUtils.addressWord32(
+            bytes32 addressWord = SHRINCSHash.addressWord32(
                 0,
                 0,
                 ShrincsTypes.AddressTypeWotsHash,
@@ -339,7 +340,7 @@ library ShrincsStateful {
             // Hash the complete WOTS-C chain-step preimage.
             out := keccak256(ptr, 108)
         }
-        out = ShrincsUtils.maskHash(out);
+        out = SHRINCSHash.maskHash(out);
     }
 
     // baseW16Digit: Read one base-16 digit from a 32-byte digest.
