@@ -83,7 +83,12 @@ Main contracts:
     encoders/decoders bridging ERC-7913 opaque bytes to typed structures
 - [contracts/Hash.sol](./contracts/Hash.sol)
   - profile-independent hash and bit primitives (address packing, hash
-    masking, base-w digits, bit readers); the compile-time hash-suite seam
+    masking, base-w digits, bit readers); shared by every suite and never
+    remapped
+- [contracts/hash/keccak/HashSuite.sol](./contracts/hash/keccak/HashSuite.sol)
+  - the compile-time hash-suite seam: every tagged scheme hash (chain,
+    leaf, node, digest, finalizer) as one helper each, selected via the
+    `shrincs-hash/` remapping axis
 - [contracts/UXMSS.sol](./contracts/UXMSS.sol)
   - stateful `WOTS-C` reconstruction and unbalanced XMSS-style path
     verification
@@ -165,7 +170,8 @@ graph TD
     end
 
     subgraph "Foundation"
-        HH["Hash.sol<br/>hash + bit primitives,<br/>address-word packing,<br/>hash-suite seam"]
+        HS["hash/keccak/HashSuite.sol<br/>tagged scheme hashes<br/>(shrincs-hash/ suite seam)"]
+        HH["Hash.sol<br/>hash + bit primitives,<br/>address-word packing<br/>(never remapped)"]
         PA["profiles/&lt;profile&gt;/SHRINCSParams.sol<br/>(profile-selected constants)"]
     end
 
@@ -180,17 +186,20 @@ graph TD
     FA --> ST
     FA --> SC
     FA --> PA
+    FA --> HS
     SC --> FO
     SC --> HY
     ST --> WC
-    ST --> HH
+    ST --> HS
     ST --> PA
     FO --> HH
+    FO --> HS
     FO --> PA
     HY --> WC
-    HY --> HH
+    HY --> HS
     HY --> PA
-    WC --> HH
+    WC --> HS
+    HS --> HH
     HH --> PA
 ```
 

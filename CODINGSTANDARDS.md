@@ -329,9 +329,9 @@ helpers at the bottom. The sequence is:
    functions.
 
 `contracts/SHRINCS.sol` follows this order: the seven public structs,
-then the decoders and `verify*` functions, then the rotation functions,
-then the internal `_toUxmss`, message-hash builders, and context
-validators.
+then the `verify*` functions, then the rotation functions, then the
+encoders/decoders, then the internal `_toUxmss`, message-hash builders,
+and context validators.
 
 **Reconcile with the Solidity style guide's Order of Layout.** That
 guide orders a file as type declarations, state variables, events,

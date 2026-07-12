@@ -158,8 +158,9 @@ contract RetagDigestHarness {
     }
 }
 
-/// @notice Z3 proof suite for the SHRINCSCodec zero-copy calldata re-tag
-/// decoders. Differential: every field read through a re-tag matches the
+/// @notice Z3 proof suite for the zero-copy calldata re-tag decoders
+/// (the dissolved codec library, now the SHRINCS.sol codec section).
+/// Differential: every field read through a re-tag matches the
 /// abi.decode of the same envelope. Adversarial: malformed envelopes driven
 /// through the real verify path against a real vector key never wrong-accept.
 /// Trichotomy (carried finding Z-6): arbitrary mutated envelope bytes land in
