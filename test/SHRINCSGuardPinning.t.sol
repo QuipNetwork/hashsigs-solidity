@@ -450,6 +450,30 @@ contract SHRINCSGuardPinningTest is Test {
         );
     }
 
+    // Class: hypertree layer authNode length != 32. Twin of FORS row 29
+    // (maintainer ruling 2026-07-12): Hypertree.sol path-walk authNode pin
+    // dropped for class consistency. Pre-drop the length pin returns the
+    // (bytes32(0), false) sentinel -> false; post-drop the mload-32 read
+    // consumes the short element's zero-padded word and the reconstructed
+    // subtree root fails the installed-root compare closed.
+    function testStatelessHypertreeAuthNodeLengthNot32Rejected() public {
+        (
+            SHRINCS.PublicKey memory publicKey,
+            bytes memory message,
+            SPHINCSPlusC.Signature memory signature
+        ) = decodeStatelessVector(".stateless.cases.valid.calldata");
+        signature.hypertree[0].authPath[0] = hex"1234";
+        assertTrue(
+            statelessRejected(
+                compositePublicKeyWord(publicKey),
+                publicKey,
+                message,
+                signature
+            ),
+            "stateless hypertree authNode != 32 must not wrong-accept"
+        );
+    }
+
     // Class: hypertree WOTS-C chain element length != 32. Review row 41.
     // Pre-drop Hypertree.sol:284 returns false; post-drop the mload-32 chain
     // read over adjacent memory reconstructs a wrong endpoint and the pkHash

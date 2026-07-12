@@ -406,7 +406,6 @@ library Hypertree {
         for (uint256 level = 0; level < height;) {
             // Read the sibling node supplied for this subtree level.
             bytes calldata authNode = authPath[level];
-            if (authNode.length != 32) return (bytes32(0), false);
             bytes32 sibling;
             // Memory-safe: reads one calldata word into a stack variable;
             // no memory is written.
