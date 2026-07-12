@@ -79,10 +79,8 @@ Main contracts:
 - [contracts/SHRINCS.sol](./contracts/SHRINCS.sol)
   - pure verification core library (facade over the component libraries):
     builds the canonical action and rotation hashes and runs the stateful
-    and stateless verify-in-place logic
-- [contracts/SHRINCSCodec.sol](./contracts/SHRINCSCodec.sol)
-  - key and envelope codec bridging ERC-7913 opaque bytes to typed
-    SHRINCS structures
+    and stateless verify-in-place logic; owns the key and envelope
+    encoders/decoders bridging ERC-7913 opaque bytes to typed structures
 - [contracts/Hash.sol](./contracts/Hash.sol)
   - profile-independent hash and bit primitives (address packing, hash
     masking, base-w digits, bit readers); the compile-time hash-suite seam
@@ -157,7 +155,6 @@ graph TD
     subgraph "Verification core libraries"
         FA["SHRINCS.sol<br/>stateful + stateless verify-in-place,<br/>canonical action + rotation hashes"]
         SC["SPHINCSPlusC.sol<br/>stateless FORS-C + hypertree<br/>-> public root"]
-        CO["SHRINCSCodec.sol<br/>(key + envelope codec)"]
     end
 
     subgraph "Crypto component libraries"
@@ -180,17 +177,11 @@ graph TD
     VF --> FA
     VF -. stateless delegate .-> SP
     SP --> SC
-    FA --> CO
     FA --> ST
     FA --> SC
     FA --> PA
-    CO --> FA
-    CO --> ST
-    CO --> SC
-    CO --> PA
     SC --> FO
     SC --> HY
-    SC --> CO
     ST --> WC
     ST --> HH
     ST --> PA
@@ -553,7 +544,7 @@ stateful SHRINCS path.
 - **hash** — the 32-byte message the signature is verified against; the
   caller constructs it (typically a domain-separated digest).
 - **signature** — `abi.encode(PublicKey, StatefulSignature)`, the
-  `SHRINCSCodec` stateful envelope.
+  `SHRINCS` stateful envelope.
 - For ABI-valid `verify(...)` calls, returns `0x024ad318` on success and
   `0xffffffff` on verification failure or a wrong-length key. Malformed
   envelope bytes revert: the verifier re-tags the calldata in place, and
@@ -1048,12 +1039,12 @@ Current tests cover:
   are rejected
 - fuzzed ABI-valid `verify(...)` inputs return the failure value instead of
   reverting
-- `SHRINCSCodec.decodeKey(...)` accepts exactly 32-byte keys and rejects
+- `SHRINCS.decodePublicKeyCommitment(...)` accepts exactly 32-byte keys and rejects
   other lengths without reverting
-- `SHRINCSCodec.statefulEnvelope(...)` re-tags canonical and other
+- `SHRINCS.statefulEnvelope(...)` re-tags canonical and other
   field-value-equivalent framings in place, and reverts on out-of-bounds
   offsets or lengths
-- `SHRINCSCodec.toMessage(...)` maps the ERC-7913 `bytes32 hash` to exactly
+- `SPHINCSPlusC.toMessage(...)` maps the ERC-7913 `bytes32 hash` to exactly
   those 32 packed bytes
 - ERC-7913 consumer examples accept `verifier || key` signers and reject
   no-code, wrong-verifier, short-signer, and non-magic-return cases
