@@ -18,6 +18,7 @@ pragma solidity ^0.8.28;
 
 import {Test} from "../lib/forge-std/src/Test.sol";
 import {SHRINCS} from "../contracts/SHRINCS.sol";
+import {HashSuite} from "shrincs-hash/HashSuite.sol";
 import {SPHINCSPlusC} from "../contracts/SPHINCSPlusC.sol";
 import {FORSMinusC} from "../contracts/FORSMinusC.sol";
 import {Hypertree} from "../contracts/Hypertree.sol";
@@ -558,7 +559,7 @@ contract SHRINCSAccountVerifierExampleTest is Test {
         bytes32 hash = keccak256(
             abi.encodePacked(
                 SHRINCS.OP_VERIFY_STATEFUL,
-                SHRINCS.HASH_SUITE_KECCAK_256,
+                HashSuite.HASH_SUITE_ID,
                 expectedCompositePublicKey,
                 context.domainSeparator,
                 context.nonce,
@@ -606,7 +607,7 @@ contract SHRINCSAccountVerifierExampleTest is Test {
         bytes32 hash = keccak256(
             abi.encodePacked(
                 SHRINCS.OP_VERIFY_STATELESS,
-                SHRINCS.HASH_SUITE_KECCAK_256,
+                HashSuite.HASH_SUITE_ID,
                 expectedCompositePublicKey,
                 context.domainSeparator,
                 context.nonce,
@@ -693,7 +694,7 @@ contract SHRINCSAccountVerifierExampleTest is Test {
         bytes32 hash = keccak256(
             abi.encodePacked(
                 SHRINCS.OP_VERIFY_STATEFUL,
-                SHRINCS.HASH_SUITE_KECCAK_256,
+                HashSuite.HASH_SUITE_ID,
                 expectedCompositePublicKey,
                 context.domainSeparator,
                 context.nonce,
@@ -742,7 +743,7 @@ contract SHRINCSAccountVerifierExampleTest is Test {
         bytes32 hash = keccak256(
             abi.encodePacked(
                 SHRINCS.OP_VERIFY_STATELESS,
-                SHRINCS.HASH_SUITE_KECCAK_256,
+                HashSuite.HASH_SUITE_ID,
                 expectedCompositePublicKey,
                 context.domainSeparator,
                 context.nonce,

@@ -18,6 +18,7 @@ pragma solidity ^0.8.28;
 
 import {SHRINCSParams} from "shrincs-profile/SHRINCSParams.sol";
 import {Hash} from "./Hash.sol";
+import {HashSuite} from "shrincs-hash/HashSuite.sol";
 
 library FORSMinusC {
     // AddressTypeForsTree: the FORS-tree ADRS type constant
@@ -176,15 +177,11 @@ library FORSMinusC {
             }
         }
 
-        // Memory-safe: hashes the forsPkInput buffer built above; no memory
-        // is written. Output is truncated to HASH_LEN bytes, high-aligned
-        // (maskHash); for 256s this folds to a no-op.
-        assembly ("memory-safe") {
-            // Hash the per-tree roots into the reconstructed FORS public
-            // value.
-            forsRoot := keccak256(forsPkInput, forsPkInputLen)
-        }
-        return (Hash.maskHash(forsRoot), true);
+        // Hash the per-tree roots into the reconstructed FORS public value.
+        // The buffer above is suite-independent; only this finalizer swaps
+        // per suite. Output truncated to HASH_LEN bytes, high-aligned
+        // (maskHash inside the suite helper); for 256s this folds to a no-op.
+        return (HashSuite.hashForsPk32(forsPkInput, forsPkInputLen), true);
     }
 
     // forsEntryRoot32: Rebuild one FORS tree root from a revealed secret leaf
@@ -217,7 +214,7 @@ library FORSMinusC {
         uint256 leafAddressValue = addressBase | leafLowIndex;
         // Hash the revealed secret leaf into the corresponding public FORS
         // leaf value.
-        node = hashForsLeaf32(
+        node = HashSuite.hashForsLeaf32(
             pkSeed, bytes32(leafAddressValue), entry.secretLeaf
         );
         // Track the current node position as we walk upward through the auth
@@ -259,7 +256,7 @@ library FORSMinusC {
             bytes32 addressWord = bytes32(addressValue);
             // Hash the two children into their parent node using the parent
             // address.
-            node = hashForsNode32(pkSeed, addressWord, left, right);
+            node = HashSuite.hashForsNode32(pkSeed, addressWord, left, right);
             index >>= 1;
             unchecked {
                 ++level;
@@ -290,90 +287,6 @@ library FORSMinusC {
         addressBase |= shiftedAddressType;
         addressBase |= shiftedLeafIndex;
         return addressBase;
-    }
-
-    // hashForsLeaf32: Hash one revealed FORS secret leaf into its public leaf
-    // value.
-    // 1. Domain-separate this hash as a FORS leaf computation.
-    // 2. Bind the public seed and leaf address.
-    // 3. Mix in the revealed secret leaf bytes.
-    // 4. Return the public FORS leaf value.
-    /// @dev Precondition: pkSeed is exactly 32 bytes, validPublicKey-checked
-    /// or a 32-byte key slice, as the fixed calldata read below assumes.
-    function hashForsLeaf32(
-        bytes calldata pkSeed,
-        bytes32 addressWord,
-        bytes calldata sk
-    ) internal pure returns (bytes32 out) {
-        // keccak256 input ("fors-leaf" tag [§1 tags], 105 bytes):
-        //   [0..9)    "fors-leaf"
-        //   [9..41)   pkSeed
-        //   [41..73)  addressWord
-        //   [73..105) secret leaf
-        // Output truncated to HASH_LEN bytes, high-aligned (maskHash
-        // below); for 256s this folds to a no-op.
-        // Memory-safe: uses scratch at the free-memory pointer without
-        // advancing it and without relying on prior contents.
-        assembly ("memory-safe") {
-            // Use the current free-memory pointer as scratch without
-            // advancing it.
-            let ptr := mload(0x40)
-            // Write the domain tag prefix for FORS leaf hashing.
-            mstore(ptr, "fors-leaf")
-            // Copy the 32-byte public seed after the 9-byte tag.
-            calldatacopy(add(ptr, 9), pkSeed.offset, 32)
-            // Write the 32-byte address word after the seed.
-            mstore(add(ptr, 41), addressWord)
-            // Copy the 32-byte secret leaf after the address.
-            calldatacopy(add(ptr, 73), sk.offset, 32)
-            // Hash the complete FORS leaf preimage.
-            out := keccak256(ptr, 105)
-        }
-        out = Hash.maskHash(out);
-    }
-
-    // hashForsNode32: Hash one internal FORS node from its left and right
-    // children.
-    // 1. Domain-separate this hash as an internal FORS node computation.
-    // 2. Bind the public seed and parent-node address.
-    // 3. Mix in the left and right child values in canonical order.
-    // 4. Return the parent node value.
-    /// @dev Precondition: pkSeed is exactly 32 bytes, validPublicKey-checked
-    /// or a 32-byte key slice, as the fixed calldata read below assumes.
-    function hashForsNode32(
-        bytes calldata pkSeed,
-        bytes32 addressWord,
-        bytes32 left,
-        bytes32 right
-    ) internal pure returns (bytes32 out) {
-        // keccak256 input ("fors-node" tag [§1 tags], 137 bytes):
-        //   [0..9)     "fors-node"
-        //   [9..41)    pkSeed
-        //   [41..73)   addressWord
-        //   [73..105)  left child
-        //   [105..137) right child
-        // Output truncated to HASH_LEN bytes, high-aligned (maskHash
-        // below); for 256s this folds to a no-op.
-        // Memory-safe: uses scratch at the free-memory pointer without
-        // advancing it and without relying on prior contents.
-        assembly ("memory-safe") {
-            // Use the current free-memory pointer as scratch without
-            // advancing it.
-            let ptr := mload(0x40)
-            // Write the domain tag prefix for FORS internal-node hashing.
-            mstore(ptr, "fors-node")
-            // Copy the 32-byte public seed after the 9-byte tag.
-            calldatacopy(add(ptr, 9), pkSeed.offset, 32)
-            // Write the 32-byte parent-node address after the seed.
-            mstore(add(ptr, 41), addressWord)
-            // Write the left child after the address.
-            mstore(add(ptr, 73), left)
-            // Write the right child after the left child.
-            mstore(add(ptr, 105), right)
-            // Hash the complete FORS internal-node preimage.
-            out := keccak256(ptr, 137)
-        }
-        out = Hash.maskHash(out);
     }
 
     // forsDigest: Derive the FORS digest bits and selected hypertree
@@ -516,13 +429,13 @@ library FORSMinusC {
         // today; kept as a correct general-purpose branch and deliberate
         // defense-in-depth.
         if (digestBytes <= 32) {
-            bytes32 digestWord;
-            // Memory-safe: hashes the scratch buffer and writes one word
-            // into the out buffer's payload (both allocated above).
+            // One digest block is enough for the whole FORS and hypertree
+            // coordinate stream. The suite helper returns the raw block.
+            bytes32 digestWord =
+                HashSuite.hashForsDigestBlock32(ptr, baseLen);
+            // Memory-safe: writes one word into the out buffer's payload
+            // (allocated above).
             assembly ("memory-safe") {
-                // One digest block is enough for the whole FORS and hypertree
-                // coordinate stream.
-                digestWord := keccak256(ptr, baseLen)
                 // Store that single digest block into the output bytes
                 // payload.
                 mstore(add(out, 32), digestWord)
@@ -534,21 +447,21 @@ library FORSMinusC {
         uint256 offset;
         uint32 blockCounter;
         while (offset < digestBytes) {
-            bytes32 digestWord;
             // Emit only as many bytes as remain needed from this block.
             uint256 chunk = digestBytes - offset;
             if (chunk > 32) chunk = 32;
             // Memory-safe: writes the 4-byte block counter into the reserved
-            // scratch (offset baseLen) and hashes; scratchLen reserved above
-            // covers baseLen + 32 bytes.
+            // scratch (offset baseLen); scratchLen reserved above covers
+            // baseLen + 32 bytes.
             assembly ("memory-safe") {
                 // Append a block counter when more than one digest block is
                 // needed.
                 mstore(add(ptr, baseLen), shl(224, blockCounter))
-                // Hash the base preimage plus the 4-byte block counter
-                // suffix.
-                digestWord := keccak256(ptr, totalLen)
             }
+            // Hash the base preimage plus the 4-byte block counter suffix.
+            // The suite helper returns the raw block.
+            bytes32 digestWord =
+                HashSuite.hashForsDigestBlock32(ptr, totalLen);
             // Copy only as many bytes as are still required from this digest
             // block.
             Hash.setHashChunk(out, digestWord, offset, chunk);

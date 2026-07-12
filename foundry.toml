@@ -26,10 +26,17 @@ cbor_metadata = false
 # Profile selection ([DESIGN §3.4]): the `shrincs-profile/` prefix
 # resolves to the active profile's SHRINCSParams library. Default is
 # the 256s profile. Other profiles override this remapping AND the
-# `out` dir. WARNING: a top-level remappings.txt silently overrides
-# these per-profile TOML remappings (verified hazard, [DESIGN §2(d′)]);
-# the profile-identity test + CI guard (T3) fail closed if one exists.
-remappings = ["shrincs-profile/=contracts/profiles/256s/"]
+# `out` dir. The `shrincs-hash/` prefix selects the hash suite (keccak
+# by default); a future SHA-256 suite remaps it to contracts/hash/sha2/.
+# Foundry replaces (not merges) the remapping array per profile, so
+# every profile that overrides remappings lists both axes. WARNING: a
+# top-level remappings.txt silently overrides these per-profile TOML
+# remappings (verified hazard, [DESIGN §2(d′)]); the profile-identity
+# test + CI guard (T3) fail closed if one exists.
+remappings = [
+    "shrincs-profile/=contracts/profiles/256s/",
+    "shrincs-hash/=contracts/hash/keccak/",
+]
 # The concrete per-profile verifiers and their deploy scripts each
 # compile only under their own profile (so the artifact carries the
 # right constants). Default is 256s, so skip the 128s SHRINCS and
@@ -81,7 +88,10 @@ gas_limit = "18446744073709551615" # u64::MAX
 # profile's constants) and the 256s-specific tests.
 [profile.128s-q18]
 out = "out-128s-q18"
-remappings = ["shrincs-profile/=contracts/profiles/128s-q18/"]
+remappings = [
+    "shrincs-profile/=contracts/profiles/128s-q18/",
+    "shrincs-hash/=contracts/hash/keccak/",
+]
 skip = [
     "contracts/SHRINCS256sKeccak.sol",
     "contracts/SHRINCS128sQ20Keccak.sol",
@@ -97,6 +107,7 @@ skip = [
     "test/SHRINCSAccountSigningFacade.t.sol",
     "test/SHRINCSAccountVectorExport.t.sol",
     "test/SHRINCSMeasurements.t.sol",
+    "test/HashSuiteStatelessGuard.t.sol",
     "test/SHRINCSAccountVerifierExample.t.sol",
     "test/SHRINCSCodec.t.sol",
     "test/SHRINCSStatefulPolicyExamples.t.sol",
@@ -109,7 +120,10 @@ skip = [
 
 [profile.128s-q20]
 out = "out-128s-q20"
-remappings = ["shrincs-profile/=contracts/profiles/128s-q20/"]
+remappings = [
+    "shrincs-profile/=contracts/profiles/128s-q20/",
+    "shrincs-hash/=contracts/hash/keccak/",
+]
 skip = [
     "contracts/SHRINCS256sKeccak.sol",
     "contracts/SHRINCS128sQ18Keccak.sol",
@@ -125,6 +139,7 @@ skip = [
     "test/SHRINCSAccountSigningFacade.t.sol",
     "test/SHRINCSAccountVectorExport.t.sol",
     "test/SHRINCSMeasurements.t.sol",
+    "test/HashSuiteStatelessGuard.t.sol",
     "test/SHRINCSAccountVerifierExample.t.sol",
     "test/SHRINCSCodec.t.sol",
     "test/SHRINCSStatefulPolicyExamples.t.sol",
@@ -146,7 +161,10 @@ optimizer = true
 optimizer_runs = 1000000
 gas_limit = "18446744073709551615" # u64::MAX
 out = "out-128s-q18-prod"
-remappings = ["shrincs-profile/=contracts/profiles/128s-q18/"]
+remappings = [
+    "shrincs-profile/=contracts/profiles/128s-q18/",
+    "shrincs-hash/=contracts/hash/keccak/",
+]
 skip = [
     "contracts/SHRINCS256sKeccak.sol",
     "contracts/SHRINCS128sQ20Keccak.sol",
@@ -165,7 +183,10 @@ optimizer = true
 optimizer_runs = 1000000
 gas_limit = "18446744073709551615" # u64::MAX
 out = "out-128s-q20-prod"
-remappings = ["shrincs-profile/=contracts/profiles/128s-q20/"]
+remappings = [
+    "shrincs-profile/=contracts/profiles/128s-q20/",
+    "shrincs-hash/=contracts/hash/keccak/",
+]
 skip = [
     "contracts/SHRINCS256sKeccak.sol",
     "contracts/SHRINCS128sQ18Keccak.sol",

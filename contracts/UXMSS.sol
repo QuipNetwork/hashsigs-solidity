@@ -17,7 +17,7 @@
 pragma solidity ^0.8.28;
 
 import {SHRINCSParams} from "shrincs-profile/SHRINCSParams.sol";
-import {Hash} from "./Hash.sol";
+import {HashSuite} from "shrincs-hash/HashSuite.sol";
 import {WOTSPlusC} from "./WOTSPlusC.sol";
 
 /// @title UXMSS
@@ -116,15 +116,12 @@ library UXMSS {
     ) internal pure returns (bytes32 pkHash, bool ok) {
         // Bind the stateful WOTS-C digest to the seed, leaf, randomizer,
         // counter, and signed message.
-        bytes32 digest = keccak256(
-            abi.encodePacked(
-                "uxmss-wots-digits",
-                pkSeed,
-                leafIndex,
-                signature.randomizer,
-                signature.counter,
-                message
-            )
+        bytes32 digest = HashSuite.uxmssWotsDigits32(
+            pkSeed,
+            leafIndex,
+            signature.randomizer,
+            signature.counter,
+            message
         );
 
         // Zero-initialized accumulator: summed over every WOTS-C chain in
@@ -161,7 +158,7 @@ library UXMSS {
             // T6/F-08: to unconditionally separate the stateful chain
             // domain, pass the tag "uxmss-wots-chain" / 16 here instead of
             // the shared WOTS_C_CHAIN_TAG (see
-            // WOTSPlusC.hashWotsCChainNoMask32).
+            // HashSuite.hashWotsCChainNoMask32).
             // Complete the revealed chain from its signing position to the
             // chain endpoint.
             bytes32 segment = WOTSPlusC.wotsChainNoMaskBase(
@@ -189,17 +186,8 @@ library UXMSS {
         }
         // Hash the reconstructed endpoints into the compact stateful WOTS
         // public-key hash. Output truncated to HASH_LEN bytes, high-
-        // aligned (maskHash); for 256s this folds to a no-op.
-        return (
-            Hash.maskHash(
-                keccak256(
-                    abi.encodePacked(
-                        "uxmss-wots-pk", pkSeed, leafIndex, segments
-                    )
-                )
-            ),
-            true
-        );
+        // aligned (maskHash inside the suite helper); 256s no-op.
+        return (HashSuite.uxmssWotsPk32(pkSeed, leafIndex, segments), true);
     }
 
     // rootFromUnbalancedPath: Rebuild the root of the custom unbalanced
@@ -218,11 +206,13 @@ library UXMSS {
     ) internal pure returns (bytes32 root, bool ok) {
         // The first parent hashes the leaf with the first auth-path node on
         // its right.
-        root = statefulParentHash(pkSeed, leafIndex, leaf, authPath[0]);
+        root = HashSuite.statefulParentHash32(
+            pkSeed, leafIndex, leaf, authPath[0]
+        );
         for (uint256 offset = 0; offset < authPath.length - 1;) {
             // Higher parents hash the next auth node on the left with the
             // running root on the right.
-            root = statefulParentHash(
+            root = HashSuite.statefulParentHash32(
                 pkSeed,
                 // casting to 'uint32' is safe because offset is bounded by
                 // authPath.length - 1, and authPath.length == leafIndex
@@ -236,50 +226,6 @@ library UXMSS {
             }
         }
         ok = true;
-    }
-
-    // statefulParentHash: Hash one parent node in the stateful unbalanced
-    // tree.
-    // 1. Domain-separate the hash as an unbalanced XMSS-style node
-    // computation.
-    // 2. Bind the public seed and left-leaf index that identify this parent
-    // location.
-    // 3. Mix in the left and right child values in tree order.
-    // 4. Return the parent node value.
-    function statefulParentHash(
-        bytes32 pkSeed,
-        uint32 leftLeafIndex,
-        bytes32 left,
-        bytes32 right
-    ) internal pure returns (bytes32 out) {
-        // keccak256 input ("uxmss-node" tag [§1 tags], 110 bytes):
-        //   [0..10)   "uxmss-node"
-        //   [10..42)  pkSeed
-        //   [42..46)  leftLeafIndex (big-endian uint32)
-        //   [46..78)  left child
-        //   [78..110) right child
-        // Output truncated to HASH_LEN bytes, high-aligned (maskHash
-        // below); for 256s this folds to a no-op.
-        // Memory-safe: uses scratch at the free-memory pointer without
-        // advancing it and without relying on prior contents.
-        assembly ("memory-safe") {
-            // Allocate a scratch buffer starting at the free-memory pointer.
-            let ptr := mload(0x40)
-            // Write the domain tag prefix for unbalanced stateful parent
-            // hashing.
-            mstore(ptr, "uxmss-node")
-            // Write the 32-byte public seed after the 10-byte tag.
-            mstore(add(ptr, 10), pkSeed)
-            // Write the 4-byte left-leaf index after the seed.
-            mstore(add(ptr, 42), shl(224, leftLeafIndex))
-            // Write the left child after the leaf index.
-            mstore(add(ptr, 46), left)
-            // Write the right child after the left child.
-            mstore(add(ptr, 78), right)
-            // Hash the complete parent-node preimage.
-            out := keccak256(ptr, 110)
-        }
-        out = Hash.maskHash(out);
     }
 
     // setSlice32: Write one 32-byte segment into a packed byte buffer.

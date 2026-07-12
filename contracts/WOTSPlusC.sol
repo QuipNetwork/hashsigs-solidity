@@ -16,7 +16,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 pragma solidity ^0.8.28;
 
-import {Hash} from "./Hash.sol";
+import {HashSuite} from "shrincs-hash/HashSuite.sol";
 
 /// @title WOTSPlusC
 /// @notice Shared WOTS+C chain machinery used by both the SHRINCS hypertree
@@ -86,67 +86,12 @@ library WOTSPlusC {
             uint256 chainStep = uint256(digit) + j;
             uint256 addressValue = chainAddressBase | chainStep;
             // Hash one step forward using the chain-specific address.
-            out = hashWotsCChainNoMask32(
+            out = HashSuite.hashWotsCChainNoMask32(
                 tag, tagLen, pkSeed, bytes32(addressValue), out
             );
             unchecked {
                 ++j;
             }
         }
-    }
-
-    // hashWotsCChainNoMask32: Execute one unmasked WOTS-C chain-hash step
-    // under a caller-supplied domain tag.
-    // 1. Domain-separate the hash as a WOTS-C chain computation.
-    // 2. Bind the public seed and chain-step address.
-    // 3. Mix in the current chain segment value.
-    // 4. Return the next chain value.
-    // Domain separation: both the hypertree (stateless) and stateful WOTS-C
-    // walks feed this one tag-parameterized step, and today both pass the
-    // shared "wots-c-chain" tag (WOTS_C_CHAIN_TAG) with its 108-byte
-    // preimage. The two subsystems stay separated through pkSeed: the
-    // hypertree path binds the stateless bundle pkSeed while the stateful
-    // path binds the stateful key's pkSeed, and honest keygen derives the
-    // two seeds independently, so their preimages never coincide. Setting
-    // both seeds equal only collides a key against itself and cannot forge
-    // against an honest key whose seeds differ. A dedicated stateful tag
-    // (e.g. "uxmss-wots-chain", 16 bytes) would separate them
-    // unconditionally but is deferred (F-08 -> T6): it is a breaking change
-    // to the Rust-anchored stateful vectors and keygen constants. With this
-    // shared step the flip is a one-argument change at the stateful call
-    // site — pass "uxmss-wots-chain" / 16 to the walk instead of the shared
-    // WOTS_C_CHAIN_TAG constant.
-    function hashWotsCChainNoMask32(
-        bytes32 tag,
-        uint256 tagLen,
-        bytes32 pkSeed,
-        bytes32 addressWord,
-        bytes32 segment
-    ) internal pure returns (bytes32 out) {
-        // keccak256 input (tag [§1 tags], tagLen + 96 bytes; for the shared
-        // WOTS_C_CHAIN_TAG this is "wots-c-chain" and 108 bytes):
-        //   [0..tagLen)          tag
-        //   [tagLen..tagLen+32)  pkSeed
-        //   [tagLen+32..+64)     addressWord
-        //   [tagLen+64..+96)     chain segment
-        // Output truncated to HASH_LEN bytes, high-aligned (maskHash
-        // below); for 256s this folds to a no-op.
-        // Memory-safe: uses scratch at the free-memory pointer without
-        // advancing it and without relying on prior contents.
-        assembly ("memory-safe") {
-            // Allocate a scratch buffer starting at the free-memory pointer.
-            let ptr := mload(0x40)
-            // Write the domain tag prefix for WOTS-C chain hashing.
-            mstore(ptr, tag)
-            // Write the 32-byte public seed after the tag.
-            mstore(add(ptr, tagLen), pkSeed)
-            // Write the 32-byte address word after the seed.
-            mstore(add(ptr, add(tagLen, 32)), addressWord)
-            // Write the current chain segment after the address.
-            mstore(add(ptr, add(tagLen, 64)), segment)
-            // Hash the complete WOTS-C chain-step preimage.
-            out := keccak256(ptr, add(tagLen, 96))
-        }
-        out = Hash.maskHash(out);
     }
 }

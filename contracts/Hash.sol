@@ -19,13 +19,15 @@ pragma solidity ^0.8.28;
 import {SHRINCSParams} from "shrincs-profile/SHRINCSParams.sol";
 
 /// @title Hash
-/// @notice Profile-independent hash and bit primitives shared by every
-/// SHRINCS module: address-word packing, hash-output masking, base-w digit
-/// extraction, and the memory-safe bit readers. This library is the
-/// compile-time hash-suite seam.
-/// @dev The current suite is keccak-256; a future SHA-256 suite plugs in
-/// here via remapping without touching the verifier logic that calls these
-/// helpers.
+/// @notice Profile-independent, suite-independent hash and bit primitives
+/// shared by every SHRINCS module: address-word packing, hash-output
+/// masking, base-w digit extraction, and the memory-safe bit readers. This
+/// library is NEVER remapped and holds no scheme-hash logic.
+/// @dev The compile-time hash-suite seam is `HashSuite` (remapped via the
+/// `shrincs-hash/` prefix): every tagged scheme hash lives there, so a future
+/// SHA-256 suite plugs in by remapping that prefix without touching the
+/// verifier logic. The primitives here (masking included) are identical
+/// across suites, which is why they stay in this shared, never-remapped file.
 library Hash {
     // addressWord32: Pack the SPHINCS/XMSS-style address components into one
     // 32-byte word.

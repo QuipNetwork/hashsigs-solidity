@@ -17,6 +17,7 @@
 pragma solidity ^0.8.28;
 
 import {SHRINCS} from "../../contracts/SHRINCS.sol";
+import {HashSuite} from "shrincs-hash/HashSuite.sol";
 import {SPHINCSPlusC} from "../../contracts/SPHINCSPlusC.sol";
 import {
     SHRINCSAccountVerifierExample
@@ -146,7 +147,7 @@ library SHRINCSAccountSigningFacade {
             keccak256(
                 abi.encodePacked(
                     SHRINCS.OP_ROTATE_STATEFUL,
-                    SHRINCS.HASH_SUITE_KECCAK_256,
+                    HashSuite.HASH_SUITE_ID,
                     account.currentSHRINCSPublicKey(),
                     context.domainSeparator,
                     context.nonce,
@@ -179,7 +180,7 @@ library SHRINCSAccountSigningFacade {
             keccak256(
                 abi.encodePacked(
                     SHRINCS.OP_ROTATE_FULL,
-                    SHRINCS.HASH_SUITE_KECCAK_256,
+                    HashSuite.HASH_SUITE_ID,
                     account.currentSHRINCSPublicKey(),
                     context.domainSeparator,
                     context.nonce,

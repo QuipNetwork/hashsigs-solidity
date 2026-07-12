@@ -17,6 +17,7 @@
 pragma solidity ^0.8.28;
 
 import {SHRINCSParams} from "shrincs-profile/SHRINCSParams.sol";
+import {HashSuite} from "shrincs-hash/HashSuite.sol";
 import {UXMSS} from "./UXMSS.sol";
 import {SPHINCSPlusC} from "./SPHINCSPlusC.sol";
 
@@ -51,12 +52,12 @@ import {SPHINCSPlusC} from "./SPHINCSPlusC.sol";
 /// The rotation/context helpers (rotateStatefulViaStateless, statelessRotate,
 /// and their message-hash builders) are likewise `calldata`-typed.
 library SHRINCS {
-    // Hash-suite identifiers bound into canonical action and rotation hashes.
-    uint32 internal constant HASH_SUITE_KECCAK_256 = 1;
-    // Sentinel for an unsupported hash suite. Referenced only by tests
-    // today; kept as a named constant so fail-closed suite checks and
-    // negative tests have a stable non-keccak identifier.
-    uint32 internal constant HASH_SUITE_UNSUPPORTED = 2;
+    // Sentinel for an unsupported hash suite. Kept as a named constant so
+    // fail-closed suite checks and negative tests have a stable identifier
+    // that never collides with a real suite id (keccak = 1, sha2 = 2). The
+    // canonical action/rotation hashes bind the active suite id directly
+    // from HashSuite.HASH_SUITE_ID.
+    uint32 internal constant HASH_SUITE_UNSUPPORTED = 0xFFFFFFFF;
     // Operation tags domain-separating each signed message family.
     bytes32 internal constant OP_VERIFY_STATEFUL =
         keccak256("shrincs-verify-stateful");
@@ -1046,7 +1047,7 @@ library SHRINCS {
         return keccak256(
             abi.encodePacked(
                 SHRINCS.OP_VERIFY_STATEFUL,
-                SHRINCS.HASH_SUITE_KECCAK_256,
+                HashSuite.HASH_SUITE_ID,
                 expectedPublicKeyCommitment,
                 context.domainSeparator,
                 context.nonce,
@@ -1073,7 +1074,7 @@ library SHRINCS {
         return keccak256(
             abi.encodePacked(
                 SHRINCS.OP_VERIFY_STATELESS,
-                SHRINCS.HASH_SUITE_KECCAK_256,
+                HashSuite.HASH_SUITE_ID,
                 expectedPublicKeyCommitment,
                 context.domainSeparator,
                 context.nonce,
@@ -1103,7 +1104,7 @@ library SHRINCS {
         return keccak256(
             abi.encodePacked(
                 SHRINCS.OP_ROTATE_STATEFUL,
-                SHRINCS.HASH_SUITE_KECCAK_256,
+                HashSuite.HASH_SUITE_ID,
                 expectedPublicKeyCommitment,
                 context.domainSeparator,
                 context.nonce,
@@ -1133,7 +1134,7 @@ library SHRINCS {
         return keccak256(
             abi.encodePacked(
                 SHRINCS.OP_ROTATE_FULL,
-                SHRINCS.HASH_SUITE_KECCAK_256,
+                HashSuite.HASH_SUITE_ID,
                 expectedPublicKeyCommitment,
                 context.domainSeparator,
                 context.nonce,

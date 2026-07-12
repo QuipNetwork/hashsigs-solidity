@@ -17,7 +17,7 @@
 pragma solidity ^0.8.28;
 
 import {SHRINCSParams} from "shrincs-profile/SHRINCSParams.sol";
-import {Hash} from "./Hash.sol";
+import {HashSuite} from "shrincs-hash/HashSuite.sol";
 import {WOTSPlusC} from "./WOTSPlusC.sol";
 
 library Hypertree {
@@ -210,7 +210,7 @@ library Hypertree {
 
         // Recompute the digest whose base-w digits determine chain stopping
         // points.
-        bytes32 digest = wotsDigest32(
+        bytes32 digest = HashSuite.wotsDigest32(
             pkSeed, expectedPkHash, randomizer, signature.counter, message
         );
         // "wots-c-pk" || pkSeed || segment_0 || ... || segment_{len-1}
@@ -298,63 +298,11 @@ library Hypertree {
             return false;
         }
 
-        bytes32 computedPkHash;
-        // Memory-safe: hashes the pkInput buffer built above; no memory is
-        // written. Output truncated to HASH_LEN bytes, high-aligned
-        // (maskHash); for 256s this folds to a no-op.
-        assembly ("memory-safe") {
-            // Hash the reconstructed chain endpoints into the compressed
-            // WOTS-C public-key hash.
-            computedPkHash := keccak256(pkInput, pkInputLen)
-        }
-        return Hash.maskHash(computedPkHash) == expectedPkHash;
-    }
-
-    // wotsDigest32: Derive the WOTS-C message digest that determines chain
-    // positions.
-    // 1. Domain-separate the digest input as a WOTS-C message computation.
-    // 2. Bind the public seed, expected public-key hash, and signature
-    // randomizer.
-    // 3. Bind the grind counter and signed message value.
-    // 4. Return the single 32-byte digest block used for base-w digit
-    // extraction.
-    function wotsDigest32(
-        bytes32 pkSeed,
-        bytes32 expectedPkHash,
-        bytes32 randomizer,
-        uint32 counter,
-        bytes32 message
-    ) internal pure returns (bytes32 out) {
-        // keccak256 input ("wots-c-msg" tag [§1 tags], 142 bytes):
-        //   [0..10)    "wots-c-msg"
-        //   [10..42)   pkSeed
-        //   [42..74)   expectedPkHash
-        //   [74..106)  randomizer
-        //   [106..110) grind counter (big-endian uint32)
-        //   [110..142) message
-        // Memory-safe: uses scratch at the free-memory pointer without
-        // advancing it and without relying on prior contents.
-        assembly ("memory-safe") {
-            // Allocate a scratch buffer starting at the free-memory pointer.
-            let ptr := mload(0x40)
-            // Write the digest domain tag prefix.
-            mstore(ptr, "wots-c-msg")
-            // Write the 32-byte public seed after the 10-byte tag.
-            mstore(add(ptr, 10), pkSeed)
-            // Write the expected compressed public-key hash after the seed.
-            mstore(add(ptr, 42), expectedPkHash)
-            // Write the 32-byte randomizer after the expected public-key
-            // hash.
-            mstore(add(ptr, 74), randomizer)
-            // Write the 4-byte grind counter after the randomizer.
-            mstore(add(ptr, 106), shl(224, counter))
-            // Write the 32-byte message after the counter.
-            mstore(add(ptr, 110), message)
-            // Hash the full WOTS-C message preimage.
-            out := keccak256(ptr, 142)
-            // Bump the free-memory pointer to the next 32-byte aligned slot.
-            mstore(0x40, add(ptr, 160))
-        }
+        // Hash the reconstructed chain endpoints into the compressed WOTS-C
+        // public-key hash. The buffer above is suite-independent; only this
+        // finalizer swaps per suite. Output truncated to HASH_LEN bytes,
+        // high-aligned (maskHash inside the suite helper); 256s no-op.
+        return HashSuite.hashWotsCPk32(pkInput, pkInputLen) == expectedPkHash;
     }
 
     // wotsDigestBytes: Return the number of bytes needed to encode all WOTS-C
@@ -434,54 +382,14 @@ library Hypertree {
             bytes32 addressWord = bytes32(addressValue);
             // Hash the two children into their parent node using the parent
             // address.
-            node = hashHypertreeNode32(pkSeedWord, addressWord, left, right);
+            node = HashSuite.hashHypertreeNode32(
+                pkSeedWord, addressWord, left, right
+            );
             index >>= 1;
             unchecked {
                 ++level;
             }
         }
         ok = true;
-    }
-
-    // hashHypertreeNode32: Hash one internal hypertree node at a specific
-    // layer/tree location.
-    // 1. Domain-separate the hash as a hypertree internal-node computation.
-    // 2. Bind the public seed and parent-node address.
-    // 3. Mix in the left and right child node values in canonical order.
-    // 4. Return the parent node value.
-    function hashHypertreeNode32(
-        bytes32 pkSeed,
-        bytes32 addressWord,
-        bytes32 left,
-        bytes32 right
-    ) internal pure returns (bytes32 out) {
-        // keccak256 input ("hypertree-node" tag [§1 tags], 142 bytes):
-        //   [0..14)    "hypertree-node"
-        //   [14..46)   pkSeed
-        //   [46..78)   addressWord
-        //   [78..110)  left child
-        //   [110..142) right child
-        // Output truncated to HASH_LEN bytes, high-aligned (maskHash
-        // below); for 256s this folds to a no-op.
-        // Memory-safe: uses scratch at the free-memory pointer without
-        // advancing it and without relying on prior contents.
-        assembly ("memory-safe") {
-            // Allocate a scratch buffer starting at the free-memory pointer.
-            let ptr := mload(0x40)
-            // Write the domain tag prefix for hypertree internal-node
-            // hashing.
-            mstore(ptr, "hypertree-node")
-            // Write the 32-byte public seed after the 14-byte tag.
-            mstore(add(ptr, 14), pkSeed)
-            // Write the 32-byte address word after the seed.
-            mstore(add(ptr, 46), addressWord)
-            // Write the left child after the address.
-            mstore(add(ptr, 78), left)
-            // Write the right child after the left child.
-            mstore(add(ptr, 110), right)
-            // Hash the complete hypertree internal-node preimage.
-            out := keccak256(ptr, 142)
-        }
-        out = Hash.maskHash(out);
     }
 }
