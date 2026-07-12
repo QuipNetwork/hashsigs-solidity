@@ -167,8 +167,6 @@ contract SHRINCSStatelessSliceCopyTest is Test {
             new Hypertree.HypertreeLayerSignature[](layerCount);
         for (uint256 i = 0; i < layerCount; i++) {
             hypertree[i] = Hypertree.HypertreeLayerSignature({
-                treeIndex: 0,
-                leafIndex: 0,
                 wotsCPkHash: leaf,
                 wotsCSignature: WOTSPlusC.WotsCSignature({
                     randomizer: randomizer,

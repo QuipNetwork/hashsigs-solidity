@@ -55,6 +55,7 @@ skip = [
     "script/DeploySPHINCSPlusC128sQ20Keccak.s.sol",
     "test/SHRINCSPinned128sQ18.t.sol",
     "test/SHRINCSPinned128sQ20.t.sol",
+    "test/SHRINCSSphincs128sVectors.t.sol",
 ]
 
 ffi = true
@@ -109,7 +110,7 @@ skip = [
     "test/SHRINCSMeasurements.t.sol",
     "test/HashSuiteStatelessGuard.t.sol",
     "test/SHRINCSAccountVerifierExample.t.sol",
-    "test/SHRINCSCodec.t.sol",
+    "test/SHRINCSEnvelope.t.sol",
     "test/SHRINCSStatefulPolicyExamples.t.sol",
     "test/SHRINCSStatelessDelegation.t.sol",
     "test/SHRINCSStatelessSliceCopy.t.sol",
@@ -141,7 +142,7 @@ skip = [
     "test/SHRINCSMeasurements.t.sol",
     "test/HashSuiteStatelessGuard.t.sol",
     "test/SHRINCSAccountVerifierExample.t.sol",
-    "test/SHRINCSCodec.t.sol",
+    "test/SHRINCSEnvelope.t.sol",
     "test/SHRINCSStatefulPolicyExamples.t.sol",
     "test/SHRINCSStatelessDelegation.t.sol",
     "test/SHRINCSStatelessSliceCopy.t.sol",

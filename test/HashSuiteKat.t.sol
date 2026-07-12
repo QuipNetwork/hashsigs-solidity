@@ -20,6 +20,7 @@ import {Test} from "../lib/forge-std/src/Test.sol";
 import {SHRINCSParams} from "shrincs-profile/SHRINCSParams.sol";
 import {HashSuite} from "shrincs-hash/HashSuite.sol";
 import {WOTSPlusC} from "../contracts/WOTSPlusC.sol";
+import {UXMSS} from "../contracts/UXMSS.sol";
 
 /// @dev Calldata/(ptr,len) entry points into HashSuite so the KATs can drive
 /// every helper shape. The finalizers copy the buffer to memory and pass its
@@ -188,6 +189,39 @@ contract HashSuiteKatTest is Test {
             )
         );
         assertEq(got, want, "wots-c-chain KAT");
+    }
+
+    // F-08 negative pin: the stateful chain step uses the "uxmss-wots-chain"
+    // tag (16 bytes, 112-byte preimage). Its output must both match the
+    // raw-ASCII reference AND diverge from the stateless "wots-c-chain" step
+    // for identical inputs, so a chain finished under the pre-T6 shared tag
+    // reconstructs a different WOTS-C public-key hash and fails verify.
+    function test_kat_uxmssWotsCChain() public view {
+        bytes32 got = h.wotsCChain(
+            UXMSS.UXMSS_WOTS_CHAIN_TAG,
+            UXMSS.UXMSS_WOTS_CHAIN_TAG_LEN,
+            PK_SEED,
+            ADDR,
+            SEGMENT
+        );
+        bytes32 want = _mask(
+            keccak256(
+                abi.encodePacked("uxmss-wots-chain", PK_SEED, ADDR, SEGMENT)
+            )
+        );
+        assertEq(got, want, "uxmss-wots-chain KAT");
+
+        bytes32 statelessStep = h.wotsCChain(
+            WOTSPlusC.WOTS_C_CHAIN_TAG,
+            WOTSPlusC.WOTS_C_CHAIN_TAG_LEN,
+            PK_SEED,
+            ADDR,
+            SEGMENT
+        );
+        assertTrue(
+            got != statelessStep,
+            "F-08: stateful and stateless chain steps must diverge"
+        );
     }
 
     function test_kat_forsLeaf() public view {

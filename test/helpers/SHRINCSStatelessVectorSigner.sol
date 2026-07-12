@@ -312,10 +312,10 @@ contract SHRINCSStatelessVectorSigner {
         session.hypertreeWotsDone = false;
         session.hypertreeAuthPathDone = false;
 
+        // T6: coordinates (tree, leaf) are no longer serialized in the layer
+        // signature; they remain local inputs to the address-word hashing.
         Hypertree.HypertreeLayerSignature storage layerSig =
             session.signature.hypertree.push();
-        layerSig.treeIndex = tree;
-        layerSig.leafIndex = leaf;
         layerSig.wotsCPkHash = abi.encodePacked(pkHash);
 
         return true;
@@ -585,8 +585,6 @@ contract SHRINCSStatelessVectorSigner {
         out.hypertree = new Hypertree
             .HypertreeLayerSignature[](signature.hypertree.length);
         for (uint256 i = 0; i < signature.hypertree.length;) {
-            out.hypertree[i].treeIndex = signature.hypertree[i].treeIndex;
-            out.hypertree[i].leafIndex = signature.hypertree[i].leafIndex;
             out.hypertree[i].wotsCPkHash = signature.hypertree[i].wotsCPkHash;
             out.hypertree[i].wotsCSignature.randomizer =
             signature.hypertree[i].wotsCSignature.randomizer;

@@ -18,6 +18,7 @@ pragma solidity ^0.8.28;
 
 import {Test} from "../lib/forge-std/src/Test.sol";
 import {SHRINCS} from "../contracts/SHRINCS.sol";
+import {SHRINCSParams} from "shrincs-profile/SHRINCSParams.sol";
 import {SPHINCSPlusC} from "../contracts/SPHINCSPlusC.sol";
 import {FORSMinusC} from "../contracts/FORSMinusC.sol";
 import {Hypertree} from "../contracts/Hypertree.sol";
@@ -81,8 +82,6 @@ contract SHRINCSStatefulPolicyExamplesTest is Test {
     }
 
     struct LegacyHypertreeLayerSignature {
-        uint64 treeIndex;
-        uint32 leafIndex;
         bytes wotsCPkHash;
         LegacyWotsCSignature wotsCSignature;
         bytes[] authPath;
@@ -342,7 +341,8 @@ contract SHRINCSStatefulPolicyExamplesTest is Test {
     {
         return keccak256(
             abi.encodePacked(
-                "shrincs-public-key",
+                "shrincs-public-key/",
+                SHRINCSParams.PROFILE_NAME,
                 publicKey.statefulPublicKey,
                 publicKey.pkSeed,
                 publicKey.hypertreeRoot
@@ -443,8 +443,6 @@ contract SHRINCSStatefulPolicyExamplesTest is Test {
             new Hypertree.HypertreeLayerSignature[](legacy.hypertree.length);
         for (uint256 i = 0; i < layers.length; ++i) {
             layers[i] = Hypertree.HypertreeLayerSignature({
-                treeIndex: legacy.hypertree[i].treeIndex,
-                leafIndex: legacy.hypertree[i].leafIndex,
                 wotsCPkHash: legacy.hypertree[i].wotsCPkHash,
                 wotsCSignature: WOTSPlusC.WotsCSignature({
                     randomizer: legacy.hypertree[i].wotsCSignature
@@ -473,7 +471,8 @@ contract SHRINCSStatefulPolicyExamplesTest is Test {
     ) internal pure returns (SHRINCS.PublicKey memory) {
         bytes32 commitment = keccak256(
             abi.encodePacked(
-                "shrincs-public-key",
+                "shrincs-public-key/",
+                SHRINCSParams.PROFILE_NAME,
                 statefulPublicKey,
                 pkSeed,
                 hypertreeRoot
@@ -494,7 +493,8 @@ contract SHRINCSStatefulPolicyExamplesTest is Test {
     ) internal pure returns (SHRINCS.RotationTarget memory) {
         bytes32 commitment = keccak256(
             abi.encodePacked(
-                "shrincs-public-key",
+                "shrincs-public-key/",
+                SHRINCSParams.PROFILE_NAME,
                 statefulPublicKey,
                 pkSeed,
                 hypertreeRoot
@@ -514,7 +514,8 @@ contract SHRINCSStatefulPolicyExamplesTest is Test {
     ) internal pure returns (SHRINCS.StatefulRotationTarget memory) {
         bytes32 commitment = keccak256(
             abi.encodePacked(
-                "shrincs-public-key",
+                "shrincs-public-key/",
+                SHRINCSParams.PROFILE_NAME,
                 statefulPublicKey,
                 currentPublicKey.pkSeed,
                 currentPublicKey.hypertreeRoot

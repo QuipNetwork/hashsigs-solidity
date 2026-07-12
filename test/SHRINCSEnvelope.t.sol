@@ -26,7 +26,7 @@ import {SHRINCSParams} from "shrincs-profile/SHRINCSParams.sol";
 import {SHRINCSVerifier} from "../contracts/SHRINCSVerifier.sol";
 import {SHRINCSTestSigner} from "./helpers/SHRINCSTestSigner.sol";
 
-contract CodecERC7913ConsumerHarness {
+contract EnvelopeERC7913ConsumerHarness {
     bytes4 internal constant ERC1271_MAGIC_VALUE = 0x1626ba7e;
 
     function isValidSignatureNow(
@@ -104,7 +104,7 @@ contract CodecERC7913ConsumerHarness {
     }
 }
 
-contract CodecMockERC1271Signer {
+contract EnvelopeMockERC1271Signer {
     bytes4 internal constant MAGIC_VALUE = 0x1626ba7e;
     bytes4 internal constant INVALID_SIGNATURE = 0xffffffff;
 
@@ -129,7 +129,7 @@ contract CodecMockERC1271Signer {
     }
 }
 
-contract CodecNonMagicERC7913Verifier is IERC7913SignatureVerifier {
+contract EnvelopeNonMagicERC7913Verifier is IERC7913SignatureVerifier {
     function verify(bytes calldata, bytes32, bytes calldata)
         external
         pure
@@ -139,19 +139,19 @@ contract CodecNonMagicERC7913Verifier is IERC7913SignatureVerifier {
     }
 }
 
-// Minimal concrete instance of the abstract profile base for the codec
+// Minimal concrete instance of the abstract profile base for the envelope
 // integration test (the real per-profile subclasses are empty too). The
 // pinned SPHINCSPlusC address is unused on the stateful path exercised
 // here, so it returns the zero address.
-contract CodecSHRINCSVerifierHarness is SHRINCSVerifier {
+contract EnvelopeSHRINCSVerifierHarness is SHRINCSVerifier {
     function _pinnedSphincsPlusC() internal pure override returns (address) {
         return address(0);
     }
 }
 
-// Exposes the internal codec library through external functions so tests
-// exercise the real calldata-facing decode paths.
-contract SHRINCSCodecHarness {
+// Exposes the SHRINCS envelope encoders/decoders through external functions
+// so tests exercise the real calldata-facing decode paths.
+contract SHRINCSEnvelopeHarness {
     function decodePublicKeyCommitment(bytes calldata key)
         external
         pure
@@ -188,11 +188,11 @@ contract SHRINCSCodecHarness {
     }
 }
 
-contract SHRINCSCodecTest is Test {
-    SHRINCSCodecHarness internal codec;
+contract SHRINCSEnvelopeTest is Test {
+    SHRINCSEnvelopeHarness internal harness;
 
     function setUp() public {
-        codec = new SHRINCSCodecHarness();
+        harness = new SHRINCSEnvelopeHarness();
     }
 
     // buildSamplePublicKey: Construct a fully populated synthetic key bundle
@@ -243,7 +243,7 @@ contract SHRINCSCodecTest is Test {
     function testDecodeKeyAcceptsExactly32Bytes() public view {
         bytes32 expected = keccak256("codec key word");
         (bytes32 commitment, bool ok) =
-            codec.decodePublicKeyCommitment(abi.encodePacked(expected));
+            harness.decodePublicKeyCommitment(abi.encodePacked(expected));
         assertTrue(ok, "32-byte key must decode");
         assertEq(
             commitment,
@@ -260,7 +260,7 @@ contract SHRINCSCodecTest is Test {
                 key[j] = 0xab;
             }
             (bytes32 commitment, bool ok) =
-                codec.decodePublicKeyCommitment(key);
+                harness.decodePublicKeyCommitment(key);
             assertFalse(ok, "wrong-length key must not decode");
             assertEq(
                 commitment,
@@ -275,12 +275,12 @@ contract SHRINCSCodecTest is Test {
         SHRINCS.Signature memory signature = buildSampleSignature();
 
         bytes memory envelope =
-            codec.encodeStatefulEnvelope(publicKey, signature);
+            harness.encodeStatefulEnvelope(publicKey, signature);
         (
             SHRINCS.PublicKey memory decodedKey,
             SHRINCS.Signature memory decodedSig,
             bool ok
-        ) = codec.decodeStatefulEnvelope(envelope);
+        ) = harness.decodeStatefulEnvelope(envelope);
         assertTrue(ok, "canonical envelope must decode");
 
         // The envelope layout is exactly abi.encode(PublicKey,
@@ -344,7 +344,7 @@ contract SHRINCSCodecTest is Test {
         bytes memory malformed =
             overwriteSignatureChainsOffset(validEnvelope(), 0x81);
         vm.expectRevert();
-        codec.decodeStatefulEnvelope(malformed);
+        harness.decodeStatefulEnvelope(malformed);
     }
 
     // A huge claimed auth-path length reads past the buffer and reverts
@@ -353,12 +353,12 @@ contract SHRINCSCodecTest is Test {
         bytes memory malformed =
             overwriteSignatureAuthPathLength(validEnvelope(), 10_000);
         vm.expectRevert();
-        codec.decodeStatefulEnvelope(malformed);
+        harness.decodeStatefulEnvelope(malformed);
     }
 
     function testToMessageIsThePackedHash() public view {
         bytes32 hash = keccak256("codec message hash");
-        bytes memory message = codec.toMessage(hash);
+        bytes memory message = harness.toMessage(hash);
         assertEq(message.length, 32, "message must be exactly 32 bytes");
         assertEq(
             message,
@@ -369,14 +369,14 @@ contract SHRINCSCodecTest is Test {
 
     function testFuzzToMessageMatchesPackedHash(bytes32 hash) public view {
         assertEq(
-            codec.toMessage(hash),
+            harness.toMessage(hash),
             abi.encodePacked(hash),
             "message must always be the packed hash bytes"
         );
     }
 
     function validEnvelope() internal view returns (bytes memory) {
-        return codec.encodeStatefulEnvelope(
+        return harness.encodeStatefulEnvelope(
             buildSamplePublicKey(), buildSampleSignature()
         );
     }
@@ -431,15 +431,15 @@ contract SHRINCSCodecTest is Test {
     }
 }
 
-contract SHRINCSCodecERC7913IntegrationTest is Test {
+contract SHRINCSEnvelopeERC7913IntegrationTest is Test {
     bytes4 internal constant INVALID_SIGNATURE = 0xffffffff;
     string internal constant VECTOR_PATH =
         "test/test_vectors/shrincs_sphincs_256s_keccak.json";
 
     SHRINCSVerifier internal verifier;
-    CodecERC7913ConsumerHarness internal consumer;
-    CodecMockERC1271Signer internal erc1271Signer;
-    CodecNonMagicERC7913Verifier internal nonMagicVerifier;
+    EnvelopeERC7913ConsumerHarness internal consumer;
+    EnvelopeMockERC1271Signer internal erc1271Signer;
+    EnvelopeNonMagicERC7913Verifier internal nonMagicVerifier;
     string internal vectors;
 
     struct LegacyStatefulPublicKey {
@@ -460,9 +460,9 @@ contract SHRINCSCodecERC7913IntegrationTest is Test {
     bytes internal validEnvelope;
 
     function setUp() public {
-        verifier = new CodecSHRINCSVerifierHarness();
-        consumer = new CodecERC7913ConsumerHarness();
-        nonMagicVerifier = new CodecNonMagicERC7913Verifier();
+        verifier = new EnvelopeSHRINCSVerifierHarness();
+        consumer = new EnvelopeERC7913ConsumerHarness();
+        nonMagicVerifier = new EnvelopeNonMagicERC7913Verifier();
         vectors = vm.readFile(VECTOR_PATH);
 
         (
@@ -489,7 +489,8 @@ contract SHRINCSCodecERC7913IntegrationTest is Test {
 
         validKey = abi.encodePacked(commitmentWord);
         validEnvelope = SHRINCS.encodeStatefulEnvelope(publicKey, signature);
-        erc1271Signer = new CodecMockERC1271Signer(signedHash, validEnvelope);
+        erc1271Signer =
+            new EnvelopeMockERC1271Signer(signedHash, validEnvelope);
     }
 
     // Checks that a stateful signature made by the Rust code works through
@@ -656,7 +657,8 @@ contract SHRINCSCodecERC7913IntegrationTest is Test {
     ) internal pure returns (SHRINCS.PublicKey memory) {
         bytes32 commitment = keccak256(
             abi.encodePacked(
-                "shrincs-public-key",
+                "shrincs-public-key/",
+                SHRINCSParams.PROFILE_NAME,
                 statefulPublicKey,
                 pkSeed,
                 hypertreeRoot

@@ -30,6 +30,14 @@ library SHRINCSTestSigner {
     uint32 internal constant INITIAL_STATEFUL_LEAF_INDEX = 1;
     uint32 internal constant MAX_STATEFUL_SIGNATURES_LIMIT = 4096;
     uint32 internal constant WOTS_C_MAX_GRIND_COUNTER = 1 << 24;
+    // 256s hypertree geometry (d = 8). This helper's stateless keygen
+    // carries the 256s layer count deliberately: the full 128s stateless
+    // hypertree keygen (single layer, 2^18 WOTS leaves) is computationally
+    // infeasible on-chain, so under 128s this helper's hypertree root is
+    // non-canonical and is NOT used for stateless correctness. 128s
+    // stateless coverage is vector-driven (SHRINCSSphincs128sVectors);
+    // 128s stateful tests use only the stateful subtree, which is
+    // independent of this constant.
     uint8 internal constant NUM_HYPERTREE_LAYERS = 8;
 
     function keygen(bytes memory seedMaterial, uint32 maxStatefulSignatures)
@@ -349,11 +357,13 @@ library SHRINCSTestSigner {
                 start + stepOffset
             );
             // Truncate each chain step, mirroring the verifier's
-            // WOTSPlusC.hashWotsCChainNoMask32 maskHash. No-op at 256s.
+            // HashSuite.hashWotsCChainNoMask32 maskHash. No-op at 256s.
+            // F-08: the stateful walk uses "uxmss-wots-chain" (16 bytes)
+            // to separate its chain domain from the stateless hypertree.
             out = Hash.maskHash(
                 keccak256(
                     abi.encodePacked(
-                        "wots-c-chain", pkSeed, addressWord, out
+                        "uxmss-wots-chain", pkSeed, addressWord, out
                     )
                 )
             );

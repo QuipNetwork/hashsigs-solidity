@@ -18,6 +18,7 @@ pragma solidity ^0.8.28;
 
 import {Test} from "../lib/forge-std/src/Test.sol";
 import {SHRINCS} from "../contracts/SHRINCS.sol";
+import {SHRINCSParams} from "shrincs-profile/SHRINCSParams.sol";
 import {SPHINCSPlusC} from "../contracts/SPHINCSPlusC.sol";
 import {FORSMinusC} from "../contracts/FORSMinusC.sol";
 import {Hypertree} from "../contracts/Hypertree.sol";
@@ -189,8 +190,6 @@ contract SHRINCSSphincs256sVectorsTest is Test {
     }
 
     struct LegacyHypertreeLayerSignature {
-        uint64 treeIndex;
-        uint32 leafIndex;
         bytes wotsCPkHash;
         LegacyWotsCSignature wotsCSignature;
         bytes[] authPath;
@@ -739,11 +738,56 @@ contract SHRINCSSphincs256sVectorsTest is Test {
             SPHINCSPlusC.Signature memory signature
         ) = decodeStatelessVector(".stateless.cases.valid.calldata");
         signature.hypertree = new Hypertree.HypertreeLayerSignature[](0);
-        // Post guard-pruning an empty hypertree reverts (Panic) at the
-        // hypertree[0] read instead of returning false; both are fail-closed.
-        vm.expectRevert();
-        stateless.verifyUnsafeRaw(
-            compositePublicKeyWord(publicKey), publicKey, message, signature
+        // T6: the layer coordinates are no longer read from hypertree[0]
+        // before verifyHypertree, so an empty hypertree no longer Panics
+        // there; it is rejected by the layers.length == d guard, returning
+        // false. Fail-closed either way, never a wrong-accept.
+        assertEq(
+            stateless.verifyUnsafeRaw(
+                compositePublicKeyWord(publicKey),
+                publicKey,
+                message,
+                signature
+            ),
+            false,
+            "stateless empty hypertree must be rejected"
+        );
+    }
+
+    // T6 negative pin (commitment profile binding). A bundle presenting the
+    // PRE-T6 unbound commitment tag ("shrincs-public-key" without the
+    // "/<profile>" suffix) must be rejected: the verifier recomputes the
+    // commitment with the profile-bound tag, so pre-T6 (and cross-profile)
+    // commitment material can never satisfy the installed-commitment check.
+    function testStatelessSphincs256sRejectsPreT6UnboundCommitment() public {
+        (
+            SHRINCS.PublicKey memory publicKey,
+            bytes memory message,
+            SPHINCSPlusC.Signature memory signature
+        ) = decodeStatelessVector(".stateless.cases.valid.calldata");
+        // Pre-T6 commitment: no "/<profile>" suffix.
+        bytes32 unbound = keccak256(
+            abi.encodePacked(
+                "shrincs-public-key",
+                publicKey.statefulPublicKey,
+                publicKey.pkSeed,
+                publicKey.hypertreeRoot
+            )
+        );
+        // The binding must actually change the commitment value.
+        assertTrue(
+            unbound != compositePublicKeyWord(publicKey),
+            "profile binding must change the commitment"
+        );
+        // Present the pre-T6 commitment as both the embedded field and the
+        // installed expectation; the profile-bound recompute rejects it.
+        publicKey.publicKeyCommitment = abi.encodePacked(unbound);
+        assertEq(
+            stateless.verifyUnsafeRaw(
+                unbound, publicKey, message, signature
+            ),
+            false,
+            "pre-T6 unbound commitment must be rejected"
         );
     }
 
@@ -863,26 +907,13 @@ contract SHRINCSSphincs256sVectorsTest is Test {
         );
     }
 
-    function testStatelessSphincs256sRejectsHypertreeLeafIndexOutOfRange()
-        public
-    {
-        (
-            SHRINCS.PublicKey memory publicKey,
-            bytes memory message,
-            SPHINCSPlusC.Signature memory signature
-        ) = decodeStatelessVector(".stateless.cases.valid.calldata");
-        signature.hypertree[0].leafIndex = 256;
-        assertEq(
-            stateless.verifyUnsafeRaw(
-                compositePublicKeyWord(publicKey),
-                publicKey,
-                message,
-                signature
-            ),
-            false,
-            "stateless hypertree leaf index out of range"
-        );
-    }
+    // (T6) The former "hypertree leaf index out of range" tamper test was
+    // removed: layer coordinates are no longer carried in the signature, so
+    // there is no carried leaf index to push out of range. The layer-0
+    // coordinate is derived from the FORS digest (read as exactly
+    // subtreeHeight bits, always < leaf_count) and upper layers by the
+    // shift/mask recurrence, so an out-of-range coordinate cannot be
+    // expressed. See the coordinate-derivation binding on Hypertree.
 
     // line-length: allow — test name is one unbreakable token
     function testStatelessSphincs256sRejectsMalformedHypertreeWotsChainLength()
@@ -1446,7 +1477,8 @@ contract SHRINCSSphincs256sVectorsTest is Test {
     {
         return keccak256(
             abi.encodePacked(
-                "shrincs-public-key",
+                "shrincs-public-key/",
+                SHRINCSParams.PROFILE_NAME,
                 publicKey.statefulPublicKey,
                 publicKey.pkSeed,
                 publicKey.hypertreeRoot
@@ -1548,8 +1580,6 @@ contract SHRINCSSphincs256sVectorsTest is Test {
             new Hypertree.HypertreeLayerSignature[](legacy.hypertree.length);
         for (uint256 i = 0; i < layers.length; ++i) {
             layers[i] = Hypertree.HypertreeLayerSignature({
-                treeIndex: legacy.hypertree[i].treeIndex,
-                leafIndex: legacy.hypertree[i].leafIndex,
                 wotsCPkHash: legacy.hypertree[i].wotsCPkHash,
                 wotsCSignature: WOTSPlusC.WotsCSignature({
                     randomizer: legacy.hypertree[i].wotsCSignature
@@ -1613,7 +1643,8 @@ contract SHRINCSSphincs256sVectorsTest is Test {
     ) internal pure returns (SHRINCS.PublicKey memory) {
         bytes32 commitment = keccak256(
             abi.encodePacked(
-                "shrincs-public-key",
+                "shrincs-public-key/",
+                SHRINCSParams.PROFILE_NAME,
                 statefulPublicKey,
                 pkSeed,
                 hypertreeRoot
@@ -1633,7 +1664,8 @@ contract SHRINCSSphincs256sVectorsTest is Test {
     ) internal pure returns (SHRINCS.StatefulRotationTarget memory) {
         bytes32 commitment = keccak256(
             abi.encodePacked(
-                "shrincs-public-key",
+                "shrincs-public-key/",
+                SHRINCSParams.PROFILE_NAME,
                 statefulPublicKey,
                 currentPublicKey.pkSeed,
                 currentPublicKey.hypertreeRoot
@@ -1652,7 +1684,8 @@ contract SHRINCSSphincs256sVectorsTest is Test {
     ) internal pure returns (SHRINCS.RotationTarget memory) {
         bytes32 commitment = keccak256(
             abi.encodePacked(
-                "shrincs-public-key",
+                "shrincs-public-key/",
+                SHRINCSParams.PROFILE_NAME,
                 statefulPublicKey,
                 pkSeed,
                 hypertreeRoot

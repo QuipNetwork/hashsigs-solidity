@@ -220,8 +220,8 @@ Tests (26 suites, 239 tests as of 2026-07-12, ci profile):
   - one adversarial case per retained input guard, asserting malformed
     input classes resolve to revert or `false`
 - [test/SHRINCSVerifier.t.sol](./test/SHRINCSVerifier.t.sol) and
-  [test/SHRINCSCodec.t.sol](./test/SHRINCSCodec.t.sol)
-  - ERC-7913 raw verifier and codec tests
+  [test/SHRINCSEnvelope.t.sol](./test/SHRINCSEnvelope.t.sol)
+  - ERC-7913 raw verifier and envelope encoder/decoder tests
 - [test/SHRINCSProfileInvariants.t.sol](./test/SHRINCSProfileInvariants.t.sol)
   - structural invariants and the profile-identity guard for the active
     `SHRINCSParams` profile
@@ -417,11 +417,15 @@ the [FIPS205 §8.2] index recurrence. The FORS digest fixes layer 0's
 coordinate; each upper layer's leaf index is the low
 `HYPERTREE_HEIGHT / NUM_HYPERTREE_LAYERS` bits of the layer below's tree
 index, and its tree index is the remaining high bits.
-`Hypertree.verifyHypertree` and the test signer enforce this chaining
-in lockstep, so a signature cannot choose independent upper-layer addresses.
-This is a deliberate, documented departure from FIPS 205 (marked
-`Deviates from [FIPS205 §8.2]:` in the code); do not change either side
-toward the FIPS recurrence without regenerating all vectors.
+`Hypertree.verifyHypertree` derives these coordinates and the test signer
+follows the same recurrence, so a signature cannot choose independent
+upper-layer addresses. The coordinates are not carried in the signature:
+the verifier seeds layer 0 from the FORS digest and derives every upper
+layer, making the derived value the sole coordinate input (the pre-T6
+carried `treeIndex`/`leafIndex` fields were removed with the vector
+regeneration). This is a deliberate, documented departure from FIPS 205
+(marked `Deviates from [FIPS205 §8.2]:` in the code); do not change either
+side toward the FIPS recurrence without regenerating all vectors.
 
 ### 3. Stateful-key rotation authorization
 
@@ -958,7 +962,6 @@ Current tests cover:
 - dropped `FORS` entries are rejected
 - short `FORS` randomizers, secret leaves, auth paths, and auth nodes are
   rejected
-- hypertree leaf index out of range is rejected
 - malformed hypertree `WOTS-C` chain length is rejected
 - wrong hypertree authentication path length is rejected
 - canonical action hash changes when nonce changes
@@ -1092,12 +1095,23 @@ delegation figure is `verifyStateless` calling its SPHINCS+C sibling.
 
 | Path                              | Gas       |
 |-----------------------------------|-----------|
-| stateful, canonical wrapper call  | 194,574   |
-| stateful, ERC-1271                | 171,561   |
-| stateful, adapter direct          | 348,786   |
-| stateless, canonical wrapper call | 1,680,697 |
-| stateless, ERC-1271               | 1,658,664 |
-| stateless delegation, ERC-7913    | 1,667,626 |
+| stateful, canonical wrapper call  | 190,792   |
+| stateful, ERC-1271                | 167,779   |
+| stateful, adapter direct          | 349,162   |
+| stateless, canonical wrapper call | 1,629,307 |
+| stateless, ERC-1271               | 1,607,077 |
+| stateless delegation, ERC-7913    | 1,661,184 |
+
+The stateless figures fall ~50k from earlier baselines: the T6 wire
+change drops the carried per-layer tree/leaf coordinates from the
+stateless signature (the verifier now derives them from the FORS
+digest), shrinking the envelope calldata and its decode. Because T6 also
+changes the stateful chain-hash preimage (F-08) and the profile-bound
+commitment, and because WOTS/FORS chain-walk lengths are data-dependent
+on the regenerated vectors, these figures are recorded actuals, not
+equality anchors. The 128s profiles verify a stateless signature in
+~243k gas (measured over the Rust-anchored 128s vector by
+`SHRINCSSphincs128sVectors.t.sol`).
 
 For the stateful profile the ERC-1271 figure falls below the canonical
 wrapper call: the wrapper builds and validates the typed `ActionContext`

@@ -48,24 +48,79 @@ contract SHRINCSSignerKeygenTest is Test {
         0x3a49d4cf20bff4e5a9770e379c7f9a6474fd2d5c1c34f204ced26567b7981aa8;
     bytes32 internal constant EXPECTED_STATEFUL_PK_SEED =
         0xa4a372b30187a5bf20d242a6e0a87206cf281bc0fdbbc44c835b3811f800587e;
-    bytes32 internal constant EXPECTED_STATEFUL_ROOT =
-        0x59255b6f0e6ee44c1957d1d48bd7edfa936b7a8a073a13a2eb973b3ab87860f6;
     bytes32 internal constant EXPECTED_STATELESS_SK_SEED =
         0x307041ea3217779667ec95a7661acbcaa52cdf46a7902cf61726c38301f0a4fe;
     bytes32 internal constant EXPECTED_STATELESS_PRF_SEED =
         0xa49f5e4c7395acc51737c7095f36715ab351afca3b5ace9dce843fa884acb967;
     bytes32 internal constant EXPECTED_PK_SEED =
         0x7f71921f640162143dc08fe0dcc827bb0baf83c5cd9a52830447aed753b58d75;
-    bytes32 internal constant EXPECTED_HYPERTREE_ROOT =
+
+    // Profile-varying keygen goldens (seed "solidity public key seed",
+    // maxStatefulSignatures 4). The seeds above are pure-KDF and identical
+    // across all three keccak profiles; these fields change with the F-08
+    // stateful chain tag, the profile-bound commitment, and 128s Trunc16
+    // (roots high-aligned, zero-padded). Anchored to the Rust signer's T6
+    // regeneration. Under 128s the stateful root/public key (q18 and q20
+    // share them) come from the feasible stateful subsystem; the 128s
+    // stateless hypertree root and commitment are asserted by the
+    // vector-backed SHRINCSSphincs128sVectors suite, not recomputed here.
+    struct ProfileGoldens {
+        bytes32 statefulRoot;
+        bytes32 hypertreeRoot;
+        bytes statefulPublicKey;
+        bytes32 publicKeyCommitment;
+    }
+
+    // 256s-keccak.
+    bytes32 internal constant G256_STATEFUL_ROOT =
+        0x4f26a29da785b7d9c0194e409dff00c4234e3708ad80a5506f40c0bc83d78f4e;
+    bytes32 internal constant G256_HYPERTREE_ROOT =
         0x51ed6195736b8c640399d7127c2073429879f795645b3fdaa7780bce6fd134b2;
-    bytes32 internal constant EXPECTED_PUBLIC_KEY_COMMITMENT =
-        0x4c986311f84e2931b0b8589f317ef88defe4640143e573b8e85ee5bf9c4ed068;
-    bytes internal constant EXPECTED_STATEFUL_PUBLIC_KEY =
+    bytes32 internal constant G256_COMMITMENT =
+        0x38681966d8f8ddcbc3dc966d2cb03feb627182622893a0b9a1580f6440db5654;
+    bytes internal constant G256_STATEFUL_PUBLIC_KEY =
     // line-length: allow — one unbreakable test vector literal token
-    hex"a4a372b30187a5bf20d242a6e0a87206cf281bc0fdbbc44c835b3811f800587e59255b6f0e6ee44c1957d1d48bd7edfa936b7a8a073a13a2eb973b3ab87860f600000004";
+    hex"a4a372b30187a5bf20d242a6e0a87206cf281bc0fdbbc44c835b3811f800587e4f26a29da785b7d9c0194e409dff00c4234e3708ad80a5506f40c0bc83d78f4e00000004";
+
+    // 128s-keccak (q18 and q20 share every golden except the commitment).
+    bytes32 internal constant G128_STATEFUL_ROOT =
+        0xb745e962fce45192d99c9f841789953700000000000000000000000000000000;
+    bytes32 internal constant G128_HYPERTREE_ROOT =
+        0x0e1a87d5b8ae4daa9a3356f0155eca1900000000000000000000000000000000;
+    bytes32 internal constant G128_Q18_COMMITMENT =
+        0xba9114ff94644c95f09cde656d179aa9fd1e162fa0e294d615ac0600a132876d;
+    bytes32 internal constant G128_Q20_COMMITMENT =
+        0x573ec4f0829ee2b7a30c5303b8c480f2b5ea3f9f71d6169aa67eea0e5dd74389;
+    bytes internal constant G128_STATEFUL_PUBLIC_KEY =
+    // line-length: allow — one unbreakable test vector literal token
+    hex"a4a372b30187a5bf20d242a6e0a87206cf281bc0fdbbc44c835b3811f800587eb745e962fce45192d99c9f84178995370000000000000000000000000000000000000004";
 
     function setUp() public {
         harness = new SHRINCSSignerHarness();
+    }
+
+    // expectedProfileGoldens: return the active profile's keygen goldens.
+    // 256s vs 128s split on HASH_LEN; q18 vs q20 split on the stateless
+    // signature budget (their only divergence is the commitment tag).
+    function expectedProfileGoldens()
+        internal
+        pure
+        returns (ProfileGoldens memory g)
+    {
+        if (SHRINCSParams.HASH_LEN == 32) {
+            g.statefulRoot = G256_STATEFUL_ROOT;
+            g.hypertreeRoot = G256_HYPERTREE_ROOT;
+            g.statefulPublicKey = G256_STATEFUL_PUBLIC_KEY;
+            g.publicKeyCommitment = G256_COMMITMENT;
+            return g;
+        }
+        g.statefulRoot = G128_STATEFUL_ROOT;
+        g.hypertreeRoot = G128_HYPERTREE_ROOT;
+        g.statefulPublicKey = G128_STATEFUL_PUBLIC_KEY;
+        g.publicKeyCommitment = SHRINCSParams.STATELESS_SIGNATURE_LIMIT
+            == 262_144
+            ? G128_Q18_COMMITMENT
+            : G128_Q20_COMMITMENT;
     }
 
     function testKeygenRejectsZeroStatefulBudget() public view {
@@ -172,13 +227,22 @@ contract SHRINCSSignerKeygenTest is Test {
         );
     }
 
-    function testKeygenMatchesRustSignerGoldenOutput() public {
-        // These golden hashes are anchored to the 256s Rust signer.
-        // 128s goldens are regenerated with the profile vectors in T6
-        // ([DESIGN §5]); until then this is pending under any non-256s
-        // profile. The other keygen tests here are profile-agnostic and
-        // run everywhere.
-        vm.skip(SHRINCSParams.HASH_LEN != 32);
+    function testKeygenMatchesRustSignerGoldenOutput() public view {
+        // Anchored to the Rust signer's T6 regeneration. The KDF seeds and
+        // the stateful goldens (statefulRoot, statefulPublicKey) are
+        // Solidity-computable and cross-checked under every keccak profile.
+        //
+        // The stateless hypertree root — and the public-key commitment that
+        // binds it — require the full stateless hypertree keygen, which is
+        // computationally infeasible in the Solidity test signer at 128s
+        // (2^18 WOTS leaves; the signer intentionally carries the 256s
+        // hypertree geometry, so its 128s hypertree root is non-canonical).
+        // Those two fields are therefore asserted only at 256s here; the
+        // authoritative 128s stateless coverage is the vector-backed
+        // SHRINCSSphincs128sVectors suite, which verifies the Rust-anchored
+        // 128s stateless signature (and its commitment) through the
+        // production verifier.
+        ProfileGoldens memory g = expectedProfileGoldens();
         (
             SHRINCS.SigningKey memory signingKey,
             SHRINCS.PublicKey memory publicKey,
@@ -189,26 +253,28 @@ contract SHRINCSSignerKeygenTest is Test {
         assertEq(signingKey.statefulSkSeed, EXPECTED_STATEFUL_SK_SEED);
         assertEq(signingKey.statefulPrfSeed, EXPECTED_STATEFUL_PRF_SEED);
         assertEq(signingKey.statefulPkSeed, EXPECTED_STATEFUL_PK_SEED);
-        assertEq(signingKey.statefulRoot, EXPECTED_STATEFUL_ROOT);
+        assertEq(signingKey.statefulRoot, g.statefulRoot);
         assertEq(signingKey.statelessSkSeed, EXPECTED_STATELESS_SK_SEED);
         assertEq(signingKey.statelessPrfSeed, EXPECTED_STATELESS_PRF_SEED);
         assertEq(signingKey.pkSeed, EXPECTED_PK_SEED);
-        assertEq(signingKey.hypertreeRoot, EXPECTED_HYPERTREE_ROOT);
         assertEq(
             keccak256(publicKey.statefulPublicKey),
-            keccak256(EXPECTED_STATEFUL_PUBLIC_KEY)
-        );
-        assertEq(
-            keccak256(publicKey.publicKeyCommitment),
-            keccak256(abi.encodePacked(EXPECTED_PUBLIC_KEY_COMMITMENT))
+            keccak256(g.statefulPublicKey)
         );
         assertEq(
             keccak256(publicKey.pkSeed),
             keccak256(abi.encodePacked(EXPECTED_PK_SEED))
         );
-        assertEq(
-            keccak256(publicKey.hypertreeRoot),
-            keccak256(abi.encodePacked(EXPECTED_HYPERTREE_ROOT))
-        );
+        if (SHRINCSParams.HASH_LEN == 32) {
+            assertEq(signingKey.hypertreeRoot, g.hypertreeRoot);
+            assertEq(
+                keccak256(publicKey.publicKeyCommitment),
+                keccak256(abi.encodePacked(g.publicKeyCommitment))
+            );
+            assertEq(
+                keccak256(publicKey.hypertreeRoot),
+                keccak256(abi.encodePacked(g.hypertreeRoot))
+            );
+        }
     }
 }
