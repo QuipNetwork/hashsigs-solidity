@@ -56,24 +56,37 @@ library FORSMinusC {
     // forced to select leaf 0 by grinding the digest so its last a
     // bits (a = FORS_TREE_HEIGHT) are zero. Construction: [SHRINCS §9.2].
     // 1. Check the compact FORS-C signature shape and randomizer length.
-    // 2. Recompute the FORS digest bits and expected hypertree coordinates.
+    // 2. Recompute the FORS digest bits and the hypertree coordinates the
+    // signer committed to.
     // 3. Enforce the FORS-C convention that the omitted final tree selects
     // leaf 0.
     // 4. Rebuild each signed FORS tree root from its revealed leaf and auth
     // path.
     // 5. Hash those per-tree roots together into the reconstructed FORS root.
-    // 6. Return the FORS root for hypertree verification together with a
-    // success flag.
+    // 6. Return the FORS root plus the digest-derived hypertree coordinates
+    // (the seed for hypertree verification) together with a success flag.
+    /// @dev T6 wire change: the hypertree coordinates are no longer carried
+    /// in the signature. This returns the digest-derived coordinates for the
+    /// caller to seed Hypertree.verifyHypertree; they are a pure function of
+    /// the public key, message, and signature (randomizer, counter), never
+    /// attacker-chosen.
     /// @dev Precondition: pkSeed is exactly 32 bytes, validPublicKey-checked
     /// or a 32-byte key slice, as the fixed calldata read below assumes.
     function verifyForsCAndReturnRoot(
         bytes calldata pkSeed,
         bytes calldata hypertreeRoot,
         bytes memory message,
-        FORSMinusC.ForsSignature calldata signature,
-        uint64 treeIndex,
-        uint32 leafIndex
-    ) internal pure returns (bytes32 forsRoot, bool ok) {
+        FORSMinusC.ForsSignature calldata signature
+    )
+        internal
+        pure
+        returns (
+            bytes32 forsRoot,
+            uint64 treeIndex,
+            uint32 leafIndex,
+            bool ok
+        )
+    {
         // FORS-C omits the final FORS tree by forcing its digest-selected
         // leaf index to zero. Verification therefore expects only k - 1
         // revealed entries and rejects any digest whose omitted final tree
@@ -81,7 +94,9 @@ library FORSMinusC {
         uint256 signedTrees = uint256(SHRINCSParams.NUM_FORS_TREES) - 1;
 
         // Recompute the FORS digest and the hypertree coordinates that the
-        // signer committed to.
+        // signer committed to. These digest-derived coordinates are the sole
+        // source of the layer-0 hypertree address (T6: no longer carried in
+        // the signature); they are returned to seed hypertree verification.
         FORSMinusC.ForsDigest memory digest = forsDigest(
             pkSeed,
             hypertreeRoot,
@@ -89,6 +104,8 @@ library FORSMinusC {
             signature.randomizer,
             signature.counter
         );
+        treeIndex = digest.treeIndex;
+        leafIndex = digest.leafIndex;
         // forsHeight: the SPHINCSPLUS `a` parameter [SPHINCSPLUS §5.5]
         // — FORS tree height.
         uint256 forsHeight = uint256(SHRINCSParams.FORS_TREE_HEIGHT);
@@ -101,12 +118,8 @@ library FORSMinusC {
                     SHRINCSParams.FORS_TREE_HEIGHT
                 ) != 0
         ) {
-            return (bytes32(0), false);
+            return (bytes32(0), 0, 0, false);
         }
-        // The stateless signature must verify for the caller-supplied
-        // hypertree coordinates.
-        if (digest.treeIndex != treeIndex) return (bytes32(0), false);
-        if (digest.leafIndex != leafIndex) return (bytes32(0), false);
 
         // "fors-pk" || pkSeed || root_0 || ... || root_{k-2}
         uint256 forsPkInputLen = 39 + signedTrees * 32;
@@ -181,7 +194,12 @@ library FORSMinusC {
         // The buffer above is suite-independent; only this finalizer swaps
         // per suite. Output truncated to HASH_LEN bytes, high-aligned
         // (maskHash inside the suite helper); for 256s this folds to a no-op.
-        return (HashSuite.hashForsPk32(forsPkInput, forsPkInputLen), true);
+        return (
+            HashSuite.hashForsPk32(forsPkInput, forsPkInputLen),
+            treeIndex,
+            leafIndex,
+            true
+        );
     }
 
     // forsEntryRoot32: Rebuild one FORS tree root from a revealed secret leaf

@@ -26,10 +26,6 @@ library Hypertree {
     uint32 internal constant AddressTypeTree = 2;
 
     struct HypertreeLayerSignature {
-        // Subtree index at this hypertree layer.
-        uint64 treeIndex;
-        // Leaf selected inside that subtree.
-        uint32 leafIndex;
         // Commitment to the reconstructed WOTS-C public key for this layer.
         bytes wotsCPkHash;
         // WOTS-C signature carrying the previous layer's root upward.
@@ -42,8 +38,8 @@ library Hypertree {
     // root to the public root.
     // 1. Check that the signature provides exactly one layer signature per
     // hypertree layer.
-    // 2. Initialize the expected subtree coordinates from the bottom FORS
-    // digest output.
+    // 2. Seed the expected subtree coordinates from the caller-supplied
+    // FORS-derived coordinates (no longer carried in the signature).
     // 3. Verify each layer's WOTS-C signature against the running
     // message/root value.
     // 4. Rebuild the XMSS-style subtree root from the revealed auth path.
@@ -55,6 +51,8 @@ library Hypertree {
         bytes calldata pkSeed,
         bytes calldata hypertreeRoot,
         bytes32 forsRoot,
+        uint64 seedTreeIndex,
+        uint32 seedLeafIndex,
         Hypertree.HypertreeLayerSignature[] calldata layers
     ) internal pure returns (bool) {
         // Every hypertree layer must be present exactly once.
@@ -69,9 +67,14 @@ library Hypertree {
         );
         // Mask off one subtree-height slice of tree-index bits at a time.
         uint64 leafMask = uint64((uint256(1) << subtreeHeight) - 1);
-        // Layer 0 must start from the coordinates chosen by the FORS digest.
-        uint64 expectedTreeIndex = layers[0].treeIndex;
-        uint32 expectedLeafIndex = layers[0].leafIndex;
+        // T6 wire change: the hypertree coordinates are no longer carried in
+        // the layer signature. Layer 0 starts from the FORS-digest-derived
+        // coordinates the caller passes in; each upper layer is then derived
+        // by the shift/mask recurrence below, so the derived value is the
+        // sole coordinate input and a signature cannot verify under any
+        // coordinate other than the one the FORS digest dictates.
+        uint64 expectedTreeIndex = seedTreeIndex;
+        uint32 expectedLeafIndex = seedLeafIndex;
         // Carry the FORS root upward as the running message/root value.
         bytes32 current = forsRoot;
 
@@ -80,14 +83,10 @@ library Hypertree {
                 layers[layer];
             // Deviates from [FIPS205 §8.2]: SHRINCS chains the hypertree
             // coordinates sequentially per layer instead of following the
-            // FIPS-205 tree/leaf index recurrence. Layer 0 starts from the
+            // FIPS-205 tree/leaf index recurrence. Layer 0 uses the
             // FORS-derived coordinate; each upper layer's coordinate is
-            // then derived from the lower layer's tree index (see the
-            // right-shift below), so the signature cannot freely choose
-            // independent upper-layer addresses. Enforce the expected
-            // subtree coordinate for this layer.
-            if (layerSig.treeIndex != expectedTreeIndex) return false;
-            if (layerSig.leafIndex != expectedLeafIndex) return false;
+            // derived from the lower layer's tree index (see the right-shift
+            // below), binding every layer's address to the derived value.
             // Verify the WOTS-C layer signature against the current carried
             // value.
             if (!verifyWotsC32(
@@ -96,8 +95,8 @@ library Hypertree {
                     // the fixed 8-layer hypertree
                     // forge-lint: disable-next-line(unsafe-typecast)
                     uint32(layer),
-                    layerSig.treeIndex,
-                    layerSig.leafIndex,
+                    expectedTreeIndex,
+                    expectedLeafIndex,
                     layerSig.wotsCPkHash,
                     current,
                     layerSig.wotsCSignature
@@ -122,8 +121,8 @@ library Hypertree {
                 subtreeHeight,
                 pkSeed,
                 layerIndex,
-                layerSig.treeIndex,
-                layerSig.leafIndex,
+                expectedTreeIndex,
+                expectedLeafIndex,
                 leaf,
                 layerSig.authPath
             );

@@ -97,20 +97,27 @@ library SPHINCSPlusC {
         Signature calldata signature
     ) internal pure returns (bool) {
         // Reconstruct the FORS root from the message, FORS
-        // randomness/counter, and revealed leaves.
-        (bytes32 forsRoot, bool ok) = FORSMinusC.verifyForsCAndReturnRoot(
-            pkSeed,
-            hypertreeRoot,
-            message,
-            signature.fors,
-            signature.hypertree[0].treeIndex,
-            signature.hypertree[0].leafIndex
+        // randomness/counter, and revealed leaves. The FORS digest also
+        // yields the layer-0 hypertree coordinates (T6: no longer carried in
+        // the signature), returned here to seed hypertree verification.
+        (
+            bytes32 forsRoot,
+            uint64 seedTreeIndex,
+            uint32 seedLeafIndex,
+            bool ok
+        ) = FORSMinusC.verifyForsCAndReturnRoot(
+            pkSeed, hypertreeRoot, message, signature.fors
         );
         if (!ok) return false;
         // Carry the reconstructed FORS root up the hypertree until it matches
-        // the public root.
+        // the public root, seeding the layer-0 coordinates from the digest.
         return Hypertree.verifyHypertree(
-            pkSeed, hypertreeRoot, forsRoot, signature.hypertree
+            pkSeed,
+            hypertreeRoot,
+            forsRoot,
+            seedTreeIndex,
+            seedLeafIndex,
+            signature.hypertree
         );
     }
 
