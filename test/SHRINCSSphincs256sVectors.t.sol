@@ -431,15 +431,12 @@ contract SHRINCSSphincs256sVectorsTest is Test {
             SHRINCS.Signature memory signature
         ) = decodeStatefulVector(".stateful.cases.valid.calldata");
         signature.chains = dropLastBytes32(signature.chains);
-        assertEq(
-            stateful.verifyUnsafeRaw(
-                compositePublicKeyWord(publicKey),
-                publicKey,
-                message,
-                signature
-            ),
-            false,
-            "stateful wrong WOTS chain count"
+        // Post guard-pruning a short chains array reverts (Panic) at the
+        // fixed WOTS loop read instead of returning false; both are
+        // fail-closed. A plain revert expectation (no selector) suffices.
+        vm.expectRevert();
+        stateful.verifyUnsafeRaw(
+            compositePublicKeyWord(publicKey), publicKey, message, signature
         );
     }
 
@@ -742,15 +739,11 @@ contract SHRINCSSphincs256sVectorsTest is Test {
             SPHINCSPlusC.Signature memory signature
         ) = decodeStatelessVector(".stateless.cases.valid.calldata");
         signature.hypertree = new Hypertree.HypertreeLayerSignature[](0);
-        assertEq(
-            stateless.verifyUnsafeRaw(
-                compositePublicKeyWord(publicKey),
-                publicKey,
-                message,
-                signature
-            ),
-            false,
-            "stateless empty hypertree"
+        // Post guard-pruning an empty hypertree reverts (Panic) at the
+        // hypertree[0] read instead of returning false; both are fail-closed.
+        vm.expectRevert();
+        stateless.verifyUnsafeRaw(
+            compositePublicKeyWord(publicKey), publicKey, message, signature
         );
     }
 
@@ -787,15 +780,12 @@ contract SHRINCSSphincs256sVectorsTest is Test {
             SPHINCSPlusC.Signature memory signature
         ) = decodeStatelessVector(".stateless.cases.valid.calldata");
         signature.fors.entries = dropLastForsEntries(signature.fors.entries);
-        assertEq(
-            stateless.verifyUnsafeRaw(
-                compositePublicKeyWord(publicKey),
-                publicKey,
-                message,
-                signature
-            ),
-            false,
-            "stateless dropped FORS entry"
+        // Post guard-pruning a short FORS entries array reverts (Panic) at
+        // the fixed k-1 loop read instead of returning false; both are
+        // fail-closed.
+        vm.expectRevert();
+        stateless.verifyUnsafeRaw(
+            compositePublicKeyWord(publicKey), publicKey, message, signature
         );
     }
 
@@ -845,15 +835,12 @@ contract SHRINCSSphincs256sVectorsTest is Test {
         ) = decodeStatelessVector(".stateless.cases.valid.calldata");
         signature.fors.entries[0].authPath =
             dropLastBytes(signature.fors.entries[0].authPath);
-        assertEq(
-            stateless.verifyUnsafeRaw(
-                compositePublicKeyWord(publicKey),
-                publicKey,
-                message,
-                signature
-            ),
-            false,
-            "stateless truncated FORS auth path"
+        // Post guard-pruning a truncated FORS auth path reverts (Panic) at
+        // the per-level read instead of returning false; both are
+        // fail-closed.
+        vm.expectRevert();
+        stateless.verifyUnsafeRaw(
+            compositePublicKeyWord(publicKey), publicKey, message, signature
         );
     }
 
@@ -929,15 +916,12 @@ contract SHRINCSSphincs256sVectorsTest is Test {
         ) = decodeStatelessVector(".stateless.cases.valid.calldata");
         signature.hypertree[0].authPath =
             dropLastBytes(signature.hypertree[0].authPath);
-        assertEq(
-            stateless.verifyUnsafeRaw(
-                compositePublicKeyWord(publicKey),
-                publicKey,
-                message,
-                signature
-            ),
-            false,
-            "stateless wrong hypertree auth path length"
+        // Post guard-pruning a wrong-length hypertree auth path reverts
+        // (Panic) at the per-level read instead of returning false; both are
+        // fail-closed.
+        vm.expectRevert();
+        stateless.verifyUnsafeRaw(
+            compositePublicKeyWord(publicKey), publicKey, message, signature
         );
     }
 

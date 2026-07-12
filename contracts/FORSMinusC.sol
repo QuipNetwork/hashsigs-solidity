@@ -76,13 +76,6 @@ library FORSMinusC {
         // revealed entries and rejects any digest whose omitted final tree
         // would require a nonzero leaf.
         uint256 signedTrees = uint256(SHRINCSParams.NUM_FORS_TREES) - 1;
-        // The randomizer is always one hash output wide.
-        if (signature.randomizer.length != 32) return (bytes32(0), false);
-        // FORS-C reveals only the signedTrees entries, never the omitted
-        // final tree.
-        if (signature.entries.length != signedTrees) {
-            return (bytes32(0), false);
-        }
 
         // Recompute the FORS digest and the hypertree coordinates that the
         // signer committed to.
@@ -142,13 +135,6 @@ library FORSMinusC {
         for (uint256 tree = 0; tree < signedTrees;) {
             // Read one revealed FORS entry for this tree.
             FORSMinusC.ForsEntry memory entry = signature.entries[tree];
-            // Every revealed secret leaf is a single 32-byte hash input.
-            if (entry.secretLeaf.length != 32) return (bytes32(0), false);
-            // Every revealed auth path must have exactly one node per FORS
-            // tree level.
-            if (entry.authPath.length != forsHeight) {
-                return (bytes32(0), false);
-            }
             // Read the digest-selected leaf for this FORS tree.
             uint32 entryLeafIndex = SHRINCSHash.readBits32(
                 digest.digest,
@@ -174,7 +160,6 @@ library FORSMinusC {
                 entryLeafIndex,
                 entry
             );
-            if (root == bytes32(0)) return (bytes32(0), false);
             // Append each reconstructed root into the final FORS public-key
             // hash input.
             // Memory-safe: writes one 32-byte root into the forsPkInput
@@ -239,7 +224,6 @@ library FORSMinusC {
         for (uint256 level = 0; level < height;) {
             // Read the sibling node supplied for this level.
             bytes memory authNode = entry.authPath[level];
-            if (authNode.length != 32) return bytes32(0);
             bytes32 sibling;
             // Memory-safe: reads one memory word into a stack variable;
             // no memory is written.

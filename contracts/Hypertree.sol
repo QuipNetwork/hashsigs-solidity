@@ -61,18 +61,12 @@ library Hypertree {
         if (layers.length != SHRINCSParams.NUM_HYPERTREE_LAYERS) {
             return false;
         }
-        // The hypertree cannot be empty. Unreachable given the exact-count
-        // check above (NUM_HYPERTREE_LAYERS is nonzero); kept as
-        // deliberate fail-closed defense-in-depth.
-        if (layers.length == 0) return false;
         // Each subtree has height h / d in the supported balanced hypertree
         // layout.
         uint32 subtreeHeight = uint32(
             SHRINCSParams.HYPERTREE_HEIGHT
                 / SHRINCSParams.NUM_HYPERTREE_LAYERS
         );
-        // Bound the leaf index range accepted inside each subtree.
-        uint32 leafCount = uint32(1) << subtreeHeight;
         // Mask off one subtree-height slice of tree-index bits at a time.
         uint64 leafMask = uint64((uint256(1) << subtreeHeight) - 1);
         // Layer 0 must start from the coordinates chosen by the FORS digest.
@@ -93,19 +87,6 @@ library Hypertree {
             // subtree coordinate for this layer.
             if (layerSig.treeIndex != expectedTreeIndex) return false;
             if (layerSig.leafIndex != expectedLeafIndex) return false;
-            // Reject leaf indices that fall outside the subtree width.
-            if (layerSig.leafIndex >= leafCount) return false;
-            // The compressed WOTS-C public-key hash always occupies one
-            // 32-byte slot. Pinned to the slot width (literal 32), not
-            // HASH_LEN: a truncated profile still transports the hash in
-            // a full 32-byte field, high-aligned and zero-padded
-            // ([DESIGN §3.2]).
-            if (layerSig.wotsCPkHash.length != 32) {
-                return false;
-            }
-            // Every subtree auth path must contain one node per subtree
-            // level.
-            if (layerSig.authPath.length != subtreeHeight) return false;
             // Verify the WOTS-C layer signature against the current carried
             // value.
             if (!verifyWotsC32(
@@ -152,8 +133,7 @@ library Hypertree {
             // The next layer's leaf index comes from the low subtree-height
             // bits of the current tree index.
             // casting to 'uint32' is safe because leafMask keeps only
-            // subtreeHeight bits, and leafCount above bounds each fixed
-            // subtree to 256 leaves
+            // subtreeHeight bits
             // forge-lint: disable-next-line(unsafe-typecast)
             expectedLeafIndex = uint32(expectedTreeIndex & leafMask);
             // Shift away this layer's subtree bits to get the next layer's
@@ -173,11 +153,6 @@ library Hypertree {
             // payload.
             expectedRoot := mload(add(expectedRootBytes, 32))
         }
-        // All tree-index bits must be consumed exactly by the time the top
-        // layer is reached. Always false for the balanced layout (a uint64
-        // right-shifted by d * (h/d) = 64 bits is zero); kept as deliberate
-        // fail-closed defense-in-depth.
-        if (expectedTreeIndex != 0) return false;
         return current == expectedRoot;
     }
 
@@ -185,8 +160,7 @@ library Hypertree {
     // a hypertree layer.
     // WOTS-C (WOTS+C in [SPHINCSPLUSC §3]): a fixed target-sum check
     // replaces the WOTS checksum chains. Construction: [SHRINCS §5].
-    // 1. Check the compact WOTS-C signature shape and digest width
-    // assumptions.
+    // 1. Check the WOTS-C digest width assumption.
     // 2. Load the public seed, expected public-key hash, and signature
     // randomizer.
     // 3. Recompute the WOTS-C message digest that selects one base-w digit
@@ -207,12 +181,6 @@ library Hypertree {
         WOTSPlusC.WotsCSignature memory signature
     ) internal pure returns (bool) {
         uint256 chainCount = uint256(SHRINCSParams.NUM_WOTS_CHAINS);
-        // The WOTS-C randomizer is always one hash output wide.
-        if (signature.randomizer.length != 32) return false;
-        // One revealed chain value is required per WOTS-C chain.
-        if (signature.chains.length != chainCount) return false;
-        // The compressed WOTS-C public-key hash is always one hash output.
-        if (expectedPkHashBytes.length != 32) return false;
         // The base-w digits are read from the first len/2 bytes of the
         // 32-byte digest word (baseW16Digit32). A profile whose digest
         // needs more than one 32-byte word is unsupported here; the
@@ -280,7 +248,6 @@ library Hypertree {
         for (uint256 i = 0; i < chainCount;) {
             // Read the revealed starting value for this chain.
             bytes memory chain = signature.chains[i];
-            if (chain.length != 32) return false;
             // Read the digest-selected base-w digit for this chain.
             uint32 digit = WOTSPlusC.baseW16Digit32(digest, i);
             // Accumulate the fixed WOTS-C target-sum check.
@@ -397,13 +364,12 @@ library Hypertree {
 
     // hypertreeRootFromPath32: Rebuild one XMSS-style subtree root from a
     // leaf value and auth path.
-    // 1. Check that the auth path has exactly one node per subtree level.
-    // 2. Construct the shared tree-hash address prefix for this layer and
+    // 1. Construct the shared tree-hash address prefix for this layer and
     // tree.
-    // 3. Walk upward from the supplied leaf one level at a time.
-    // 4. Rebuild each parent node with the correct left/right ordering and
+    // 2. Walk upward from the supplied leaf one level at a time.
+    // 3. Rebuild each parent node with the correct left/right ordering and
     // address.
-    // 5. Return the reconstructed subtree root and success flag.
+    // 4. Return the reconstructed subtree root and success flag.
     function hypertreeRootFromPath32(
         uint32 height,
         bytes memory pkSeed,
@@ -413,8 +379,6 @@ library Hypertree {
         bytes32 leaf,
         bytes[] memory authPath
     ) internal pure returns (bytes32 node, bool ok) {
-        // Every subtree auth path must contain one node per subtree level.
-        if (authPath.length != height) return (bytes32(0), false);
         bytes32 pkSeedWord;
         // Memory-safe: reads one memory word into a stack variable; no
         // memory is written.

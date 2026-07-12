@@ -85,23 +85,18 @@ library SPHINCSPlusC {
 
     // verify: Verify a stateless signature after the caller has already
     // constructed the exact signed message bytes.
-    // 1. Validate the fixed public-seed and public-root layout.
-    // 2. Reconstruct the FORS-C root from the signed message bytes and FORS
+    // 1. Reconstruct the FORS-C root from the signed message bytes and FORS
     // proof.
-    // 3. Carry that root up the hypertree and compare it to the public root.
+    // 2. Carry that root up the hypertree and compare it to the public root.
+    /// @dev Callers must supply pkSeed and hypertreeRoot as exactly 32
+    /// bytes each: in-repo callers are validPublicKey-checked or
+    /// bytes32-widened, and the mload-32 reads below assume it.
     function verify(
         bytes memory pkSeed,
         bytes memory hypertreeRoot,
         bytes memory message,
         Signature memory signature
     ) internal pure returns (bool) {
-        // The stateless public seed is always one hash output wide.
-        if (pkSeed.length != 32) return false;
-        // The hypertree root is always one hash output wide.
-        if (hypertreeRoot.length != 32) return false;
-        // A stateless signature must carry at least one hypertree layer.
-        if (signature.hypertree.length == 0) return false;
-
         // Reconstruct the FORS root from the message, FORS
         // randomness/counter, and revealed leaves.
         (bytes32 forsRoot, bool ok) = FORSMinusC.verifyForsCAndReturnRoot(

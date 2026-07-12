@@ -75,15 +75,9 @@ library UXMSS {
         // In this unbalanced stateful tree, the leaf index is encoded by
         // auth-path length.
         uint32 leafIndex = uint32(signature.authPath.length);
-        // Leaf 0 is reserved and never used for valid stateful signatures.
-        if (leafIndex == 0) return false;
         // Reject signatures that claim a leaf beyond the configured stateful
         // budget.
         if (leafIndex > maxSignatures) return false;
-        // Stateful WOTS-C always reveals a fixed number of chains.
-        if (signature.chains.length != SHRINCSParams.WOTS_CHAINS_STATEFUL) {
-            return false;
-        }
 
         // Reconstruct the compact WOTS-C public-key hash from the signature
         // and message.
@@ -207,23 +201,17 @@ library UXMSS {
     // rootFromUnbalancedPath: Rebuild the root of the custom unbalanced
     // stateful tree from one leaf and path.
     // Unbalanced XMSS-style tree per [SHRINCS App. B.3].
-    // 1. Check that the auth path length matches the encoded leaf index.
-    // 2. Hash the leaf together with the first auth node to form the first
+    // 1. Hash the leaf together with the first auth node to form the first
     // parent.
-    // 3. Walk upward through the remaining auth path nodes in the tree's
+    // 2. Walk upward through the remaining auth path nodes in the tree's
     // unbalanced order.
-    // 4. Return the reconstructed root and success flag.
+    // 3. Return the reconstructed root and success flag.
     function rootFromUnbalancedPath(
         bytes32 pkSeed,
         uint32 leafIndex,
         bytes32 leaf,
         bytes32[] memory authPath
     ) internal pure returns (bytes32 root, bool ok) {
-        // This unbalanced tree encodes the leaf index as the auth-path
-        // length.
-        if (authPath.length != leafIndex) return (bytes32(0), false);
-        // Leaf 0 is invalid, so a valid auth path is never empty.
-        if (authPath.length == 0) return (bytes32(0), false);
         // The first parent hashes the leaf with the first auth-path node on
         // its right.
         root = statefulParentHash(pkSeed, leafIndex, leaf, authPath[0]);

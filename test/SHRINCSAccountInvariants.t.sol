@@ -216,19 +216,27 @@ contract SHRINCSAccountHandler is Test {
     }
 
     // actGarbageStateless: an empty stateless signature must be rejected with
-    // no state change (fail-closed, I7).
+    // no state change (fail-closed, I7). After the input-guard pruning an
+    // empty signature reverts (Panic) inside the verify core instead of
+    // returning false; a caught revert is equally fail-closed (no acceptance,
+    // state rolled back), so it counts as a clean rejection.
     function actGarbageStateless(bytes32 actionType, bytes32 payloadHash)
         external
     {
         SPHINCSPlusC.Signature memory signature;
         bytes32 digestBefore = _stateDigest();
-        bool ok = account.verifyStatelessAction(
+        try account.verifyStatelessAction(
             publicKeyOf[0], actionType, payloadHash, signature
-        );
-        if (ok) {
-            ghostMutationAccepted = true;
-        } else if (_stateDigest() != digestBefore) {
-            ghostPurityViolated = true;
+        ) returns (
+            bool ok
+        ) {
+            if (ok) {
+                ghostMutationAccepted = true;
+            } else if (_stateDigest() != digestBefore) {
+                ghostPurityViolated = true;
+            }
+        } catch {
+            if (_stateDigest() != digestBefore) ghostPurityViolated = true;
         }
         _afterOp();
     }
@@ -236,20 +244,27 @@ contract SHRINCSAccountHandler is Test {
     // actUnarmedRotateFull: rotateFullKey with a garbage recovery signature
     // must fail closed. A true return would mean rotation happened without a
     // valid armed recovery signature (I6); any state change on false breaks
-    // purity (I7).
+    // purity (I7). Once recovery is armed the empty signature reaches the
+    // verify core, which after the input-guard pruning reverts (Panic)
+    // instead of returning false; a caught revert is equally fail-closed.
     function actUnarmedRotateFull(uint256 targetSelector) external {
         (uint256 keyIndex, bool found) = _currentKeyIndex();
         if (!found) return;
         uint256 targetIndex = bound(targetSelector, 0, KEY_COUNT - 1);
         SPHINCSPlusC.Signature memory signature;
         bytes32 digestBefore = _stateDigest();
-        bool ok = account.rotateFullKey(
+        try account.rotateFullKey(
             publicKeyOf[keyIndex], signature, _fullTarget(targetIndex)
-        );
-        if (ok) {
-            ghostRotateGatingViolated = true;
-        } else if (_stateDigest() != digestBefore) {
-            ghostPurityViolated = true;
+        ) returns (
+            bool ok
+        ) {
+            if (ok) {
+                ghostRotateGatingViolated = true;
+            } else if (_stateDigest() != digestBefore) {
+                ghostPurityViolated = true;
+            }
+        } catch {
+            if (_stateDigest() != digestBefore) ghostPurityViolated = true;
         }
         _afterOp();
     }

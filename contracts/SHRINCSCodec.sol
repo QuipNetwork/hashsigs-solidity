@@ -285,19 +285,13 @@ library SHRINCSCodec {
 
     // matchesExpectedPublicKeyCommitment: Check that a bundled public key
     // matches an installed commitment.
-    // 1. Require a nonzero expected installed-key commitment.
-    // 2. Require a 32-byte encoded commitment field inside the public key.
-    // 3. Load the declared commitment from memory.
-    // 4. Check it against the caller-supplied expected commitment.
-    // 5. Recompute the bundle commitment and require it to match too.
+    // 1. Load the declared commitment from memory.
+    // 2. Check it against the caller-supplied expected commitment.
+    // 3. Recompute the bundle commitment and require it to match too.
     function matchesExpectedPublicKeyCommitment(
         SHRINCS.PublicKey memory publicKey,
         bytes32 expectedPublicKeyCommitment
     ) internal pure returns (bool) {
-        // A missing installed-key commitment is always invalid.
-        if (expectedPublicKeyCommitment == bytes32(0)) return false;
-        // The encoded commitment field must always be one hash output wide.
-        if (publicKey.publicKeyCommitment.length != 32) return false;
         bytes memory encodedCommitment = publicKey.publicKeyCommitment;
         bytes32 actualCommitment;
         // Memory-safe: reads one memory word into a stack variable; no
@@ -350,19 +344,16 @@ library SHRINCSCodec {
 
     // decodeStatefulPublicKey: Decode the fixed-width stateful public-key
     // payload into typed fields.
-    // 1. Check the exact packed byte width of the encoded stateful public
-    // key.
-    // 2. Allocate the decoded struct in memory.
-    // 3. Copy the public seed, root, and max-signatures fields from memory.
-    // 4. Return the decoded struct together with a success flag.
+    // 1. Allocate the decoded struct in memory.
+    // 2. Copy the public seed, root, and max-signatures fields from memory.
+    // 3. Return the decoded struct together with a success flag.
+    /// @dev Precondition: callers must supply the validPublicKey-checked
+    /// 68-byte encoding; the fixed-offset assembly reads below assume it.
     function decodeStatefulPublicKey(bytes memory encoded)
         internal
         pure
         returns (UXMSS.StatefulPublicKey memory publicKey, bool ok)
     {
-        if (encoded.length != SHRINCSParams.STATEFUL_PUBLIC_KEY_BYTES) {
-            return (publicKey, false);
-        }
         // Decoded StatefulPublicKey layout (0x60 bytes) written at the
         // free-memory pointer:
         //   [0x00..0x20) pkSeed
