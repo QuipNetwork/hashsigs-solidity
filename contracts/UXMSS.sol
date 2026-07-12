@@ -29,6 +29,17 @@ library UXMSS {
     // [FIPS205 §4.2] (value 0) for the SPHINCS-style keyed hash inputs.
     uint32 internal constant AddressTypeWotsHash = 0;
 
+    // Stateful WOTS-C chain-step domain tag and its byte length. F-08
+    // split: the stateful (UXMSS) walk uses "uxmss-wots-chain" (16 bytes)
+    // to unconditionally separate its chain domain from the stateless
+    // hypertree walk (which keeps WOTSPlusC.WOTS_C_CHAIN_TAG,
+    // "wots-c-chain"). The chain-step preimage is [tag | pkSeed |
+    // addressWord | segment], so its length here is
+    // UXMSS_WOTS_CHAIN_TAG_LEN + 96 = 112 bytes. Profile-agnostic: one
+    // string across all keccak profiles.
+    bytes32 internal constant UXMSS_WOTS_CHAIN_TAG = "uxmss-wots-chain";
+    uint256 internal constant UXMSS_WOTS_CHAIN_TAG_LEN = 16;
+
     struct StatefulPublicKey {
         // Public seed for stateful WOTS-C and tree hashing.
         bytes32 pkSeed;
@@ -155,15 +166,15 @@ library UXMSS {
             // WOTS chains
             // forge-lint: disable-next-line(unsafe-typecast)
             uint32 chainIndex = uint32(i);
-            // T6/F-08: to unconditionally separate the stateful chain
-            // domain, pass the tag "uxmss-wots-chain" / 16 here instead of
-            // the shared WOTS_C_CHAIN_TAG (see
-            // HashSuite.hashWotsCChainNoMask32).
+            // F-08: the stateful chain domain is separated from the
+            // stateless hypertree walk by its own tag "uxmss-wots-chain"
+            // / 16 (112-byte preimage), not the shared WOTS_C_CHAIN_TAG
+            // (see HashSuite.hashWotsCChainNoMask32).
             // Complete the revealed chain from its signing position to the
             // chain endpoint.
             bytes32 segment = WOTSPlusC.wotsChainNoMaskBase(
-                WOTSPlusC.WOTS_C_CHAIN_TAG,
-                WOTSPlusC.WOTS_C_CHAIN_TAG_LEN,
+                UXMSS_WOTS_CHAIN_TAG,
+                UXMSS_WOTS_CHAIN_TAG_LEN,
                 SHRINCSParams.WOTS_BASE_STATEFUL,
                 pkSeed,
                 addressBase,

@@ -42,20 +42,14 @@ library HashSuite {
     // 3. Mix in the current chain segment value.
     // 4. Return the next chain value.
     // Domain separation: both the hypertree (stateless) and stateful WOTS-C
-    // walks feed this one tag-parameterized step, and today both pass the
-    // shared "wots-c-chain" tag (WOTSPlusC.WOTS_C_CHAIN_TAG) with its
-    // 108-byte preimage. The two subsystems stay separated through pkSeed:
-    // the hypertree path binds the stateless bundle pkSeed while the stateful
-    // path binds the stateful key's pkSeed, and honest keygen derives the two
-    // seeds independently, so their preimages never coincide. Setting both
-    // seeds equal only collides a key against itself and cannot forge against
-    // an honest key whose seeds differ. A dedicated stateful tag (e.g.
-    // "uxmss-wots-chain", 16 bytes) would separate them unconditionally but
-    // is deferred (F-08 -> T6): it is a breaking change to the Rust-anchored
-    // stateful vectors and keygen constants. With this shared step the flip
-    // is a one-argument change at the stateful call site — pass
-    // "uxmss-wots-chain" / 16 to the walk instead of the shared
-    // WOTS_C_CHAIN_TAG constant.
+    // walks feed this one tag-parameterized step, but pass distinct tags.
+    // The stateless hypertree walk passes "wots-c-chain"
+    // (WOTSPlusC.WOTS_C_CHAIN_TAG, 12 bytes) with a 108-byte preimage; the
+    // stateful (UXMSS) walk passes "uxmss-wots-chain"
+    // (UXMSS.UXMSS_WOTS_CHAIN_TAG, 16 bytes) with a 112-byte preimage
+    // (F-08 split). The dedicated stateful tag separates the two chain
+    // domains unconditionally, so a stateless and a stateful chain step can
+    // never share a preimage regardless of how the two pkSeeds relate.
     function hashWotsCChainNoMask32(
         bytes32 tag,
         uint256 tagLen,

@@ -28,11 +28,12 @@ import {HashSuite} from "shrincs-hash/HashSuite.sol";
 /// verifier keeps its own message-digest, public-key, and target-sum logic
 /// and calls into these shared primitives for the chain walk itself.
 library WOTSPlusC {
-    // WOTS-C chain-step domain tag and its byte length. "wots-c-chain" is
-    // 12 bytes; the chain-step preimage is [tag | pkSeed | addressWord |
-    // segment], so its length is WOTS_C_CHAIN_TAG_LEN + 96 = 108 bytes.
-    // Bound here as named constants so the hypertree and stateful walks
-    // share one derivation.
+    // Stateless WOTS-C chain-step domain tag and its byte length.
+    // "wots-c-chain" is 12 bytes; the chain-step preimage is [tag | pkSeed
+    // | addressWord | segment], so its length is WOTS_C_CHAIN_TAG_LEN + 96
+    // = 108 bytes. Used by the stateless hypertree walk. The stateful
+    // (UXMSS) walk uses its own UXMSS.UXMSS_WOTS_CHAIN_TAG
+    // ("uxmss-wots-chain", 16 bytes) instead (F-08 split).
     bytes32 internal constant WOTS_C_CHAIN_TAG = "wots-c-chain";
     uint256 internal constant WOTS_C_CHAIN_TAG_LEN = 12;
 
