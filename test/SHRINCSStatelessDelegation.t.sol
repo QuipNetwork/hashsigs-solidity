@@ -23,6 +23,7 @@ import {
 import {SHRINCSCodec} from "../contracts/SHRINCSCodec.sol";
 import {SHRINCS} from "../contracts/SHRINCS.sol";
 import {SPHINCSPlusC} from "../contracts/SPHINCSPlusC.sol";
+import {Hypertree} from "../contracts/Hypertree.sol";
 import {SHRINCS256sKeccak} from "../contracts/SHRINCS256sKeccak.sol";
 import {
     SHRINCSAccountSigningFacade
@@ -118,6 +119,31 @@ contract SHRINCSStatelessDelegationTest is Test {
         );
     }
 
+    // Pins the delegation slice-build behavior change (epic Z5). The
+    // signature's public-key bundle is the valid fixture's, so the commitment
+    // and validPublicKey checks pass and prepareStatelessDelegation reaches
+    // SHRINCSCodec.sliceStatelessSignatureEnvelope. That build indexes the
+    // last hypertree layer's last authPath element; on an empty last-layer
+    // authPath (or an empty hypertree) the index reads Panic. verifyStateless
+    // wraps the delegation build in no try/catch, so the Panic propagates and
+    // the call lands in {revert, false} — never a wrong-accept. The prior
+    // canonicity walk rejected these at a sibling-side length check; nothing
+    // else pins the new revert. Panic-revert is the expected arm here.
+    function testVerifyStatelessSliceBuildRevertsOnMalformedAuthPath()
+        public
+    {
+        (bytes memory emptyAuthPath, bytes memory emptyHypertree) =
+            this.buildMalformedEnvelopes();
+        assertTrue(
+            verifyStatelessRejected(emptyAuthPath),
+            "empty last-layer authPath must not wrong-accept"
+        );
+        assertTrue(
+            verifyStatelessRejected(emptyHypertree),
+            "empty hypertree must not wrong-accept"
+        );
+    }
+
     function testVerifyStatelessRejectsTamperedHash() public view {
         assertEq(
             verifier.verifyStateless(
@@ -205,5 +231,70 @@ contract SHRINCSStatelessDelegationTest is Test {
             SHRINCSAccountSigningFacade.publicKeyCommitmentWord(publicKey)
         );
         envelope = SHRINCSCodec.encodeStatelessEnvelope(publicKey, signature);
+    }
+
+    /// @dev Outcome-only rejection check for the slice-build pin: a revert
+    /// (Panic) and a `0xffffffff` return are the same safe outcome. Returns
+    /// true iff verifyStateless did NOT wrong-accept.
+    function verifyStatelessRejected(bytes memory envelope)
+        internal
+        view
+        returns (bool)
+    {
+        try verifier.verifyStateless(
+            validKey, signedHash, envelope
+        ) returns (
+            bytes4 selector
+        ) {
+            return selector == INVALID_SIGNATURE;
+        } catch {
+            return true;
+        }
+    }
+
+    /// @dev Builds two envelopes whose public-key bundle is the valid
+    /// fixture's (same keygen seed, so the installed-commitment and
+    /// validPublicKey checks pass) but whose stateless signature is malformed
+    /// so the delegation slice-build Panics: one with an empty last-layer
+    /// authPath, one with an empty hypertree. External so the large fixture
+    /// working set runs in its own memory frame.
+    function buildMalformedEnvelopes()
+        external
+        returns (bytes memory emptyAuthPath, bytes memory emptyHypertree)
+    {
+        (
+            SHRINCS.SigningKey memory signingKey,
+            SHRINCS.PublicKey memory publicKey,
+            bool ok
+        ) = SHRINCSAccountSigningFacade.keygen(
+            bytes("stateless delegation fixture"), 4
+        );
+        require(ok, "keygen");
+
+        bytes32 hash = keccak256("stateless delegation message");
+        (bytes32 sessionId, bool beginOk) = signer.beginSession(
+            signingKey, publicKey, abi.encodePacked(hash)
+        );
+        require(beginOk, "begin");
+        SPHINCSPlusC.Signature memory signature;
+        bool completeOk;
+        (signature, completeOk) =
+            SHRINCSAccountSigningFacade.completeStatelessSession(
+                signer, sessionId
+            );
+        require(completeOk, "complete");
+
+        // Empty the last layer's authPath: slice-build's authPath[last] index
+        // read Panics; the bundle is untouched so it reaches the slice build.
+        uint256 last = signature.hypertree.length - 1;
+        signature.hypertree[last].authPath = new bytes[](0);
+        emptyAuthPath =
+            SHRINCSCodec.encodeStatelessEnvelope(publicKey, signature);
+
+        // Empty the whole hypertree: slice-build's hypertree[last] index read
+        // Panics.
+        signature.hypertree = new Hypertree.HypertreeLayerSignature[](0);
+        emptyHypertree =
+            SHRINCSCodec.encodeStatelessEnvelope(publicKey, signature);
     }
 }
