@@ -24,6 +24,8 @@ library ShrincsTypes {
     bytes32 internal constant OP_VERIFY_STATEFUL = keccak256("shrincs-verify-stateful");
     bytes32 internal constant OP_VERIFY_STATELESS = keccak256("shrincs-verify-stateless");
     bytes32 internal constant OP_VERIFY_COMPACT = keccak256("shrincs-verify-compact");
+    bytes32 internal constant OP_REGISTER_COMPACT_SLOT = keccak256("shrincs-register-compact-slot");
+    bytes32 internal constant OP_REVOKE_COMPACT_SLOT = keccak256("shrincs-revoke-compact-slot");
     bytes32 internal constant OP_ROTATE_STATEFUL = keccak256("shrincs-rotate-stateful");
     bytes32 internal constant OP_ROTATE_FULL = keccak256("shrincs-rotate-full");
 

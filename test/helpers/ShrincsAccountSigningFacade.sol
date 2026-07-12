@@ -173,6 +173,36 @@ library ShrincsAccountSigningFacade {
         (sessionId, ok) = signer.beginSession(signingKey, currentPublicKey, message);
     }
 
+    function beginCompactSlotRegistrationSessionNow(
+        ShrincsStatelessVectorSigner signer,
+        ShrincsAccountVerifierExample account,
+        ShrincsTypes.SigningKey memory signingKey,
+        ShrincsTypes.PublicKey memory currentPublicKey,
+        bytes32 subPkSeed,
+        bytes32 subPkRoot
+    ) internal returns (ShrincsTypes.RotationContext memory context, bytes32 sessionId, bool ok) {
+        context = rotationContext(account);
+        bytes memory message = abi.encodePacked(
+            SHRINCS.compactSlotRegistrationMessageHash(account.currentShrincsPublicKey(), context, subPkSeed, subPkRoot)
+        );
+        (sessionId, ok) = signer.beginSession(signingKey, currentPublicKey, message);
+    }
+
+    function beginCompactSlotRevocationSessionNow(
+        ShrincsStatelessVectorSigner signer,
+        ShrincsAccountVerifierExample account,
+        ShrincsTypes.SigningKey memory signingKey,
+        ShrincsTypes.PublicKey memory currentPublicKey,
+        bytes32 subPkSeed,
+        bytes32 subPkRoot
+    ) internal returns (ShrincsTypes.RotationContext memory context, bytes32 sessionId, bool ok) {
+        context = rotationContext(account);
+        bytes memory message = abi.encodePacked(
+            SHRINCS.compactSlotRevocationMessageHash(account.currentShrincsPublicKey(), context, subPkSeed, subPkRoot)
+        );
+        (sessionId, ok) = signer.beginSession(signingKey, currentPublicKey, message);
+    }
+
     function statefulRotationTarget(
         ShrincsTypes.PublicKey memory currentPublicKey,
         bytes memory nextStatefulPublicKey

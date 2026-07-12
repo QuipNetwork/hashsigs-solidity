@@ -28,6 +28,8 @@ contract ShrincsAccountVerifierExample {
     uint8 internal constant ERC1271_MODE_STATEFUL_ACTION = 1;
     // Envelope mode selecting canonical stateless account-action validation.
     uint8 internal constant ERC1271_MODE_STATELESS_ACTION = 2;
+    // Envelope mode selecting canonical compact account-action validation.
+    uint8 internal constant ERC1271_MODE_COMPACT_ACTION = 3;
 
     enum StatefulPolicy {
         // Accept only the next expected stateful leaf index.
@@ -61,6 +63,7 @@ contract ShrincsAccountVerifierExample {
     bool public recoveryMode;
 
     mapping(uint256 keyVersion => mapping(uint256 wordIndex => uint256 usedBits)) internal usedLeafBitmap;
+    mapping(bytes32 slotId => bool registered) public compactSlots;
 
     bytes32 internal constant DOMAIN_TAG = keccak256("shrincs-account-v1");
 
@@ -71,6 +74,13 @@ contract ShrincsAccountVerifierExample {
     );
     event StatefulSignatureVerified(uint32 indexed leafIndex, uint256 indexed nonce, uint256 indexed keyVersion);
     event StatelessSignatureVerified(uint64 usedCount, uint256 indexed nonce, uint256 indexed keyVersion);
+    event CompactSignatureVerified(bytes32 indexed slotId, uint256 indexed nonce, uint256 indexed keyVersion);
+    event CompactSlotRegistered(
+        bytes32 indexed slotId, bytes32 subPkSeed, bytes32 subPkRoot, uint256 indexed nonce, uint256 indexed keyVersion
+    );
+    event CompactSlotRevoked(
+        bytes32 indexed slotId, bytes32 subPkSeed, bytes32 subPkRoot, uint256 indexed nonce, uint256 indexed keyVersion
+    );
     event StatelessRotationConsumed(
         uint64 usedCount,
         uint256 indexed nonce,
@@ -122,6 +132,15 @@ contract ShrincsAccountVerifierExample {
             return INVALID_SIGNATURE;
         }
 
+        if (mode == ERC1271_MODE_COMPACT_ACTION) {
+            try this.decodeAndCheckCompact1271Envelope(hash, payload) returns (bool ok) {
+                if (ok) return MAGIC_VALUE;
+            } catch {
+                return INVALID_SIGNATURE;
+            }
+            return INVALID_SIGNATURE;
+        }
+
         return INVALID_SIGNATURE;
     }
 
@@ -163,6 +182,23 @@ contract ShrincsAccountVerifierExample {
         ) = abi.decode(payload, (ShrincsTypes.PublicKey, bytes32, bytes32, ShrincsTypes.StatelessSignature));
 
         return this.isValidStatelessActionSignatureNow(hash, publicKey, actionType, payloadHash, shrincsSignature);
+    }
+
+    // decodeAndCheckCompact1271Envelope: Self-call decoder for compact ERC-1271 envelopes.
+    // 1. Decode the canonical compact envelope layout from bytes.
+    // 2. Delegate the read-only compact slot and cryptographic checks.
+    // 3. Allow isValidSignature(...) to catch malformed payloads and return INVALID_SIGNATURE.
+    function decodeAndCheckCompact1271Envelope(bytes32 hash, bytes calldata payload)
+        external
+        view
+        onlySelf
+        returns (bool)
+    {
+        (bytes32 subPkSeed, bytes32 subPkRoot, bytes32 actionType, bytes32 payloadHash, bytes memory compactSignature) =
+            abi.decode(payload, (bytes32, bytes32, bytes32, bytes32, bytes));
+
+        return
+            this.isValidCompactActionSignatureNow(hash, subPkSeed, subPkRoot, actionType, payloadHash, compactSignature);
     }
 
     // constructor: Install the initial key commitment and start in the default safe wrapper mode.
@@ -287,6 +323,69 @@ contract ShrincsAccountVerifierExample {
         return true;
     }
 
+    // verifyCompactAction: Canonical compact account-action verification path.
+    // 1. Require the compact slot to be registered.
+    // 2. Build the canonical typed action context from wrapper-owned freshness state.
+    // 3. Verify the raw JARDIN compact signature against that canonical action message.
+    // 4. Advance nonce only after success; q remains signer-owned and untracked on-chain.
+    function verifyCompactAction(
+        bytes32 subPkSeed,
+        bytes32 subPkRoot,
+        bytes32 actionType,
+        bytes32 payloadHash,
+        bytes calldata signature
+    ) external returns (bool) {
+        // Derive the persistent JARDIN compact slot key.
+        bytes32 slotId = compactSlotId(subPkSeed, subPkRoot);
+        // Reject any compact lane that has not been stateless-authorized.
+        if (!compactSlots[slotId]) return false;
+
+        // Bind the action to this contract instance, nonce, and key epoch.
+        ShrincsTypes.ActionContext memory context = ShrincsTypes.ActionContext({
+            domainSeparator: domainSeparator(),
+            nonce: nonce,
+            keyVersion: keyVersion,
+            actionType: actionType,
+            payloadHash: payloadHash
+        });
+
+        // Verify the canonical compact action under the registered compact sub-key.
+        bool ok = SHRINCS.verifyCompact(subPkSeed, subPkRoot, context, signature);
+        if (!ok) return false;
+
+        // Emit before nonce advancement so observers see the consumed nonce value.
+        emit CompactSignatureVerified(slotId, nonce, keyVersion);
+        // Advance account freshness after a successful compact action.
+        nonce += 1;
+        return true;
+    }
+
+    // registerCompactSlot: Authorize a compact Type 2 lane with a stateless signature.
+    // 1. Require the slot to be currently unregistered.
+    // 2. Verify a stateless registration authorization under the installed key.
+    // 3. Store compactSlots[keccak256(subPkSeed || subPkRoot)] = true.
+    function registerCompactSlot(
+        ShrincsTypes.PublicKey calldata publicKey,
+        ShrincsTypes.StatelessSignature calldata signature,
+        bytes32 subPkSeed,
+        bytes32 subPkRoot
+    ) external returns (bool) {
+        return updateCompactSlot(publicKey, signature, subPkSeed, subPkRoot, true);
+    }
+
+    // revokeCompactSlot: Revoke a compact Type 2 lane with a stateless signature.
+    // 1. Require the slot to be currently registered.
+    // 2. Verify a stateless revocation authorization under the installed key.
+    // 3. Store compactSlots[keccak256(subPkSeed || subPkRoot)] = false.
+    function revokeCompactSlot(
+        ShrincsTypes.PublicKey calldata publicKey,
+        ShrincsTypes.StatelessSignature calldata signature,
+        bytes32 subPkSeed,
+        bytes32 subPkRoot
+    ) external returns (bool) {
+        return updateCompactSlot(publicKey, signature, subPkSeed, subPkRoot, false);
+    }
+
     // rotateToFreshKey: Recovery-only path that replaces the installed stateful subkey.
     // 1. Require the wrapper to be in recovery-rotation mode.
     // 2. Require recovery mode to be actively entered by the owner.
@@ -314,8 +413,9 @@ contract ShrincsAccountVerifierExample {
             ShrincsTypes.RotationContext({domainSeparator: domainSeparator(), nonce: nonce, keyVersion: keyVersion});
 
         // Verify the stateless recovery signature and derive the next installed commitment.
-        bytes32 nextCompositePublicKey =
-            SHRINCS.rotateStatefulViaStateless(currentShrincsPublicKey, currentPublicKey, context, recoverySignature, nextKey);
+        bytes32 nextCompositePublicKey = SHRINCS.rotateStatefulViaStateless(
+            currentShrincsPublicKey, currentPublicKey, context, recoverySignature, nextKey
+        );
         if (nextCompositePublicKey == bytes32(0)) return false;
 
         // Count and announce the consumed recovery signature before preserving the stateless budget
@@ -376,6 +476,11 @@ contract ShrincsAccountVerifierExample {
         uint256 bitIndex = uint256(leafIndex) & 0xff;
         // Return whether that bit has already been marked as used.
         return (usedLeafBitmap[keyVersion][wordIndex] & (uint256(1) << bitIndex)) != 0;
+    }
+
+    // compactSlotId: Derive the persistent compact slot key.
+    function compactSlotId(bytes32 subPkSeed, bytes32 subPkRoot) public pure returns (bytes32) {
+        return SHRINCS.compactSlotId(subPkSeed, subPkRoot);
     }
 
     // setStatefulPolicyMonotonicIndex: Switch to monotonic stateful leaf tracking.
@@ -522,6 +627,34 @@ contract ShrincsAccountVerifierExample {
         return SHRINCS.verifyStateless(currentShrincsPublicKey, publicKey, context, signature);
     }
 
+    // isValidCompactActionSignatureNow: Read-only self-call helper for canonical compact action verification.
+    // 1. Require the compact slot to be registered without mutating state.
+    // 2. Rebuild the canonical action context from wrapper-owned state.
+    // 3. Require the caller-supplied hash to match the current canonical compact action hash.
+    // 4. Verify the raw compact signature under the registered sub-key.
+    function isValidCompactActionSignatureNow(
+        bytes32 hash,
+        bytes32 subPkSeed,
+        bytes32 subPkRoot,
+        bytes32 actionType,
+        bytes32 payloadHash,
+        bytes calldata signature
+    ) external view onlySelf returns (bool) {
+        bytes32 slotId = compactSlotId(subPkSeed, subPkRoot);
+        if (!compactSlots[slotId]) return false;
+
+        ShrincsTypes.ActionContext memory context = ShrincsTypes.ActionContext({
+            domainSeparator: domainSeparator(),
+            nonce: nonce,
+            keyVersion: keyVersion,
+            actionType: actionType,
+            payloadHash: payloadHash
+        });
+
+        if (SHRINCS.compactActionMessageHash(context) != hash) return false;
+        return SHRINCS.verifyCompact(subPkSeed, subPkRoot, context, signature);
+    }
+
     // commitStatefulLeafUse: Record a successfully verified stateful leaf under the active policy.
     // 1. Under monotonic tracking, advance the next expected leaf by one.
     // 2. Under bitmap tracking, mark the corresponding bit for this leaf as used.
@@ -548,9 +681,57 @@ contract ShrincsAccountVerifierExample {
     // 2. Emit a dedicated rotation-usage event before any key install resets wrapper state.
     function consumeStatelessRotationUse(bytes32 nextCompositePublicKey, bool fullRotation) internal {
         statelessSignaturesUsed += 1;
-        emit StatelessRotationConsumed(
-            statelessSignaturesUsed, nonce, keyVersion, nextCompositePublicKey, fullRotation
+        emit StatelessRotationConsumed(statelessSignaturesUsed, nonce, keyVersion, nextCompositePublicKey, fullRotation);
+    }
+
+    // updateCompactSlot: Verify a stateless slot update and write the compactSlots flag.
+    // 1. Enforce current stateless gating and usage budget.
+    // 2. Build the registration or revocation message for this slot.
+    // 3. Verify the stateless authorization under the current installed key.
+    // 4. Write exactly one slot flag and consume the account nonce after success.
+    function updateCompactSlot(
+        ShrincsTypes.PublicKey calldata publicKey,
+        ShrincsTypes.StatelessSignature calldata signature,
+        bytes32 subPkSeed,
+        bytes32 subPkRoot,
+        bool registered
+    ) internal returns (bool) {
+        // Recovery-only policy gates stateless slot updates until recovery mode is armed.
+        if (statefulPolicy == StatefulPolicy.RecoveryRotation && !recoveryMode) return false;
+        // Enforce the per-key stateless usage budget.
+        if (statelessSignaturesUsed >= ShrincsTypes.STATELESS_SIGNATURE_LIMIT) return false;
+
+        // Derive the JARDIN compact slot key.
+        bytes32 slotId = compactSlotId(subPkSeed, subPkRoot);
+        // Reject no-op updates so signatures are never consumed for an unchanged slot flag.
+        if (compactSlots[slotId] == registered) return false;
+
+        // Bind the update to this contract instance, nonce, and key epoch.
+        ShrincsTypes.RotationContext memory context =
+            ShrincsTypes.RotationContext({domainSeparator: domainSeparator(), nonce: nonce, keyVersion: keyVersion});
+        // Choose the exact stateless authorization message for this slot operation.
+        bytes32 message = registered
+            ? SHRINCS.compactSlotRegistrationMessageHash(currentShrincsPublicKey, context, subPkSeed, subPkRoot)
+            : SHRINCS.compactSlotRevocationMessageHash(currentShrincsPublicKey, context, subPkSeed, subPkRoot);
+        // Verify the stateless signature over the slot update message.
+        bool ok = SHRINCS.verifyStatelessUncheckedMessage(
+            currentShrincsPublicKey, publicKey, abi.encodePacked(message), signature
         );
+        if (!ok) return false;
+
+        // Store the requested slot authorization state only after verification succeeds.
+        compactSlots[slotId] = registered;
+        // Count the stateless authorization under this installed key.
+        statelessSignaturesUsed += 1;
+        // Emit before nonce advancement so observers see the consumed nonce value.
+        if (registered) {
+            emit CompactSlotRegistered(slotId, subPkSeed, subPkRoot, nonce, keyVersion);
+        } else {
+            emit CompactSlotRevoked(slotId, subPkSeed, subPkRoot, nonce, keyVersion);
+        }
+        // Advance account freshness after the stateless slot update.
+        nonce += 1;
+        return true;
     }
 
     // domainSeparator: Derive the wrapper's canonical signing domain.

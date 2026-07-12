@@ -297,6 +297,72 @@ library SHRINCS {
         }
     }
 
+    // compactSlotRegistrationMessageHash: Build the stateless authorization hash for slot registration.
+    // Preimage:
+    //   OP_REGISTER_COMPACT_SLOT32 || HASH_SUITE_KECCAK_2564 || installedKey32 ||
+    //   domainSeparator32 || nonce32 || keyVersion32 || slotId32 || subPkSeed32 || subPkRoot32.
+    function compactSlotRegistrationMessageHash(
+        bytes32 expectedPublicKeyCommitment,
+        ShrincsTypes.RotationContext memory context,
+        bytes32 subPkSeed,
+        bytes32 subPkRoot
+    ) internal pure returns (bytes32) {
+        return compactSlotUpdateMessageHash(
+            ShrincsTypes.OP_REGISTER_COMPACT_SLOT, expectedPublicKeyCommitment, context, subPkSeed, subPkRoot
+        );
+    }
+
+    // compactSlotRevocationMessageHash: Build the stateless authorization hash for slot revocation.
+    // Preimage:
+    //   OP_REVOKE_COMPACT_SLOT32 || HASH_SUITE_KECCAK_2564 || installedKey32 ||
+    //   domainSeparator32 || nonce32 || keyVersion32 || slotId32 || subPkSeed32 || subPkRoot32.
+    function compactSlotRevocationMessageHash(
+        bytes32 expectedPublicKeyCommitment,
+        ShrincsTypes.RotationContext memory context,
+        bytes32 subPkSeed,
+        bytes32 subPkRoot
+    ) internal pure returns (bytes32) {
+        return compactSlotUpdateMessageHash(
+            ShrincsTypes.OP_REVOKE_COMPACT_SLOT, expectedPublicKeyCommitment, context, subPkSeed, subPkRoot
+        );
+    }
+
+    // compactSlotUpdateMessageHash: Build a compact-slot update hash with the supplied operation tag.
+    function compactSlotUpdateMessageHash(
+        bytes32 op,
+        bytes32 expectedPublicKeyCommitment,
+        ShrincsTypes.RotationContext memory context,
+        bytes32 subPkSeed,
+        bytes32 subPkRoot
+    ) internal pure returns (bytes32 out) {
+        // Cache constants so the assembly preimage stays close to abi.encodePacked semantics.
+        uint32 suite = ShrincsTypes.HASH_SUITE_KECCAK_256;
+        // Derive the slot id from the exact compact public key being authorized.
+        bytes32 slotId = compactSlotId(subPkSeed, subPkRoot);
+        assembly {
+            // Allocate one fixed-size hash preimage.
+            let ptr := mload(0x40)
+            // Operation tag.
+            mstore(ptr, op)
+            // HASH_SUITE_KECCAK_256 as uint32 in abi.encodePacked form.
+            mstore(add(ptr, 32), shl(224, suite))
+            // Current installed SHRINCS bundle commitment.
+            mstore(add(ptr, 36), expectedPublicKeyCommitment)
+            // Copy domainSeparator32 || nonce32 || keyVersion32.
+            mcopy(add(ptr, 68), context, 96)
+            // compactSlot = keccak256(subPkSeed || subPkRoot).
+            mstore(add(ptr, 164), slotId)
+            // Compact public seed.
+            mstore(add(ptr, 196), subPkSeed)
+            // Compact public root.
+            mstore(add(ptr, 228), subPkRoot)
+            // Hash the exact packed preimage length.
+            out := keccak256(ptr, 260)
+            // Bump free memory past the rounded preimage.
+            mstore(0x40, add(ptr, 288))
+        }
+    }
+
     // statelessActionMessageHash: Build the canonical stateless action message hash.
     // 1. Bind the stateless operation tag.
     // 2. Bind the hash suite.
