@@ -25,6 +25,7 @@ import {SHRINCS} from "../contracts/SHRINCS.sol";
 import {SPHINCSPlusC} from "../contracts/SPHINCSPlusC.sol";
 import {FORSMinusC} from "../contracts/FORSMinusC.sol";
 import {Hypertree} from "../contracts/Hypertree.sol";
+import {WOTSPlusC} from "../contracts/WOTSPlusC.sol";
 import {SHRINCS256sKeccak} from "../contracts/SHRINCS256sKeccak.sol";
 import {SHRINCSTestSigner} from "./helpers/SHRINCSTestSigner.sol";
 import {
@@ -352,22 +353,48 @@ contract SHRINCSCalldataRetagTest is Test {
 
     /// @dev Fuzz over well-formed, re-encoded signature-only envelopes,
     /// exercising the single-offset-word re-tag over the deeply nested
-    /// SPHINCSPlusC.Signature (varied FORS randomizer/counter/entries).
+    /// SPHINCSPlusC.Signature. Shapes vary in both dynamic members: a
+    /// multi-entry FORS signature (1..4 entries) and a possibly non-empty
+    /// hypertree (0..2 layers, each a fully populated WOTS-C layer), so the
+    /// re-tag is proven against abi.decode across the full signature shape,
+    /// not just the empty-hypertree / single-entry corner.
     function testFuzzDifferentialSignatureWellFormed(
         bytes calldata randomizer,
         uint32 counter,
         bytes calldata secretLeaf,
-        bytes[] calldata authPath
+        bytes[] calldata authPath,
+        uint8 entryShape,
+        uint8 layerShape
     ) public view {
-        FORSMinusC.ForsEntry[] memory entries = new FORSMinusC.ForsEntry[](1);
-        entries[0] = FORSMinusC.ForsEntry({
-            secretLeaf: secretLeaf, authPath: authPath
-        });
+        uint256 entryCount = 1 + (uint256(entryShape) % 4);
+        FORSMinusC.ForsEntry[] memory entries =
+            new FORSMinusC.ForsEntry[](entryCount);
+        for (uint256 i = 0; i < entryCount; i++) {
+            entries[i] = FORSMinusC.ForsEntry({
+                secretLeaf: secretLeaf, authPath: authPath
+            });
+        }
+        uint256 layerCount = uint256(layerShape) % 3;
+        Hypertree.HypertreeLayerSignature[] memory hypertree =
+            new Hypertree.HypertreeLayerSignature[](layerCount);
+        for (uint256 i = 0; i < layerCount; i++) {
+            hypertree[i] = Hypertree.HypertreeLayerSignature({
+                treeIndex: 0,
+                leafIndex: 0,
+                wotsCPkHash: secretLeaf,
+                wotsCSignature: WOTSPlusC.WotsCSignature({
+                    randomizer: randomizer,
+                    counter: counter,
+                    chains: authPath
+                }),
+                authPath: authPath
+            });
+        }
         SPHINCSPlusC.Signature memory signature = SPHINCSPlusC.Signature({
             fors: FORSMinusC.ForsSignature({
                 randomizer: randomizer, counter: counter, entries: entries
             }),
-            hypertree: new Hypertree.HypertreeLayerSignature[](0)
+            hypertree: hypertree
         });
         bytes memory envelope =
             SHRINCSCodec.encodeStatelessSignatureEnvelope(signature);
@@ -384,7 +411,12 @@ contract SHRINCSCalldataRetagTest is Test {
     // ---------------------------------------------------------------- //
 
     function testAdversarialStatefulRejectsMalformed() public view {
-        _assertStatefulNotSuccess(_e1b(statefulEnvelope), "stateful E1b");
+        _assertStatefulNotSuccess(
+            _e1b(statefulEnvelope, 0), "stateful E1b head 0"
+        );
+        _assertStatefulNotSuccess(
+            _e1b(statefulEnvelope, 1), "stateful E1b head 1"
+        );
         _assertStatefulNotSuccess(
             _truncate(statefulEnvelope), "stateful truncated"
         );
@@ -397,7 +429,12 @@ contract SHRINCSCalldataRetagTest is Test {
     }
 
     function testAdversarialStatelessRejectsMalformed() public view {
-        _assertStatelessNotSuccess(_e1b(statelessEnvelope), "stateless E1b");
+        _assertStatelessNotSuccess(
+            _e1b(statelessEnvelope, 0), "stateless E1b head 0"
+        );
+        _assertStatelessNotSuccess(
+            _e1b(statelessEnvelope, 1), "stateless E1b head 1"
+        );
         _assertStatelessNotSuccess(
             _truncate(statelessEnvelope), "stateless truncated"
         );
@@ -410,12 +447,43 @@ contract SHRINCSCalldataRetagTest is Test {
     }
 
     function testAdversarialSignatureRejectsMalformed() public view {
-        _assertSignatureNotSuccess(_e1b(signatureEnvelope), "signature E1b");
+        _assertSignatureNotSuccess(
+            _e1b(signatureEnvelope, 0), "signature E1b head 0"
+        );
         _assertSignatureNotSuccess(
             _truncate(signatureEnvelope), "signature truncated"
         );
         _assertSignatureNotSuccess(
             _oobOffset(signatureEnvelope), "signature OOB offset"
+        );
+        _assertSignatureNotSuccess(
+            _aliasNestedOffset(signatureEnvelope), "signature nested aliased"
+        );
+    }
+
+    // ---------------------------------------------------------------- //
+    // Positive controls: the UNMUTATED valid envelopes verify through   //
+    // the SAME entrypoints the adversarial cases use, so a broken       //
+    // fixture cannot make every not-success assertion pass vacuously.   //
+    // (The stateful positive control is                                 //
+    // testStatefulNonCanonicalReencodingVerifies below.)               //
+    // ---------------------------------------------------------------- //
+
+    function testStatelessEnvelopeVerifies() public view {
+        assertEq(
+            verifier.verifyStateless(
+                statelessKey, statelessHash, statelessEnvelope
+            ),
+            SELECTOR,
+            "valid stateless envelope must verify (positive control)"
+        );
+    }
+
+    function testSignatureEnvelopeVerifies() public view {
+        assertEq(
+            sphincs.verify(signatureKey, statelessHash, signatureEnvelope),
+            SELECTOR,
+            "valid signature envelope must verify (positive control)"
         );
     }
 
@@ -513,18 +581,21 @@ contract SHRINCSCalldataRetagTest is Test {
     // Malformed-envelope constructors.                                 //
     // ---------------------------------------------------------------- //
 
-    /// @dev E1b: set the last head offset word to 2^255, past solc's signed
-    /// tail bound.
-    function _e1b(bytes memory envelope)
+    /// @dev E1b: set the head offset word at index `headWord` to 2^255, past
+    /// solc's signed tail bound. `headWord` selects which head slot is
+    /// corrupted: word 0 is the first head offset (the signature-only
+    /// envelope's only head word, or a two-struct envelope's publicKey
+    /// offset), word 1 is a two-struct envelope's second (signature) offset.
+    function _e1b(bytes memory envelope, uint256 headWord)
         internal
         pure
         returns (bytes memory out)
     {
         out = bytes.concat(envelope);
-        uint256 wordOffset = out.length >= 64 ? 64 : 32;
         uint256 e1b = 1 << 255;
+        uint256 slot = 32 + headWord * 32;
         assembly {
-            mstore(add(add(out, 32), sub(wordOffset, 32)), e1b)
+            mstore(add(out, slot), e1b)
         }
     }
 
@@ -564,6 +635,25 @@ contract SHRINCSCalldataRetagTest is Test {
         out = bytes.concat(envelope);
         assembly {
             mstore(add(out, 64), mload(add(out, 32)))
+        }
+    }
+
+    /// @dev Alias the signature-only envelope's nested hypertree offset onto
+    /// its fors offset. The one-word outer head has no head-level alias, so
+    /// this in-bounds aliasing case lives one level down, inside the single
+    /// wrapped SPHINCSPlusC.Signature struct.
+    function _aliasNestedOffset(bytes memory envelope)
+        internal
+        pure
+        returns (bytes memory out)
+    {
+        out = bytes.concat(envelope);
+        // The outer offset at content[0..32) points to the struct start at
+        // content byte 32; that struct's head is the fors offset at
+        // content[32..64) and the hypertree offset at content[64..96). Point
+        // the hypertree offset at the fors tail (both are struct-relative).
+        assembly {
+            mstore(add(out, 96), mload(add(out, 64)))
         }
     }
 
