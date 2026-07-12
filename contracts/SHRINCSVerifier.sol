@@ -34,23 +34,24 @@ import {SHRINCS} from "./SHRINCS.sol";
 ///
 /// Revert model (deliberate: replaces the previous try/catch swallow).
 /// A malformed key (wrong length) returns 0xffffffff through the length-
-/// guarded key decoder. A malformed envelope reverts inside abi.decode (the
-/// canonicity walk is gone; a short buffer, out-of-range offset or length, or
-/// dirty value-type high bits reverts there) — that revert is the rejection
+/// guarded key decoder. A malformed envelope reverts downstream through
+/// solc's calldata member access on the re-tagged struct (the canonicity
+/// walk is gone; a short buffer, out-of-range offset or length, or dirty
+/// value-type high bits reverts there) — that revert is the rejection
 /// channel, and there is no try/catch anywhere. A well-formed but invalid
 /// signature returns 0xffffffff. Every other failure, including an inner
 /// out-of-gas, reverts to the caller; ERC-7913 permits this (the interface
 /// says a verifier SHOULD return 0xffffffff OR revert on an invalid
 /// signature). A caller that needs a boolean must treat a revert as its own
 /// policy decision. A non-canonical but ABI-tolerated re-encoding of a valid
-/// envelope decodes to the same value and verifies, so envelopes are
+/// envelope re-tags to the same field values and verifies, so envelopes are
 /// byte-malleable; consumers must key on decoded fields, not envelope bytes.
-/// The stateful `verify` path runs entirely in-contract through
-/// the memory-typed SHRINCS library, with no external call. The only
-/// remaining external call is `verifyStateless`'s delegation to the pinned
-/// SPHINCSPlusC sibling; no try surrounds it, so an out-of-gas there
-/// propagates as a revert instead of being misreported as an invalid
-/// signature.
+/// The stateful `verify` path runs entirely in-contract through the
+/// calldata-typed SHRINCS library, verifying the re-tagged envelope in place
+/// with no external call. The only remaining external call is
+/// `verifyStateless`'s delegation to the pinned SPHINCSPlusC sibling; no try
+/// surrounds it, so an out-of-gas there propagates as a revert instead of
+/// being misreported as an invalid signature.
 ///
 /// Caller obligations. Every SHRINCS library is `pure` and both adapters
 /// are storage-free (their entrypoints are `view` or `pure`); they verify a
@@ -84,11 +85,11 @@ abstract contract SHRINCSVerifier is IERC7913SignatureVerifier {
 
     /// @notice ERC-7913 verification entrypoint for stateful signatures.
     /// @dev Decodes the 32-byte key into the installed bundle commitment
-    /// (wrong length -> 0xffffffff) and abi.decodes the stateful envelope (a
-    /// malformed envelope reverts there). verify then hands the decoded
-    /// memory structs straight to the memory-typed SHRINCS library, which
-    /// enforces the
-    /// commitment-vs-bundle match, bundle shape, leaf-index bounds, WOTS-C
+    /// (wrong length -> 0xffffffff) and re-tags the stateful envelope in
+    /// place (a malformed envelope reverts downstream). verify then hands the
+    /// typed calldata struct pointers straight to the calldata-typed SHRINCS
+    /// library, which enforces the commitment-vs-bundle match, bundle shape,
+    /// leaf-index bounds, WOTS-C
     /// reconstruction, and the unbalanced-tree root over exactly the 32 hash
     /// bytes. No external call, no try/catch: an execution failure, including
     /// out-of-gas, reverts. See the contract-level revert model.
@@ -108,11 +109,9 @@ abstract contract SHRINCSVerifier is IERC7913SignatureVerifier {
         if (!okKey) return INVALID_SIGNATURE;
 
         (
-            SHRINCS.PublicKey memory publicKey,
-            SHRINCS.Signature memory statefulSignature,
-            bool okEnvelope
-        ) = SHRINCS.decodeStatefulEnvelope(signature);
-        if (!okEnvelope) return INVALID_SIGNATURE;
+            SHRINCS.PublicKey calldata publicKey,
+            SHRINCS.Signature calldata statefulSignature
+        ) = SHRINCS.statefulEnvelope(signature);
 
         if (SHRINCS.verify(
                 publicKeyCommitment, hash, publicKey, statefulSignature
@@ -126,9 +125,10 @@ abstract contract SHRINCSVerifier is IERC7913SignatureVerifier {
     /// signatures, delegated to the pinned SPHINCSPlusC verifier.
     /// @dev Decodes the 32-byte key (the installed commitment; wrong length
     /// -> 0xffffffff), then hands the stateless envelope to
-    /// SHRINCS.prepareStatelessDelegation, which abi.decodes it (a malformed
-    /// envelope reverts there), runs the bundle-vs-commitment check
-    /// (commitment first, then shape, mirroring the library stateless path),
+    /// SHRINCS.prepareStatelessDelegation, which re-tags it in place (a
+    /// malformed envelope reverts downstream), runs the bundle-vs-commitment
+    /// check (commitment first, then shape, mirroring the library stateless
+    /// path),
     /// loads the two 32-byte stateless seed words, and returns the delegate
     /// key
     /// (abi.encode(pkSeed, hypertreeRoot)) and stateless signature envelope.

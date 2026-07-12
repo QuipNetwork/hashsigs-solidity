@@ -70,7 +70,7 @@ library UXMSS {
         bytes32 root,
         uint32 maxSignatures,
         bytes memory message,
-        UXMSS.Signature memory signature
+        UXMSS.Signature calldata signature
     ) internal pure returns (bool) {
         // In this unbalanced stateful tree, the leaf index is encoded by
         // auth-path length.
@@ -112,7 +112,7 @@ library UXMSS {
         bytes32 pkSeed,
         uint32 leafIndex,
         bytes memory message,
-        UXMSS.Signature memory signature
+        UXMSS.Signature calldata signature
     ) internal pure returns (bytes32 pkHash, bool ok) {
         // Bind the stateful WOTS-C digest to the seed, leaf, randomizer,
         // counter, and signed message.
@@ -143,6 +143,10 @@ library UXMSS {
         // path previously built via SHRINCSHash.addressWord32.
         uint256 addressBase = (uint256(AddressTypeWotsHash) << 96)
             | (uint256(leafIndex) << 64);
+        // Hoist the calldata array reference so the loop reads element data
+        // from a fixed base pointer instead of re-resolving the struct member
+        // offset on every iteration.
+        bytes32[] calldata chains = signature.chains;
         for (uint256 i = 0; i < SHRINCSParams.WOTS_CHAINS_STATEFUL;) {
             // Read the base-16 digit that chooses where this chain stopped
             // during signing.
@@ -167,7 +171,7 @@ library UXMSS {
                 pkSeed,
                 addressBase,
                 chainIndex,
-                signature.chains[i],
+                chains[i],
                 digit
             );
             // Store the reconstructed endpoint into the packed segment
@@ -210,7 +214,7 @@ library UXMSS {
         bytes32 pkSeed,
         uint32 leafIndex,
         bytes32 leaf,
-        bytes32[] memory authPath
+        bytes32[] calldata authPath
     ) internal pure returns (bytes32 root, bool ok) {
         // The first parent hashes the leaf with the first auth-path node on
         // its right.

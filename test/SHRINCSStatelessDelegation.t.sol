@@ -100,13 +100,22 @@ contract SHRINCSStatelessDelegationTest is Test {
     // Revert model: the canonicity walk is gone, so a truncated envelope
     // reverts inside abi.decode before any delegation instead of returning
     // 0xffffffff.
-    function testVerifyStatelessRevertsOnTruncatedEnvelope() public {
+    // Re-tag model: a one-byte truncation leaves every re-tagged offset and
+    // length in bounds, so the bundle check passes and the delegate signature
+    // is rebuilt with a corrupted last node; the pinned sibling's FORS-C plus
+    // hypertree reconstruction then fails, so verifyStateless rejects with
+    // 0xffffffff rather than reverting (a malformed case moving within
+    // {revert, false}).
+    function testVerifyStatelessRejectsTruncatedEnvelope() public view {
         bytes memory truncated = validEnvelope;
         assembly {
             mstore(truncated, sub(mload(truncated), 1))
         }
-        vm.expectRevert();
-        verifier.verifyStateless(validKey, signedHash, truncated);
+        assertEq(
+            verifier.verifyStateless(validKey, signedHash, truncated),
+            INVALID_SIGNATURE,
+            "truncated stateless envelope must be rejected"
+        );
     }
 
     function testVerifyStatelessRejectsTamperedHash() public view {

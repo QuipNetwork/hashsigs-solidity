@@ -106,22 +106,23 @@ contract SHRINCSAccountVerifierExample {
 
     /// @notice ERC-1271 compatibility view for canonical SHRINCS
     /// account-action signatures.
-    /// @dev Decodes the leading envelope mode byte and abi.decodes the
-    /// remainder as a stateful or stateless action envelope, rebuilds the
+    /// @dev Decodes the leading envelope mode byte and re-tags the remainder
+    /// in place as a stateful or stateless action envelope, rebuilds the
     /// current action context from wrapper-owned state, checks the supplied
     /// hash against the canonical action hash, and verifies the embedded
     /// SHRINCS signature without mutating state.
     /// @dev Revert model (mirrors the SHRINCSVerifier). An empty signature
     /// (no mode byte) and a malformed envelope revert (the mode read indexes
-    /// empty bytes; abi.decode reverts on a short buffer, out-of-range offset
-    /// or length, or dirty value-type high bits — the canonicity walk is
-    /// gone). An unknown mode byte and a well-formed but invalid signature
-    /// return 0xffffffff. There is no try/catch; every other failure,
-    /// including an inner out-of-gas, reverts. A non-canonical but
-    /// ABI-tolerated re-encoding decodes to the same value and verifies, so
-    /// envelopes are byte-malleable. The read-only signature check runs
-    /// directly on the decoded memory structs through the memory-typed
-    /// SHRINCS library, with no self-call hop. Reference gas: a stateful
+    /// empty bytes; the re-tagged struct's member access reverts on a
+    /// short buffer, out-of-range offset or length, or dirty value-type high
+    /// bits — the canonicity walk is gone). An unknown mode byte and a
+    /// well-formed but invalid signature return 0xffffffff. There is no
+    /// try/catch; every failure, including an inner out-of-gas, reverts.
+    /// A non-canonical but ABI-tolerated re-encoding maps to the same field
+    /// values and verifies, so envelopes are byte-malleable. The read-only
+    /// signature check runs on the re-tagged calldata structs through
+    /// the calldata-typed SHRINCS library, with no self-call hop. Reference
+    /// gas: a stateful
     /// check costs roughly 180k gas and a stateless check roughly 2.08M gas;
     /// callers must forward comfortably above those or the verification
     /// reverts.
@@ -139,17 +140,15 @@ contract SHRINCSAccountVerifierExample {
         bytes calldata payload = signature[1:];
 
         if (mode == ERC1271_MODE_STATEFUL_ACTION) {
-            // abi.decode reverts on a malformed envelope.
+            // Re-tag the action envelope in place; malformed reverts
+            // downstream through solc's calldata member access.
             (
-                SHRINCS.PublicKey memory publicKey,
+                SHRINCS.PublicKey calldata publicKey,
                 bytes32 actionType,
                 bytes32 payloadHash,
-                SHRINCS.Signature memory shrincsSignature
-            ) = abi.decode(
-                payload,
-                (SHRINCS.PublicKey, bytes32, bytes32, SHRINCS.Signature)
-            );
-            // Direct in-contract memory-typed check, no self-call hop.
+                SHRINCS.Signature calldata shrincsSignature
+            ) = SHRINCS.statefulActionEnvelope(payload);
+            // Direct in-contract calldata-typed check, no self-call hop.
             if (isValidStatefulActionSignatureNow(
                     hash,
                     publicKey,
@@ -161,17 +160,15 @@ contract SHRINCSAccountVerifierExample {
         }
 
         if (mode == ERC1271_MODE_STATELESS_ACTION) {
-            // abi.decode reverts on a malformed envelope.
+            // Re-tag the action envelope in place; malformed reverts
+            // downstream through solc's calldata member access.
             (
-                SHRINCS.PublicKey memory publicKey,
+                SHRINCS.PublicKey calldata publicKey,
                 bytes32 actionType,
                 bytes32 payloadHash,
-                SPHINCSPlusC.Signature memory shrincsSignature
-            ) = abi.decode(
-                payload,
-                (SHRINCS.PublicKey, bytes32, bytes32, SPHINCSPlusC.Signature)
-            );
-            // Direct in-contract memory-typed check, no self-call hop.
+                SPHINCSPlusC.Signature calldata shrincsSignature
+            ) = SHRINCS.statelessActionEnvelope(payload);
+            // Direct in-contract calldata-typed check, no self-call hop.
             if (isValidStatelessActionSignatureNow(
                     hash,
                     publicKey,
@@ -585,11 +582,12 @@ contract SHRINCSAccountVerifierExample {
     }
 
     /// @notice Read-only helper for canonical stateful action verification.
-    /// @dev Called directly on the decoded memory structs (no self-call hop).
-    /// Enforces the stateful leaf policy without consuming the leaf, rebuilds
-    /// the canonical action context, requires the supplied hash to match the
-    /// canonical stateful action hash and the context to be well-formed, then
-    /// verifies the signature over that hash through the memory-typed facade.
+    /// @dev Called directly on the re-tagged calldata structs (no self-call
+    /// hop). Enforces the stateful leaf policy without consuming the leaf,
+    /// rebuilds the canonical action context, requires the supplied hash to
+    /// match the canonical stateful action hash and the context to be
+    /// well-formed, then verifies the signature over that hash through the
+    /// calldata-typed facade.
     /// @param hash The 32-byte hash the signature must authorize.
     /// @param publicKey The SHRINCS public-key bundle.
     /// @param actionType The action type bound into the canonical hash.
@@ -598,10 +596,10 @@ contract SHRINCSAccountVerifierExample {
     /// @return True when the stateful signature is valid now.
     function isValidStatefulActionSignatureNow(
         bytes32 hash,
-        SHRINCS.PublicKey memory publicKey,
+        SHRINCS.PublicKey calldata publicKey,
         bytes32 actionType,
         bytes32 payloadHash,
-        SHRINCS.Signature memory signature
+        SHRINCS.Signature calldata signature
     ) internal view returns (bool) {
         uint32 leafIndex = uint32(signature.authPath.length);
         if (!precheckStatefulLeafUse(leafIndex)) return false;
@@ -630,12 +628,12 @@ contract SHRINCSAccountVerifierExample {
     }
 
     /// @notice Read-only helper for canonical stateless action verification.
-    /// @dev Called directly on the decoded memory structs (no self-call hop).
-    /// Enforces recovery-mode gating and the stateless usage budget without
-    /// consuming either, rebuilds the canonical action context, requires the
-    /// supplied hash to match the canonical stateless action hash and the
-    /// context to be well-formed, then verifies the signature over that hash
-    /// through the memory-typed library.
+    /// @dev Called directly on the re-tagged calldata structs (no self-call
+    /// hop). Enforces recovery-mode gating and the stateless usage budget
+    /// without consuming either, rebuilds the canonical action context,
+    /// requires the supplied hash to match the canonical stateless hash
+    /// and the context to be well-formed, then verifies the signature over
+    /// that hash through the calldata-typed library.
     /// @param hash The 32-byte hash the signature must authorize.
     /// @param publicKey The SHRINCS public-key bundle.
     /// @param actionType The action type bound into the canonical hash.
@@ -644,10 +642,10 @@ contract SHRINCSAccountVerifierExample {
     /// @return True when the stateless signature is valid now.
     function isValidStatelessActionSignatureNow(
         bytes32 hash,
-        SHRINCS.PublicKey memory publicKey,
+        SHRINCS.PublicKey calldata publicKey,
         bytes32 actionType,
         bytes32 payloadHash,
-        SPHINCSPlusC.Signature memory signature
+        SPHINCSPlusC.Signature calldata signature
     ) internal view returns (bool) {
         if (
             statefulPolicy == StatefulPolicy.RecoveryRotation

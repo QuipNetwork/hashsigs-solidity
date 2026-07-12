@@ -64,10 +64,10 @@ library FORSMinusC {
     // 6. Return the FORS root for hypertree verification together with a
     // success flag.
     function verifyForsCAndReturnRoot(
-        bytes memory pkSeed,
-        bytes memory hypertreeRoot,
+        bytes calldata pkSeed,
+        bytes calldata hypertreeRoot,
         bytes memory message,
-        FORSMinusC.ForsSignature memory signature,
+        FORSMinusC.ForsSignature calldata signature,
         uint64 treeIndex,
         uint32 leafIndex
     ) internal pure returns (bytes32 forsRoot, bool ok) {
@@ -123,7 +123,7 @@ library FORSMinusC {
             // Write the domain tag prefix at the start of the buffer.
             mstore(forsPkInput, "fors-pk")
             // Copy the 32-byte public seed immediately after the 7-byte tag.
-            mstore(add(forsPkInput, 7), mload(add(pkSeed, 32)))
+            calldatacopy(add(forsPkInput, 7), pkSeed.offset, 32)
             // Bump the free-memory pointer to the next 32-byte aligned slot
             // after this buffer.
             mstore(
@@ -134,7 +134,7 @@ library FORSMinusC {
 
         for (uint256 tree = 0; tree < signedTrees;) {
             // Read one revealed FORS entry for this tree.
-            FORSMinusC.ForsEntry memory entry = signature.entries[tree];
+            FORSMinusC.ForsEntry calldata entry = signature.entries[tree];
             // Read the digest-selected leaf for this FORS tree.
             uint32 entryLeafIndex = SHRINCSHash.readBits32(
                 digest.digest,
@@ -196,12 +196,12 @@ library FORSMinusC {
     // 5. Return the reconstructed root for this FORS tree.
     function forsEntryRoot32(
         uint32 height,
-        bytes memory pkSeed,
+        bytes calldata pkSeed,
         uint64 treeIndex,
         uint32 leafIndex,
         uint32 forsTreeIndex,
         uint32 entryLeafIndex,
-        FORSMinusC.ForsEntry memory entry
+        FORSMinusC.ForsEntry calldata entry
     ) internal pure returns (bytes32 node) {
         // Build the shared address prefix used by all nodes in this FORS tree
         // location.
@@ -221,15 +221,19 @@ library FORSMinusC {
         // Track the current node position as we walk upward through the auth
         // path.
         uint256 index = entryLeafIndex;
+        // Hoist the calldata array reference so the loop reads element data
+        // from a fixed base pointer instead of re-resolving the struct member
+        // offset on every iteration.
+        bytes[] calldata authPath = entry.authPath;
         for (uint256 level = 0; level < height;) {
             // Read the sibling node supplied for this level.
-            bytes memory authNode = entry.authPath[level];
+            bytes calldata authNode = authPath[level];
             bytes32 sibling;
-            // Memory-safe: reads one memory word into a stack variable;
+            // Memory-safe: reads one calldata word into a stack variable;
             // no memory is written.
             assembly ("memory-safe") {
-                // Load the 32-byte sibling node from the bytes payload.
-                sibling := mload(add(authNode, 32))
+                // Load the 32-byte sibling node directly from calldata.
+                sibling := calldataload(authNode.offset)
             }
             // Place the current node and sibling in canonical left/right
             // order for this level.
@@ -293,9 +297,9 @@ library FORSMinusC {
     // 3. Mix in the revealed secret leaf bytes.
     // 4. Return the public FORS leaf value.
     function hashForsLeaf32(
-        bytes memory pkSeed,
+        bytes calldata pkSeed,
         bytes32 addressWord,
-        bytes memory sk
+        bytes calldata sk
     ) internal pure returns (bytes32 out) {
         // keccak256 input ("fors-leaf" tag [§1 tags], 105 bytes):
         //   [0..9)    "fors-leaf"
@@ -313,11 +317,11 @@ library FORSMinusC {
             // Write the domain tag prefix for FORS leaf hashing.
             mstore(ptr, "fors-leaf")
             // Copy the 32-byte public seed after the 9-byte tag.
-            mstore(add(ptr, 9), mload(add(pkSeed, 32)))
+            calldatacopy(add(ptr, 9), pkSeed.offset, 32)
             // Write the 32-byte address word after the seed.
             mstore(add(ptr, 41), addressWord)
             // Copy the 32-byte secret leaf after the address.
-            mstore(add(ptr, 73), mload(add(sk, 32)))
+            calldatacopy(add(ptr, 73), sk.offset, 32)
             // Hash the complete FORS leaf preimage.
             out := keccak256(ptr, 105)
         }
@@ -331,7 +335,7 @@ library FORSMinusC {
     // 3. Mix in the left and right child values in canonical order.
     // 4. Return the parent node value.
     function hashForsNode32(
-        bytes memory pkSeed,
+        bytes calldata pkSeed,
         bytes32 addressWord,
         bytes32 left,
         bytes32 right
@@ -353,7 +357,7 @@ library FORSMinusC {
             // Write the domain tag prefix for FORS internal-node hashing.
             mstore(ptr, "fors-node")
             // Copy the 32-byte public seed after the 9-byte tag.
-            mstore(add(ptr, 9), mload(add(pkSeed, 32)))
+            calldatacopy(add(ptr, 9), pkSeed.offset, 32)
             // Write the 32-byte parent-node address after the seed.
             mstore(add(ptr, 41), addressWord)
             // Write the left child after the address.
@@ -380,10 +384,10 @@ library FORSMinusC {
     // 5. Return both coordinates together with the digest bytes used for FORS
     // leaf selection.
     function forsDigest(
-        bytes memory pkSeed,
-        bytes memory hypertreeRoot,
+        bytes calldata pkSeed,
+        bytes calldata hypertreeRoot,
         bytes memory message,
-        bytes memory randomizer,
+        bytes calldata randomizer,
         uint32 counter
     ) internal pure returns (FORSMinusC.ForsDigest memory out) {
         // Reserve bits for all signed FORS tree leaf choices.
@@ -431,9 +435,9 @@ library FORSMinusC {
     // 4. Produce either one digest block or as many blocks as needed.
     // 5. Return exactly the requested number of digest bytes.
     function forsDigestBytes(
-        bytes memory pkSeed,
-        bytes memory hypertreeRoot,
-        bytes memory randomizer,
+        bytes calldata pkSeed,
+        bytes calldata hypertreeRoot,
+        bytes calldata randomizer,
         uint32 counter,
         bytes memory message,
         uint256 digestBytes
@@ -478,11 +482,11 @@ library FORSMinusC {
             // Write the digest domain tag prefix.
             mstore(ptr, "fors-digest")
             // Copy the 32-byte public seed after the 11-byte tag.
-            mstore(add(ptr, 11), mload(add(pkSeed, 32)))
+            calldatacopy(add(ptr, 11), pkSeed.offset, 32)
             // Copy the 32-byte hypertree root after the seed.
-            mstore(add(ptr, 43), mload(add(hypertreeRoot, 32)))
+            calldatacopy(add(ptr, 43), hypertreeRoot.offset, 32)
             // Copy the 32-byte per-signature randomizer after the root.
-            mstore(add(ptr, 75), mload(add(randomizer, 32)))
+            calldatacopy(add(ptr, 75), randomizer.offset, 32)
             // Write the 4-byte grind counter after the randomizer.
             mstore(add(ptr, 107), shl(224, counter))
             let src := add(message, 32)

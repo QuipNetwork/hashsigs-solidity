@@ -26,17 +26,22 @@ import {SHRINCSParams} from "shrincs-profile/SHRINCSParams.sol";
 /// @dev Single source of truth for the verifier envelope format; tests (and
 /// later the SDK) must encode through this library so encoder and decoder
 /// cannot drift.
-/// @dev Revert model: the envelope decoders abi.decode the calldata
-/// directly. A malformed encoding reverts inside abi.decode (short buffer,
-/// out-of-range offset or length, or dirty value-type high bits); that revert
-/// is the rejection channel, so the envelope decoders no longer report
-/// malformed input through the `ok` flag (it is now always true on return).
-/// The key/commitment decoders still length-check and report a wrong length
-/// through `ok == false` without reverting. Acceptance is the ABI's: any
-/// non-canonical framing abi.decode tolerates (non-minimal offsets, gap or
-/// trailing bytes, dirty `bytes` tail padding) decodes to the same logical
-/// value and verifies, so envelopes are byte-malleable — external consumers
-/// must key on decoded field values, never on the envelope bytes.
+/// @dev Revert model: the production verify paths do not abi.decode. They
+/// re-tag the calldata envelope (statefulEnvelope, statelessEnvelope,
+/// statelessSignatureEnvelope, statefulActionEnvelope,
+/// statelessActionEnvelope) into typed calldata struct pointers without
+/// copying or validating; each
+/// re-tag's own NatSpec carries the safety story. Rejection is downstream:
+/// solc-generated member access reverts on out-of-bounds offsets < 2^64,
+/// out-of-bounds lengths, and dirty value-type high bits; a >= 2^255 head
+/// offset reads members as empty and the surviving KEEP guards plus solc's
+/// index Panic drive it into {revert, false}. The key/commitment decoders
+/// still length-check and report a wrong length through `ok == false` without
+/// reverting. Acceptance is the ABI's: any non-canonical framing that decodes
+/// to the same logical field values verifies, so envelopes are byte-malleable
+/// — external consumers must key on decoded field values, never on the
+/// envelope bytes. decodeStatefulEnvelope remains an abi.decode helper for
+/// test/off-chain encoders only; no production verify path calls it.
 library SHRINCSCodec {
     /// @notice Decode an ERC-7913 `key` into the SHRINCS installed bundle
     /// commitment.
@@ -105,33 +110,7 @@ library SHRINCSCodec {
         return abi.encode(publicKey, signature);
     }
 
-    /// @notice Decode the SHRINCSVerifier stateless envelope into typed
-    /// structs.
-    /// @dev Envelope layout is abi.encode(PublicKey, SPHINCSPlusC.Signature)
-    /// with no mode prefix. abi.decode reverts on a malformed encoding (short
-    /// buffer, out-of-range offset or length, or dirty value-type high bits);
-    /// that revert is the rejection channel. Non-canonical framing abi.decode
-    /// tolerates decodes to the same value and is accepted (byte-malleable).
-    /// @param envelope The abi-encoded stateless envelope bytes.
-    /// @return publicKey The decoded SHRINCS public-key bundle.
-    /// @return signature The decoded stateless signature.
-    /// @return ok Always true on return; a malformed envelope reverts.
-    function decodeStatelessEnvelope(bytes calldata envelope)
-        internal
-        pure
-        returns (
-            SHRINCS.PublicKey memory publicKey,
-            SPHINCSPlusC.Signature memory signature,
-            bool ok
-        )
-    {
-        (publicKey, signature) = abi.decode(
-            envelope, (SHRINCS.PublicKey, SPHINCSPlusC.Signature)
-        );
-        return (publicKey, signature, true);
-    }
-
-    /// @notice Inverse of decodeStatelessEnvelope.
+    /// @notice Inverse of the stateless envelope re-tag (statelessEnvelope).
     /// @dev Shares one format definition with the decoder so the verifier,
     /// tests, and off-chain encoders cannot drift.
     /// @param publicKey The SHRINCS public-key bundle.
@@ -144,29 +123,29 @@ library SHRINCSCodec {
         return abi.encode(publicKey, signature);
     }
 
-    /// @notice Decode the SPHINCSPlusCVerifier key into its two seed words.
+    /// @notice Decode the SPHINCSPlusCVerifier key into its two seed slices.
     /// @dev Key layout is abi.encode(bytes32 pkSeed, bytes32 hypertreeRoot),
-    /// exactly 64 bytes of static words with no framing freedom, so a length
-    /// check plus two calldata loads is a complete canonicity check. Never
-    /// reverts; malformed keys are reported through the ok flag.
+    /// exactly 64 bytes of static words with no framing, so the length
+    /// check is a complete canonicity check. The two 32-byte seed words are
+    /// returned as calldata slices the stateless verify path reads in place,
+    /// with no copy. Never reverts; a wrong length is reported through the ok
+    /// flag.
     /// @param key The ERC-7913 key bytes (exactly 64 bytes).
-    /// @return pkSeed The stateless SPHINCS-style public seed.
-    /// @return hypertreeRoot The stateless SPHINCS-style public root.
+    /// @return pkSeed Calldata slice of the stateless public seed word.
+    /// @return hypertreeRoot Calldata slice of the stateless root word.
     /// @return ok False when the key length is not 64.
     function decodeStatelessKey(bytes calldata key)
         internal
         pure
-        returns (bytes32 pkSeed, bytes32 hypertreeRoot, bool ok)
+        returns (
+            bytes calldata pkSeed,
+            bytes calldata hypertreeRoot,
+            bool ok
+        )
     {
         // Two static bytes32 words abi.encode to exactly 64 bytes.
-        if (key.length != 64) return (bytes32(0), bytes32(0), false);
-        // Memory-safe: reads two calldata words into stack variables; no
-        // memory is written.
-        assembly ("memory-safe") {
-            pkSeed := calldataload(key.offset)
-            hypertreeRoot := calldataload(add(key.offset, 32))
-        }
-        return (pkSeed, hypertreeRoot, true);
+        if (key.length != 64) return (key[0:0], key[0:0], false);
+        return (key[0:32], key[32:64], true);
     }
 
     /// @notice Inverse of decodeStatelessKey.
@@ -182,26 +161,8 @@ library SHRINCSCodec {
         return abi.encode(pkSeed, hypertreeRoot);
     }
 
-    /// @notice Decode the SPHINCSPlusCVerifier envelope into a typed
-    /// stateless signature.
-    /// @dev Envelope layout is abi.encode(SPHINCSPlusC.Signature) with no
-    /// mode prefix. abi.decode reverts on a malformed encoding (short buffer,
-    /// out-of-range offset or length, or dirty value-type high bits); that
-    /// revert is the rejection channel. Non-canonical framing abi.decode
-    /// tolerates decodes to the same value and is accepted (byte-malleable).
-    /// @param envelope The abi-encoded stateless-signature envelope bytes.
-    /// @return signature The decoded stateless signature.
-    /// @return ok Always true on return; a malformed envelope reverts.
-    function decodeStatelessSignatureEnvelope(bytes calldata envelope)
-        internal
-        pure
-        returns (SPHINCSPlusC.Signature memory signature, bool ok)
-    {
-        signature = abi.decode(envelope, (SPHINCSPlusC.Signature));
-        return (signature, true);
-    }
-
-    /// @notice Inverse of decodeStatelessSignatureEnvelope.
+    /// @notice Inverse of the stateless-signature re-tag
+    /// (statelessSignatureEnvelope).
     /// @dev Builds the SPHINCSPlusCVerifier signature envelope the sub-call
     /// verify expects, so the delegation path re-encodes through one format
     /// definition.
@@ -306,6 +267,81 @@ library SHRINCSCodec {
         }
     }
 
+    /// @notice Zero-copy re-tag of a stateful account-action envelope into
+    /// typed calldata pointers and the two inline action words.
+    /// @dev Envelope layout is
+    /// abi.encode(PublicKey, bytes32 actionType, bytes32 payloadHash,
+    /// SHRINCS.Signature): a four-word head whose first/last words are the
+    /// two dynamic-struct offsets and whose middle two words are the inline
+    /// action fields. This re-tag reads all four without copying or
+    /// validating; it never reverts on its own. Same safety story as
+    /// statefulEnvelope (E1a/E2 revert, E1b lands in {revert, false} via the
+    /// downstream Panic backstop plus the KEEP guards, in-bounds aliasing
+    /// accepted by design). The inline action words carry no offset, so they
+    /// only feed the caller's canonical action-hash comparison; a wrong value
+    /// fails that comparison rather than being trusted.
+    /// @param payload The abi-encoded stateful action envelope calldata.
+    /// @return publicKey Calldata pointer to the public-key bundle.
+    /// @return actionType The inline action-type word.
+    /// @return payloadHash The inline payload-hash word.
+    /// @return signature Calldata pointer to the stateful signature.
+    function statefulActionEnvelope(bytes calldata payload)
+        internal
+        pure
+        returns (
+            SHRINCS.PublicKey calldata publicKey,
+            bytes32 actionType,
+            bytes32 payloadHash,
+            SHRINCS.Signature calldata signature
+        )
+    {
+        // Pure calldata re-tag: reads two offset words into two calldata
+        // pointers and two inline words; no memory is read or written.
+        assembly ("memory-safe") {
+            publicKey := add(payload.offset, calldataload(payload.offset))
+            actionType := calldataload(add(payload.offset, 0x20))
+            payloadHash := calldataload(add(payload.offset, 0x40))
+            signature := add(
+                payload.offset,
+                calldataload(add(payload.offset, 0x60))
+            )
+        }
+    }
+
+    /// @notice Zero-copy re-tag of a stateless account-action envelope into
+    /// typed calldata pointers and the two inline action words.
+    /// @dev Envelope layout is
+    /// abi.encode(PublicKey, bytes32 actionType, bytes32 payloadHash,
+    /// SPHINCSPlusC.Signature): the same four-word head shape and the same
+    /// safety story as statefulActionEnvelope.
+    /// @param payload The abi-encoded stateless action envelope calldata.
+    /// @return publicKey Calldata pointer to the public-key bundle.
+    /// @return actionType The inline action-type word.
+    /// @return payloadHash The inline payload-hash word.
+    /// @return signature Calldata pointer to the stateless signature.
+    function statelessActionEnvelope(bytes calldata payload)
+        internal
+        pure
+        returns (
+            SHRINCS.PublicKey calldata publicKey,
+            bytes32 actionType,
+            bytes32 payloadHash,
+            SPHINCSPlusC.Signature calldata signature
+        )
+    {
+        // Pure calldata re-tag: reads two offset words into two calldata
+        // pointers and two inline words; no memory is read or written.
+        assembly ("memory-safe") {
+            publicKey := add(payload.offset, calldataload(payload.offset))
+            actionType := calldataload(add(payload.offset, 0x20))
+            payloadHash := calldataload(add(payload.offset, 0x40))
+            signature := add(
+                payload.offset,
+                calldataload(add(payload.offset, 0x60))
+            )
+        }
+    }
+
     /// @notice Convert the ERC-7913 32-byte hash into the SHRINCS signed
     /// message bytes.
     /// @dev ERC-7913 hands a bytes32 hash; SHRINCS signs raw message bytes.
@@ -326,7 +362,7 @@ library SHRINCSCodec {
     // 2. Bind the stateful public key, stateless public seed, and hypertree
     // root.
     // 3. Return the installed public-key commitment.
-    function publicKeyCommitment(SHRINCS.PublicKey memory publicKey)
+    function publicKeyCommitment(SHRINCS.PublicKey calldata publicKey)
         internal
         pure
         returns (bytes32)
@@ -364,20 +400,27 @@ library SHRINCSCodec {
 
     // matchesExpectedPublicKeyCommitment: Check that a bundled public key
     // matches an installed commitment.
-    // 1. Load the declared commitment from memory.
+    // 1. Load the declared commitment from calldata.
     // 2. Check it against the caller-supplied expected commitment.
     // 3. Recompute the bundle commitment and require it to match too.
+    /// @dev Pairing precondition: this helper reads the first 32-byte word of
+    /// publicKey.publicKeyCommitment without checking its length (the length
+    /// pin dropped with the guard review). Every caller must pair it with a
+    /// validPublicKey check on the same bundle, which pins
+    /// publicKeyCommitment.length == 32; a short field would load adjacent
+    /// calldata and fail the recomputed-commitment comparison, so the pairing
+    /// is what keeps a short-commitment bundle out of the accept path.
     function matchesExpectedPublicKeyCommitment(
-        SHRINCS.PublicKey memory publicKey,
+        SHRINCS.PublicKey calldata publicKey,
         bytes32 expectedPublicKeyCommitment
     ) internal pure returns (bool) {
-        bytes memory encodedCommitment = publicKey.publicKeyCommitment;
+        bytes calldata encodedCommitment = publicKey.publicKeyCommitment;
         bytes32 actualCommitment;
-        // Memory-safe: reads one memory word into a stack variable; no
+        // Memory-safe: reads one calldata word into a stack variable; no
         // memory is written.
         assembly ("memory-safe") {
-            // Load the declared 32-byte commitment from the bytes payload.
-            actualCommitment := mload(add(encodedCommitment, 32))
+            // Load the declared 32-byte commitment directly from calldata.
+            actualCommitment := calldataload(encodedCommitment.offset)
         }
         // First require the declared field to match the expected installed
         // commitment.
@@ -391,10 +434,10 @@ library SHRINCSCodec {
     // embedded commitment is correct.
     // 1. Check the encoded stateful public-key length.
     // 2. Check the commitment, public-seed, and hypertree-root lengths.
-    // 3. Load the embedded commitment from memory.
+    // 3. Load the embedded commitment from calldata.
     // 4. Recompute the bundle commitment and require it to match the embedded
     // field.
-    function validPublicKey(SHRINCS.PublicKey memory publicKey)
+    function validPublicKey(SHRINCS.PublicKey calldata publicKey)
         internal
         pure
         returns (bool)
@@ -410,13 +453,13 @@ library SHRINCSCodec {
         if (publicKey.pkSeed.length != 32) return false;
         // The hypertree root is always one hash output wide.
         if (publicKey.hypertreeRoot.length != 32) return false;
-        bytes memory encodedCommitment = publicKey.publicKeyCommitment;
+        bytes calldata encodedCommitment = publicKey.publicKeyCommitment;
         bytes32 expectedCommitment;
-        // Memory-safe: reads one memory word into a stack variable; no
+        // Memory-safe: reads one calldata word into a stack variable; no
         // memory is written.
         assembly ("memory-safe") {
-            // Load the embedded 32-byte commitment from the bytes payload.
-            expectedCommitment := mload(add(encodedCommitment, 32))
+            // Load the embedded 32-byte commitment directly from calldata.
+            expectedCommitment := calldataload(encodedCommitment.offset)
         }
         return publicKeyCommitment(publicKey) == expectedCommitment;
     }
@@ -424,11 +467,11 @@ library SHRINCSCodec {
     // decodeStatefulPublicKey: Decode the fixed-width stateful public-key
     // payload into typed fields.
     // 1. Allocate the decoded struct in memory.
-    // 2. Copy the public seed, root, and max-signatures fields from memory.
+    // 2. Copy the public seed, root, and max-signatures fields from calldata.
     // 3. Return the decoded struct together with a success flag.
     /// @dev Precondition: callers must supply the validPublicKey-checked
     /// 68-byte encoding; the fixed-offset assembly reads below assume it.
-    function decodeStatefulPublicKey(bytes memory encoded)
+    function decodeStatefulPublicKey(bytes calldata encoded)
         internal
         pure
         returns (UXMSS.StatefulPublicKey memory publicKey, bool ok)
@@ -438,23 +481,28 @@ library SHRINCSCodec {
         //   [0x00..0x20) pkSeed
         //   [0x20..0x40) root
         //   [0x40..0x60) maxSignatures (high 4 bytes of the last input word)
-        // The final input word (encoded+0x60) reads the last, word-padded
-        // slot of the `encoded` payload: STATEFUL_PUBLIC_KEY_BYTES rounds up
-        // to a whole number of words, so this word is allocated and readable;
-        // only its high 4 bytes carry maxSignatures and the shr discards the
-        // trailing padding.
+        // The final calldata word (encoded.offset+0x40) reads the 4-byte
+        // maxSignatures field in its high bytes: STATEFUL_PUBLIC_KEY_BYTES is
+        // 68, so only bytes [64,68) carry maxSignatures and the shr discards
+        // the trailing bytes read from the adjacent calldata.
         // Memory-safe: allocates 0x60 bytes and advances the free-memory
-        // pointer past them; reads stay inside the `encoded` buffer.
+        // pointer past them; reads stay inside the calldata region.
         assembly ("memory-safe") {
             // Allocate the decoded struct starting at the free-memory
             // pointer.
             publicKey := mload(0x40)
             // Copy the first 32 bytes as the stateful public seed.
-            mstore(publicKey, mload(add(encoded, 32)))
+            mstore(publicKey, calldataload(encoded.offset))
             // Copy the next 32 bytes as the stateful root.
-            mstore(add(publicKey, 0x20), mload(add(encoded, 64)))
+            mstore(
+                add(publicKey, 0x20),
+                calldataload(add(encoded.offset, 32))
+            )
             // Copy the high 4 bytes of the final word as maxSignatures.
-            mstore(add(publicKey, 0x40), shr(224, mload(add(encoded, 96))))
+            mstore(
+                add(publicKey, 0x40),
+                shr(224, calldataload(add(encoded.offset, 64)))
+            )
             // Bump the free-memory pointer past the decoded struct.
             mstore(0x40, add(publicKey, 0x60))
         }

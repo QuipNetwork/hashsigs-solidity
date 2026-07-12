@@ -28,24 +28,25 @@ import {SPHINCSPlusC} from "./SPHINCSPlusC.sol";
 /// @dev Caller obligations. Every function in this library is `pure`. The
 /// verify and hash-building functions never revert; they return fail-closed
 /// booleans, and revert policy belongs to the calling contract. The envelope
-/// decode facades (decodeStatefulEnvelope, prepareStatelessDelegation)
-/// abi.decode calldata and revert on a malformed encoding — that revert is
-/// the rejection channel. All statefulness is the WRAPPER
+/// re-tag facades (statefulEnvelope, statelessActionEnvelope,
+/// prepareStatelessDelegation, ...) re-tag calldata in place; a malformed
+/// encoding reverts downstream through solc's calldata member access — that
+/// revert is the rejection channel. All statefulness is the WRAPPER
 /// contract's job: single-use tracking of stateful leaves, nonce and
 /// keyVersion replay scoping, and installing the commitment a rotation
 /// returns. SHRINCSAccountVerifierExample is the reference wrapper. Any
 /// future storage-needing helper belongs in a separate wrapper/base contract
 /// at the top of the inheritance chain, never in these libraries.
-/// @dev Calldata/memory split. The verify path takes `memory` structs so the
-/// ERC-7913 adapters can call it directly with their decoded envelopes, with
-/// no self-call bridge to re-materialize calldata: verifyStateful/
-/// verifyStatelessUncheckedMessage and the whole component stack below them
-/// (UXMSS, SPHINCSPlusC, FORSMinusC, Hypertree, and the Codec public-key
-/// checks) are `memory`-typed. The rotation/context helpers
-/// (rotateStatefulViaStateless, statelessRotate, and their message-hash
-/// builders) stay `calldata`-typed: wrapper contracts call them with genuine
-/// calldata, and any `memory` leaves they hand to the shared verify helpers
-/// are copied implicitly at the call boundary.
+/// @dev Calldata typing. The verify path is `calldata` end-to-end: the
+/// adapters and wrapper re-tag their calldata envelopes into typed struct
+/// pointers and hand them straight down, with no abi.decode and no copy.
+/// verify/verifyStatefulUncheckedMessage/verifyStatelessUncheckedMessage and
+/// the whole component stack below them (UXMSS, SPHINCSPlusC, FORSMinusC,
+/// Hypertree, and the Codec public-key checks) take `calldata` structs;
+/// `_toUxmss` re-tags the twin signature pointer in calldata at the single
+/// stateful call boundary. The message bytes stay `memory`.
+/// The rotation/context helpers (rotateStatefulViaStateless, statelessRotate,
+/// and their message-hash builders) are likewise `calldata`-typed.
 library SHRINCS {
     // Hash-suite identifiers bound into canonical action and rotation hashes.
     uint32 internal constant HASH_SUITE_KECCAK_256 = 1;
@@ -175,19 +176,51 @@ library SHRINCS {
         return SHRINCSCodec.decodePublicKeyCommitment(key);
     }
 
-    // decodeStatefulEnvelope: Facade forward decoding the SHRINCSVerifier
-    // stateful envelope into the hybrid data model's public key and
-    // Signature. Keeps the adapter's only import edge pointed here.
-    function decodeStatefulEnvelope(bytes calldata envelope)
+    // statefulEnvelope: Facade re-tagging the SHRINCSVerifier stateful
+    // envelope into the hybrid data model's public key and Signature calldata
+    // pointers in place, with no copy. Keeps the adapter's only import edge
+    // pointed here.
+    function statefulEnvelope(bytes calldata envelope)
         internal
         pure
         returns (
-            SHRINCS.PublicKey memory publicKey,
-            SHRINCS.Signature memory signature,
-            bool ok
+            SHRINCS.PublicKey calldata publicKey,
+            SHRINCS.Signature calldata signature
         )
     {
-        return SHRINCSCodec.decodeStatefulEnvelope(envelope);
+        return SHRINCSCodec.statefulEnvelope(envelope);
+    }
+
+    // statefulActionEnvelope: Facade re-tagging the wrapper's ERC-1271
+    // stateful action envelope into calldata pointers and the two inline
+    // action words in place, with no copy.
+    function statefulActionEnvelope(bytes calldata payload)
+        internal
+        pure
+        returns (
+            SHRINCS.PublicKey calldata publicKey,
+            bytes32 actionType,
+            bytes32 payloadHash,
+            SHRINCS.Signature calldata signature
+        )
+    {
+        return SHRINCSCodec.statefulActionEnvelope(payload);
+    }
+
+    // statelessActionEnvelope: Facade forward re-tagging the wrapper's
+    // ERC-1271 stateless action envelope into calldata pointers and the two
+    // inline action words in place, with no copy.
+    function statelessActionEnvelope(bytes calldata payload)
+        internal
+        pure
+        returns (
+            SHRINCS.PublicKey calldata publicKey,
+            bytes32 actionType,
+            bytes32 payloadHash,
+            SPHINCSPlusC.Signature calldata signature
+        )
+    {
+        return SHRINCSCodec.statelessActionEnvelope(payload);
     }
 
     // verify: Facade stateful verify over a 32-byte hash. Packs the ERC-7913
@@ -196,8 +229,8 @@ library SHRINCS {
     function verify(
         bytes32 publicKeyCommitment,
         bytes32 hash,
-        PublicKey memory publicKey,
-        Signature memory signature
+        PublicKey calldata publicKey,
+        Signature calldata signature
     ) internal pure returns (bool) {
         return verifyStatefulUncheckedMessage(
             publicKeyCommitment,
@@ -210,7 +243,7 @@ library SHRINCS {
     // prepareStatelessDelegation: Encapsulate the stateless bundle checks the
     // SHRINCSVerifier ran inline before delegating to the pinned SPHINCSPlusC
     // sibling.
-    // 1. Decode the stateless envelope (abi.decode; malformed reverts).
+    // 1. Re-tag the stateless envelope in place (malformed reverts below).
     // 2. Run commitment-first bundle checks (commitment match, then shape).
     // 3. Extract the two 32-byte stateless seed words.
     // 4. Return the pinned-sibling delegate key and signature envelope;
@@ -228,11 +261,9 @@ library SHRINCS {
         )
     {
         (
-            SHRINCS.PublicKey memory publicKey,
-            SPHINCSPlusC.Signature memory signature,
-            bool okEnvelope
-        ) = SHRINCSCodec.decodeStatelessEnvelope(envelope);
-        if (!okEnvelope) return (false, "", "");
+            SHRINCS.PublicKey calldata publicKey,
+            SPHINCSPlusC.Signature calldata signature
+        ) = SHRINCSCodec.statelessEnvelope(envelope);
 
         // Commitment first, then shape, mirroring the library stateless path.
         if (!SHRINCSCodec.matchesExpectedPublicKeyCommitment(
@@ -243,15 +274,15 @@ library SHRINCS {
         }
 
         // validPublicKey has proven both fields are exactly 32 bytes.
-        bytes memory seed = publicKey.pkSeed;
-        bytes memory root = publicKey.hypertreeRoot;
+        bytes calldata seed = publicKey.pkSeed;
+        bytes calldata root = publicKey.hypertreeRoot;
         bytes32 pkSeed;
         bytes32 hypertreeRoot;
-        // Memory-safe: reads two memory words into stack variables; no
+        // Memory-safe: reads two calldata words into stack variables; no
         // memory is written.
         assembly ("memory-safe") {
-            pkSeed := mload(add(seed, 32))
-            hypertreeRoot := mload(add(root, 32))
+            pkSeed := calldataload(seed.offset)
+            hypertreeRoot := calldataload(root.offset)
         }
         return (
             true,
@@ -531,9 +562,9 @@ library SHRINCS {
     // library.
     function verifyStatefulUncheckedMessage(
         bytes32 expectedPublicKeyCommitment,
-        SHRINCS.PublicKey memory publicKey,
+        SHRINCS.PublicKey calldata publicKey,
         bytes memory message,
-        SHRINCS.Signature memory signature
+        SHRINCS.Signature calldata signature
     ) internal pure returns (bool) {
         // The public key must satisfy the compiled fixed key shape.
         if (!SHRINCSCodec.validPublicKey(publicKey)) return false;
@@ -563,14 +594,14 @@ library SHRINCS {
     // _toUxmss: Re-tag a SHRINCS.Signature memory pointer as its
     // UXMSS.Signature twin at the single call boundary into the stateful
     // component library.
-    function _toUxmss(Signature memory signature)
+    function _toUxmss(Signature calldata signature)
         private
         pure
-        returns (UXMSS.Signature memory converted)
+        returns (UXMSS.Signature calldata converted)
     {
         // SHRINCS.Signature and UXMSS.Signature are deliberate twins
         // with identical layouts (see the struct comments and the
-        // twin-drift test); re-tag the pointer instead of copying.
+        // twin-drift test); re-tag the calldata pointer instead of copying.
         // Memory-safe: no memory is read or written.
         assembly ("memory-safe") {
             converted := signature
@@ -698,9 +729,9 @@ library SHRINCS {
     // component library.
     function verifyStatelessUncheckedMessage(
         bytes32 expectedPublicKeyCommitment,
-        SHRINCS.PublicKey memory publicKey,
+        SHRINCS.PublicKey calldata publicKey,
         bytes memory message,
-        SPHINCSPlusC.Signature memory signature
+        SPHINCSPlusC.Signature calldata signature
     ) internal pure returns (bool) {
         // The current public key must match the installed bundle commitment
         // expected by the caller.

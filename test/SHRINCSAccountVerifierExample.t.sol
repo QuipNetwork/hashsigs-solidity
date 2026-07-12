@@ -496,11 +496,14 @@ contract SHRINCSAccountVerifierExampleTest is Test {
         assertEq(account.statelessSignaturesUsed(), 0);
     }
 
-    // Revert model: the canonicity walk is gone, so a malformed stateless
-    // envelope reverts inside abi.decode instead of returning 0xffffffff;
-    // state is untouched.
+    // Re-tag model: the `deadbeef` payload re-tags to a publicKey head offset
+    // whose top bit is set (0xde...), so it slips solc's signed bound and
+    // the struct members read as empty (E1b). validPublicKey then rejects the
+    // empty bundle, so this malformed stateless envelope is rejected with
+    // 0xffffffff rather than a revert (a malformed case moving within
+    // {revert, false}); state is untouched.
     // line-length: allow — test name is one unbreakable token
-    function testExampleIsValidSignatureRevertsOnMalformedStatelessEnvelope()
+    function testExampleIsValidSignatureRejectsMalformedStatelessEnvelope()
         public
     {
         (SHRINCS.PublicKey memory publicKey,,) =
@@ -513,8 +516,11 @@ contract SHRINCSAccountVerifierExampleTest is Test {
         bytes memory envelope = abi.encodePacked(
             bytes1(ERC1271_MODE_STATELESS_ACTION), hex"deadbeef"
         );
-        vm.expectRevert();
-        account.isValidSignature(bytes32(0), envelope);
+        assertEq(
+            account.isValidSignature(bytes32(0), envelope),
+            INVALID_SIGNATURE,
+            "malformed stateless envelope must be rejected"
+        );
 
         assertEq(
             account.currentSHRINCSPublicKey(), expectedCompositePublicKey

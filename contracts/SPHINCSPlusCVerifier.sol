@@ -34,15 +34,17 @@ import {SPHINCSPlusC} from "./SPHINCSPlusC.sol";
 ///
 /// Revert model (same as the SHRINCSVerifier). A malformed key (wrong
 /// length) returns 0xffffffff through the length-guarded key decoder; a
-/// malformed envelope reverts inside abi.decode (the canonicity walk is gone;
-/// a short buffer, out-of-range offset or length, or dirty value-type high
-/// bits reverts there); a well-formed but invalid signature returns
-/// 0xffffffff. No try/catch anywhere. Every other failure, including an inner
-/// out-of-gas, reverts to the caller; ERC-7913 permits this. A non-canonical
-/// but ABI-tolerated re-encoding decodes to the same value and verifies, so
+/// malformed envelope reverts downstream through solc's calldata member
+/// access on the re-tagged struct (the canonicity walk is gone; a short
+/// buffer, out-of-range offset or length, or dirty value-type high bits
+/// reverts there); a well-formed but invalid signature returns 0xffffffff. No
+/// try/catch anywhere. Every other failure, including an inner out-of-gas,
+/// reverts to the caller; ERC-7913 permits this. A non-canonical but
+/// ABI-tolerated re-encoding re-tags to the same fields and verifies, so
 /// envelopes are byte-malleable; consumers must key on decoded fields, not
-/// envelope bytes. verify runs entirely in-contract through the memory-typed
-/// SPHINCSPlusC library, with no external call.
+/// envelope bytes. verify runs in-contract through the calldata-typed
+/// SPHINCSPlusC library, verifying the re-tagged envelope in place with no
+/// external call.
 ///
 /// Caller obligations. Every SPHINCSPlusC library is `pure` and this
 /// adapter's `verify` is likewise storage-free and `pure` (removing the
@@ -73,12 +75,12 @@ abstract contract SPHINCSPlusCVerifier is IERC7913SignatureVerifier {
 
     /// @notice ERC-7913 verification entrypoint for stateless SPHINCSPlusC
     /// signatures.
-    /// @dev Decodes the 64-byte key into the two stateless seed words (wrong
-    /// length -> 0xffffffff) and abi.decodes the stateless-signature envelope
-    /// (a malformed envelope reverts there). verify hands the two seed words
-    /// and the decoded signature to the memory-typed SPHINCSPlusC library,
-    /// which verifies FORS-C plus the hypertree over the 32 hash bytes under
-    /// the public seed and root. No external call, no try/catch: an
+    /// @dev Decodes the 64-byte key into two calldata seed slices (wrong
+    /// length -> 0xffffffff) and re-tags the stateless-signature envelope in
+    /// place (a malformed envelope reverts downstream). verify hands the seed
+    /// slices and the re-tagged signature to the calldata-typed SPHINCSPlusC
+    /// library, which verifies FORS-C plus the hypertree over the 32 hash
+    /// bytes under the public seed and root. No call, no try/catch: an
     /// execution failure, including out-of-gas, reverts. See the
     /// contract-level revert model.
     /// @param key abi.encode(bytes32 pkSeed, bytes32 hypertreeRoot).
@@ -92,13 +94,12 @@ abstract contract SPHINCSPlusCVerifier is IERC7913SignatureVerifier {
         bytes32 hash,
         bytes calldata signature
     ) external pure returns (bytes4) {
-        (bytes32 pkSeed, bytes32 hypertreeRoot, bool okKey) =
+        (bytes calldata pkSeed, bytes calldata hypertreeRoot, bool okKey) =
             SPHINCSPlusC.decodeKey(key);
         if (!okKey) return INVALID_SIGNATURE;
 
-        (SPHINCSPlusC.Signature memory signature_, bool okEnvelope) =
-            SPHINCSPlusC.decodeSignatureEnvelope(signature);
-        if (!okEnvelope) return INVALID_SIGNATURE;
+        SPHINCSPlusC.Signature calldata signature_ =
+            SPHINCSPlusC.signatureEnvelope(signature);
 
         if (SPHINCSPlusC.verify(pkSeed, hypertreeRoot, hash, signature_)) {
             return IERC7913SignatureVerifier.verify.selector;

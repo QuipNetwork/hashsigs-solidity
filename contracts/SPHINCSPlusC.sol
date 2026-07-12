@@ -45,41 +45,43 @@ library SPHINCSPlusC {
     }
 
     // decodeKey: Facade forward decoding the SPHINCSPlusCVerifier 64-byte key
-    // into its two stateless seed words. Keeps the adapter's only import edge
+    // into its two stateless seed slices. Keeps the adapter's only edge
     // pointed at this parent library.
     function decodeKey(bytes calldata key)
         internal
         pure
-        returns (bytes32 pkSeed, bytes32 hypertreeRoot, bool ok)
+        returns (
+            bytes calldata pkSeed,
+            bytes calldata hypertreeRoot,
+            bool ok
+        )
     {
         return SHRINCSCodec.decodeStatelessKey(key);
     }
 
-    // decodeSignatureEnvelope: Facade forward decoding the
-    // SPHINCSPlusCVerifier stateless-signature envelope into a typed
-    // Signature. Keeps the adapter's only import edge pointed here.
-    function decodeSignatureEnvelope(bytes calldata envelope)
+    // signatureEnvelope: Facade forward re-tagging the SPHINCSPlusCVerifier
+    // stateless-signature envelope into a typed calldata Signature pointer
+    // in place, with no copy. Keeps the adapter's only import edge pointed
+    // here.
+    function signatureEnvelope(bytes calldata envelope)
         internal
         pure
-        returns (Signature memory signature, bool ok)
+        returns (Signature calldata signature)
     {
-        return SHRINCSCodec.decodeStatelessSignatureEnvelope(envelope);
+        return SHRINCSCodec.statelessSignatureEnvelope(envelope);
     }
 
-    // verify: Facade verify over a 32-byte hash and the two seed words. Wraps
-    // the message-bytes verify below by widening the seed words to 32-byte
-    // `bytes` and packing the ERC-7913 hash into the signed message bytes.
+    // verify: Facade verify over a hash and the two seed slices. Wraps
+    // the message-bytes verify below by packing the ERC-7913 hash into the
+    // signed message bytes; the calldata seed slices are read in place.
     function verify(
-        bytes32 pkSeed,
-        bytes32 hypertreeRoot,
+        bytes calldata pkSeed,
+        bytes calldata hypertreeRoot,
         bytes32 hash,
-        Signature memory signature
+        Signature calldata signature
     ) internal pure returns (bool) {
         return verify(
-            abi.encodePacked(pkSeed),
-            abi.encodePacked(hypertreeRoot),
-            SHRINCSCodec.toMessage(hash),
-            signature
+            pkSeed, hypertreeRoot, SHRINCSCodec.toMessage(hash), signature
         );
     }
 
@@ -89,13 +91,13 @@ library SPHINCSPlusC {
     // proof.
     // 2. Carry that root up the hypertree and compare it to the public root.
     /// @dev Callers must supply pkSeed and hypertreeRoot as exactly 32
-    /// bytes each: in-repo callers are validPublicKey-checked or
-    /// bytes32-widened, and the mload-32 reads below assume it.
+    /// bytes each: in-repo callers are validPublicKey-checked or supplied as
+    /// 32-byte key slices, and the calldataload-32 reads below assume it.
     function verify(
-        bytes memory pkSeed,
-        bytes memory hypertreeRoot,
+        bytes calldata pkSeed,
+        bytes calldata hypertreeRoot,
         bytes memory message,
-        Signature memory signature
+        Signature calldata signature
     ) internal pure returns (bool) {
         // Reconstruct the FORS root from the message, FORS
         // randomness/counter, and revealed leaves.

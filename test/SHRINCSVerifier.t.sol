@@ -207,13 +207,19 @@ contract SHRINCSVerifierTest is Test {
         );
     }
 
-    // Revert model: the canonicity walk is gone, so a truncated envelope
-    // reverts inside abi.decode instead of returning 0xffffffff.
+    // Re-tag model: removing a whole 32-byte word leaves the last auth-path
+    // array's length word claiming one more element than the truncated
+    // calldata holds, so solc's out-of-bounds calldata access on that element
+    // reverts — the malformed envelope stays in {revert, false}. Removing a
+    // full word (not one byte) is deliberate: under a masked-hash profile the
+    // low bytes of the final node are already zero, so a one-byte tail strip
+    // re-tags to the identical valid node (documented byte-malleability) and
+    // would still verify.
     function testRejectsTruncatedEnvelope() public {
         bytes memory truncated = validEnvelope;
         assembly {
-            // Shrink the in-memory copy of the envelope by one byte.
-            mstore(truncated, sub(mload(truncated), 1))
+            // Shrink the in-memory copy of the envelope by one 32-byte word.
+            mstore(truncated, sub(mload(truncated), 32))
         }
         vm.expectRevert();
         verifier.verify(validKey, signedHash, truncated);
