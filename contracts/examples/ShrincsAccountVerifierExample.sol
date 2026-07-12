@@ -711,8 +711,8 @@ contract ShrincsAccountVerifierExample {
             ShrincsTypes.RotationContext({domainSeparator: domainSeparator(), nonce: nonce, keyVersion: keyVersion});
         // Choose the exact stateless authorization message for this slot operation.
         bytes32 message = registered
-            ? SHRINCS.compactSlotRegistrationMessageHash(currentShrincsPublicKey, context, subPkSeed, subPkRoot)
-            : SHRINCS.compactSlotRevocationMessageHash(currentShrincsPublicKey, context, subPkSeed, subPkRoot);
+            ? SHRINCS.compactSlotRegistrationMessageHash(context, subPkSeed, subPkRoot)
+            : SHRINCS.compactSlotRevocationMessageHash(context, subPkSeed, subPkRoot);
         // Verify the stateless signature over the slot update message.
         bool ok = SHRINCS.verifyStatelessUncheckedMessage(
             currentShrincsPublicKey, publicKey, abi.encodePacked(message), signature

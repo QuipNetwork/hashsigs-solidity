@@ -41,11 +41,11 @@ library ShrincsAccountSigningFacade {
         return ShrincsTestSigner.keygen(seedMaterial, maxStatefulSignatures);
     }
 
-    function actionContext(
-        ShrincsAccountVerifierExample account,
-        bytes32 actionType,
-        bytes32 payloadHash
-    ) internal view returns (ShrincsTypes.ActionContext memory context) {
+    function actionContext(ShrincsAccountVerifierExample account, bytes32 actionType, bytes32 payloadHash)
+        internal
+        view
+        returns (ShrincsTypes.ActionContext memory context)
+    {
         context = ShrincsTypes.ActionContext({
             domainSeparator: domainSeparator(address(account)),
             nonce: account.nonce(),
@@ -61,9 +61,7 @@ library ShrincsAccountSigningFacade {
         returns (ShrincsTypes.RotationContext memory context)
     {
         context = ShrincsTypes.RotationContext({
-            domainSeparator: domainSeparator(address(account)),
-            nonce: account.nonce(),
-            keyVersion: account.keyVersion()
+            domainSeparator: domainSeparator(address(account)), nonce: account.nonce(), keyVersion: account.keyVersion()
         });
     }
 
@@ -95,14 +93,7 @@ library ShrincsAccountSigningFacade {
         ShrincsTypes.PublicKey memory publicKey,
         bytes32 actionType,
         bytes32 payloadHash
-    )
-        internal
-        returns (
-            ShrincsTypes.ActionContext memory context,
-            bytes32 sessionId,
-            bool ok
-        )
-    {
+    ) internal returns (ShrincsTypes.ActionContext memory context, bytes32 sessionId, bool ok) {
         context = actionContext(account, actionType, payloadHash);
         bytes memory message =
             abi.encodePacked(SHRINCS.statelessActionMessageHash(account.currentShrincsPublicKey(), context));
@@ -115,14 +106,7 @@ library ShrincsAccountSigningFacade {
         ShrincsTypes.SigningKey memory signingKey,
         ShrincsTypes.PublicKey memory currentPublicKey,
         ShrincsTypes.StatefulRotationTarget memory nextStatefulKey
-    )
-        internal
-        returns (
-            ShrincsTypes.RotationContext memory context,
-            bytes32 sessionId,
-            bool ok
-        )
-    {
+    ) internal returns (ShrincsTypes.RotationContext memory context, bytes32 sessionId, bool ok) {
         context = rotationContext(account);
         bytes memory message = abi.encodePacked(
             keccak256(
@@ -147,14 +131,7 @@ library ShrincsAccountSigningFacade {
         ShrincsTypes.SigningKey memory signingKey,
         ShrincsTypes.PublicKey memory currentPublicKey,
         ShrincsTypes.RotationTarget memory nextKey
-    )
-        internal
-        returns (
-            ShrincsTypes.RotationContext memory context,
-            bytes32 sessionId,
-            bool ok
-        )
-    {
+    ) internal returns (ShrincsTypes.RotationContext memory context, bytes32 sessionId, bool ok) {
         context = rotationContext(account);
         bytes memory message = abi.encodePacked(
             keccak256(
@@ -182,9 +159,8 @@ library ShrincsAccountSigningFacade {
         bytes32 subPkRoot
     ) internal returns (ShrincsTypes.RotationContext memory context, bytes32 sessionId, bool ok) {
         context = rotationContext(account);
-        bytes memory message = abi.encodePacked(
-            SHRINCS.compactSlotRegistrationMessageHash(account.currentShrincsPublicKey(), context, subPkSeed, subPkRoot)
-        );
+        bytes memory message =
+            abi.encodePacked(SHRINCS.compactSlotRegistrationMessageHash(context, subPkSeed, subPkRoot));
         (sessionId, ok) = signer.beginSession(signingKey, currentPublicKey, message);
     }
 
@@ -197,22 +173,20 @@ library ShrincsAccountSigningFacade {
         bytes32 subPkRoot
     ) internal returns (ShrincsTypes.RotationContext memory context, bytes32 sessionId, bool ok) {
         context = rotationContext(account);
-        bytes memory message = abi.encodePacked(
-            SHRINCS.compactSlotRevocationMessageHash(account.currentShrincsPublicKey(), context, subPkSeed, subPkRoot)
-        );
+        bytes memory message = abi.encodePacked(SHRINCS.compactSlotRevocationMessageHash(context, subPkSeed, subPkRoot));
         (sessionId, ok) = signer.beginSession(signingKey, currentPublicKey, message);
     }
 
-    function statefulRotationTarget(
-        ShrincsTypes.PublicKey memory currentPublicKey,
-        bytes memory nextStatefulPublicKey
-    ) internal pure returns (ShrincsTypes.StatefulRotationTarget memory nextKey) {
+    function statefulRotationTarget(ShrincsTypes.PublicKey memory currentPublicKey, bytes memory nextStatefulPublicKey)
+        internal
+        pure
+        returns (ShrincsTypes.StatefulRotationTarget memory nextKey)
+    {
         bytes32 commitment = ShrincsUtils.publicKeyCommitmentFromParts(
             nextStatefulPublicKey, currentPublicKey.pkSeed, currentPublicKey.hypertreeRoot
         );
         nextKey = ShrincsTypes.StatefulRotationTarget({
-            statefulPublicKey: nextStatefulPublicKey,
-            publicKeyCommitment: abi.encodePacked(commitment)
+            statefulPublicKey: nextStatefulPublicKey, publicKeyCommitment: abi.encodePacked(commitment)
         });
     }
 
@@ -235,7 +209,9 @@ library ShrincsAccountSigningFacade {
         bytes32 payloadHash,
         ShrincsTypes.StatefulSignature memory signature
     ) internal pure returns (bytes memory) {
-        return abi.encodePacked(bytes1(ERC1271_MODE_STATEFUL_ACTION), abi.encode(publicKey, actionType, payloadHash, signature));
+        return abi.encodePacked(
+            bytes1(ERC1271_MODE_STATEFUL_ACTION), abi.encode(publicKey, actionType, payloadHash, signature)
+        );
     }
 
     function encodeStateless1271Envelope(
@@ -244,7 +220,9 @@ library ShrincsAccountSigningFacade {
         bytes32 payloadHash,
         ShrincsTypes.StatelessSignature memory signature
     ) internal pure returns (bytes memory) {
-        return abi.encodePacked(bytes1(ERC1271_MODE_STATELESS_ACTION), abi.encode(publicKey, actionType, payloadHash, signature));
+        return abi.encodePacked(
+            bytes1(ERC1271_MODE_STATELESS_ACTION), abi.encode(publicKey, actionType, payloadHash, signature)
+        );
     }
 
     function publicKeyCommitmentWord(ShrincsTypes.PublicKey memory publicKey) internal pure returns (bytes32 word) {
@@ -269,10 +247,10 @@ library ShrincsAccountSigningFacade {
         return keccak256(abi.encode(DOMAIN_TAG, block.chainid, account));
     }
 
-    function completeStatelessSession(
-        ShrincsStatelessVectorSigner signer,
-        bytes32 sessionId
-    ) internal returns (ShrincsTypes.StatelessSignature memory signature, bool ok) {
+    function completeStatelessSession(ShrincsStatelessVectorSigner signer, bytes32 sessionId)
+        internal
+        returns (ShrincsTypes.StatelessSignature memory signature, bool ok)
+    {
         (, signature, ok) = ShrincsStatelessVectorSigningFacade.completeSession(signer, sessionId);
     }
 }

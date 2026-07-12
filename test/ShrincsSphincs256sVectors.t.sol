@@ -100,21 +100,19 @@ contract CompactHarness {
     }
 
     function registrationMessageHash(
-        bytes32 expectedCompositePublicKey,
         ShrincsTypes.RotationContext calldata context,
         bytes32 subPkSeed,
         bytes32 subPkRoot
     ) external pure returns (bytes32) {
-        return SHRINCS.compactSlotRegistrationMessageHash(expectedCompositePublicKey, context, subPkSeed, subPkRoot);
+        return SHRINCS.compactSlotRegistrationMessageHash(context, subPkSeed, subPkRoot);
     }
 
-    function revocationMessageHash(
-        bytes32 expectedCompositePublicKey,
-        ShrincsTypes.RotationContext calldata context,
-        bytes32 subPkSeed,
-        bytes32 subPkRoot
-    ) external pure returns (bytes32) {
-        return SHRINCS.compactSlotRevocationMessageHash(expectedCompositePublicKey, context, subPkSeed, subPkRoot);
+    function revocationMessageHash(ShrincsTypes.RotationContext calldata context, bytes32 subPkSeed, bytes32 subPkRoot)
+        external
+        pure
+        returns (bytes32)
+    {
+        return SHRINCS.compactSlotRevocationMessageHash(context, subPkSeed, subPkRoot);
     }
 
     function slotId(bytes32 subPkSeed, bytes32 subPkRoot) external pure returns (bytes32) {
@@ -882,7 +880,6 @@ contract ShrincsSphincs256sVectorsTest is Test {
     }
 
     function testCompactSlotRegistrationMessageHashMatchesPackedEncoding() public view {
-        bytes32 expectedCompositePublicKey = keccak256("installed key");
         bytes32 subPkSeed = keccak256("compact seed");
         bytes32 subPkRoot = keccak256("compact root");
         ShrincsTypes.RotationContext memory context =
@@ -892,7 +889,6 @@ contract ShrincsSphincs256sVectorsTest is Test {
             abi.encodePacked(
                 ShrincsTypes.OP_REGISTER_COMPACT_SLOT,
                 ShrincsTypes.HASH_SUITE_KECCAK_256,
-                expectedCompositePublicKey,
                 context.domainSeparator,
                 context.nonce,
                 context.keyVersion,
@@ -903,14 +899,13 @@ contract ShrincsSphincs256sVectorsTest is Test {
         );
 
         assertEq(
-            compact.registrationMessageHash(expectedCompositePublicKey, context, subPkSeed, subPkRoot),
+            compact.registrationMessageHash(context, subPkSeed, subPkRoot),
             expected,
             "compact slot registration hash packed encoding"
         );
     }
 
     function testCompactSlotRevocationMessageHashMatchesPackedEncoding() public view {
-        bytes32 expectedCompositePublicKey = keccak256("installed key");
         bytes32 subPkSeed = keccak256("compact seed");
         bytes32 subPkRoot = keccak256("compact root");
         ShrincsTypes.RotationContext memory context =
@@ -920,7 +915,6 @@ contract ShrincsSphincs256sVectorsTest is Test {
             abi.encodePacked(
                 ShrincsTypes.OP_REVOKE_COMPACT_SLOT,
                 ShrincsTypes.HASH_SUITE_KECCAK_256,
-                expectedCompositePublicKey,
                 context.domainSeparator,
                 context.nonce,
                 context.keyVersion,
@@ -931,7 +925,7 @@ contract ShrincsSphincs256sVectorsTest is Test {
         );
 
         assertEq(
-            compact.revocationMessageHash(expectedCompositePublicKey, context, subPkSeed, subPkRoot),
+            compact.revocationMessageHash(context, subPkSeed, subPkRoot),
             expected,
             "compact slot revocation hash packed encoding"
         );

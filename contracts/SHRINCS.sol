@@ -299,38 +299,31 @@ library SHRINCS {
 
     // compactSlotRegistrationMessageHash: Build the stateless authorization hash for slot registration.
     // Preimage:
-    //   OP_REGISTER_COMPACT_SLOT32 || HASH_SUITE_KECCAK_2564 || installedKey32 ||
+    //   OP_REGISTER_COMPACT_SLOT32 || HASH_SUITE_KECCAK_2564 ||
     //   domainSeparator32 || nonce32 || keyVersion32 || slotId32 || subPkSeed32 || subPkRoot32.
     function compactSlotRegistrationMessageHash(
-        bytes32 expectedPublicKeyCommitment,
         ShrincsTypes.RotationContext memory context,
         bytes32 subPkSeed,
         bytes32 subPkRoot
     ) internal pure returns (bytes32) {
-        return compactSlotUpdateMessageHash(
-            ShrincsTypes.OP_REGISTER_COMPACT_SLOT, expectedPublicKeyCommitment, context, subPkSeed, subPkRoot
-        );
+        return compactSlotUpdateMessageHash(ShrincsTypes.OP_REGISTER_COMPACT_SLOT, context, subPkSeed, subPkRoot);
     }
 
     // compactSlotRevocationMessageHash: Build the stateless authorization hash for slot revocation.
     // Preimage:
-    //   OP_REVOKE_COMPACT_SLOT32 || HASH_SUITE_KECCAK_2564 || installedKey32 ||
+    //   OP_REVOKE_COMPACT_SLOT32 || HASH_SUITE_KECCAK_2564 ||
     //   domainSeparator32 || nonce32 || keyVersion32 || slotId32 || subPkSeed32 || subPkRoot32.
     function compactSlotRevocationMessageHash(
-        bytes32 expectedPublicKeyCommitment,
         ShrincsTypes.RotationContext memory context,
         bytes32 subPkSeed,
         bytes32 subPkRoot
     ) internal pure returns (bytes32) {
-        return compactSlotUpdateMessageHash(
-            ShrincsTypes.OP_REVOKE_COMPACT_SLOT, expectedPublicKeyCommitment, context, subPkSeed, subPkRoot
-        );
+        return compactSlotUpdateMessageHash(ShrincsTypes.OP_REVOKE_COMPACT_SLOT, context, subPkSeed, subPkRoot);
     }
 
     // compactSlotUpdateMessageHash: Build a compact-slot update hash with the supplied operation tag.
     function compactSlotUpdateMessageHash(
         bytes32 op,
-        bytes32 expectedPublicKeyCommitment,
         ShrincsTypes.RotationContext memory context,
         bytes32 subPkSeed,
         bytes32 subPkRoot
@@ -346,20 +339,18 @@ library SHRINCS {
             mstore(ptr, op)
             // HASH_SUITE_KECCAK_256 as uint32 in abi.encodePacked form.
             mstore(add(ptr, 32), shl(224, suite))
-            // Current installed SHRINCS bundle commitment.
-            mstore(add(ptr, 36), expectedPublicKeyCommitment)
             // Copy domainSeparator32 || nonce32 || keyVersion32.
-            mcopy(add(ptr, 68), context, 96)
+            mcopy(add(ptr, 36), context, 96)
             // compactSlot = keccak256(subPkSeed || subPkRoot).
-            mstore(add(ptr, 164), slotId)
+            mstore(add(ptr, 132), slotId)
             // Compact public seed.
-            mstore(add(ptr, 196), subPkSeed)
+            mstore(add(ptr, 164), subPkSeed)
             // Compact public root.
-            mstore(add(ptr, 228), subPkRoot)
+            mstore(add(ptr, 196), subPkRoot)
             // Hash the exact packed preimage length.
-            out := keccak256(ptr, 260)
+            out := keccak256(ptr, 228)
             // Bump free memory past the rounded preimage.
-            mstore(0x40, add(ptr, 288))
+            mstore(0x40, add(ptr, 256))
         }
     }
 
