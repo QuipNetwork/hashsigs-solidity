@@ -160,7 +160,8 @@ Rules:
   solc's per-field access check plus the reconstruction loops' index
   bounds turn such a framing into a revert (Panic). The guarantee is
   `{revert, false}`, never a wrong-accept — not "never revert". The exact
-  acceptance bound is the SHRINCSCodec library `@dev` revert-model note.
+  acceptance bound is the `@dev` revert-model note on the SHRINCS
+library's encoder/decoder section (contracts/SHRINCS.sol).
   Do NOT add a revert on a well-formed-but-invalid path (it leaks check
   ordering and griefs account-abstraction flows), and do NOT add a length
   pre-check whose only effect is to turn a malformed-input revert into a
