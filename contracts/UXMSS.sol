@@ -17,7 +17,7 @@
 pragma solidity ^0.8.28;
 
 import {SHRINCSParams} from "shrincs-profile/SHRINCSParams.sol";
-import {SHRINCSHash} from "./SHRINCSHash.sol";
+import {Hash} from "./Hash.sol";
 import {WOTSPlusC} from "./WOTSPlusC.sol";
 
 /// @title UXMSS
@@ -140,7 +140,7 @@ library UXMSS {
         // 64..95; layer and tree are 0 for the stateful subtree. The
         // per-step chain index and step are folded in by the shared walk
         // (WOTSPlusC.wotsChainNoMaskBase), reproducing the address word this
-        // path previously built via SHRINCSHash.addressWord32.
+        // path previously built via Hash.addressWord32.
         uint256 addressBase = (uint256(AddressTypeWotsHash) << 96)
             | (uint256(leafIndex) << 64);
         // Hoist the calldata array reference so the loop reads element data
@@ -191,7 +191,7 @@ library UXMSS {
         // public-key hash. Output truncated to HASH_LEN bytes, high-
         // aligned (maskHash); for 256s this folds to a no-op.
         return (
-            SHRINCSHash.maskHash(
+            Hash.maskHash(
                 keccak256(
                     abi.encodePacked(
                         "uxmss-wots-pk", pkSeed, leafIndex, segments
@@ -279,7 +279,7 @@ library UXMSS {
             // Hash the complete parent-node preimage.
             out := keccak256(ptr, 110)
         }
-        out = SHRINCSHash.maskHash(out);
+        out = Hash.maskHash(out);
     }
 
     // setSlice32: Write one 32-byte segment into a packed byte buffer.

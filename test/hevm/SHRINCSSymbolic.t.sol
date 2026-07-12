@@ -16,7 +16,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 pragma solidity ^0.8.28;
 
-import {SHRINCSHash} from "../../contracts/SHRINCSHash.sol";
+import {Hash} from "../../contracts/Hash.sol";
 
 /// @title SHRINCSSymbolic
 /// @notice hevm symbolic-execution properties for the pure bit-arithmetic
@@ -38,7 +38,7 @@ contract SHRINCSSymbolic {
     {
         require(index < 64, "index in range");
         bytes memory digest = abi.encodePacked(word);
-        uint32 digit = SHRINCSHash.baseWDigit(16, digest, index);
+        uint32 digit = Hash.baseWDigit(16, digest, index);
         assert(digit < 16);
     }
 
@@ -52,7 +52,7 @@ contract SHRINCSSymbolic {
         // Keep the 14-bit window inside the two data words.
         require(startBit <= 512 - 14, "window in buffer");
         bytes memory buffer = _twoWordBuffer(hi, lo);
-        uint32 value = SHRINCSHash.readBits32(buffer, startBit, 14);
+        uint32 value = Hash.readBits32(buffer, startBit, 14);
         assert(value < (uint32(1) << 14));
     }
 
@@ -65,7 +65,7 @@ contract SHRINCSSymbolic {
     ) external pure {
         require(startBit <= 512 - 48, "window in buffer");
         bytes memory buffer = _twoWordBuffer(hi, lo);
-        uint64 value = SHRINCSHash.readBits64(buffer, startBit, 48);
+        uint64 value = Hash.readBits64(buffer, startBit, 48);
         assert(value < (uint64(1) << 48));
     }
 

@@ -16,7 +16,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 pragma solidity ^0.8.28;
 
-import {SHRINCSHash} from "./SHRINCSHash.sol";
+import {Hash} from "./Hash.sol";
 
 /// @title WOTSPlusC
 /// @notice Shared WOTS+C chain machinery used by both the SHRINCS hypertree
@@ -147,6 +147,6 @@ library WOTSPlusC {
             // Hash the complete WOTS-C chain-step preimage.
             out := keccak256(ptr, add(tagLen, 96))
         }
-        out = SHRINCSHash.maskHash(out);
+        out = Hash.maskHash(out);
     }
 }

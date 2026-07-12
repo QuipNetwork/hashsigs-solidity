@@ -17,7 +17,7 @@
 pragma solidity ^0.8.28;
 
 import {Test} from "../lib/forge-std/src/Test.sol";
-import {SHRINCSHash} from "../contracts/SHRINCSHash.sol";
+import {Hash} from "../contracts/Hash.sol";
 
 /// @title SHRINCSArithmeticFuzzTest
 /// @notice Differential and bounds fuzz for the pure bit-arithmetic helpers
@@ -26,7 +26,7 @@ import {SHRINCSHash} from "../contracts/SHRINCSHash.sol";
 /// in range so the (w-1) - digit chain-step count never underflows.
 /// @dev The reference readers walk bits one at a time so they share no code
 /// with the production assembly. The buffers carry the 32-byte read slack
-/// SHRINCSHash.readBits32/64 document, so the fuzz respects the caller
+/// Hash.readBits32/64 document, so the fuzz respects the caller
 /// contract (F-07). The same properties are proved symbolically by Task 6's
 /// hevm job over SHRINCSSymbolic.
 contract SHRINCSArithmeticFuzzTest is Test {
@@ -52,7 +52,7 @@ contract SHRINCSArithmeticFuzzTest is Test {
         uint256 startBit = bound(startBitSeed, 0, 512 - bitLen);
         bytes memory buffer = _twoWordBuffer(hi, lo);
 
-        uint32 got = SHRINCSHash.readBits32(buffer, startBit, bitLen);
+        uint32 got = Hash.readBits32(buffer, startBit, bitLen);
         uint256 want = _referenceBits(buffer, startBit, bitLen);
         assertEq(uint256(got), want, "readBits32 != reference");
 
@@ -72,7 +72,7 @@ contract SHRINCSArithmeticFuzzTest is Test {
         uint256 startBit = bound(startBitSeed, 0, 512 - bitLen);
         bytes memory buffer = _twoWordBuffer(hi, lo);
 
-        uint64 got = SHRINCSHash.readBits64(buffer, startBit, bitLen);
+        uint64 got = Hash.readBits64(buffer, startBit, bitLen);
         uint256 want = _referenceBits(buffer, startBit, bitLen);
         assertEq(uint256(got), want, "readBits64 != reference");
 
@@ -96,8 +96,8 @@ contract SHRINCSArithmeticFuzzTest is Test {
         bytes memory clean = _twoWordBuffer(hi, bytes32(0));
         bytes memory noisy = _twoWordBuffer(hi, slackNoise);
 
-        uint32 fromClean = SHRINCSHash.readBits32(clean, startBit, bitLen);
-        uint32 fromNoisy = SHRINCSHash.readBits32(noisy, startBit, bitLen);
+        uint32 fromClean = Hash.readBits32(clean, startBit, bitLen);
+        uint32 fromNoisy = Hash.readBits32(noisy, startBit, bitLen);
         assertEq(fromClean, fromNoisy, "slack changed readBits32");
     }
 
@@ -109,7 +109,7 @@ contract SHRINCSArithmeticFuzzTest is Test {
     {
         uint256 index = bound(indexSeed, 0, 63);
         bytes memory digest = abi.encodePacked(word);
-        uint32 digit = SHRINCSHash.baseWDigit(CHAIN_BASE_16, digest, index);
+        uint32 digit = Hash.baseWDigit(CHAIN_BASE_16, digest, index);
         assertLe(uint256(digit), CHAIN_BASE_16 - 1, "base16 digit range");
         // Underflow guard: (w-1) - digit stays inside [0, w-1].
         uint256 stepsLeft = uint256(CHAIN_BASE_16 - 1) - uint256(digit);
@@ -123,7 +123,7 @@ contract SHRINCSArithmeticFuzzTest is Test {
     {
         uint256 index = bound(indexSeed, 0, 31);
         bytes memory digest = abi.encodePacked(word);
-        uint32 digit = SHRINCSHash.baseWDigit(CHAIN_BASE_256, digest, index);
+        uint32 digit = Hash.baseWDigit(CHAIN_BASE_256, digest, index);
         assertLe(uint256(digit), CHAIN_BASE_256 - 1, "base256 digit range");
     }
 

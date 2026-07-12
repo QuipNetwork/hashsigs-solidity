@@ -17,7 +17,7 @@
 pragma solidity ^0.8.28;
 
 import {SHRINCSParams} from "shrincs-profile/SHRINCSParams.sol";
-import {SHRINCSHash} from "./SHRINCSHash.sol";
+import {Hash} from "./Hash.sol";
 
 library FORSMinusC {
     // AddressTypeForsTree: the FORS-tree ADRS type constant
@@ -92,7 +92,7 @@ library FORSMinusC {
         // The omitted final FORS tree must always select leaf 0 in the
         // compressed FORS-C layout.
         if (
-            SHRINCSHash.readBits32(
+            Hash.readBits32(
                     digest.digest,
                     signedTrees * forsHeight,
                     SHRINCSParams.FORS_TREE_HEIGHT
@@ -136,7 +136,7 @@ library FORSMinusC {
             // Read one revealed FORS entry for this tree.
             FORSMinusC.ForsEntry calldata entry = signature.entries[tree];
             // Read the digest-selected leaf for this FORS tree.
-            uint32 entryLeafIndex = SHRINCSHash.readBits32(
+            uint32 entryLeafIndex = Hash.readBits32(
                 digest.digest,
                 tree * forsHeight,
                 SHRINCSParams.FORS_TREE_HEIGHT
@@ -182,7 +182,7 @@ library FORSMinusC {
             // value.
             forsRoot := keccak256(forsPkInput, forsPkInputLen)
         }
-        return (SHRINCSHash.maskHash(forsRoot), true);
+        return (Hash.maskHash(forsRoot), true);
     }
 
     // forsEntryRoot32: Rebuild one FORS tree root from a revealed secret leaf
@@ -325,7 +325,7 @@ library FORSMinusC {
             // Hash the complete FORS leaf preimage.
             out := keccak256(ptr, 105)
         }
-        out = SHRINCSHash.maskHash(out);
+        out = Hash.maskHash(out);
     }
 
     // hashForsNode32: Hash one internal FORS node from its left and right
@@ -367,7 +367,7 @@ library FORSMinusC {
             // Hash the complete FORS internal-node preimage.
             out := keccak256(ptr, 137)
         }
-        out = SHRINCSHash.maskHash(out);
+        out = Hash.maskHash(out);
     }
 
     // forsDigest: Derive the FORS digest bits and selected hypertree
@@ -417,11 +417,11 @@ library FORSMinusC {
         uint256 cursor = indexBits;
         // Read the hypertree tree index immediately after the FORS choice
         // bits.
-        out.treeIndex = SHRINCSHash.readBits64(digest, cursor, treeBits);
+        out.treeIndex = Hash.readBits64(digest, cursor, treeBits);
         cursor += treeBits;
         // Read the bottom-layer leaf index from the remaining subtree-height
         // bits.
-        out.leafIndex = SHRINCSHash.readBits32(digest, cursor, subtreeHeight);
+        out.leafIndex = Hash.readBits32(digest, cursor, subtreeHeight);
         out.digest = digest;
     }
 
@@ -543,7 +543,7 @@ library FORSMinusC {
             }
             // Copy only as many bytes as are still required from this digest
             // block.
-            SHRINCSHash.setHashChunk(out, digestWord, offset, chunk);
+            Hash.setHashChunk(out, digestWord, offset, chunk);
             offset += chunk;
             unchecked {
                 ++blockCounter;

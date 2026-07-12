@@ -20,7 +20,7 @@ import {SHRINCS} from "../../contracts/SHRINCS.sol";
 import {UXMSS} from "../../contracts/UXMSS.sol";
 import {SHRINCSParams} from "shrincs-profile/SHRINCSParams.sol";
 import {SHRINCSCodec} from "../../contracts/SHRINCSCodec.sol";
-import {SHRINCSHash} from "../../contracts/SHRINCSHash.sol";
+import {Hash} from "../../contracts/Hash.sol";
 
 /// @notice TEST-ONLY Solidity signer helpers that mirror the Rust signer for
 /// stateful flows.
@@ -246,7 +246,7 @@ library SHRINCSTestSigner {
         // Mirror the verifier's high-aligned truncation (maskHash): the
         // reconstructed stateful WOTS-C leaf is masked, so the signer's
         // leaf must be too. No-op at 256s (all-ones mask).
-        return SHRINCSHash.maskHash(
+        return Hash.maskHash(
             keccak256(
                 abi.encodePacked(
                     "uxmss-wots-pk", pkSeed, leafIndex, endpoints
@@ -342,7 +342,7 @@ library SHRINCSTestSigner {
     ) internal pure returns (bytes32 out) {
         out = value;
         for (uint32 stepOffset = 0; stepOffset < steps;) {
-            bytes32 addressWord = SHRINCSHash.addressWord32(
+            bytes32 addressWord = Hash.addressWord32(
                 0,
                 0,
                 UXMSS.AddressTypeWotsHash,
@@ -352,7 +352,7 @@ library SHRINCSTestSigner {
             );
             // Truncate each chain step, mirroring the verifier's
             // WOTSPlusC.hashWotsCChainNoMask32 maskHash. No-op at 256s.
-            out = SHRINCSHash.maskHash(
+            out = Hash.maskHash(
                 keccak256(
                     abi.encodePacked(
                         "wots-c-chain", pkSeed, addressWord, out
@@ -373,7 +373,7 @@ library SHRINCSTestSigner {
     ) internal pure returns (bytes32) {
         // Truncate the parent node, mirroring the verifier's
         // statefulParentHash maskHash. No-op at 256s.
-        return SHRINCSHash.maskHash(
+        return Hash.maskHash(
             keccak256(
                 abi.encodePacked(
                     "uxmss-node", pkSeed, leftLeafIndex, left, right
@@ -473,7 +473,7 @@ library SHRINCSTestSigner {
             hypertreeAddressWord(layer, tree, height, index);
         // Truncate the hypertree node, mirroring the verifier's
         // hashHypertreeNode32 maskHash. No-op at 256s.
-        return SHRINCSHash.maskHash(
+        return Hash.maskHash(
             keccak256(
                 abi.encodePacked(
                     "hypertree-node", pkSeed, addressWord, left, right
@@ -526,7 +526,7 @@ library SHRINCSTestSigner {
         }
         // Truncate the WOTS-C public-key hash, mirroring the verifier's
         // verifyWotsC32 maskHash. No-op at 256s.
-        return SHRINCSHash.maskHash(
+        return Hash.maskHash(
             keccak256(abi.encodePacked("wots-c-pk", pkSeed, endpoints))
         );
     }
@@ -551,13 +551,13 @@ library SHRINCSTestSigner {
     ) internal pure returns (bytes32 out) {
         out = value;
         for (uint32 step = start; step < start + steps;) {
-            bytes32 addressWord = SHRINCSHash.addressWord32(
+            bytes32 addressWord = Hash.addressWord32(
                 layer, tree, UXMSS.AddressTypeWotsHash, keypair, chain, step
             );
             // Truncate each stateless chain step, mirroring the
             // verifier's WOTSPlusC.hashWotsCChainNoMask32 maskHash.
             // No-op at 256s.
-            out = SHRINCSHash.maskHash(
+            out = Hash.maskHash(
                 keccak256(
                     abi.encodePacked(
                         "wots-c-chain", pkSeed, addressWord, out

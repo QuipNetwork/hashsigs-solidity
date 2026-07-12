@@ -23,7 +23,7 @@ import {FORSMinusC} from "../../contracts/FORSMinusC.sol";
 import {Hypertree} from "../../contracts/Hypertree.sol";
 import {UXMSS} from "../../contracts/UXMSS.sol";
 import {SHRINCSParams} from "shrincs-profile/SHRINCSParams.sol";
-import {SHRINCSHash} from "../../contracts/SHRINCSHash.sol";
+import {Hash} from "../../contracts/Hash.sol";
 
 /// @notice TEST-ONLY staged stateless SHRINCS signer for on-demand vector
 /// generation.
@@ -672,7 +672,7 @@ contract SHRINCSStatelessVectorSigner {
         if (digestBytes <= 32) {
             out = new bytes(digestBytes);
             bytes32 digestWord = keccak256(base);
-            SHRINCSHash.setHashChunk(out, digestWord, 0, digestBytes);
+            Hash.setHashChunk(out, digestWord, 0, digestBytes);
             return out;
         }
 
@@ -684,7 +684,7 @@ contract SHRINCSStatelessVectorSigner {
                 keccak256(abi.encodePacked(base, blockCounter));
             uint256 chunk = digestBytes - offset;
             if (chunk > 32) chunk = 32;
-            SHRINCSHash.setHashChunk(out, digestWord, offset, chunk);
+            Hash.setHashChunk(out, digestWord, offset, chunk);
             offset += chunk;
             unchecked {
                 ++blockCounter;
@@ -1026,7 +1026,7 @@ contract SHRINCSStatelessVectorSigner {
     ) internal pure returns (bytes32 out) {
         out = value;
         for (uint32 step = start; step < start + steps;) {
-            bytes32 addressWord = SHRINCSHash.addressWord32(
+            bytes32 addressWord = Hash.addressWord32(
                 layer, tree, UXMSS.AddressTypeWotsHash, keypair, chain, step
             );
             out = keccak256(

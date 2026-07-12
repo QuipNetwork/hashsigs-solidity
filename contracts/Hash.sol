@@ -18,7 +18,7 @@ pragma solidity ^0.8.28;
 
 import {SHRINCSParams} from "shrincs-profile/SHRINCSParams.sol";
 
-/// @title SHRINCSHash
+/// @title Hash
 /// @notice Profile-independent hash and bit primitives shared by every
 /// SHRINCS module: address-word packing, hash-output masking, base-w digit
 /// extraction, and the memory-safe bit readers. This library is the
@@ -26,7 +26,7 @@ import {SHRINCSParams} from "shrincs-profile/SHRINCSParams.sol";
 /// @dev The current suite is keccak-256; a future SHA-256 suite plugs in
 /// here via remapping without touching the verifier logic that calls these
 /// helpers.
-library SHRINCSHash {
+library Hash {
     // addressWord32: Pack the SPHINCS/XMSS-style address components into one
     // 32-byte word.
     // 1. Shift each address component into its reserved bit range.

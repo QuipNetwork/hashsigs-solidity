@@ -83,7 +83,7 @@ Main contracts:
 - [contracts/SHRINCSCodec.sol](./contracts/SHRINCSCodec.sol)
   - key and envelope codec bridging ERC-7913 opaque bytes to typed
     SHRINCS structures
-- [contracts/SHRINCSHash.sol](./contracts/SHRINCSHash.sol)
+- [contracts/Hash.sol](./contracts/Hash.sol)
   - profile-independent hash and bit primitives (address packing, hash
     masking, base-w digits, bit readers); the compile-time hash-suite seam
 - [contracts/UXMSS.sol](./contracts/UXMSS.sol)
@@ -168,7 +168,7 @@ graph TD
     end
 
     subgraph "Foundation"
-        HH["SHRINCSHash.sol<br/>hash + bit primitives,<br/>address-word packing,<br/>hash-suite seam"]
+        HH["Hash.sol<br/>hash + bit primitives,<br/>address-word packing,<br/>hash-suite seam"]
         PA["profiles/&lt;profile&gt;/SHRINCSParams.sol<br/>(profile-selected constants)"]
     end
 
