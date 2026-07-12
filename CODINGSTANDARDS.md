@@ -230,13 +230,6 @@ Rules:
   may `abi.decode` freely; the differential proofs in
   `test/SHRINCSCalldataRetag.t.sol` rely on it as the reference decoder.
 
-<!-- SLOT: bead ga7's file-organization section pastes in AFTER Z5.
-     Z5's edits above touch §2 (line 87), §5 (new bullets at end), and
-     §8 (lines 255-258) only. ga7 should paste its file-organization
-     section at its own anchor (a new numbered section, not inside §5 or
-     §8) so the two paste-ins do not collide. If ga7 targets a location
-     inside §5, coordinate ordering with this C2 block. -->
-
 ## 6. Assembly
 
 - Assembly is a last resort for gas-critical hashing and calldata
@@ -315,3 +308,47 @@ the default `foundry.toml` profile already sets it.
 All six must pass before requesting review; merges to main require the
 full pipeline to pass. Zero warnings: a lint finding is either fixed or
 suppressed with the §5 two-line form.
+
+## 9. File organization
+
+Order the members of a `.sol` file by the reader's path through it:
+wire types first, common operations next, rare operations last,
+helpers at the bottom. The sequence is:
+
+1. **Public structs** — wire and API types the caller constructs or
+   receives (`Signature`, `PublicKey`, envelope structs).
+2. **Public and external functions for regular users** — the primary
+   operations (`verify`, `decode*`).
+3. **Admin and owner functions** — rotation, key management, and other
+   privileged or infrequent operations.
+4. **Internal-only structs** — types used only inside the file.
+5. **Encoders and decoders** — serialization helpers that back the
+   public API.
+6. **Internal helpers** — the remaining `internal` and `private`
+   functions.
+
+`contracts/SHRINCS.sol` follows this order: the seven public structs,
+then the decoders and `verify*` functions, then the rotation functions,
+then the internal `_toUxmss`, message-hash builders, and context
+validators.
+
+**Reconcile with the Solidity style guide's Order of Layout.** That
+guide orders a file as type declarations, state variables, events,
+errors, modifiers, then functions, and orders functions by visibility
+(constructor, receive, fallback, external, public, internal, private)
+with `view` and `pure` last in each group. This section's scheme is
+a semantic grouping layered on top. Where visibility ordering is
+degenerate — a library, where every function is `internal` — the
+semantic grouping governs. Where both apply, keep the style-guide
+visibility order within each semantic group.
+
+**Struct visibility does not exist in Solidity.** "Internal-only
+structs" is a convention of placement and naming, not a language
+guarantee. A struct declared in a library is reachable as
+`Lib.StructName` regardless of where it sits in the file. Placement
+signals intent to the reader; it does not restrict access.
+
+**Apply this order when you touch a file, not as a standalone
+reformat.** Moving a member into place is part of editing it. A
+commit that only reorders members adds review load and obscures
+history.
