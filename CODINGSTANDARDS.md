@@ -149,17 +149,35 @@ Rules:
 
 ## 5. Verifier safety idioms
 
-- **Fail closed, never revert.** Verification and rotation functions
-  return `false` (or `bytes32(0)`) on any malformed input, unknown
-  parameter set, or failed check. They must not revert: reverting
-  verifiers leak check ordering and enable griefing when embedded in
-  account-abstraction flows. Each early return corresponds to one
-  named check.
+- **Fail closed.** Verification and rotation functions never
+  wrong-accept. On a *well-formed but invalid* signature — an unknown
+  parameter set, or any failed check — they return `false` (or
+  `bytes32(0)`, or `0xffffffff` at the ERC-7913 boundary), and each such
+  early return corresponds to one named check. On a *malformed* envelope
+  — a calldata framing the re-tag paths cannot read as a valid signature
+  — they MAY revert instead: the production verify paths re-tag calldata
+  in place rather than `abi.decode` it (see the re-tag bullet below), and
+  solc's per-field access check plus the reconstruction loops' index
+  bounds turn such a framing into a revert (Panic). The guarantee is
+  `{revert, false}`, never a wrong-accept — not "never revert". The exact
+  acceptance bound is the SHRINCSCodec library `@dev` revert-model note.
+  Do NOT add a revert on a well-formed-but-invalid path (it leaks check
+  ordering and griefs account-abstraction flows), and do NOT add a length
+  pre-check whose only effect is to turn a malformed-input revert into a
+  `false`.
   Exception: example/reference code that is documented "do not use
   on-chain" (the WOTSPlus signer/keygen) may use `require`.
-- **Validate lengths before assembly reads.** Every `calldataload`/
-  `calldatacopy` of a `bytes` value is preceded by an explicit
-  `.length` check in Solidity.
+- **Validate lengths before assembly reads, except on the re-tag verify
+  paths.** Outside the calldata re-tag paths, every `calldataload`/
+  `calldatacopy` of a `bytes` value is preceded by an explicit `.length`
+  check in Solidity. The re-tag verify paths deliberately read
+  fixed-width words (the 32-byte FORS/hypertree node and randomizer
+  reads) with no per-read length check: the preimage width is a
+  compile-time constant and an over-/under-length field is caught
+  downstream by a hash or root compare (accepted encoding malleability,
+  never a wrong-accept — see the re-tag bullet and the
+  guard-applicability review). Re-adding such a check is redundant unless
+  it stops a wrong-accept the review does not already rule out.
 - **Calldata framing reads (narrow exception).** A `calldataload`
   whose result is used *only* as an operand of an equality/comparison
   against an expected constant or a running cursor — never in
@@ -204,7 +222,7 @@ Rules:
   access checks and the existing guards do not already prevent. A guard
   that only restates a solc bounds check, or that only rejects an input
   the signature verification already rejects, is redundant and does not
-  belong in verifier code. `.plans/guard-applicability-review.md` is the
+  belong in verifier code. `docs/guard-applicability-review.md` is the
   worked example: it classifies every guard on the verify paths as
   necessary or redundant and records the retained set.
 - **`abi.decode` stays available in tests and scripts.** The rule above

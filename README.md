@@ -203,7 +203,7 @@ graph TD
     HH --> PA
 ```
 
-Tests (25 suites, 231 tests as of 2026-07-11, default profile):
+Tests (26 suites, 239 tests as of 2026-07-12, ci profile):
 
 - [test/SHRINCSSphincs256sVectors.t.sol](./test/SHRINCSSphincs256sVectors.t.sol)
   - vector-backed verification and rotation-authorization tests
@@ -285,7 +285,7 @@ The re-tag is sound because of two mechanisms:
   offset or length that falls outside the calldata bounds reverts before
   any field is used.
 - a small set of retained input guards (documented in
-  `.plans/guard-applicability-review.md`) pins the field lengths that the
+  `docs/guard-applicability-review.md`) pins the field lengths that the
   hash construction depends on — the public-key field split, the WOTS key
   windows, and the shape and count checks that the reconstruction loops
   read.
@@ -1080,7 +1080,9 @@ Current tests cover:
 
 Measured 2026-07-12 at this repository's default profile
 settings (`via_ir = true`, optimizer runs 200) by
-[test/SHRINCSMeasurements.t.sol](./test/SHRINCSMeasurements.t.sol). The
+[test/SHRINCSMeasurements.t.sol](./test/SHRINCSMeasurements.t.sol), except
+the `stateful, adapter direct` row, which is measured by
+`SHRINCSVerifier.t.sol::testGasSnapshotHappyPathVerify`. The
 ERC-1271 figures verify the envelope in place over calldata; the ERC-7913
 delegation figure is `verifyStateless` calling its SPHINCS+C sibling.
 
@@ -1103,6 +1105,7 @@ Reproduce with:
 
 ```bash
 forge test --match-contract SHRINCSMeasurements -vv
+forge test --match-test testGasSnapshotHappyPathVerify -vv
 ```
 
 The stateful entrypoints make no external call, so their execution
@@ -1149,8 +1152,8 @@ Run the full verifier test suite:
 forge test
 ```
 
-Expected result as of 2026-07-11 on the default profile:
-`231 tests passed, 0 failed`.
+Expected result as of 2026-07-12 on the default profile:
+`239 tests passed, 0 failed`.
 
 ### Using Rust-Generated SHRINCS Vectors
 

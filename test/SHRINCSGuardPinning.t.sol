@@ -26,7 +26,7 @@ import {WOTSPlusC} from "../contracts/WOTSPlusC.sol";
 // GUARD-PINNING SAFETY ENVELOPE (epic Z1).
 //
 // This suite pins the OUTCOME of the ~29 input guards named in the guard-
-// applicability review (scratchpad/guard-applicability-review.md) across the
+// applicability review (docs/guard-applicability-review.md) across the
 // guard-pruning drops. For every dropped guard's adversarial input class, the
 // review proves the real verify path lands in {revert, false} — never a
 // wrong-accept. These tests assert exactly that OUTCOME, not the MECHANISM:
@@ -203,8 +203,10 @@ contract SHRINCSGuardPinningTest is Test {
 
     // Class: stateful leaf-0 signature (empty authPath). Review rows
     // 18/21/22. leafIndex := authPath.length, so an empty path claims the
-    // reserved leaf 0. Pre-drop UXMSS.sol:79 returns false; post-drop it is
-    // rejected by rootFromUnbalancedPath (:226) or Panics on authPath[0].
+    // reserved leaf 0. Pre-drop UXMSS.sol:79 returns false; post-drop it
+    // Panics on authPath[0] or fails the crypto compare (the
+    // rootFromUnbalancedPath length check it once hit was itself dropped in
+    // Z1).
     function testStatefulLeafZeroEmptyAuthPathRejected() public {
         (
             SHRINCS.PublicKey memory publicKey,

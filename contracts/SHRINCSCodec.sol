@@ -223,8 +223,9 @@ library SHRINCSCodec {
         // free-memory pointer past the (word-aligned) allocation.
         assembly ("memory-safe") {
             // Canonical body = last authPath element's padded end - the
-            // signature's calldata start; both bounds are word-aligned, so
-            // body is a whole number of 32-byte words.
+            // signature's calldata start; for canonical (and solc-checked)
+            // framings both bounds are word-aligned, so body is a whole
+            // number of 32-byte words.
             let bodyEnd :=
                 add(tail.offset, and(add(tail.length, 31), not(31)))
             let body := sub(bodyEnd, signature)

@@ -25,13 +25,17 @@ import {SPHINCSPlusC} from "./SPHINCSPlusC.sol";
 /// @notice Pure verification core for the hybrid SHRINCS scheme: builds the
 /// canonical action and rotation hashes and runs the stateful/stateless
 /// verify-and-decode logic the ERC-7913 SHRINCSVerifier calls into.
-/// @dev Caller obligations. Every function in this library is `pure`. The
-/// verify and hash-building functions never revert; they return fail-closed
-/// booleans, and revert policy belongs to the calling contract. The envelope
-/// re-tag facades (statefulEnvelope, statelessActionEnvelope,
-/// prepareStatelessDelegation, ...) re-tag calldata in place; a malformed
-/// encoding reverts downstream through solc's calldata member access — that
-/// revert is the rejection channel. All statefulness is the WRAPPER
+/// @dev Caller obligations. Every function in this library is `pure`. On a
+/// well-formed but invalid signature the verify and hash-building functions
+/// return a fail-closed boolean (never a wrong-accept), and the ERC-7913
+/// revert-vs-0xffffffff policy belongs to the calling contract. On a
+/// malformed envelope they MAY revert: the re-tag facades (statefulEnvelope,
+/// statelessActionEnvelope, prepareStatelessDelegation, ...) point calldata
+/// structs at the fields in place, and a framing that solc's calldata member
+/// access or a reconstruction loop's index bound cannot read Panics — that
+/// revert is the rejection channel. The guarantee is {revert, false}, never a
+/// wrong-accept; the SHRINCSCodec library revert-model note states the exact
+/// acceptance bound. All statefulness is the WRAPPER
 /// contract's job: single-use tracking of stateful leaves, nonce and
 /// keyVersion replay scoping, and installing the commitment a rotation
 /// returns. SHRINCSAccountVerifierExample is the reference wrapper. Any
