@@ -530,6 +530,152 @@ contract SHRINCSAccountVerifierExampleTest is Test {
         assertEq(account.statelessSignaturesUsed(), 0);
     }
 
+    // M2 pinning: deterministic wild-pointer (E1b) probes on the
+    // offset-bearing head words of the two 4-tuple action re-tags
+    // (SHRINCSCodec.statefulActionEnvelope / statelessActionEnvelope). The
+    // abi.encode head is publicKey offset (word 0), inline actionType and
+    // payloadHash (words 1 and 2), signature offset (word 3); only words 0
+    // and 3 are offsets. The supplied hash is the matching canonical action
+    // hash, so the flow reaches and dereferences the probed offset: a head
+    // offset >= 2^255 slips solc's signed tail bound, so the struct members
+    // read empty (word 0 -> validPublicKey false -> 0xffffffff) or the tail
+    // access reverts (word 3). Either way the wrapper stays in {revert,
+    // false} and never returns the ERC-1271 magic value; state is untouched.
+    // line-length: allow — test name is one unbreakable token
+    function testExampleIsValidSignatureRejectsE1bStatefulActionHeadProbes()
+        public
+    {
+        (
+            SHRINCS.PublicKey memory publicKey,,
+            SHRINCS.Signature memory signature
+        ) = decodeStatefulVector(".stateful.cases.valid.calldata");
+        bytes32 expectedCompositePublicKey =
+            compositePublicKeyWord(publicKey);
+        SHRINCSAccountVerifierExample account =
+            new SHRINCSAccountVerifierExample(expectedCompositePublicKey);
+        SHRINCS.ActionContext memory context =
+            actionContext(address(account), 0, 0);
+        bytes32 hash = keccak256(
+            abi.encodePacked(
+                SHRINCS.OP_VERIFY_STATEFUL,
+                SHRINCS.HASH_SUITE_KECCAK_256,
+                expectedCompositePublicKey,
+                context.domainSeparator,
+                context.nonce,
+                context.keyVersion,
+                context.actionType,
+                context.payloadHash
+            )
+        );
+        bytes memory envelope = abi.encodePacked(
+            bytes1(ERC1271_MODE_STATEFUL_ACTION),
+            abi.encode(
+                publicKey, context.actionType, context.payloadHash, signature
+            )
+        );
+
+        _assertActionNotAccepted(
+            account, hash, _corruptActionHead(envelope, 0), "stateful head 0"
+        );
+        _assertActionNotAccepted(
+            account, hash, _corruptActionHead(envelope, 3), "stateful head 3"
+        );
+
+        assertEq(
+            account.currentSHRINCSPublicKey(), expectedCompositePublicKey
+        );
+        assertEq(account.nonce(), 0);
+        assertEq(account.keyVersion(), 0);
+        assertEq(account.statelessSignaturesUsed(), 0);
+    }
+
+    // line-length: allow — test name is one unbreakable token
+    function testExampleIsValidSignatureRejectsE1bStatelessActionHeadProbes()
+        public
+    {
+        (
+            SHRINCS.PublicKey memory publicKey,,
+            SPHINCSPlusC.Signature memory signature
+        ) = decodeStatelessVector(".stateless.cases.valid.calldata");
+        bytes32 expectedCompositePublicKey =
+            compositePublicKeyWord(publicKey);
+        SHRINCSAccountVerifierExample account =
+            new SHRINCSAccountVerifierExample(expectedCompositePublicKey);
+        SHRINCS.ActionContext memory context =
+            actionContext(address(account), 0, 0);
+        bytes32 hash = keccak256(
+            abi.encodePacked(
+                SHRINCS.OP_VERIFY_STATELESS,
+                SHRINCS.HASH_SUITE_KECCAK_256,
+                expectedCompositePublicKey,
+                context.domainSeparator,
+                context.nonce,
+                context.keyVersion,
+                context.actionType,
+                context.payloadHash
+            )
+        );
+        bytes memory envelope = abi.encodePacked(
+            bytes1(ERC1271_MODE_STATELESS_ACTION),
+            abi.encode(
+                publicKey, context.actionType, context.payloadHash, signature
+            )
+        );
+
+        _assertActionNotAccepted(
+            account,
+            hash,
+            _corruptActionHead(envelope, 0),
+            "stateless head 0"
+        );
+        _assertActionNotAccepted(
+            account,
+            hash,
+            _corruptActionHead(envelope, 3),
+            "stateless head 3"
+        );
+
+        assertEq(
+            account.currentSHRINCSPublicKey(), expectedCompositePublicKey
+        );
+        assertEq(account.nonce(), 0);
+        assertEq(account.keyVersion(), 0);
+        assertEq(account.statelessSignaturesUsed(), 0);
+    }
+
+    /// @dev Assert the wrapper's isValidSignature does not accept `envelope`:
+    /// it either reverts or returns a non-magic value. Never asserts a
+    /// specific error, so it holds across the {revert, false} rejection set.
+    function _assertActionNotAccepted(
+        SHRINCSAccountVerifierExample account,
+        bytes32 hash,
+        bytes memory envelope,
+        string memory label
+    ) internal view {
+        try account.isValidSignature(hash, envelope) returns (bytes4 r) {
+            assertTrue(r != MAGIC_VALUE, label);
+        } catch {}
+    }
+
+    /// @dev Overwrite the abi.encode head word at index `headWord` (after the
+    /// 1-byte mode prefix) with 2^255, past solc's signed tail bound (E1b).
+    /// Only the offset-bearing head words 0 (publicKey) and 3 (signature) are
+    /// meaningful; words 1 and 2 are inline bytes32 action fields.
+    function _corruptActionHead(bytes memory envelope, uint256 headWord)
+        internal
+        pure
+        returns (bytes memory out)
+    {
+        out = bytes.concat(envelope);
+        uint256 e1b = 1 << 255;
+        // Data starts at out+0x20; the mode byte occupies data[0], so head
+        // word `headWord` begins at data byte 1 + headWord*32.
+        uint256 slot = 32 + 1 + headWord * 32;
+        assembly {
+            mstore(add(out, slot), e1b)
+        }
+    }
+
     // line-length: allow — test name is one unbreakable token
     function testExampleIsValidSignatureRejectsLegacyStatefulVectorThroughCanonicalEnvelope()
         public

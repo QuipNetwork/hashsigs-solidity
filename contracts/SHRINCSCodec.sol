@@ -37,10 +37,17 @@ import {SHRINCSParams} from "shrincs-profile/SHRINCSParams.sol";
 /// offset reads members as empty and the surviving KEEP guards plus solc's
 /// index Panic drive it into {revert, false}. The key/commitment decoders
 /// still length-check and report a wrong length through `ok == false` without
-/// reverting. Acceptance is the ABI's: any non-canonical framing that decodes
-/// to the same logical field values verifies, so envelopes are byte-malleable
-/// — external consumers must key on decoded field values, never on the
-/// envelope bytes. decodeStatefulEnvelope remains an abi.decode helper for
+/// reverting. Acceptance is wider than abi.decode's: any framing whose
+/// in-place field reads reproduce a valid signature's field values
+/// verifies. The re-tag reads are bounds-checked against calldatasize (the
+/// whole transaction calldata), not the envelope slice, so they may read
+/// into adjacent calldata such as the outer ABI zero-padding; under
+/// masked-hash profiles even a tail-truncated envelope that abi.decode
+/// would reject can verify. It is pure encoding malleability, never a
+/// wrong-accept: accepted reads always equal a valid signature's exact
+/// field values, so external consumers must key on decoded field values,
+/// never on the envelope bytes. decodeStatefulEnvelope remains an
+/// abi.decode helper for
 /// test/off-chain encoders only; no production verify path calls it.
 library SHRINCSCodec {
     /// @notice Decode an ERC-7913 `key` into the SHRINCS installed bundle
@@ -191,10 +198,15 @@ library SHRINCSCodec {
     ///   (installed-commitment match, validPublicKey shape pins, Hypertree
     ///   layers == d, UXMSS leaf-index cap) reject the rest, so E1b lands in
     ///   {revert, false};
-    /// - an in-bounds offset that aliases another field is ACCEPTED by
-    ///   design; envelopes are byte-malleable, so consumers must key on
-    ///   decoded field values, never on envelope bytes (documented at the
-    ///   contract level, not guarded here).
+    /// - framings whose in-place reads reproduce a valid signature's field
+    ///   values are ACCEPTED by design: in-bounds offset aliasing, and
+    ///   (the reads being bounds-checked against calldatasize, not the
+    ///   envelope slice) reads that extend into adjacent calldata such as
+    ///   the outer ABI padding, so a tail-truncated envelope can verify
+    ///   under masked-hash profiles. This is pure encoding malleability,
+    ///   never a wrong-accept; consumers must key on decoded field values,
+    ///   never on envelope bytes (the acceptance model is documented at
+    ///   the contract level, not guarded here).
     /// @param payload The abi-encoded stateful envelope calldata.
     /// @return publicKey Calldata pointer to the public-key bundle.
     /// @return signature Calldata pointer to the stateful signature.
@@ -223,7 +235,7 @@ library SHRINCSCodec {
     /// the head is two offset words, one per dynamic struct. Same re-tag and
     /// same safety story as statefulEnvelope (E1a/E2 revert, E1b lands in
     /// {revert, false} via the downstream Panic backstop plus the KEEP
-    /// guards, in-bounds aliasing accepted by design).
+    /// guards, encoding malleability accepted by design).
     /// @param payload The abi-encoded stateless envelope calldata.
     /// @return publicKey Calldata pointer to the public-key bundle.
     /// @return signature Calldata pointer to the stateless signature.
@@ -251,7 +263,7 @@ library SHRINCSCodec {
     /// @dev Envelope layout is abi.encode(SPHINCSPlusC.Signature): a single
     /// dynamic struct, so the head is one offset word. Same safety story as
     /// statefulEnvelope (E1a/E2 revert, E1b lands in {revert, false} via the
-    /// downstream Panic backstop plus the KEEP guards, in-bounds aliasing
+    /// downstream Panic backstop plus the KEEP guards, encoding malleability
     /// accepted by design).
     /// @param payload The abi-encoded stateless-signature envelope calldata.
     /// @return signature Calldata pointer to the stateless signature.
@@ -276,7 +288,7 @@ library SHRINCSCodec {
     /// action fields. This re-tag reads all four without copying or
     /// validating; it never reverts on its own. Same safety story as
     /// statefulEnvelope (E1a/E2 revert, E1b lands in {revert, false} via the
-    /// downstream Panic backstop plus the KEEP guards, in-bounds aliasing
+    /// downstream Panic backstop plus the KEEP guards, encoding malleability
     /// accepted by design). The inline action words carry no offset, so they
     /// only feed the caller's canonical action-hash comparison; a wrong value
     /// fails that comparison rather than being trusted.

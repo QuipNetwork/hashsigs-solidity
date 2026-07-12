@@ -97,15 +97,15 @@ contract SHRINCSStatelessDelegationTest is Test {
         );
     }
 
-    // Revert model: the canonicity walk is gone, so a truncated envelope
-    // reverts inside abi.decode before any delegation instead of returning
-    // 0xffffffff.
     // Re-tag model: a one-byte truncation leaves every re-tagged offset and
     // length in bounds, so the bundle check passes and the delegate signature
-    // is rebuilt with a corrupted last node; the pinned sibling's FORS-C plus
-    // hypertree reconstruction then fails, so verifyStateless rejects with
-    // 0xffffffff rather than reverting (a malformed case moving within
-    // {revert, false}).
+    // is rebuilt with a corrupted last node. This 256s fixture is unmasked,
+    // so the sibling's FORS-C plus hypertree reconstruction fails and
+    // verifyStateless returns 0xffffffff without reverting (a malformed case
+    // moving within {revert, false}). Under a masked-hash profile the same
+    // truncation would instead verify as pure encoding malleability, pinned
+    // by testTailTruncationAcceptedUnderMaskedProfile in the SHRINCSVerifier
+    // suite.
     function testVerifyStatelessRejectsTruncatedEnvelope() public view {
         bytes memory truncated = validEnvelope;
         assembly {

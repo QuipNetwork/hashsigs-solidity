@@ -502,8 +502,10 @@ contract SHRINCSCalldataRetagTest is Test {
         ) {
             if (result == SELECTOR) {
                 // Success is acceptable ONLY when the mutant abi.decodes to
-                // field-equal structs of the valid envelope (the documented
-                // byte-malleability widening).
+                // field-equal structs of the valid envelope. This fuzz only
+                // overlays bytes in place (no truncation), so the
+                // documented encoding-malleability widening coincides with
+                // decode-equivalence here.
                 assertEq(
                     digest.abiStateful(mutant),
                     digest.abiStateful(statefulEnvelope),

@@ -43,9 +43,13 @@ import {SHRINCS} from "./SHRINCS.sol";
 /// out-of-gas, reverts to the caller; ERC-7913 permits this (the interface
 /// says a verifier SHOULD return 0xffffffff OR revert on an invalid
 /// signature). A caller that needs a boolean must treat a revert as its own
-/// policy decision. A non-canonical but ABI-tolerated re-encoding of a valid
-/// envelope re-tags to the same field values and verifies, so envelopes are
-/// byte-malleable; consumers must key on decoded fields, not envelope bytes.
+/// policy decision. Acceptance is wider than abi.decode's: any framing whose
+/// in-place field reads reproduce a valid signature's field values verifies.
+/// The reads are bounds-checked against calldatasize, not the envelope
+/// slice, so they may read into adjacent calldata such as the outer ABI
+/// padding, and under masked-hash profiles a tail-truncated envelope can
+/// still verify. This is pure encoding malleability, never a wrong-accept;
+/// consumers must key on decoded fields, not envelope bytes.
 /// The stateful `verify` path runs entirely in-contract through the
 /// calldata-typed SHRINCS library, verifying the re-tagged envelope in place
 /// with no external call. The only remaining external call is

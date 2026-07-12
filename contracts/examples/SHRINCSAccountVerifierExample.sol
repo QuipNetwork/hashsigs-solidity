@@ -118,8 +118,13 @@ contract SHRINCSAccountVerifierExample {
     /// bits — the canonicity walk is gone). An unknown mode byte and a
     /// well-formed but invalid signature return 0xffffffff. There is no
     /// try/catch; every failure, including an inner out-of-gas, reverts.
-    /// A non-canonical but ABI-tolerated re-encoding maps to the same field
-    /// values and verifies, so envelopes are byte-malleable. The read-only
+    /// Acceptance is wider than abi.decode's: any framing whose in-place
+    /// field reads reproduce a valid signature's field values verifies. The
+    /// reads are bounds-checked against calldatasize, not the envelope
+    /// slice, so they may read into adjacent calldata such as the outer ABI
+    /// padding, and under masked-hash profiles a tail-truncated envelope can
+    /// still verify. This is pure encoding malleability, never a
+    /// wrong-accept. The read-only
     /// signature check runs on the re-tagged calldata structs through
     /// the calldata-typed SHRINCS library, with no self-call hop. Reference
     /// gas: a stateful

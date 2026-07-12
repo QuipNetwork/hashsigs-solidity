@@ -23,6 +23,7 @@ import {
 import {SHRINCSCodec} from "../contracts/SHRINCSCodec.sol";
 import {SHRINCS} from "../contracts/SHRINCS.sol";
 import {SHRINCSVerifier} from "../contracts/SHRINCSVerifier.sol";
+import {SHRINCSParams} from "shrincs-profile/SHRINCSParams.sol";
 import {SHRINCSTestSigner} from "./helpers/SHRINCSTestSigner.sol";
 
 /// @dev Minimal concrete instance of the abstract profile base, used to
@@ -207,14 +208,17 @@ contract SHRINCSVerifierTest is Test {
         );
     }
 
-    // Re-tag model: removing a whole 32-byte word leaves the last auth-path
-    // array's length word claiming one more element than the truncated
-    // calldata holds, so solc's out-of-bounds calldata access on that element
-    // reverts — the malformed envelope stays in {revert, false}. Removing a
-    // full word (not one byte) is deliberate: under a masked-hash profile the
-    // low bytes of the final node are already zero, so a one-byte tail strip
-    // re-tags to the identical valid node (documented byte-malleability) and
-    // would still verify.
+    // Re-tag model: removing a whole 32-byte word makes the last auth-path
+    // array's length word overcommit the calldata (it claims one more word
+    // than remains within calldatasize), so solc's calldata tail access
+    // reverts; the malformed envelope stays in {revert, false}. Removing a
+    // full word (not 1 to 16 bytes) is deliberate: a short tail strip is
+    // pure encoding malleability under a masked-hash profile. solc
+    // bounds-checks the re-tagged reads against calldatasize, not the
+    // envelope slice, so the stripped tail is read back from the outer ABI
+    // zero-padding; masking already zeroes those low bytes, so the final
+    // node is bit-identical and still verifies (pinned by
+    // testTailTruncationAcceptedUnderMaskedProfile).
     function testRejectsTruncatedEnvelope() public {
         bytes memory truncated = validEnvelope;
         assembly {
@@ -223,6 +227,43 @@ contract SHRINCSVerifierTest is Test {
         }
         vm.expectRevert();
         verifier.verify(validKey, signedHash, truncated);
+    }
+
+    // M1 pinning: under masked-hash (128s) profiles a valid envelope with a
+    // 1-to-16-byte tail truncation still verifies. solc bounds-checks the
+    // re-tagged calldata reads against calldatasize (the whole tx calldata),
+    // not the envelope slice, so the final auth-path node's stripped tail is
+    // read back from the outer ABI zero-padding. Under 128s maskHash already
+    // zeroes those low bytes, so the read-back node is bit-identical and the
+    // signature verifies; this is pure encoding malleability, never a
+    // wrong-accept. Under 256s (unmasked) the corrupted node yields
+    // 0xffffffff without reverting: the bounds check never fires for a tail
+    // truncation, so rejection there is purely cryptographic.
+    // NUM_HYPERTREE_LAYERS == 1 distinguishes 128s from 256s (d == 8).
+    function testTailTruncationAcceptedUnderMaskedProfile() public view {
+        bytes4 expected = SHRINCSParams.NUM_HYPERTREE_LAYERS == 1
+            ? IERC7913SignatureVerifier.verify.selector
+            : INVALID_SIGNATURE;
+
+        bytes memory oneByte = validEnvelope;
+        assembly {
+            mstore(oneByte, sub(mload(oneByte), 1))
+        }
+        assertEq(
+            verifier.verify(validKey, signedHash, oneByte),
+            expected,
+            "1-byte tail truncation outcome must match the profile"
+        );
+
+        bytes memory sixteenByte = validEnvelope;
+        assembly {
+            mstore(sixteenByte, sub(mload(sixteenByte), 16))
+        }
+        assertEq(
+            verifier.verify(validKey, signedHash, sixteenByte),
+            expected,
+            "16-byte tail truncation outcome must match the profile"
+        );
     }
 
     function testRejectsEmptyEnvelope() public {

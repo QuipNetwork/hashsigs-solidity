@@ -39,10 +39,14 @@ import {SPHINCSPlusC} from "./SPHINCSPlusC.sol";
 /// buffer, out-of-range offset or length, or dirty value-type high bits
 /// reverts there); a well-formed but invalid signature returns 0xffffffff. No
 /// try/catch anywhere. Every other failure, including an inner out-of-gas,
-/// reverts to the caller; ERC-7913 permits this. A non-canonical but
-/// ABI-tolerated re-encoding re-tags to the same fields and verifies, so
-/// envelopes are byte-malleable; consumers must key on decoded fields, not
-/// envelope bytes. verify runs in-contract through the calldata-typed
+/// reverts to the caller; ERC-7913 permits this. Acceptance is wider than
+/// abi.decode's: any framing whose in-place field reads reproduce a valid
+/// signature's field values verifies. The reads are bounds-checked against
+/// calldatasize, not the envelope slice, so they may read into adjacent
+/// calldata such as the outer ABI padding, and under masked-hash profiles a
+/// tail-truncated envelope can still verify. This is pure encoding
+/// malleability, never a wrong-accept; consumers must key on decoded fields,
+/// not envelope bytes. verify runs in-contract through the calldata-typed
 /// SPHINCSPlusC library, verifying the re-tagged envelope in place with no
 /// external call.
 ///
