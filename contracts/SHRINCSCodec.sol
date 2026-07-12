@@ -213,6 +213,99 @@ library SHRINCSCodec {
         return abi.encode(signature);
     }
 
+    /// @notice Zero-copy re-tag of a stateful envelope into typed calldata
+    /// struct pointers.
+    /// @dev Envelope layout is abi.encode(PublicKey, SHRINCS.Signature): the
+    /// head is two offset words, one per dynamic struct. This re-tag reads
+    /// those two offsets and returns calldata pointers without copying or
+    /// validating them; it never reverts on its own and does no length or
+    /// offset pre-check. All safety is downstream.
+    /// Safety story (post-Z1/Z2 empirical review):
+    /// - solc member access reverts on out-of-bounds offsets < 2^64,
+    ///   out-of-bounds lengths, and dirty value-type high bits (E1a/E2);
+    /// - a head offset >= 2^255 slips solc's signed tail bound and its
+    ///   dynamic members read as EMPTY (E1b); downstream, solc's index
+    ///   bounds-check Panics on the empty/short arrays inside the
+    ///   constant-bounded verify loops, and the surviving KEEP guards
+    ///   (installed-commitment match, validPublicKey shape pins, Hypertree
+    ///   layers == d, UXMSS leaf-index cap) reject the rest, so E1b lands in
+    ///   {revert, false};
+    /// - an in-bounds offset that aliases another field is ACCEPTED by
+    ///   design; envelopes are byte-malleable, so consumers must key on
+    ///   decoded field values, never on envelope bytes (documented at the
+    ///   contract level, not guarded here).
+    /// @param payload The abi-encoded stateful envelope calldata.
+    /// @return publicKey Calldata pointer to the public-key bundle.
+    /// @return signature Calldata pointer to the stateful signature.
+    function statefulEnvelope(bytes calldata payload)
+        internal
+        pure
+        returns (
+            SHRINCS.PublicKey calldata publicKey,
+            SHRINCS.Signature calldata signature
+        )
+    {
+        // Pure calldata re-tag: reads two offset words into two calldata
+        // pointers; no memory is read or written.
+        assembly ("memory-safe") {
+            publicKey := add(payload.offset, calldataload(payload.offset))
+            signature := add(
+                payload.offset,
+                calldataload(add(payload.offset, 0x20))
+            )
+        }
+    }
+
+    /// @notice Zero-copy re-tag of a stateless envelope into typed calldata
+    /// struct pointers.
+    /// @dev Envelope layout is abi.encode(PublicKey, SPHINCSPlusC.Signature):
+    /// the head is two offset words, one per dynamic struct. Same re-tag and
+    /// same safety story as statefulEnvelope (E1a/E2 revert, E1b lands in
+    /// {revert, false} via the downstream Panic backstop plus the KEEP
+    /// guards, in-bounds aliasing accepted by design).
+    /// @param payload The abi-encoded stateless envelope calldata.
+    /// @return publicKey Calldata pointer to the public-key bundle.
+    /// @return signature Calldata pointer to the stateless signature.
+    function statelessEnvelope(bytes calldata payload)
+        internal
+        pure
+        returns (
+            SHRINCS.PublicKey calldata publicKey,
+            SPHINCSPlusC.Signature calldata signature
+        )
+    {
+        // Pure calldata re-tag: reads two offset words into two calldata
+        // pointers; no memory is read or written.
+        assembly ("memory-safe") {
+            publicKey := add(payload.offset, calldataload(payload.offset))
+            signature := add(
+                payload.offset,
+                calldataload(add(payload.offset, 0x20))
+            )
+        }
+    }
+
+    /// @notice Zero-copy re-tag of a stateless-signature envelope into a
+    /// typed calldata struct pointer.
+    /// @dev Envelope layout is abi.encode(SPHINCSPlusC.Signature): a single
+    /// dynamic struct, so the head is one offset word. Same safety story as
+    /// statefulEnvelope (E1a/E2 revert, E1b lands in {revert, false} via the
+    /// downstream Panic backstop plus the KEEP guards, in-bounds aliasing
+    /// accepted by design).
+    /// @param payload The abi-encoded stateless-signature envelope calldata.
+    /// @return signature Calldata pointer to the stateless signature.
+    function statelessSignatureEnvelope(bytes calldata payload)
+        internal
+        pure
+        returns (SPHINCSPlusC.Signature calldata signature)
+    {
+        // Pure calldata re-tag: reads one offset word into one calldata
+        // pointer; no memory is read or written.
+        assembly ("memory-safe") {
+            signature := add(payload.offset, calldataload(payload.offset))
+        }
+    }
+
     /// @notice Convert the ERC-7913 32-byte hash into the SHRINCS signed
     /// message bytes.
     /// @dev ERC-7913 hands a bytes32 hash; SHRINCS signs raw message bytes.
