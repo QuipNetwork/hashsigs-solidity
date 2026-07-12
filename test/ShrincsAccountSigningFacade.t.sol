@@ -22,12 +22,15 @@ import {ShrincsTypes} from "../contracts/ShrincsTypes.sol";
 import {ShrincsAccountVerifierExample} from "../contracts/examples/ShrincsAccountVerifierExample.sol";
 import {ShrincsStatelessVectorSigner} from "./helpers/ShrincsStatelessVectorSigner.sol";
 import {ShrincsAccountSigningFacade} from "./helpers/ShrincsAccountSigningFacade.sol";
+import {ShrincsTestSigner} from "./helpers/ShrincsTestSigner.sol";
 
 contract ShrincsAccountSigningFacadeHarness is ShrincsStatelessVectorSigner {}
 
 contract ShrincsAccountSigningFacadeTest is Test {
     bytes4 internal constant ERC1271_MAGIC_VALUE = 0x1626ba7e;
     bytes4 internal constant INVALID_SIGNATURE = 0xffffffff;
+    uint8 internal constant ERC1271_MODE_COMPACT_ACTION = 3;
+    uint256 internal constant COMPACT_SIGNATURE_BYTES = 10053;
 
     ShrincsAccountSigningFacadeHarness internal signer;
 
@@ -159,6 +162,183 @@ contract ShrincsAccountSigningFacadeTest is Test {
             INVALID_SIGNATURE,
             "stateless ERC-1271 snapshot must fail after nonce advances"
         );
+    }
+
+    function testAccountAwareCompactSlotRegistrationAndRevocationSignerFeedsWrapper() public {
+        (ShrincsTypes.SigningKey memory signingKey, ShrincsTypes.PublicKey memory publicKey, bool keygenOk) =
+            ShrincsAccountSigningFacade.keygen(bytes("account-aware compact slot current key"), 4);
+        assertTrue(keygenOk, "keygen must succeed");
+
+        ShrincsAccountVerifierExample account =
+            new ShrincsAccountVerifierExample(ShrincsAccountSigningFacade.publicKeyCommitmentWord(publicKey));
+        bytes32 subPkSeed = keccak256("compact sub seed");
+        bytes32 subPkRoot = keccak256("compact sub root");
+        bytes32 slotId = account.compactSlotId(subPkSeed, subPkRoot);
+        bytes32 actionType = keccak256("execute");
+        bytes32 payloadHash = keccak256("payload");
+        bytes memory malformedCompactSignature = new bytes(COMPACT_SIGNATURE_BYTES);
+
+        bool unregisteredCompactActionOk =
+            account.verifyCompactAction(subPkSeed, subPkRoot, actionType, payloadHash, malformedCompactSignature);
+        assertEq(unregisteredCompactActionOk, false, "unregistered compact action must fail");
+        assertEq(account.nonce(), 0, "unregistered compact action must not consume nonce");
+
+        (ShrincsTypes.RotationContext memory registerContext, bytes32 registerSessionId, bool registerSignOk) = ShrincsAccountSigningFacade.beginCompactSlotRegistrationSessionNow(
+            signer, account, signingKey, publicKey, subPkSeed, subPkRoot
+        );
+        assertTrue(registerSignOk, "compact slot registration signing must succeed");
+        assertEq(registerContext.nonce, 0, "registration should sign the current wrapper nonce");
+
+        (ShrincsTypes.StatelessSignature memory registerSignature, bool registerCompleteOk) =
+            ShrincsAccountSigningFacade.completeStatelessSession(signer, registerSessionId);
+        assertTrue(registerCompleteOk, "registration session completion must succeed");
+
+        bool registerOk = account.registerCompactSlot(publicKey, registerSignature, subPkSeed, subPkRoot);
+        assertTrue(registerOk, "wrapper must accept account-aware compact slot registration");
+        assertTrue(account.compactSlots(slotId), "compact slot must be registered");
+        assertEq(account.nonce(), 1, "registration must consume the current nonce");
+        assertEq(account.statelessSignaturesUsed(), 1, "registration must consume one stateless use");
+
+        bool compactActionOk =
+            account.verifyCompactAction(subPkSeed, subPkRoot, actionType, payloadHash, malformedCompactSignature);
+        assertEq(compactActionOk, false, "malformed compact action must fail");
+        assertEq(account.nonce(), 1, "failed compact action must not consume nonce");
+        assertTrue(account.compactSlots(slotId), "failed compact action must not revoke slot");
+
+        bool repeatRegisterOk = account.registerCompactSlot(publicKey, registerSignature, subPkSeed, subPkRoot);
+        assertEq(repeatRegisterOk, false, "already-registered compact slot must not register again");
+        assertEq(account.nonce(), 1, "no-op compact registration must not consume nonce");
+        assertEq(account.statelessSignaturesUsed(), 1, "no-op compact registration must not consume stateless use");
+
+        (ShrincsTypes.RotationContext memory revokeContext, bytes32 revokeSessionId, bool revokeSignOk) = ShrincsAccountSigningFacade.beginCompactSlotRevocationSessionNow(
+            signer, account, signingKey, publicKey, subPkSeed, subPkRoot
+        );
+        assertTrue(revokeSignOk, "compact slot revocation signing must succeed");
+        assertEq(revokeContext.nonce, 1, "revocation should sign the current wrapper nonce");
+
+        (ShrincsTypes.StatelessSignature memory revokeSignature, bool revokeCompleteOk) =
+            ShrincsAccountSigningFacade.completeStatelessSession(signer, revokeSessionId);
+        assertTrue(revokeCompleteOk, "revocation session completion must succeed");
+
+        bool revokeOk = account.revokeCompactSlot(publicKey, revokeSignature, subPkSeed, subPkRoot);
+        assertTrue(revokeOk, "wrapper must accept account-aware compact slot revocation");
+        assertEq(account.compactSlots(slotId), false, "compact slot must be revoked");
+        assertEq(account.nonce(), 2, "revocation must consume the current nonce");
+        assertEq(account.statelessSignaturesUsed(), 2, "revocation must consume one more stateless use");
+
+        bool repeatRevokeOk = account.revokeCompactSlot(publicKey, revokeSignature, subPkSeed, subPkRoot);
+        assertEq(repeatRevokeOk, false, "already-revoked compact slot must not revoke again");
+        assertEq(account.nonce(), 2, "no-op compact revocation must not consume nonce");
+        assertEq(account.statelessSignaturesUsed(), 2, "no-op compact revocation must not consume stateless use");
+    }
+
+    function testCompact1271RejectsMalformedSignatureAndPreservesState() public {
+        (ShrincsTypes.SigningKey memory signingKey, ShrincsTypes.PublicKey memory publicKey, bool keygenOk) =
+            ShrincsAccountSigningFacade.keygen(bytes("account-aware compact 1271 current key"), 4);
+        assertTrue(keygenOk, "keygen must succeed");
+
+        ShrincsAccountVerifierExample account =
+            new ShrincsAccountVerifierExample(ShrincsAccountSigningFacade.publicKeyCommitmentWord(publicKey));
+        bytes32 subPkSeed = keccak256("compact 1271 sub seed");
+        bytes32 subPkRoot = keccak256("compact 1271 sub root");
+        bytes32 slotId = account.compactSlotId(subPkSeed, subPkRoot);
+
+        (, bytes32 sessionId, bool signOk) = ShrincsAccountSigningFacade.beginCompactSlotRegistrationSessionNow(
+            signer, account, signingKey, publicKey, subPkSeed, subPkRoot
+        );
+        assertTrue(signOk, "compact slot registration signing must succeed");
+        (ShrincsTypes.StatelessSignature memory registrationSignature, bool completeOk) =
+            ShrincsAccountSigningFacade.completeStatelessSession(signer, sessionId);
+        assertTrue(completeOk, "registration session completion must succeed");
+        assertTrue(
+            account.registerCompactSlot(publicKey, registrationSignature, subPkSeed, subPkRoot),
+            "registration must succeed"
+        );
+
+        bytes32 actionType = keccak256("execute");
+        bytes32 payloadHash = keccak256("payload");
+        ShrincsTypes.ActionContext memory context = ShrincsTypes.ActionContext({
+            domainSeparator: ShrincsAccountSigningFacade.domainSeparator(address(account)),
+            nonce: account.nonce(),
+            keyVersion: account.keyVersion(),
+            actionType: actionType,
+            payloadHash: payloadHash
+        });
+        bytes32 hash = SHRINCS.compactActionMessageHash(context);
+        bytes memory compactSignature = new bytes(COMPACT_SIGNATURE_BYTES);
+        bytes memory envelope = abi.encodePacked(
+            bytes1(ERC1271_MODE_COMPACT_ACTION),
+            abi.encode(subPkSeed, subPkRoot, actionType, payloadHash, compactSignature)
+        );
+
+        assertEq(
+            account.isValidSignature(hash, envelope),
+            INVALID_SIGNATURE,
+            "compact ERC-1271 malformed signature must fail"
+        );
+        assertTrue(account.compactSlots(slotId), "compact 1271 failure must preserve slot");
+        assertEq(account.nonce(), 1, "compact 1271 failure must not consume nonce");
+        assertEq(account.statelessSignaturesUsed(), 1, "compact 1271 failure must not consume stateless use");
+    }
+
+    function testAccountAwareCompactActionSignerFeedsWrapperAndDoesNotTrackQ() public {
+        (ShrincsTypes.SigningKey memory signingKey, ShrincsTypes.PublicKey memory publicKey, bool keygenOk) =
+            ShrincsAccountSigningFacade.keygen(bytes("account-aware compact action current key"), 4);
+        assertTrue(keygenOk, "keygen must succeed");
+
+        ShrincsAccountVerifierExample account =
+            new ShrincsAccountVerifierExample(ShrincsAccountSigningFacade.publicKeyCommitmentWord(publicKey));
+        uint8 q = 7;
+        (bytes32 compactSkSeed, bytes32 subPkSeed, bytes32 subPkRoot, bool compactKeygenOk) =
+            ShrincsTestSigner.compactSingleLaneKeygen(bytes("account-aware compact action slot"), q);
+        assertTrue(compactKeygenOk, "compact fixture keygen must succeed");
+
+        (, bytes32 sessionId, bool signOk) = ShrincsAccountSigningFacade.beginCompactSlotRegistrationSessionNow(
+            signer, account, signingKey, publicKey, subPkSeed, subPkRoot
+        );
+        assertTrue(signOk, "compact slot registration signing must succeed");
+        (ShrincsTypes.StatelessSignature memory registrationSignature, bool completeOk) =
+            ShrincsAccountSigningFacade.completeStatelessSession(signer, sessionId);
+        assertTrue(completeOk, "registration session completion must succeed");
+        assertTrue(
+            account.registerCompactSlot(publicKey, registrationSignature, subPkSeed, subPkRoot),
+            "registration must succeed"
+        );
+
+        bytes32 actionType = keccak256("execute");
+        bytes32 firstPayloadHash = keccak256("compact payload one");
+        ShrincsTypes.ActionContext memory firstContext = ShrincsTypes.ActionContext({
+            domainSeparator: ShrincsAccountSigningFacade.domainSeparator(address(account)),
+            nonce: account.nonce(),
+            keyVersion: account.keyVersion(),
+            actionType: actionType,
+            payloadHash: firstPayloadHash
+        });
+        (bytes memory firstSignature, bool firstSignOk) =
+            ShrincsTestSigner.signCompactAction(compactSkSeed, subPkSeed, subPkRoot, firstContext, q);
+        assertTrue(firstSignOk, "first compact action signing must succeed");
+        assertTrue(
+            account.verifyCompactAction(subPkSeed, subPkRoot, actionType, firstPayloadHash, firstSignature),
+            "wrapper must accept first compact action"
+        );
+        assertEq(account.nonce(), 2, "first compact action must consume nonce after registration");
+
+        bytes32 secondPayloadHash = keccak256("compact payload two");
+        ShrincsTypes.ActionContext memory secondContext = ShrincsTypes.ActionContext({
+            domainSeparator: ShrincsAccountSigningFacade.domainSeparator(address(account)),
+            nonce: account.nonce(),
+            keyVersion: account.keyVersion(),
+            actionType: actionType,
+            payloadHash: secondPayloadHash
+        });
+        (bytes memory secondSignature, bool secondSignOk) =
+            ShrincsTestSigner.signCompactAction(compactSkSeed, subPkSeed, subPkRoot, secondContext, q);
+        assertTrue(secondSignOk, "second compact action signing must succeed");
+        assertTrue(
+            account.verifyCompactAction(subPkSeed, subPkRoot, actionType, secondPayloadHash, secondSignature),
+            "wrapper must not track q on-chain"
+        );
+        assertEq(account.nonce(), 3, "second compact action must consume nonce");
     }
 
     function testAccountAwareStatefulOnlyRotationSignerFeedsWrapper() public {

@@ -30,17 +30,21 @@ import {ShrincsTypes} from "./ShrincsTypes.sol";
 // - Gas-oriented JARDIN prototype:
 //   https://github.com/nconsigny/JARDIN/blob/main/src/JardinForsPlainVerifier.sol
 library ShrincsCompact {
-    // CompactDigestBytes: ceil(k * a / 8) for k=52 and a=5.
+    // Raw compact signature layout:
+    //   R32 || counter4 || openedFORS[51] || q1 || merkleAuth[7].
+    // JARDIN-style compact parameters here are n=32, k=52, a=5, opened trees=51,
+    // and outer balanced Merkle height h=7.
+    // CompactDigestBytes = ceil(k * a / 8) = ceil(52 * 5 / 8) = 33.
     uint16 internal constant CompactDigestBytes = 33;
-    // CompactForsOffset: R(32) || uint32_be(counter).
+    // CompactForsOffset = len(R32 || counter4) = 32 + 4 = 36.
     uint16 internal constant CompactForsOffset = 36;
-    // CompactForsEntryBytes: secret leaf plus a=5 authentication nodes.
+    // CompactForsEntryBytes = secretLeaf32 + authPath(5 * 32) = 192.
     uint16 internal constant CompactForsEntryBytes = 192;
-    // CompactQOffset: byte offset of the balanced-tree leaf q.
+    // CompactQOffset = 36 + 51 * 192 = 9828.
     uint16 internal constant CompactQOffset = 9828;
-    // CompactMerkleAuthOffset: byte offset of the h=7 balanced-tree auth path.
+    // CompactMerkleAuthOffset = CompactQOffset + q1 = 9829.
     uint16 internal constant CompactMerkleAuthOffset = 9829;
-    // CompactSignatureBytes: 32 + 4 + 51 * (32 + 5 * 32) + 1 + 7 * 32.
+    // CompactSignatureBytes = 32 + 4 + 51 * 192 + 1 + 7 * 32 = 10053.
     uint16 internal constant CompactSignatureBytes = 10053;
     // ForsPkInputBytes: pkSeed || FORS_ROOTS ADRS || 51 reconstructed roots.
     uint16 internal constant ForsPkInputBytes = 1696;

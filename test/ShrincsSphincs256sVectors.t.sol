@@ -19,6 +19,7 @@ pragma solidity ^0.8.28;
 import {Test} from "../lib/forge-std/src/Test.sol";
 import {SHRINCS} from "../contracts/SHRINCS.sol";
 import {ShrincsTypes} from "../contracts/ShrincsTypes.sol";
+import {ShrincsTestSigner} from "./helpers/ShrincsTestSigner.sol";
 
 contract StatefulHarness {
     function verifyUnsafeRaw(
@@ -96,6 +97,24 @@ contract CompactHarness {
 
     function actionMessageHash(ShrincsTypes.ActionContext calldata context) external pure returns (bytes32) {
         return SHRINCS.compactActionMessageHash(context);
+    }
+
+    function registrationMessageHash(
+        bytes32 expectedCompositePublicKey,
+        ShrincsTypes.RotationContext calldata context,
+        bytes32 subPkSeed,
+        bytes32 subPkRoot
+    ) external pure returns (bytes32) {
+        return SHRINCS.compactSlotRegistrationMessageHash(expectedCompositePublicKey, context, subPkSeed, subPkRoot);
+    }
+
+    function revocationMessageHash(
+        bytes32 expectedCompositePublicKey,
+        ShrincsTypes.RotationContext calldata context,
+        bytes32 subPkSeed,
+        bytes32 subPkRoot
+    ) external pure returns (bytes32) {
+        return SHRINCS.compactSlotRevocationMessageHash(expectedCompositePublicKey, context, subPkSeed, subPkRoot);
     }
 
     function slotId(bytes32 subPkSeed, bytes32 subPkRoot) external pure returns (bytes32) {
@@ -862,6 +881,62 @@ contract ShrincsSphincs256sVectorsTest is Test {
         );
     }
 
+    function testCompactSlotRegistrationMessageHashMatchesPackedEncoding() public view {
+        bytes32 expectedCompositePublicKey = keccak256("installed key");
+        bytes32 subPkSeed = keccak256("compact seed");
+        bytes32 subPkRoot = keccak256("compact root");
+        ShrincsTypes.RotationContext memory context =
+            ShrincsTypes.RotationContext({domainSeparator: keccak256("shrincs-account"), nonce: 7, keyVersion: 2});
+        bytes32 slotId = keccak256(abi.encodePacked(subPkSeed, subPkRoot));
+        bytes32 expected = keccak256(
+            abi.encodePacked(
+                ShrincsTypes.OP_REGISTER_COMPACT_SLOT,
+                ShrincsTypes.HASH_SUITE_KECCAK_256,
+                expectedCompositePublicKey,
+                context.domainSeparator,
+                context.nonce,
+                context.keyVersion,
+                slotId,
+                subPkSeed,
+                subPkRoot
+            )
+        );
+
+        assertEq(
+            compact.registrationMessageHash(expectedCompositePublicKey, context, subPkSeed, subPkRoot),
+            expected,
+            "compact slot registration hash packed encoding"
+        );
+    }
+
+    function testCompactSlotRevocationMessageHashMatchesPackedEncoding() public view {
+        bytes32 expectedCompositePublicKey = keccak256("installed key");
+        bytes32 subPkSeed = keccak256("compact seed");
+        bytes32 subPkRoot = keccak256("compact root");
+        ShrincsTypes.RotationContext memory context =
+            ShrincsTypes.RotationContext({domainSeparator: keccak256("shrincs-account"), nonce: 8, keyVersion: 3});
+        bytes32 slotId = keccak256(abi.encodePacked(subPkSeed, subPkRoot));
+        bytes32 expected = keccak256(
+            abi.encodePacked(
+                ShrincsTypes.OP_REVOKE_COMPACT_SLOT,
+                ShrincsTypes.HASH_SUITE_KECCAK_256,
+                expectedCompositePublicKey,
+                context.domainSeparator,
+                context.nonce,
+                context.keyVersion,
+                slotId,
+                subPkSeed,
+                subPkRoot
+            )
+        );
+
+        assertEq(
+            compact.revocationMessageHash(expectedCompositePublicKey, context, subPkSeed, subPkRoot),
+            expected,
+            "compact slot revocation hash packed encoding"
+        );
+    }
+
     function testCompactActionMessageHashMatchesPackedEncoding() public view {
         ShrincsTypes.ActionContext memory context = ShrincsTypes.ActionContext({
             domainSeparator: keccak256("shrincs-account"),
@@ -921,6 +996,24 @@ contract ShrincsSphincs256sVectorsTest is Test {
 
         assertEq(
             compact.verify(subPkSeed, subPkRoot, context, malformedSignature), false, "compact malformed raw signature"
+        );
+    }
+
+    function testCompactVerifyAcceptsSignedRawFixture() public view {
+        uint8 q = 11;
+        (bytes32 skSeed, bytes32 subPkSeed, bytes32 subPkRoot, bool keygenOk) =
+            ShrincsTestSigner.compactSingleLaneKeygen(bytes("compact signed raw fixture"), q);
+        assertTrue(keygenOk, "compact fixture keygen must succeed");
+
+        bytes32 message = keccak256("compact raw message");
+        (bytes memory signature, bool signOk) =
+            ShrincsTestSigner.signCompactRaw(skSeed, subPkSeed, subPkRoot, message, q);
+        assertTrue(signOk, "compact fixture signing must succeed");
+
+        assertTrue(compact.verifyUnsafeRaw(subPkSeed, subPkRoot, message, signature), "signed compact fixture");
+        assertFalse(
+            compact.verifyUnsafeRaw(subPkSeed, subPkRoot, keccak256("wrong compact raw message"), signature),
+            "compact fixture must bind message"
         );
     }
 
