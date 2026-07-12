@@ -59,13 +59,12 @@ import {SHRINCS} from "./SHRINCS.sol";
 ///
 /// Caller obligations. Every SHRINCS library is `pure` and both adapters
 /// are storage-free (their entrypoints are `view` or `pure`); they verify a
-/// signature and nothing more. All
-/// statefulness is the WRAPPER contract's job: single-use tracking of
-/// stateful leaves, nonce and keyVersion replay scoping, and installing the
-/// commitment a rotation returns. SHRINCSAccountVerifierExample is the
-/// reference wrapper. Any future storage-needing helper belongs in a
-/// separate wrapper/base contract at the top of the inheritance chain, never
-/// in these libraries or adapters.
+/// signature and nothing more. All statefulness is the WRAPPER contract's
+/// job: single-use tracking of stateful leaves, nonce and keyVersion replay
+/// scoping, and installing the commitment a rotation returns.
+/// SHRINCSAccountVerifierExample is the reference wrapper. Any future
+/// storage-needing helper belongs in a separate wrapper/base contract at the
+/// top of the inheritance chain, never in these libraries or adapters.
 ///
 /// @dev Abstract profile base. The verify/decode logic is profile-agnostic
 /// (it takes its parameter tuple from the compile-time-selected
@@ -90,7 +89,7 @@ abstract contract SHRINCSVerifier is IERC7913SignatureVerifier {
     /// @notice ERC-7913 verification entrypoint for stateful signatures.
     /// @dev Decodes the 32-byte key into the installed bundle commitment
     /// (wrong length -> 0xffffffff) and re-tags the stateful envelope in
-    /// place (a malformed envelope reverts downstream). verify then hands the
+    /// place (a malformed envelope reverts downstream), then hands the
     /// typed calldata struct pointers straight to the calldata-typed SHRINCS
     /// library, which enforces the commitment-vs-bundle match, bundle shape,
     /// leaf-index bounds, WOTS-C

@@ -317,7 +317,11 @@ adjacent calldata such as the outer ABI zero-padding. Under masked-hash
 tail-truncated envelope that `abi.decode` would reject reads its stripped
 tail back from that padding and still verifies. Acceptance never reaches
 a wrong-accept: accepted reads always equal a valid signature's exact
-field values.
+field values. One qualification applies to the stateless delegation
+path: it slices a bounded signature region before forwarding it to the
+SPHINCS+C sibling, so a framing that reproduces those fields only by
+reading out into adjacent calldata can revert or return `false` at the
+sibling rather than verify there.
 
 **Malleability caveat.** Because these field-value-equivalent framings
 all verify, an external consumer that keys, caches, or deduplicates on
@@ -334,14 +338,14 @@ encoding.
 flowchart LR
     subgraph "Stateful path (normal case)"
         A1["action context<br/>(domain, nonce, keyVersion,<br/>actionType, payloadHash)"] --> A2["statefulActionMessageHash"]
-        A2 --> A3["validate expected<br/>public root (Utils)"]
+        A2 --> A3["validate expected<br/>public root"]
         A3 --> A4["recompute compact WOTS-C<br/>pk hash from 64 chains<br/>(target-sum 480 check)"]
         A4 --> A5["fold unbalanced-XMSS<br/>auth path"]
         A5 --> A6{"== stateful root?"}
     end
 
     subgraph "Stateless path (fallback / rotation authorization)"
-        B1["action or rotation<br/>message hash"] --> B2["validate public key +<br/>public root (Utils)"]
+        B1["action or rotation<br/>message hash"] --> B2["validate public key +<br/>public root"]
         B2 --> B3["FORS-C: digest, omitted final<br/>tree leaf == 0, rebuild 21 tree<br/>roots → fors-pk root"]
         B3 --> B4["forsRoot"]
         B4 --> B5["8 hypertree layers:<br/>WOTS-C verify + Merkle path,<br/>root chains upward"]

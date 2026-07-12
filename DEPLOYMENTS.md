@@ -30,8 +30,7 @@ No chain has a deployment yet, so nothing is burned.
    Deploy each SPHINCSPlusC verifier BEFORE its SHRINCS sibling: CREATE3
    fixes the address either way, but `SHRINCSVerifier.verifyStateless`
    reverts on empty code, and each SHRINCS deploy script asserts its
-   sibling is
-   already deployed at the pinned address.
+   sibling is already deployed at the pinned address.
 
    ```bash
    FOUNDRY_PROFILE=production forge script \
@@ -184,8 +183,8 @@ CREATE2 ties the address to the init code, so any recompile moved it.
 CREATE3 removes that coupling, so the profile split adopts it. That
 single verifier is now the abstract `SHRINCSVerifier` base
 (contracts/SHRINCSVerifier.sol) of the concrete per-profile verifiers,
-so this exact artifact is no
-longer deployable; the address above was never used on any chain.
+so this exact artifact is no longer deployable; the address above was
+never used on any chain.
 
 ### WOTS+ — Hardhat Ignition
 

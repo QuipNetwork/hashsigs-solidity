@@ -172,6 +172,8 @@ library Hypertree {
     // explicit checksum suffix.
     // 6. Hash the reconstructed segments and compare them to the expected
     // public-key hash.
+    /// @dev Precondition: pkSeedBytes is exactly 32 bytes,
+    /// validPublicKey-checked or a 32-byte slice, as the read below assumes.
     function verifyWotsC32(
         bytes calldata pkSeedBytes,
         uint32 layer,
@@ -374,6 +376,8 @@ library Hypertree {
     // 3. Rebuild each parent node with the correct left/right ordering and
     // address.
     // 4. Return the reconstructed subtree root and success flag.
+    /// @dev Precondition: pkSeed is exactly 32 bytes, validPublicKey-checked
+    /// or a 32-byte key slice, as the fixed calldata read below assumes.
     function hypertreeRootFromPath32(
         uint32 height,
         bytes calldata pkSeed,

@@ -63,6 +63,8 @@ library FORSMinusC {
     // 5. Hash those per-tree roots together into the reconstructed FORS root.
     // 6. Return the FORS root for hypertree verification together with a
     // success flag.
+    /// @dev Precondition: pkSeed is exactly 32 bytes, validPublicKey-checked
+    /// or a 32-byte key slice, as the fixed calldata read below assumes.
     function verifyForsCAndReturnRoot(
         bytes calldata pkSeed,
         bytes calldata hypertreeRoot,
@@ -296,6 +298,8 @@ library FORSMinusC {
     // 2. Bind the public seed and leaf address.
     // 3. Mix in the revealed secret leaf bytes.
     // 4. Return the public FORS leaf value.
+    /// @dev Precondition: pkSeed is exactly 32 bytes, validPublicKey-checked
+    /// or a 32-byte key slice, as the fixed calldata read below assumes.
     function hashForsLeaf32(
         bytes calldata pkSeed,
         bytes32 addressWord,
@@ -334,6 +338,8 @@ library FORSMinusC {
     // 2. Bind the public seed and parent-node address.
     // 3. Mix in the left and right child values in canonical order.
     // 4. Return the parent node value.
+    /// @dev Precondition: pkSeed is exactly 32 bytes, validPublicKey-checked
+    /// or a 32-byte key slice, as the fixed calldata read below assumes.
     function hashForsNode32(
         bytes calldata pkSeed,
         bytes32 addressWord,
@@ -434,6 +440,8 @@ library FORSMinusC {
     // 3. Mix in the signed message bytes.
     // 4. Produce either one digest block or as many blocks as needed.
     // 5. Return exactly the requested number of digest bytes.
+    /// @dev Precondition: pkSeed is exactly 32 bytes, validPublicKey-checked
+    /// or a 32-byte key slice, as the fixed calldata read below assumes.
     function forsDigestBytes(
         bytes calldata pkSeed,
         bytes calldata hypertreeRoot,

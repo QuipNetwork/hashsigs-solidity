@@ -28,6 +28,12 @@ import {UXMSS} from "../contracts/UXMSS.sol";
 /// values into both structs and asserts abi.encode byte equality, so any
 /// future field reorder/type change in one struct that is not mirrored in the
 /// other fails closed here.
+/// @dev Coverage limit: abi.encode equality cannot detect a same-word
+/// numeric widening (e.g. one struct's `counter` widened uint32 -> uint64):
+/// both pad to the same 32-byte word for every value <= uint32.max, so the
+/// boundary case below cannot flag it either. That residual drift is guarded
+/// by the mirrored struct-field comments and review; the boundary case pins
+/// the narrowing/reorder half that encode equality DOES catch.
 contract SHRINCSSignatureTwinDriftTest is Test {
     function testTwinLayoutEquality() public pure {
         bytes32[] memory chains = new bytes32[](3);
@@ -56,6 +62,40 @@ contract SHRINCSSignatureTwinDriftTest is Test {
             keccak256(abi.encode(shrincsSignature)),
             keccak256(abi.encode(uxmssSignature)),
             "SHRINCS.Signature and UXMSS.Signature layouts diverged"
+        );
+    }
+
+    // Boundary fixture: max-width counter and all-ones words. This does not
+    // close the widening blind spot documented in the contract header, but a
+    // field narrowed below uint32 would fail to compile the max counter here,
+    // and a reorder still fails the byte-equality assertion.
+    function testTwinLayoutEqualityAtBoundaries() public pure {
+        bytes32[] memory chains = new bytes32[](3);
+        chains[0] = bytes32(type(uint256).max);
+        chains[1] = bytes32(uint256(0));
+        chains[2] = bytes32(type(uint256).max);
+
+        bytes32[] memory authPath = new bytes32[](2);
+        authPath[0] = bytes32(type(uint256).max);
+        authPath[1] = bytes32(uint256(0));
+
+        SHRINCS.Signature memory shrincsSignature = SHRINCS.Signature({
+            randomizer: bytes32(type(uint256).max),
+            counter: type(uint32).max,
+            chains: chains,
+            authPath: authPath
+        });
+        UXMSS.Signature memory uxmssSignature = UXMSS.Signature({
+            randomizer: bytes32(type(uint256).max),
+            counter: type(uint32).max,
+            chains: chains,
+            authPath: authPath
+        });
+
+        assertEq(
+            keccak256(abi.encode(shrincsSignature)),
+            keccak256(abi.encode(uxmssSignature)),
+            "SHRINCS.Signature and UXMSS.Signature layouts diverged at bounds"
         );
     }
 }

@@ -46,17 +46,16 @@ import {SPHINCSPlusC} from "./SPHINCSPlusC.sol";
 /// calldata such as the outer ABI padding, and under masked-hash profiles a
 /// tail-truncated envelope can still verify. This is pure encoding
 /// malleability, never a wrong-accept; consumers must key on decoded fields,
-/// not envelope bytes. verify runs in-contract through the calldata-typed
-/// SPHINCSPlusC library, verifying the re-tagged envelope in place with no
-/// external call.
+/// not envelope bytes. Verification runs in-contract through the
+/// calldata-typed SPHINCSPlusC library, verifying the re-tagged envelope in
+/// place with no external call.
 ///
 /// Caller obligations. Every SPHINCSPlusC library is `pure` and this
 /// adapter's `verify` is likewise storage-free and `pure` (removing the
 /// self-call hop left no external call); it verifies a signature and nothing
-/// more. All
-/// statefulness — stateless-budget accounting, nonce/keyVersion replay
-/// scoping, installing a rotated key — is the WRAPPER contract's job.
-/// SHRINCSAccountVerifierExample is the reference wrapper. Any future
+/// more. All statefulness — stateless-budget accounting, nonce/keyVersion
+/// replay scoping, installing a rotated key — is the WRAPPER contract's
+/// job. SHRINCSAccountVerifierExample is the reference wrapper. Any future
 /// storage-needing helper belongs in a separate wrapper/base contract at the
 /// top of the inheritance chain, never in this adapter or its libraries.
 ///
@@ -81,7 +80,7 @@ abstract contract SPHINCSPlusCVerifier is IERC7913SignatureVerifier {
     /// signatures.
     /// @dev Decodes the 64-byte key into two calldata seed slices (wrong
     /// length -> 0xffffffff) and re-tags the stateless-signature envelope in
-    /// place (a malformed envelope reverts downstream). verify hands the seed
+    /// place (a malformed envelope reverts downstream), then hands the seed
     /// slices and the re-tagged signature to the calldata-typed SPHINCSPlusC
     /// library, which verifies FORS-C plus the hypertree over the 32 hash
     /// bytes under the public seed and root. No call, no try/catch: an
