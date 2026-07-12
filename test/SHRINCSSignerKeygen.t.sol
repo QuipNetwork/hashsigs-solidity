@@ -21,7 +21,6 @@ import {SHRINCSTestSigner} from "./helpers/SHRINCSTestSigner.sol";
 import {SHRINCS} from "../contracts/SHRINCS.sol";
 import {UXMSS} from "../contracts/UXMSS.sol";
 import {SHRINCSParams} from "shrincs-profile/SHRINCSParams.sol";
-import {SHRINCSCodec} from "../contracts/SHRINCSCodec.sol";
 
 contract SHRINCSSignerHarness {
     function keygen(bytes memory seedMaterial, uint32 maxStatefulSignatures)
@@ -37,7 +36,7 @@ contract SHRINCSSignerHarness {
         pure
         returns (UXMSS.StatefulPublicKey memory, bool)
     {
-        return SHRINCSCodec.decodeStatefulPublicKey(encoded);
+        return SHRINCS.decodeStatefulPublicKey(encoded);
     }
 }
 
@@ -145,7 +144,7 @@ contract SHRINCSSignerKeygenTest is Test {
         assertEq(publicKey.hypertreeRoot.length, 32);
 
         // line-length: allow — fmt canonical call head exceeds cap
-        bytes32 expectedCommitment = SHRINCSCodec.publicKeyCommitmentFromParts(
+        bytes32 expectedCommitment = SHRINCS.publicKeyCommitmentFromParts(
             publicKey.statefulPublicKey,
             publicKey.pkSeed,
             publicKey.hypertreeRoot

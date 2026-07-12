@@ -532,7 +532,7 @@ contract SHRINCSAccountVerifierExampleTest is Test {
 
     // M2 pinning: deterministic wild-pointer (E1b) probes on the
     // offset-bearing head words of the two 4-tuple action re-tags
-    // (SHRINCSCodec.statefulActionEnvelope / statelessActionEnvelope). The
+    // (SHRINCS.statefulActionEnvelope / statelessActionEnvelope). The
     // abi.encode head is publicKey offset (word 0), inline actionType and
     // payloadHash (words 1 and 2), signature offset (word 3); only words 0
     // and 3 are offsets. The supplied hash is the matching canonical action

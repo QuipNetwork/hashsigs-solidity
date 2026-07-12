@@ -21,7 +21,6 @@ import {
     IERC7913SignatureVerifier
 } from "../contracts/interfaces/IERC7913SignatureVerifier.sol";
 import {SHRINCS} from "../contracts/SHRINCS.sol";
-import {SHRINCSCodec} from "../contracts/SHRINCSCodec.sol";
 import {SHRINCSVerifier} from "../contracts/SHRINCSVerifier.sol";
 import {
     SHRINCSAccountVerifierExample
@@ -112,7 +111,7 @@ contract SHRINCSMutationFuzzTest is Test {
         signature.chains[index] =
             bytes32(uint256(signature.chains[index]) ^ (uint256(flip) | 1));
         bytes memory mutated =
-            SHRINCSCodec.encodeStatefulEnvelope(publicKey, signature);
+            SHRINCS.encodeStatefulEnvelope(publicKey, signature);
         assertEq(
             rawVerifier.verify(rawKey, rawHash, mutated),
             INVALID_SIGNATURE,
@@ -130,7 +129,7 @@ contract SHRINCSMutationFuzzTest is Test {
         // XOR flips at least one counter bit without overflowing uint32.
         signature.counter = signature.counter ^ bump;
         bytes memory mutated =
-            SHRINCSCodec.encodeStatefulEnvelope(publicKey, signature);
+            SHRINCS.encodeStatefulEnvelope(publicKey, signature);
         assertEq(
             rawVerifier.verify(rawKey, rawHash, mutated),
             INVALID_SIGNATURE,
@@ -179,7 +178,6 @@ contract SHRINCSMutationFuzzTest is Test {
         );
         assertTrue(ok, "raw sign");
         rawKey = abi.encodePacked(commitment);
-        rawEnvelope =
-            SHRINCSCodec.encodeStatefulEnvelope(publicKey, signature);
+        rawEnvelope = SHRINCS.encodeStatefulEnvelope(publicKey, signature);
     }
 }

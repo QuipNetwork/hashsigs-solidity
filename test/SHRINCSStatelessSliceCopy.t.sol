@@ -17,7 +17,6 @@
 pragma solidity ^0.8.28;
 
 import {Test} from "../lib/forge-std/src/Test.sol";
-import {SHRINCSCodec} from "../contracts/SHRINCSCodec.sol";
 import {SHRINCS} from "../contracts/SHRINCS.sol";
 import {SPHINCSPlusC} from "../contracts/SPHINCSPlusC.sol";
 import {FORSMinusC} from "../contracts/FORSMinusC.sol";
@@ -43,9 +42,9 @@ contract SliceCopyHarness {
         returns (bytes memory slice, bytes memory oracle)
     {
         (, SPHINCSPlusC.Signature calldata sig) =
-            SHRINCSCodec.statelessEnvelope(envelope);
-        slice = SHRINCSCodec.sliceStatelessSignatureEnvelope(sig);
-        oracle = SHRINCSCodec.encodeStatelessSignatureEnvelope(sig);
+            SHRINCS.statelessEnvelope(envelope);
+        slice = SHRINCS.sliceStatelessSignatureEnvelope(sig);
+        oracle = SPHINCSPlusC.encodeStatelessSignatureEnvelope(sig);
     }
 
     /// @dev A masked-profile-legal tail truncation: the envelope view is cut
@@ -59,9 +58,9 @@ contract SliceCopyHarness {
     {
         bytes calldata env = envelope[0:envelope.length - cut];
         (, SPHINCSPlusC.Signature calldata sig) =
-            SHRINCSCodec.statelessEnvelope(env);
-        slice = SHRINCSCodec.sliceStatelessSignatureEnvelope(sig);
-        oracle = SHRINCSCodec.encodeStatelessSignatureEnvelope(sig);
+            SHRINCS.statelessEnvelope(env);
+        slice = SHRINCS.sliceStatelessSignatureEnvelope(sig);
+        oracle = SPHINCSPlusC.encodeStatelessSignatureEnvelope(sig);
     }
 
     function buildSlice(bytes calldata envelope)
@@ -70,9 +69,9 @@ contract SliceCopyHarness {
         returns (uint256 used, bytes memory out)
     {
         (, SPHINCSPlusC.Signature calldata sig) =
-            SHRINCSCodec.statelessEnvelope(envelope);
+            SHRINCS.statelessEnvelope(envelope);
         uint256 g = gasleft();
-        out = SHRINCSCodec.sliceStatelessSignatureEnvelope(sig);
+        out = SHRINCS.sliceStatelessSignatureEnvelope(sig);
         used = g - gasleft();
     }
 
@@ -82,15 +81,15 @@ contract SliceCopyHarness {
         returns (uint256 used, bytes memory out)
     {
         (, SPHINCSPlusC.Signature calldata sig) =
-            SHRINCSCodec.statelessEnvelope(envelope);
+            SHRINCS.statelessEnvelope(envelope);
         uint256 g = gasleft();
-        out = SHRINCSCodec.encodeStatelessSignatureEnvelope(sig);
+        out = SPHINCSPlusC.encodeStatelessSignatureEnvelope(sig);
         used = g - gasleft();
     }
 }
 
 /// @notice Differential proof that the delegation-path slice-copy
-/// (SHRINCSCodec.sliceStatelessSignatureEnvelope) reproduces exactly the
+/// (SHRINCS.sliceStatelessSignatureEnvelope) reproduces exactly the
 /// bytes abi.encode of the re-tagged stateless signature would produce, over
 /// the real 256s vector, a fuzz of well-formed re-encoded envelopes, and a
 /// masked-profile-legal tail-truncated frame; plus the gas reduction from
@@ -192,7 +191,7 @@ contract SHRINCSStatelessSliceCopyTest is Test {
             hypertreeRoot: leaf
         });
         bytes memory envelope =
-            SHRINCSCodec.encodeStatelessEnvelope(publicKey, signature);
+            SHRINCS.encodeStatelessEnvelope(publicKey, signature);
         (bytes memory slice, bytes memory oracle) =
             harness.sliceVsOracle(envelope);
         assertEq(
@@ -229,6 +228,6 @@ contract SHRINCSStatelessSliceCopyTest is Test {
             );
         require(completeOk, "complete");
 
-        envelope = SHRINCSCodec.encodeStatelessEnvelope(publicKey, signature);
+        envelope = SHRINCS.encodeStatelessEnvelope(publicKey, signature);
     }
 }

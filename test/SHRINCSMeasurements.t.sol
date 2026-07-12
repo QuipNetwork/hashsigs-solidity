@@ -21,7 +21,6 @@ import {Vm} from "../lib/forge-std/src/Vm.sol";
 import {
     IERC7913SignatureVerifier
 } from "../contracts/interfaces/IERC7913SignatureVerifier.sol";
-import {SHRINCSCodec} from "../contracts/SHRINCSCodec.sol";
 import {SHRINCS} from "../contracts/SHRINCS.sol";
 import {SPHINCSPlusC} from "../contracts/SPHINCSPlusC.sol";
 import {SHRINCS256sKeccak} from "../contracts/SHRINCS256sKeccak.sol";
@@ -341,7 +340,7 @@ contract SHRINCSMeasurementsTest is Test {
             verifier.pinned()
         );
         key = abi.encodePacked(publicKeyCommitmentWord(publicKey));
-        envelope = SHRINCSCodec.encodeStatelessEnvelope(publicKey, signature);
+        envelope = SHRINCS.encodeStatelessEnvelope(publicKey, signature);
     }
 
     function publicKeyCommitmentWord(SHRINCS.PublicKey memory publicKey)

@@ -20,7 +20,6 @@ import {Test} from "../lib/forge-std/src/Test.sol";
 import {
     IERC7913SignatureVerifier
 } from "../contracts/interfaces/IERC7913SignatureVerifier.sol";
-import {SHRINCSCodec} from "../contracts/SHRINCSCodec.sol";
 import {SHRINCS} from "../contracts/SHRINCS.sol";
 import {SPHINCSPlusC} from "../contracts/SPHINCSPlusC.sol";
 import {FORSMinusC} from "../contracts/FORSMinusC.sol";
@@ -58,7 +57,7 @@ contract RetagDigestHarness {
         (
             SHRINCS.PublicKey calldata publicKey,
             SHRINCS.Signature calldata signature
-        ) = SHRINCSCodec.statefulEnvelope(payload);
+        ) = SHRINCS.statefulEnvelope(payload);
         return keccak256(
             abi.encode(
                 publicKey.statefulPublicKey,
@@ -105,7 +104,7 @@ contract RetagDigestHarness {
         (
             SHRINCS.PublicKey calldata publicKey,
             SPHINCSPlusC.Signature calldata signature
-        ) = SHRINCSCodec.statelessEnvelope(payload);
+        ) = SHRINCS.statelessEnvelope(payload);
         return keccak256(
             abi.encode(
                 publicKey.statefulPublicKey,
@@ -144,7 +143,7 @@ contract RetagDigestHarness {
         returns (bytes32)
     {
         SPHINCSPlusC.Signature calldata signature =
-            SHRINCSCodec.statelessSignatureEnvelope(payload);
+            SPHINCSPlusC.statelessSignatureEnvelope(payload);
         return keccak256(abi.encode(signature));
     }
 
@@ -238,7 +237,7 @@ contract SHRINCSCalldataRetagTest is Test {
             SHRINCSAccountSigningFacade.publicKeyCommitmentWord(publicKey)
         );
         statefulEnvelope =
-            SHRINCSCodec.encodeStatefulEnvelope(publicKey, signature);
+            SHRINCS.encodeStatefulEnvelope(publicKey, signature);
     }
 
     /// @dev External so the heavy stateless signing runs in its own memory
@@ -279,13 +278,12 @@ contract SHRINCSCalldataRetagTest is Test {
         sKey = abi.encodePacked(
             SHRINCSAccountSigningFacade.publicKeyCommitmentWord(publicKey)
         );
-        sEnvelope =
-            SHRINCSCodec.encodeStatelessEnvelope(publicKey, signature);
-        sigKey = SHRINCSCodec.encodeStatelessKey(
+        sEnvelope = SHRINCS.encodeStatelessEnvelope(publicKey, signature);
+        sigKey = SHRINCS.encodeStatelessKey(
             signingKey.pkSeed, signingKey.hypertreeRoot
         );
         sigEnvelope =
-            SHRINCSCodec.encodeStatelessSignatureEnvelope(signature);
+            SPHINCSPlusC.encodeStatelessSignatureEnvelope(signature);
     }
 
     // ---------------------------------------------------------------- //
@@ -343,7 +341,7 @@ contract SHRINCSCalldataRetagTest is Test {
             authPath: authPath
         });
         bytes memory envelope =
-            SHRINCSCodec.encodeStatefulEnvelope(publicKey, signature);
+            SHRINCS.encodeStatefulEnvelope(publicKey, signature);
         assertEq(
             digest.retagStateful(envelope),
             digest.abiStateful(envelope),
@@ -397,7 +395,7 @@ contract SHRINCSCalldataRetagTest is Test {
             hypertree: hypertree
         });
         bytes memory envelope =
-            SHRINCSCodec.encodeStatelessSignatureEnvelope(signature);
+            SPHINCSPlusC.encodeStatelessSignatureEnvelope(signature);
         assertEq(
             digest.retagSignature(envelope),
             digest.abiSignature(envelope),

@@ -20,8 +20,8 @@ import {Test} from "../lib/forge-std/src/Test.sol";
 import {
     IERC7913SignatureVerifier
 } from "../contracts/interfaces/IERC7913SignatureVerifier.sol";
-import {SHRINCSCodec} from "../contracts/SHRINCSCodec.sol";
 import {SHRINCS} from "../contracts/SHRINCS.sol";
+import {SPHINCSPlusC} from "../contracts/SPHINCSPlusC.sol";
 import {SHRINCSParams} from "shrincs-profile/SHRINCSParams.sol";
 import {SHRINCSVerifier} from "../contracts/SHRINCSVerifier.sol";
 import {SHRINCSTestSigner} from "./helpers/SHRINCSTestSigner.sol";
@@ -157,7 +157,7 @@ contract SHRINCSCodecHarness {
         pure
         returns (bytes32 commitment, bool ok)
     {
-        return SHRINCSCodec.decodePublicKeyCommitment(key);
+        return SHRINCS.decodePublicKeyCommitment(key);
     }
 
     function decodeStatefulEnvelope(bytes calldata envelope)
@@ -169,14 +169,14 @@ contract SHRINCSCodecHarness {
             bool ok
         )
     {
-        return SHRINCSCodec.decodeStatefulEnvelope(envelope);
+        return SHRINCS.decodeStatefulEnvelope(envelope);
     }
 
     function encodeStatefulEnvelope(
         SHRINCS.PublicKey memory publicKey,
         SHRINCS.Signature memory signature
     ) external pure returns (bytes memory envelope) {
-        return SHRINCSCodec.encodeStatefulEnvelope(publicKey, signature);
+        return SHRINCS.encodeStatefulEnvelope(publicKey, signature);
     }
 
     function toMessage(bytes32 hash)
@@ -184,7 +184,7 @@ contract SHRINCSCodecHarness {
         pure
         returns (bytes memory message)
     {
-        return SHRINCSCodec.toMessage(hash);
+        return SPHINCSPlusC.toMessage(hash);
     }
 }
 
@@ -488,8 +488,7 @@ contract SHRINCSCodecERC7913IntegrationTest is Test {
         }
 
         validKey = abi.encodePacked(commitmentWord);
-        validEnvelope =
-            SHRINCSCodec.encodeStatefulEnvelope(publicKey, signature);
+        validEnvelope = SHRINCS.encodeStatefulEnvelope(publicKey, signature);
         erc1271Signer = new CodecMockERC1271Signer(signedHash, validEnvelope);
     }
 
@@ -504,7 +503,7 @@ contract SHRINCSCodecERC7913IntegrationTest is Test {
             SHRINCS.Signature memory signature
         ) = decodeRustStatefulVector();
         bytes memory envelope =
-            SHRINCSCodec.encodeStatefulEnvelope(publicKey, signature);
+            SHRINCS.encodeStatefulEnvelope(publicKey, signature);
 
         assertEq(
             verifier.verify(publicKey.publicKeyCommitment, hash, envelope),

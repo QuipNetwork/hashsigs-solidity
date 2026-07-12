@@ -18,7 +18,6 @@ pragma solidity ^0.8.28;
 
 import {FORSMinusC} from "./FORSMinusC.sol";
 import {Hypertree} from "./Hypertree.sol";
-import {SHRINCSCodec} from "./SHRINCSCodec.sol";
 
 /// @title SPHINCSPlusC
 /// @notice Stateless SPHINCS+C-style verification ([SPHINCSPLUSC]): a FORS-C
@@ -56,7 +55,7 @@ library SPHINCSPlusC {
             bool ok
         )
     {
-        return SHRINCSCodec.decodeStatelessKey(key);
+        return decodeStatelessKey(key);
     }
 
     // signatureEnvelope: Facade forward re-tagging the SPHINCSPlusCVerifier
@@ -68,7 +67,7 @@ library SPHINCSPlusC {
         pure
         returns (Signature calldata signature)
     {
-        return SHRINCSCodec.statelessSignatureEnvelope(envelope);
+        return statelessSignatureEnvelope(envelope);
     }
 
     // verify: Facade verify over a hash and the two seed slices. Wraps
@@ -80,9 +79,7 @@ library SPHINCSPlusC {
         bytes32 hash,
         Signature calldata signature
     ) internal pure returns (bool) {
-        return verify(
-            pkSeed, hypertreeRoot, SHRINCSCodec.toMessage(hash), signature
-        );
+        return verify(pkSeed, hypertreeRoot, toMessage(hash), signature);
     }
 
     // verify: Verify a stateless signature after the caller has already
@@ -115,5 +112,85 @@ library SPHINCSPlusC {
         return Hypertree.verifyHypertree(
             pkSeed, hypertreeRoot, forsRoot, signature.hypertree
         );
+    }
+
+    // Encoders and decoders (folded from the dissolved codec library).
+    // Stateless key/message/signature-envelope serialization backing
+    // the public API above; none reference SHRINCS types, keeping this
+    // base library free of any edge to the hybrid SHRINCS layer.
+
+    /// @notice Decode the SPHINCSPlusCVerifier key into its two seed slices.
+    /// @dev Key layout is abi.encode(bytes32 pkSeed, bytes32 hypertreeRoot),
+    /// exactly 64 bytes of static words with no framing, so the length
+    /// check is a complete canonicity check. The two 32-byte seed words are
+    /// returned as calldata slices the stateless verify path reads in place,
+    /// with no copy. Never reverts; a wrong length is reported through the ok
+    /// flag.
+    /// @param key The ERC-7913 key bytes (exactly 64 bytes).
+    /// @return pkSeed Calldata slice of the stateless public seed word.
+    /// @return hypertreeRoot Calldata slice of the stateless root word.
+    /// @return ok False when the key length is not 64.
+    function decodeStatelessKey(bytes calldata key)
+        internal
+        pure
+        returns (
+            bytes calldata pkSeed,
+            bytes calldata hypertreeRoot,
+            bool ok
+        )
+    {
+        // Two static bytes32 words abi.encode to exactly 64 bytes.
+        if (key.length != 64) return (key[0:0], key[0:0], false);
+        return (key[0:32], key[32:64], true);
+    }
+
+    /// @notice Inverse of the stateless-signature re-tag
+    /// (statelessSignatureEnvelope). Reference/off-chain encoder and the
+    /// differential oracle for sliceStatelessSignatureEnvelope; the
+    /// delegation path builds through the slice-copy below.
+    /// @dev Builds the SPHINCSPlusCVerifier signature envelope the sub-call
+    /// verify expects, so the delegation path re-encodes through one format
+    /// definition.
+    /// @param signature The stateless signature.
+    /// @return envelope The abi-encoded stateless-signature envelope bytes.
+    function encodeStatelessSignatureEnvelope(
+        SPHINCSPlusC.Signature memory signature
+    ) internal pure returns (bytes memory envelope) {
+        return abi.encode(signature);
+    }
+
+    /// @notice Zero-copy re-tag of a stateless-signature envelope into a
+    /// typed calldata struct pointer.
+    /// @dev Envelope layout is abi.encode(SPHINCSPlusC.Signature): a single
+    /// dynamic struct, so the head is one offset word. Same safety story as
+    /// statefulEnvelope (E1a/E2 revert, E1b lands in {revert, false} via the
+    /// downstream Panic backstop plus the KEEP guards, encoding malleability
+    /// accepted by design).
+    /// @param payload The abi-encoded stateless-signature envelope calldata.
+    /// @return signature Calldata pointer to the stateless signature.
+    function statelessSignatureEnvelope(bytes calldata payload)
+        internal
+        pure
+        returns (SPHINCSPlusC.Signature calldata signature)
+    {
+        // Pure calldata re-tag: reads one offset word into one calldata
+        // pointer; no memory is read or written.
+        assembly ("memory-safe") {
+            signature := add(payload.offset, calldataload(payload.offset))
+        }
+    }
+
+    /// @notice Convert the ERC-7913 32-byte hash into the SHRINCS signed
+    /// message bytes.
+    /// @dev ERC-7913 hands a bytes32 hash; SHRINCS signs raw message bytes.
+    /// The hash IS the message: exactly its 32 bytes, packed.
+    /// @param hash The 32-byte ERC-7913 hash.
+    /// @return message The message bytes SHRINCS signs (the 32 hash bytes).
+    function toMessage(bytes32 hash)
+        internal
+        pure
+        returns (bytes memory message)
+    {
+        return abi.encodePacked(hash);
     }
 }

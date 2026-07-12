@@ -20,7 +20,6 @@ import {Test} from "../lib/forge-std/src/Test.sol";
 import {
     IERC7913SignatureVerifier
 } from "../contracts/interfaces/IERC7913SignatureVerifier.sol";
-import {SHRINCSCodec} from "../contracts/SHRINCSCodec.sol";
 import {SHRINCS} from "../contracts/SHRINCS.sol";
 import {SPHINCSPlusC} from "../contracts/SPHINCSPlusC.sol";
 import {Hypertree} from "../contracts/Hypertree.sol";
@@ -122,7 +121,7 @@ contract SHRINCSStatelessDelegationTest is Test {
     // Pins the delegation slice-build behavior change (epic Z5). The
     // signature's public-key bundle is the valid fixture's, so the commitment
     // and validPublicKey checks pass and prepareStatelessDelegation reaches
-    // SHRINCSCodec.sliceStatelessSignatureEnvelope. That build indexes the
+    // SHRINCS.sliceStatelessSignatureEnvelope. That build indexes the
     // last hypertree layer's last authPath element; on an empty last-layer
     // authPath (or an empty hypertree) the index reads Panic. verifyStateless
     // wraps the delegation build in no try/catch, so the Panic propagates and
@@ -230,7 +229,7 @@ contract SHRINCSStatelessDelegationTest is Test {
         key = abi.encodePacked(
             SHRINCSAccountSigningFacade.publicKeyCommitmentWord(publicKey)
         );
-        envelope = SHRINCSCodec.encodeStatelessEnvelope(publicKey, signature);
+        envelope = SHRINCS.encodeStatelessEnvelope(publicKey, signature);
     }
 
     /// @dev Outcome-only rejection check for the slice-build pin: a revert
@@ -288,13 +287,12 @@ contract SHRINCSStatelessDelegationTest is Test {
         // read Panics; the bundle is untouched so it reaches the slice build.
         uint256 last = signature.hypertree.length - 1;
         signature.hypertree[last].authPath = new bytes[](0);
-        emptyAuthPath =
-            SHRINCSCodec.encodeStatelessEnvelope(publicKey, signature);
+        emptyAuthPath = SHRINCS.encodeStatelessEnvelope(publicKey, signature);
 
         // Empty the whole hypertree: slice-build's hypertree[last] index read
         // Panics.
         signature.hypertree = new Hypertree.HypertreeLayerSignature[](0);
         emptyHypertree =
-            SHRINCSCodec.encodeStatelessEnvelope(publicKey, signature);
+            SHRINCS.encodeStatelessEnvelope(publicKey, signature);
     }
 }

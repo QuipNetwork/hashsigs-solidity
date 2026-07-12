@@ -19,7 +19,6 @@ pragma solidity ^0.8.28;
 import {SHRINCS} from "../../contracts/SHRINCS.sol";
 import {UXMSS} from "../../contracts/UXMSS.sol";
 import {SHRINCSParams} from "shrincs-profile/SHRINCSParams.sol";
-import {SHRINCSCodec} from "../../contracts/SHRINCSCodec.sol";
 import {Hash} from "../../contracts/Hash.sol";
 
 /// @notice TEST-ONLY Solidity signer helpers that mirror the Rust signer for
@@ -84,12 +83,11 @@ library SHRINCSTestSigner {
         bytes memory statefulPublicKey = encodeStatefulPublicKey(
             statefulPkSeed, statefulRoot, maxStatefulSignatures
         );
-        bytes32 publicKeyCommitment =
-            SHRINCSCodec.publicKeyCommitmentFromParts(
-                statefulPublicKey,
-                abi.encodePacked(pkSeed),
-                abi.encodePacked(hypertreeRoot)
-            );
+        bytes32 publicKeyCommitment = SHRINCS.publicKeyCommitmentFromParts(
+            statefulPublicKey,
+            abi.encodePacked(pkSeed),
+            abi.encodePacked(hypertreeRoot)
+        );
         publicKey = SHRINCS.PublicKey({
             statefulPublicKey: statefulPublicKey,
             publicKeyCommitment: abi.encodePacked(publicKeyCommitment),
