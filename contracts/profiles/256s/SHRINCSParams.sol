@@ -28,15 +28,16 @@ pragma solidity ^0.8.28;
 /// constant-fold struct-passed params. See
 /// [DESIGN §2/§3] for the option analysis.
 library SHRINCSParams {
+    // PROFILE_NAME: the canonical suite-qualified profile string. It is
+    // the sole source of this profile's identity: PROFILE_ID hashes it,
+    // and the public-key commitment binds it as the tag suffix
+    // "shrincs-public-key/<PROFILE_NAME>" ([DESIGN §4] rider Q2), so the
+    // two can never drift.
+    string internal constant PROFILE_NAME = "shrincs-256s-keccak";
     // PROFILE_ID: stable identifier for this compiled profile. Consumed
     // by the profile-identity test/CI guard ([DESIGN §3.5]) to catch a
     // wrong-profile or remappings.txt-shadowed build.
-    // TODO(T6): bind PROFILE_ID into the public-key commitment tag
-    // ("shrincs-public-key/<profile>") during the single vector
-    // regeneration event ([DESIGN §4] rider Q2). Not bound yet; the
-    // string already carries the hash suite (-keccak), so T6 binds
-    // suite-qualified ids.
-    bytes32 internal constant PROFILE_ID = keccak256("shrincs-256s-keccak");
+    bytes32 internal constant PROFILE_ID = keccak256(bytes(PROFILE_NAME));
 
     // Encoded stateful public key layout:
     // 32-byte pkSeed || 32-byte root || 4-byte maxSignatures.

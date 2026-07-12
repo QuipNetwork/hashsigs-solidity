@@ -863,7 +863,9 @@ library SHRINCS {
 
     // publicKeyCommitment: Recompute the bundle commitment from a fully
     // encoded public key.
-    // 1. Domain-separate the commitment as a SHRINCS public-key bundle hash.
+    // 1. Domain-separate the commitment as a SHRINCS public-key bundle hash
+    // profile-bound to "shrincs-public-key/<PROFILE_NAME>" (raw ASCII, no
+    // length prefix), so a bundle can never verify under the wrong profile.
     // 2. Bind the stateful public key, stateless public seed, and hypertree
     // root.
     // 3. Return the installed public-key commitment.
@@ -874,7 +876,8 @@ library SHRINCS {
     {
         return keccak256(
             abi.encodePacked(
-                "shrincs-public-key",
+                "shrincs-public-key/",
+                SHRINCSParams.PROFILE_NAME,
                 publicKey.statefulPublicKey,
                 publicKey.pkSeed,
                 publicKey.hypertreeRoot
@@ -884,7 +887,9 @@ library SHRINCS {
 
     // publicKeyCommitmentFromParts: Recompute the bundle commitment from
     // explicit component fields.
-    // 1. Domain-separate the commitment as a SHRINCS public-key bundle hash.
+    // 1. Domain-separate the commitment as a SHRINCS public-key bundle hash
+    // profile-bound to "shrincs-public-key/<PROFILE_NAME>" (raw ASCII, no
+    // length prefix), matching publicKeyCommitment.
     // 2. Bind the stateful public key, stateless public seed, and hypertree
     // root.
     // 3. Return the installed public-key commitment.
@@ -895,7 +900,8 @@ library SHRINCS {
     ) internal pure returns (bytes32) {
         return keccak256(
             abi.encodePacked(
-                "shrincs-public-key",
+                "shrincs-public-key/",
+                SHRINCSParams.PROFILE_NAME,
                 statefulPublicKey,
                 pkSeed,
                 hypertreeRoot
