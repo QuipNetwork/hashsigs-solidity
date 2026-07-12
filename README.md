@@ -79,7 +79,7 @@ Main contracts:
 - [contracts/SHRINCS.sol](./contracts/SHRINCS.sol)
   - pure verification core library (facade over the component libraries):
     builds the canonical action and rotation hashes and runs the stateful
-    and stateless verify-and-decode logic
+    and stateless verify-in-place logic
 - [contracts/SHRINCSCodec.sol](./contracts/SHRINCSCodec.sol)
   - key and envelope codec bridging ERC-7913 opaque bytes to typed
     SHRINCS structures
@@ -120,9 +120,6 @@ Main contracts:
   - not used by the SHRINCS paths or the ERC-7913 verifiers
 - [contracts/examples/SHRINCSAccountVerifierExample.sol](./contracts/examples/SHRINCSAccountVerifierExample.sol)
   - example account wrapper that owns nonce, rotation, and policy state
-- [contracts/examples/SHRINCSAccountEnvelope.sol](./contracts/examples/SHRINCSAccountEnvelope.sol)
-  - structural canonicity validation for the wrapper's ERC-1271 stateless
-    envelopes
 
 Deployment and tooling:
 
@@ -150,7 +147,6 @@ Architecture:
 graph TD
     subgraph "Integrator layer (example)"
         EX["SHRINCSAccountVerifierExample.sol<br/>(contract — owner, policies, nonce,<br/>keyVersion, q_s budget, stateful-use tracking)"]
-        EN["SHRINCSAccountEnvelope.sol<br/>(ERC-1271 stateless envelope<br/>canonicity walk)"]
     end
 
     subgraph "ERC-7913 verifiers"
@@ -159,7 +155,7 @@ graph TD
     end
 
     subgraph "Verification core libraries"
-        FA["SHRINCS.sol<br/>stateful + stateless verify-and-decode,<br/>canonical action + rotation hashes"]
+        FA["SHRINCS.sol<br/>stateful + stateless verify-in-place,<br/>canonical action + rotation hashes"]
         SC["SPHINCSPlusC.sol<br/>stateless FORS-C + hypertree<br/>-> public root"]
         CO["SHRINCSCodec.sol<br/>(key + envelope codec)"]
     end
@@ -181,7 +177,6 @@ graph TD
     EX --> FA
     EX --> SC
     EX --> PA
-    EX --> EN
     VF --> FA
     VF -. stateless delegate .-> SP
     SP --> SC
@@ -216,9 +211,14 @@ Tests (25 suites, 231 tests as of 2026-07-11, default profile):
   - wrapper integration and state-transition tests
 - [test/SHRINCSStatefulPolicyExamples.t.sol](./test/SHRINCSStatefulPolicyExamples.t.sol)
   - stateful-use policy tests
-- [test/SHRINCSAccountEnvelopeCanonicity.t.sol](./test/SHRINCSAccountEnvelopeCanonicity.t.sol)
-  - negative and differential-fuzz tests for the ERC-1271 stateless
-    envelope canonicity walk
+- [test/SHRINCSCalldataRetag.t.sol](./test/SHRINCSCalldataRetag.t.sol)
+  - proves the calldata re-tag decoders agree with `abi.decode` over every
+    vector and fuzzed well-formed envelope, and that malformed envelopes
+    (wild offsets, truncation, aliasing) land in revert or `false` through
+    the full verify path
+- [test/SHRINCSGuardPinning.t.sol](./test/SHRINCSGuardPinning.t.sol)
+  - one adversarial case per retained input guard, asserting malformed
+    input classes resolve to revert or `false`
 - [test/SHRINCSVerifier.t.sol](./test/SHRINCSVerifier.t.sol) and
   [test/SHRINCSCodec.t.sol](./test/SHRINCSCodec.t.sol)
   - ERC-7913 raw verifier and codec tests
@@ -265,6 +265,68 @@ checks that:
 
 This keeps the hybrid stateful/stateless public key coherent while
 preserving the SPHINCS-style stateless core.
+
+## Verification model
+
+SHRINCS verifies signatures in place over calldata. No production verify
+path copies the envelope or calls `abi.decode`, and no path walks the
+envelope for canonicity.
+
+Each verifier re-tags the calldata: it reads the ABI head offsets of the
+opaque `signature` argument and points calldata-typed structs at the
+signature fields where they already sit. The signature is then verified
+directly from those fields. The one copy in the system is the stateless
+delegation payload, which the SHRINCS verifier builds by slicing the
+re-tagged signature region and forwarding it to its SPHINCS+C sibling.
+
+The re-tag is sound because of two mechanisms:
+
+- solc generates a calldata access check on every typed field read. An
+  offset or length that falls outside the calldata bounds reverts before
+  any field is used.
+- a small set of retained input guards (documented in
+  `.plans/guard-applicability-review.md`) pins the field lengths that the
+  hash construction depends on — the public-key field split, the WOTS key
+  windows, and the shape and count checks that the reconstruction loops
+  read.
+
+Together these turn every malformed envelope into a revert or a `false`
+return. See [Revert model](#revert-model) for the caller-visible
+behavior.
+
+## Revert model
+
+The verify paths distinguish two failure classes:
+
+- **Malformed envelope bytes revert.** Offsets or lengths outside the
+  calldata bounds, and truncated envelopes, fail the solc calldata access
+  check. The call reverts; it does not return a signature-invalid value.
+- **Well-formed but invalid signatures return the failure value.** An
+  envelope whose bytes are well-formed but whose signature does not verify
+  returns `0xffffffff` from the ERC-7913 and ERC-1271 paths, or `false`
+  from the library entry points.
+
+Acceptance widened from the earlier canonicity-walk model: any calldata
+framing whose in-place field reads reproduce a valid signature's field
+values now verifies. The verifier no longer requires the byte-exact
+canonical encoding. This is a superset of what `abi.decode` tolerates:
+the re-tagged reads are bounds-checked against `calldatasize` (the whole
+transaction calldata), not the envelope slice, so a read may extend into
+adjacent calldata such as the outer ABI zero-padding. Under masked-hash
+(128s) profiles the low bytes of each hash node are zero, so a
+tail-truncated envelope that `abi.decode` would reject reads its stripped
+tail back from that padding and still verifies. Acceptance never reaches
+a wrong-accept: accepted reads always equal a valid signature's exact
+field values.
+
+**Malleability caveat.** Because these field-value-equivalent framings
+all verify, an external consumer that keys, caches, or deduplicates on
+the raw signature bytes can see two distinct byte strings that both
+verify for the same message. Consumers that need a single canonical byte
+form must re-encode the signature themselves before keying on it. Nothing
+in this repository keys on raw signature bytes; the wrapper's replay
+protection binds the message and account state, not the signature
+encoding.
 
 ## Verification Flows
 
@@ -438,13 +500,15 @@ Supported envelope modes:
 
 The adapter:
 
-- rejects non-canonical envelope encodings
-  - the stateful envelope must re-encode to its exact input bytes
-  - the stateless envelope is checked by a structural canonicity walk
-    ([`SHRINCSAccountEnvelope`](./contracts/examples/SHRINCSAccountEnvelope.sol))
-    that proves the same property without re-materializing the ~90 KB
-    structure; a differential fuzz test pins the walk against the re-encode
-    reference
+- verifies the envelope in place over calldata
+  - the mode byte selects the stateful or stateless decoder
+  - the decoder re-tags the calldata offsets and reads the signature
+    fields directly; it does not copy or re-materialize the structure
+  - malformed envelope bytes revert; well-formed bytes that fail
+    verification return `0xffffffff`
+  - any framing whose in-place reads reproduce a valid signature's field
+    values verifies — a superset of decode-equivalent re-encodings (see
+    [Verification model](#verification-model))
 - rebuilds the current `ActionContext` from wrapper-owned state
   - `domainSeparator()`
   - `nonce`
@@ -460,17 +524,17 @@ Important semantics:
 - ERC-1271 validity here is snapshot-based.
   - a signature can be valid now and invalid later after `nonce`,
     `keyVersion`, policy state, or key state changes
-- malformed known-mode envelopes return `0xffffffff` instead of reverting
+- known-mode envelopes with malformed bytes revert; well-formed
+  envelopes that fail verification return `0xffffffff`
 - legacy raw vectors and primitive raw SHRINCS signatures are rejected on
   this path
 - stateless/key-rotation authorizations are not part of this ERC-1271
   surface
-- **minimum gas:** malformed envelopes return `0xffffffff` through
-  non-reverting canonicity validators, but verification itself runs
-  entirely in-contract through the memory-typed `SHRINCS` library with no
-  external call. An execution failure, including out-of-gas, reverts
-  rather than being reported as `0xffffffff`, so a valid signature is
-  never reported invalid. Callers must forward gas comfortably above the
+- **minimum gas:** verification runs entirely in-contract over calldata,
+  with no external call. A well-formed envelope that fails verification
+  returns `0xffffffff`; malformed envelope bytes and any execution
+  failure, including out-of-gas, revert. A valid signature is never
+  reported invalid. Callers must forward gas comfortably above the
   measured figures in [Gas measurements](#gas-measurements).
 
 ### 6. ERC-7913 raw verifier
@@ -487,11 +551,11 @@ stateful SHRINCS path.
 - **signature** — `abi.encode(PublicKey, StatefulSignature)`, the
   `SHRINCSCodec` stateful envelope.
 - For ABI-valid `verify(...)` calls, returns `0x024ad318` on success and
-  `0xffffffff` on verification failure, malformed key bytes, or malformed
-  SHRINCS envelope bytes. The public `verify(...)` entrypoint catches
-  envelope-decoding failures through the non-reverting `SHRINCS`
-  decoders. Malformed ABI calldata can still fail before the function
-  body is entered.
+  `0xffffffff` on verification failure or a wrong-length key. Malformed
+  envelope bytes revert: the verifier re-tags the calldata in place, and
+  offsets or lengths that fall outside the calldata bounds fail the
+  solc-generated access check rather than being reported as an invalid
+  signature.
 
 The envelope fields are:
 
@@ -517,21 +581,24 @@ the per-profile subclasses (`SHRINCS256sKeccak`, `SHRINCS128sQ18Keccak`,
 
 At a high level, [`SHRINCSVerifier.verify(...)`](./contracts/SHRINCSVerifier.sol):
 
-1. decodes `key` as the expected bundle commitment
-2. decodes `signature` as a stateful SHRINCS envelope
-3. hands the decoded memory structs to the memory-typed `SHRINCS` library
-   over the 32-byte `hash`
+1. reads `key` as the expected bundle commitment
+2. re-tags `signature` as a stateful SHRINCS envelope in place over
+   calldata, with no copy
+3. passes the calldata-typed structs to the `SHRINCS` library over the
+   32-byte `hash`
 4. calls `SHRINCS.verify(...)`, which enforces the commitment match,
    bundle shape, `WOTS-C` reconstruction, and the unbalanced-tree root
-5. returns the ERC-7913 magic value on success, or `0xffffffff` on failure
+5. returns the ERC-7913 magic value on success, or `0xffffffff` on
+   verification failure
 
-Malformed signature envelopes passed through `SHRINCSVerifier.verify(...)`
-are treated as signature failure, not bubbled as verifier reverts.
+A well-formed envelope that fails verification returns `0xffffffff`.
+Malformed envelope bytes revert: the re-tag reads offsets and lengths
+that the solc-generated calldata access check rejects when they fall
+outside the calldata bounds.
 
-`verify(...)` makes no external call: it runs entirely in-contract through
-the memory-typed `SHRINCS` library, so any execution failure, including
-out-of-gas, reverts to the caller rather than being misreported as an
-invalid signature.
+`verify(...)` makes no external call: it runs entirely in-contract over
+calldata, so any execution failure, including out-of-gas, reverts to the
+caller rather than being misreported as an invalid signature.
 
 #### Security scope
 
@@ -954,14 +1021,16 @@ Current tests cover:
   and resets stateless usage accounting for the new key
 - stateful-only and full-key rotations emit dedicated stateless-usage events
 
-### ERC-1271 envelope canonicity
+### Calldata re-tag and envelope handling
 
-- the canonical stateless envelope is accepted
-- dirty tail padding, non-minimal offsets, offset aliasing, oversized
-  lengths, gap bytes, trailing bytes, truncation, and length-changing word
-  counts are rejected
-- differential fuzz tests pin the structural walk against the re-encode
-  reference, including single-byte-flip mutations
+- the calldata re-tag decoders agree with `abi.decode` over every vector
+  and fuzzed well-formed envelope
+- any framing whose in-place reads reproduce a valid signature's field
+  values verifies — a superset of decode-equivalent re-encodings that,
+  under masked-hash profiles, includes tail truncations read back from
+  ABI padding
+- malformed envelope bytes (wild offsets, oversized lengths, in-bounds
+  aliasing) land in revert or `false` through the full verify path
 
 ### ERC-7913 raw verifier and codec
 
@@ -977,8 +1046,9 @@ Current tests cover:
   reverting
 - `SHRINCSCodec.decodeKey(...)` accepts exactly 32-byte keys and rejects
   other lengths without reverting
-- `SHRINCSCodec.decodeStatefulEnvelope(...)` round-trips canonical envelopes
-  and rejects non-canonical ABI encodings
+- `SHRINCSCodec.statefulEnvelope(...)` re-tags canonical and other
+  field-value-equivalent framings in place, and reverts on out-of-bounds
+  offsets or lengths
 - `SHRINCSCodec.toMessage(...)` maps the ERC-7913 `bytes32 hash` to exactly
   those 32 packed bytes
 - ERC-7913 consumer examples accept `verifier || key` signers and reject
@@ -1008,25 +1078,26 @@ Current tests cover:
 
 ## Gas Measurements
 
-Measured 2026-07-11 at this repository's default profile settings
-(`via_ir = true`, optimizer runs 200) by
+Measured 2026-07-12 at this repository's default profile
+settings (`via_ir = true`, optimizer runs 200) by
 [test/SHRINCSMeasurements.t.sol](./test/SHRINCSMeasurements.t.sol). The
-ERC-1271 figures include envelope canonicity validation; the ERC-7913
+ERC-1271 figures verify the envelope in place over calldata; the ERC-7913
 delegation figure is `verifyStateless` calling its SPHINCS+C sibling.
 
 | Path                              | Gas       |
 |-----------------------------------|-----------|
-| stateful, canonical wrapper call  | 201,162   |
-| stateful, ERC-1271                | 179,941   |
-| stateless, canonical wrapper call | 2,105,166 |
-| stateless, ERC-1271               | 2,414,248 |
-| stateless delegation, ERC-7913    | 3,444,369 |
+| stateful, canonical wrapper call  | 194,574   |
+| stateful, ERC-1271                | 171,561   |
+| stateful, adapter direct          | 348,786   |
+| stateless, canonical wrapper call | 1,680,697 |
+| stateless, ERC-1271               | 1,658,664 |
+| stateless delegation, ERC-7913    | 1,667,626 |
 
 For the stateful profile the ERC-1271 figure falls below the canonical
 wrapper call: the wrapper builds and validates the typed `ActionContext`
 and canonical hash on-chain, whereas the ERC-1271 path verifies a
-precomputed hash, and the envelope walk now costs less than that context
-machinery.
+precomputed hash, and the in-place re-tag verification costs less than
+that context machinery.
 
 Reproduce with:
 

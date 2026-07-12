@@ -287,7 +287,7 @@ library SHRINCS {
         return (
             true,
             SHRINCSCodec.encodeStatelessKey(pkSeed, hypertreeRoot),
-            SHRINCSCodec.encodeStatelessSignatureEnvelope(signature)
+            SHRINCSCodec.sliceStatelessSignatureEnvelope(signature)
         );
     }
 

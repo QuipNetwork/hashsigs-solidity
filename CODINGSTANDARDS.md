@@ -83,9 +83,9 @@ Rules:
     hashes, encoding sizes): `SCREAMING_SNAKE_CASE`
     (`OP_VERIFY_STATEFUL`, `STATEFUL_PUBLIC_KEY_BYTES`).
 - **Functions:** `mixedCase`, including `internal` and `private`
-  functions. `private` functions take a leading underscore
-  (`_isCanonicalEnvelope`). `internal` library functions are
-  unprefixed — in an `internal` library they are the API.
+  functions. `private` functions take a leading underscore (`_toUxmss`).
+  `internal` library functions are unprefixed — in an `internal` library
+  they are the API.
 - **Structs, enums, libraries, contracts:** `CapWords`.
 - **Imports:** explicit named imports only:
   `import {SHRINCS} from "./SHRINCS.sol";`
@@ -188,6 +188,36 @@ Rules:
   ```
 
   A bare disable with no justification is review-blocking.
+- **Verify in place over calldata; do not decode or walk the envelope.**
+  Library and verifier code must not `abi.decode` an envelope and must not
+  validate the full envelope structurally before use. Both re-materialize
+  or re-traverse the whole input for no security gain. Instead, re-tag the
+  calldata — point calldata-typed structs at the signature fields where
+  they already sit — and verify the signature directly from those fields.
+  The safety story is self-authenticating: solc's per-field calldata
+  access check reverts on offsets or lengths outside the calldata bounds,
+  and the retained input guards pin the field lengths the hash
+  construction reads. A malformed envelope then reverts or returns the
+  failure value; it can never reach a wrong-accept.
+- **Justify every new input guard against self-authentication.** Before
+  adding an input guard, show what wrong-accept it prevents that solc
+  access checks and the existing guards do not already prevent. A guard
+  that only restates a solc bounds check, or that only rejects an input
+  the signature verification already rejects, is redundant and does not
+  belong in verifier code. `.plans/guard-applicability-review.md` is the
+  worked example: it classifies every guard on the verify paths as
+  necessary or redundant and records the retained set.
+- **`abi.decode` stays available in tests and scripts.** The rule above
+  is about `contracts/` verifier and library code. Test and script code
+  may `abi.decode` freely; the differential proofs in
+  `test/SHRINCSCalldataRetag.t.sol` rely on it as the reference decoder.
+
+<!-- SLOT: bead ga7's file-organization section pastes in AFTER Z5.
+     Z5's edits above touch §2 (line 87), §5 (new bullets at end), and
+     §8 (lines 255-258) only. ga7 should paste its file-organization
+     section at its own anchor (a new numbered section, not inside §5 or
+     §8) so the two paste-ins do not collide. If ga7 targets a location
+     inside §5, coordinate ordering with this C2 block. -->
 
 ## 6. Assembly
 
@@ -254,8 +284,10 @@ Rules:
   MR that adds or changes a stateful flow (nonces, key versions,
   budgets, consumption tracking) or a serialized envelope format
   includes fuzz/invariant properties for it in the same MR:
-  state-machine invariants for the former, decode canonicity plus
-  mutation rejection for the latter.
+  state-machine invariants for the former; for the latter, a differential
+  proof that the re-tag agrees with `abi.decode` over vectors and fuzzed
+  well-formed envelopes, and an adversarial proof that malformed envelopes
+  land in revert or the failure value.
 
 Note: `forge` on some dev machines is shadowed by an unrelated
 tool — confirm `forge --version` reports Foundry (Homebrew installs

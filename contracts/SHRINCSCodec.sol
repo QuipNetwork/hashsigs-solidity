@@ -169,7 +169,9 @@ library SHRINCSCodec {
     }
 
     /// @notice Inverse of the stateless-signature re-tag
-    /// (statelessSignatureEnvelope).
+    /// (statelessSignatureEnvelope). Reference/off-chain encoder and the
+    /// differential oracle for sliceStatelessSignatureEnvelope; the
+    /// delegation path builds through the slice-copy below.
     /// @dev Builds the SPHINCSPlusCVerifier signature envelope the sub-call
     /// verify expects, so the delegation path re-encodes through one format
     /// definition.
@@ -179,6 +181,59 @@ library SHRINCSCodec {
         SPHINCSPlusC.Signature memory signature
     ) internal pure returns (bytes memory envelope) {
         return abi.encode(signature);
+    }
+
+    /// @notice Slice-copy re-encode of a re-tagged stateless signature into
+    /// the SPHINCSPlusCVerifier signature envelope, with no field-by-field
+    /// memory materialization.
+    /// @dev Byte-identical to encodeStatelessSignatureEnvelope's
+    /// abi.encode(signature) for every canonically framed signature:
+    /// abi.encode of one dynamic value is a single 0x20 head offset word
+    /// followed by that value's canonical body, and a re-tagged calldata
+    /// signature already holds its canonical body contiguously, so the
+    /// envelope is that head word plus ONE bulk calldatacopy of the body.
+    /// The body length is the signature's own extent, derived from
+    /// solc-checked members: hypertree is Signature's last field and authPath
+    /// is HypertreeLayerSignature's last field, so the canonical encoding
+    /// ends at the padded end of the last layer's last authPath element.
+    /// Reading that end follows the nested calldata offsets solc resolves, so
+    /// the copy spans the struct's true extent even when the outer envelope
+    /// was truncated into adjacent calldata (matching abi.encode, which
+    /// re-serializes from the in-place field reads; see the contract-level
+    /// framing-malleability note). A malformed signature with an empty
+    /// hypertree or empty last-layer authPath Panics on the index read and
+    /// reverts, fail-closed within the verifier's documented {revert, false}
+    /// model.
+    /// @param signature Re-tagged stateless signature calldata pointer.
+    /// @return envelope The abi-encoded stateless-signature envelope bytes.
+    function sliceStatelessSignatureEnvelope(
+        SPHINCSPlusC.Signature calldata signature
+    ) internal pure returns (bytes memory envelope) {
+        // hypertree is Signature's last field; authPath is the last field of
+        // its element; so the canonical body ends at the last layer's last
+        // authPath element. solc bounds-checks both index reads: an empty
+        // hypertree or empty authPath Panics and reverts (fail-closed).
+        uint256 lastLayer = signature.hypertree.length - 1;
+        uint256 lastPath = signature.hypertree[lastLayer].authPath.length - 1;
+        bytes calldata tail =
+            signature.hypertree[lastLayer].authPath[lastPath];
+        // Memory-safe: allocates the envelope at the free-memory pointer,
+        // writes its length and the single 0x20 head offset word, bulk-copies
+        // the signature's canonical body from calldata, and bumps the
+        // free-memory pointer past the (word-aligned) allocation.
+        assembly ("memory-safe") {
+            // Canonical body = last authPath element's padded end - the
+            // signature's calldata start; both bounds are word-aligned, so
+            // body is a whole number of 32-byte words.
+            let bodyEnd :=
+                add(tail.offset, and(add(tail.length, 31), not(31)))
+            let body := sub(bodyEnd, signature)
+            envelope := mload(0x40)
+            mstore(envelope, add(0x20, body))
+            mstore(add(envelope, 0x20), 0x20)
+            calldatacopy(add(envelope, 0x40), signature, body)
+            mstore(0x40, add(add(envelope, 0x20), add(0x20, body)))
+        }
     }
 
     /// @notice Zero-copy re-tag of a stateful envelope into typed calldata

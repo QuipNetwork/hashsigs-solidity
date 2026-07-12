@@ -219,7 +219,7 @@ contract SHRINCSVerifierTest is Test {
     // zero-padding; masking already zeroes those low bytes, so the final
     // node is bit-identical and still verifies (pinned by
     // testTailTruncationAcceptedUnderMaskedProfile).
-    function testRejectsTruncatedEnvelope() public {
+    function testRevertsOnTruncatedEnvelope() public {
         bytes memory truncated = validEnvelope;
         assembly {
             // Shrink the in-memory copy of the envelope by one 32-byte word.
@@ -239,9 +239,11 @@ contract SHRINCSVerifierTest is Test {
     // wrong-accept. Under 256s (unmasked) the corrupted node yields
     // 0xffffffff without reverting: the bounds check never fires for a tail
     // truncation, so rejection there is purely cryptographic.
-    // NUM_HYPERTREE_LAYERS == 1 distinguishes 128s from 256s (d == 8).
+    // HASH_LEN != 32 is the causal discriminator: the masked 128s profiles
+    // (HASH_LEN == 16) zero the low bytes, so tail truncation still verifies;
+    // the unmasked 256s profile (HASH_LEN == 32) does not.
     function testTailTruncationAcceptedUnderMaskedProfile() public view {
-        bytes4 expected = SHRINCSParams.NUM_HYPERTREE_LAYERS == 1
+        bytes4 expected = SHRINCSParams.HASH_LEN != 32
             ? IERC7913SignatureVerifier.verify.selector
             : INVALID_SIGNATURE;
 
@@ -266,12 +268,12 @@ contract SHRINCSVerifierTest is Test {
         );
     }
 
-    function testRejectsEmptyEnvelope() public {
+    function testRevertsOnEmptyEnvelope() public {
         vm.expectRevert();
         verifier.verify(validKey, signedHash, bytes(""));
     }
 
-    function testRejectsGarbageEnvelope() public {
+    function testRevertsOnGarbageEnvelope() public {
         bytes memory garbage = abi.encodePacked(
             keccak256("garbage word one"),
             keccak256("garbage word two"),
