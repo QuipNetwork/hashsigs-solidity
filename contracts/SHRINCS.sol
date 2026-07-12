@@ -25,9 +25,12 @@ import {SPHINCSPlusC} from "./SPHINCSPlusC.sol";
 /// @notice Pure verification core for the hybrid SHRINCS scheme: builds the
 /// canonical action and rotation hashes and runs the stateful/stateless
 /// verify-and-decode logic the ERC-7913 SHRINCSVerifier calls into.
-/// @dev Caller obligations. Every function in this library is `pure` and the
-/// library never reverts; it returns fail-closed booleans, and the revert
-/// policy belongs to the calling contract. All statefulness is the WRAPPER
+/// @dev Caller obligations. Every function in this library is `pure`. The
+/// verify and hash-building functions never revert; they return fail-closed
+/// booleans, and revert policy belongs to the calling contract. The envelope
+/// decode facades (decodeStatefulEnvelope, prepareStatelessDelegation)
+/// abi.decode calldata and revert on a malformed encoding — that revert is
+/// the rejection channel. All statefulness is the WRAPPER
 /// contract's job: single-use tracking of stateful leaves, nonce and
 /// keyVersion replay scoping, and installing the commitment a rotation
 /// returns. SHRINCSAccountVerifierExample is the reference wrapper. Any
@@ -207,7 +210,7 @@ library SHRINCS {
     // prepareStatelessDelegation: Encapsulate the stateless bundle checks the
     // SHRINCSVerifier ran inline before delegating to the pinned SPHINCSPlusC
     // sibling.
-    // 1. Decode the stateless envelope (non-reverting structural walk).
+    // 1. Decode the stateless envelope (abi.decode; malformed reverts).
     // 2. Run commitment-first bundle checks (commitment match, then shape).
     // 3. Extract the two 32-byte stateless seed words.
     // 4. Return the pinned-sibling delegate key and signature envelope;

@@ -154,10 +154,11 @@ contract SHRINCSAccountSigningFacadeTest is Test {
         );
     }
 
-    // Checks that trailing bytes appended to a stateful ERC-1271 envelope
-    // are rejected by the re-encode canonicity check.
+    // Byte-malleability (canonicity walk removed): trailing bytes appended to
+    // a stateful ERC-1271 envelope are ignored by abi.decode, so the envelope
+    // decodes to the same signature and still verifies.
     // line-length: allow — test name is one unbreakable token
-    function testAccountAwareStateful1271EnvelopeRejectsTrailingBytes()
+    function testAccountAwareStateful1271EnvelopeAcceptsTrailingBytes()
         public
     {
         (
@@ -203,11 +204,11 @@ contract SHRINCSAccountSigningFacadeTest is Test {
             "canonical stateful envelope must verify"
         );
 
-        bytes memory malformed = bytes.concat(envelope, hex"00");
+        bytes memory trailing = bytes.concat(envelope, hex"00");
         assertEq(
-            account.isValidSignature(hash, malformed),
-            INVALID_SIGNATURE,
-            "trailing bytes must invalidate the stateful envelope"
+            account.isValidSignature(hash, trailing),
+            ERC1271_MAGIC_VALUE,
+            "trailing bytes decode to the same stateful signature (malleable)"
         );
     }
 
@@ -348,10 +349,11 @@ contract SHRINCSAccountSigningFacadeTest is Test {
         );
     }
 
-    // Checks that trailing bytes appended to a stateless ERC-1271 envelope
-    // are rejected by the re-encode canonicity check.
+    // Byte-malleability (canonicity walk removed): trailing bytes appended to
+    // a stateless ERC-1271 envelope are ignored by abi.decode, so it decodes
+    // to the same signature and still verifies.
     // line-length: allow — test name is one unbreakable token
-    function testAccountAwareStateless1271EnvelopeRejectsTrailingBytes()
+    function testAccountAwareStateless1271EnvelopeAcceptsTrailingBytes()
         public
     {
         (
@@ -410,11 +412,11 @@ contract SHRINCSAccountSigningFacadeTest is Test {
             "canonical stateless envelope must verify"
         );
 
-        bytes memory malformed = bytes.concat(envelope, hex"00");
+        bytes memory trailing = bytes.concat(envelope, hex"00");
         assertEq(
-            account.isValidSignature(hash, malformed),
-            INVALID_SIGNATURE,
-            "trailing bytes must invalidate the stateless envelope"
+            account.isValidSignature(hash, trailing),
+            ERC1271_MAGIC_VALUE,
+            "trailing bytes decode to same stateless signature (malleable)"
         );
     }
 

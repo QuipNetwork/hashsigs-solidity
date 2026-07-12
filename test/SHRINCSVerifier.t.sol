@@ -207,39 +207,32 @@ contract SHRINCSVerifierTest is Test {
         );
     }
 
-    function testRejectsTruncatedEnvelope() public view {
+    // Revert model: the canonicity walk is gone, so a truncated envelope
+    // reverts inside abi.decode instead of returning 0xffffffff.
+    function testRejectsTruncatedEnvelope() public {
         bytes memory truncated = validEnvelope;
         assembly {
             // Shrink the in-memory copy of the envelope by one byte.
             mstore(truncated, sub(mload(truncated), 1))
         }
-        assertEq(
-            verifier.verify(validKey, signedHash, truncated),
-            INVALID_SIGNATURE,
-            "truncated envelope must be rejected"
-        );
+        vm.expectRevert();
+        verifier.verify(validKey, signedHash, truncated);
     }
 
-    function testRejectsEmptyEnvelope() public view {
-        assertEq(
-            verifier.verify(validKey, signedHash, bytes("")),
-            INVALID_SIGNATURE,
-            "empty envelope must be rejected"
-        );
+    function testRejectsEmptyEnvelope() public {
+        vm.expectRevert();
+        verifier.verify(validKey, signedHash, bytes(""));
     }
 
-    function testRejectsGarbageEnvelope() public view {
+    function testRejectsGarbageEnvelope() public {
         bytes memory garbage = abi.encodePacked(
             keccak256("garbage word one"),
             keccak256("garbage word two"),
             keccak256("garbage word three"),
             uint8(0x99)
         );
-        assertEq(
-            verifier.verify(validKey, signedHash, garbage),
-            INVALID_SIGNATURE,
-            "garbage envelope must be rejected"
-        );
+        vm.expectRevert();
+        verifier.verify(validKey, signedHash, garbage);
     }
 
     function testRejectsMismatchedBundleCommitment() public view {
@@ -272,19 +265,22 @@ contract SHRINCSVerifierTest is Test {
     // deployed sibling by SHRINCSStatelessDelegationTest's
     // testVerifyStatelessRevertsWhenDelegationStrandedOnValidSig.
 
-    function testFuzzVerifyNeverReverts(
+    function testFuzzVerifyNeverWrongAccepts(
         bytes calldata key,
         bytes32 hash,
         bytes calldata signature
     ) public view {
-        // Any random input must produce a clean failure value, never a
-        // revert.
-        bytes4 result = verifier.verify(key, hash, signature);
-        assertEq(
-            result,
-            INVALID_SIGNATURE,
-            "random inputs must yield the failure value"
-        );
+        // Under the revert-on-malformed model a random input either returns
+        // the failure value or reverts inside abi.decode; it must never yield
+        // the success selector (no wrong-accept).
+        try verifier.verify(key, hash, signature) returns (bytes4 result) {
+            assertTrue(
+                result != IERC7913SignatureVerifier.verify.selector,
+                "random inputs must never wrong-accept"
+            );
+        } catch {
+            // A revert on a malformed envelope is a safe rejection.
+        }
     }
 
     function testGasSnapshotHappyPathVerify() public {

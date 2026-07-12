@@ -332,103 +332,28 @@ contract SHRINCSCodecTest is Test {
         }
     }
 
-    // decodeMalformedOk: run the non-reverting decoder and return only its
-    // ok flag. The walk-B validator reports non-canonical input through the
-    // flag instead of reverting (revert policy belongs to the caller).
-    function decodeMalformedOk(bytes memory malformed)
-        internal
-        view
-        returns (bool ok)
-    {
-        (,, ok) = codec.decodeStatefulEnvelope(malformed);
-    }
-
-    // Checks that extra bytes at the end of the envelope are rejected.
-    function testDecodeStatefulEnvelopeRejectsTrailingBytes() public view {
-        bytes memory envelope = validEnvelope();
-        bytes memory malformed = bytes.concat(envelope, hex"00");
-        assertFalse(
-            decodeMalformedOk(malformed), "trailing bytes must be rejected"
-        );
-    }
-
-    // Checks that unused bytes inside the public key part are rejected.
-    // line-length: allow — test name is one unbreakable token
-    function testDecodeStatefulEnvelopeRejectsNestedTrailingBytesInsidePublicKey()
+    // Revert model: the canonicity walk is gone, so the decoder is plain
+    // abi.decode. A dynamic offset pointing out of range reverts inside
+    // abi.decode. (Non-canonical framing abi.decode tolerates — trailing or
+    // gap bytes, aliased/out-of-order offsets, oversized in-range arrays —
+    // decodes to the same value and is accepted; those malleability
+    // rejections went away with the walk.)
+    function testDecodeStatefulEnvelopeRevertsOnMalformedDynamicOffset()
         public
-        view
-    {
-        bytes memory malformed =
-            insertGapBeforePublicKeyCommitment(validEnvelope());
-        assertFalse(
-            decodeMalformedOk(malformed), "nested gap must be rejected"
-        );
-    }
-
-    // Checks that a bad pointer inside the encoded signature is rejected.
-    function testDecodeStatefulEnvelopeRejectsMalformedDynamicOffset()
-        public
-        view
     {
         bytes memory malformed =
             overwriteSignatureChainsOffset(validEnvelope(), 0x81);
-        assertFalse(
-            decodeMalformedOk(malformed), "bad dynamic offset must fail"
-        );
+        vm.expectRevert();
+        codec.decodeStatefulEnvelope(malformed);
     }
 
-    // Checks that reused pointers inside the encoded public key are rejected.
-    function testDecodeStatefulEnvelopeRejectsDuplicatedInternalOffsets()
-        public
-        view
-    {
-        bytes memory malformed =
-            duplicatePublicKeyCommitmentOffset(validEnvelope());
-        assertFalse(
-            decodeMalformedOk(malformed),
-            "duplicated internal offsets must fail"
-        );
-    }
-
-    // Checks that out-of-order ABI pointers are rejected even if abi.decode
-    // could read them.
-    // line-length: allow — test name is one unbreakable token
-    function testDecodeStatefulEnvelopeRejectsOutOfOrderOffsetsThatStillDecode()
-        public
-        view
-    {
-        bytes memory malformed =
-            reorderPublicKeyStatefulAndCommitmentData(validEnvelope());
-        assertFalse(
-            decodeMalformedOk(malformed), "out-of-order offsets must fail"
-        );
-    }
-
-    // Checks that a stateful signature must have exactly 64 WOTS-C chain
-    // values.
-    function testDecodeStatefulEnvelopeRejectsOversizedDeclaredChainArray()
-        public
-        view
-    {
-        bytes memory malformed =
-            overwriteSignatureChainsLength(validEnvelope(), 65);
-        assertFalse(
-            decodeMalformedOk(malformed),
-            "non-canonical chain length must fail"
-        );
-    }
-
-    // Checks that a huge claimed auth path length is rejected before the
-    // decoded value is accepted.
-    function testDecodeStatefulEnvelopeRejectsHugeAuthPathLength()
-        public
-        view
-    {
+    // A huge claimed auth-path length reads past the buffer and reverts
+    // inside abi.decode.
+    function testDecodeStatefulEnvelopeRevertsOnHugeAuthPathLength() public {
         bytes memory malformed =
             overwriteSignatureAuthPathLength(validEnvelope(), 10_000);
-        assertFalse(
-            decodeMalformedOk(malformed), "huge auth path length must fail"
-        );
+        vm.expectRevert();
+        codec.decodeStatefulEnvelope(malformed);
     }
 
     function testToMessageIsThePackedHash() public view {
@@ -456,85 +381,6 @@ contract SHRINCSCodecTest is Test {
         );
     }
 
-    function duplicatePublicKeyCommitmentOffset(bytes memory source)
-        internal
-        pure
-        returns (bytes memory out)
-    {
-        out = cloneBytes(source);
-        uint256 publicKeyOffset = wordAt(out, 0);
-        bytes32 statefulPublicKeyOffset =
-            bytes32(wordAt(out, publicKeyOffset));
-        writeWord(out, publicKeyOffset + 32, statefulPublicKeyOffset);
-    }
-
-    function insertGapBeforePublicKeyCommitment(bytes memory source)
-        internal
-        pure
-        returns (bytes memory out)
-    {
-        uint256 publicKeyOffset = wordAt(source, 0);
-        uint256 oldSignatureOffset = wordAt(source, 32);
-        uint256 gapOffset =
-            publicKeyOffset + wordAt(source, publicKeyOffset + 32);
-
-        out = insertZeroWordAt(source, gapOffset);
-        writeWord(out, 32, bytes32(oldSignatureOffset + 32));
-        writeWord(
-            out,
-            publicKeyOffset + 32,
-            bytes32(wordAt(source, publicKeyOffset + 32) + 32)
-        );
-        writeWord(
-            out,
-            publicKeyOffset + 64,
-            bytes32(wordAt(source, publicKeyOffset + 64) + 32)
-        );
-        writeWord(
-            out,
-            publicKeyOffset + 96,
-            bytes32(wordAt(source, publicKeyOffset + 96) + 32)
-        );
-    }
-
-    function reorderPublicKeyStatefulAndCommitmentData(bytes memory source)
-        internal
-        pure
-        returns (bytes memory out)
-    {
-        out = cloneBytes(source);
-
-        uint256 publicKeyOffset = wordAt(source, 0);
-        uint256 statefulOffset = wordAt(source, publicKeyOffset);
-        uint256 commitmentOffset = wordAt(source, publicKeyOffset + 32);
-        uint256 statefulSize = dynamicBytesSegmentSize(
-            source, publicKeyOffset + statefulOffset
-        );
-        uint256 commitmentSize = dynamicBytesSegmentSize(
-            source, publicKeyOffset + commitmentOffset
-        );
-
-        writeWord(
-            out, publicKeyOffset, bytes32(statefulOffset + commitmentSize)
-        );
-        writeWord(out, publicKeyOffset + 32, bytes32(statefulOffset));
-
-        copyBytesRange(
-            out,
-            publicKeyOffset + statefulOffset,
-            source,
-            publicKeyOffset + commitmentOffset,
-            commitmentSize
-        );
-        copyBytesRange(
-            out,
-            publicKeyOffset + statefulOffset + commitmentSize,
-            source,
-            publicKeyOffset + statefulOffset,
-            statefulSize
-        );
-    }
-
     function overwriteSignatureChainsOffset(
         bytes memory source,
         uint256 newOffset
@@ -542,16 +388,6 @@ contract SHRINCSCodecTest is Test {
         out = cloneBytes(source);
         uint256 signatureOffset = wordAt(out, 32);
         writeWord(out, signatureOffset + 64, bytes32(newOffset));
-    }
-
-    function overwriteSignatureChainsLength(
-        bytes memory source,
-        uint256 newLength
-    ) internal pure returns (bytes memory out) {
-        out = cloneBytes(source);
-        uint256 signatureOffset = wordAt(out, 32);
-        uint256 chainsOffset = wordAt(out, signatureOffset + 64);
-        writeWord(out, signatureOffset + chainsOffset, bytes32(newLength));
     }
 
     function overwriteSignatureAuthPathLength(
@@ -562,44 +398,6 @@ contract SHRINCSCodecTest is Test {
         uint256 signatureOffset = wordAt(out, 32);
         uint256 authPathOffset = wordAt(out, signatureOffset + 96);
         writeWord(out, signatureOffset + authPathOffset, bytes32(newLength));
-    }
-
-    function insertZeroWordAt(bytes memory source, uint256 offset)
-        internal
-        pure
-        returns (bytes memory out)
-    {
-        out = new bytes(source.length + 32);
-        for (uint256 i = 0; i < offset; ++i) {
-            out[i] = source[i];
-        }
-        for (uint256 i = offset; i < source.length; ++i) {
-            out[i + 32] = source[i];
-        }
-    }
-
-    function dynamicBytesSegmentSize(bytes memory source, uint256 offset)
-        internal
-        pure
-        returns (uint256)
-    {
-        uint256 byteLength = wordAt(source, offset);
-        // divide-before-multiply is intentional: ((byteLength + 31) / 32)
-        // * 32 rounds byteLength up to the next 32-byte word boundary
-        // forge-lint: disable-next-line(divide-before-multiply)
-        return 32 + ((byteLength + 31) / 32) * 32;
-    }
-
-    function copyBytesRange(
-        bytes memory target,
-        uint256 targetOffset,
-        bytes memory source,
-        uint256 sourceOffset,
-        uint256 length
-    ) internal pure {
-        for (uint256 i = 0; i < length; ++i) {
-            target[targetOffset + i] = source[sourceOffset + i];
-        }
     }
 
     function cloneBytes(bytes memory source)

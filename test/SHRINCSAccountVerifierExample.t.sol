@@ -417,8 +417,10 @@ contract SHRINCSAccountVerifierExampleTest is Test {
         );
     }
 
+    // Revert model: an empty signature carries no mode byte, so the mode read
+    // reverts (Panic) instead of returning 0xffffffff; state is untouched.
     // line-length: allow — test name is one unbreakable token
-    function testExampleIsValidSignatureRejectsMalformedEnvelopeAndPreservesState()
+    function testExampleIsValidSignatureRevertsOnEmptyEnvelopeAndPreservesState()
         public
     {
         (SHRINCS.PublicKey memory publicKey,,) =
@@ -428,11 +430,9 @@ contract SHRINCSAccountVerifierExampleTest is Test {
         SHRINCSAccountVerifierExample account =
             new SHRINCSAccountVerifierExample(expectedCompositePublicKey);
 
-        bytes4 actual = account.isValidSignature(bytes32(0), hex"");
+        vm.expectRevert();
+        account.isValidSignature(bytes32(0), hex"");
 
-        assertEq(
-            actual, INVALID_SIGNATURE, "empty envelope must be rejected"
-        );
         assertEq(
             account.currentSHRINCSPublicKey(), expectedCompositePublicKey
         );
@@ -468,8 +468,11 @@ contract SHRINCSAccountVerifierExampleTest is Test {
         assertEq(account.statelessSignaturesUsed(), 0);
     }
 
+    // Revert model: the canonicity walk is gone, so a malformed stateful
+    // envelope reverts inside abi.decode instead of returning 0xffffffff;
+    // state is untouched.
     // line-length: allow — test name is one unbreakable token
-    function testExampleIsValidSignatureRejectsMalformedStatefulEnvelopeWithoutReverting()
+    function testExampleIsValidSignatureRevertsOnMalformedStatefulEnvelope()
         public
     {
         (SHRINCS.PublicKey memory publicKey,,) =
@@ -482,13 +485,9 @@ contract SHRINCSAccountVerifierExampleTest is Test {
         bytes memory envelope = abi.encodePacked(
             bytes1(ERC1271_MODE_STATEFUL_ACTION), hex"01020304"
         );
-        bytes4 actual = account.isValidSignature(bytes32(0), envelope);
+        vm.expectRevert();
+        account.isValidSignature(bytes32(0), envelope);
 
-        assertEq(
-            actual,
-            INVALID_SIGNATURE,
-            "malformed stateful envelope must return invalid"
-        );
         assertEq(
             account.currentSHRINCSPublicKey(), expectedCompositePublicKey
         );
@@ -497,8 +496,11 @@ contract SHRINCSAccountVerifierExampleTest is Test {
         assertEq(account.statelessSignaturesUsed(), 0);
     }
 
+    // Revert model: the canonicity walk is gone, so a malformed stateless
+    // envelope reverts inside abi.decode instead of returning 0xffffffff;
+    // state is untouched.
     // line-length: allow — test name is one unbreakable token
-    function testExampleIsValidSignatureRejectsMalformedStatelessEnvelopeWithoutReverting()
+    function testExampleIsValidSignatureRevertsOnMalformedStatelessEnvelope()
         public
     {
         (SHRINCS.PublicKey memory publicKey,,) =
@@ -511,13 +513,9 @@ contract SHRINCSAccountVerifierExampleTest is Test {
         bytes memory envelope = abi.encodePacked(
             bytes1(ERC1271_MODE_STATELESS_ACTION), hex"deadbeef"
         );
-        bytes4 actual = account.isValidSignature(bytes32(0), envelope);
+        vm.expectRevert();
+        account.isValidSignature(bytes32(0), envelope);
 
-        assertEq(
-            actual,
-            INVALID_SIGNATURE,
-            "malformed stateless envelope must return invalid"
-        );
         assertEq(
             account.currentSHRINCSPublicKey(), expectedCompositePublicKey
         );

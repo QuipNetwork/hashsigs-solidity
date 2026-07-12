@@ -97,16 +97,16 @@ contract SHRINCSStatelessDelegationTest is Test {
         );
     }
 
-    function testVerifyStatelessRejectsTruncatedEnvelope() public view {
+    // Revert model: the canonicity walk is gone, so a truncated envelope
+    // reverts inside abi.decode before any delegation instead of returning
+    // 0xffffffff.
+    function testVerifyStatelessRevertsOnTruncatedEnvelope() public {
         bytes memory truncated = validEnvelope;
         assembly {
             mstore(truncated, sub(mload(truncated), 1))
         }
-        assertEq(
-            verifier.verifyStateless(validKey, signedHash, truncated),
-            INVALID_SIGNATURE,
-            "malformed envelope must be rejected before delegation"
-        );
+        vm.expectRevert();
+        verifier.verifyStateless(validKey, signedHash, truncated);
     }
 
     function testVerifyStatelessRejectsTamperedHash() public view {

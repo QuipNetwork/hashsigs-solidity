@@ -41,16 +41,18 @@ contract MutationVerifierHarness is SHRINCSVerifier {
 }
 
 /// @title SHRINCSMutationFuzzTest
-/// @notice Mutation-malleability fuzz (security-testing plan P4). Starting
-/// from a valid signature produced in setUp, any single bit/byte mutation of
-/// the wrapper's canonical ERC-1271 envelope is rejected, and any mutation of
-/// the raw stateful signature material fails verification. The pristine
-/// inputs always verify (guards against test-vector rot).
-/// @dev The ERC-1271 path enforces re-encode canonicity, so a byte flip
-/// that decodes to the same fields still fails the canonicity check: no
-/// second encoding is accepted. The raw ERC-7913 path checks signature
-/// only, so it is fuzzed by perturbing the cryptographic fields (chains,
-/// counter), which always breaks WOTS-C reconstruction.
+/// @notice Mutation fuzz (security-testing plan P4). The pristine wrapper
+/// ERC-1271 envelope and raw ERC-7913 signature both verify (guards against
+/// test-vector rot), and any mutation of the raw stateful signature's
+/// cryptographic material fails verification.
+/// @dev The raw ERC-7913 path checks the signature only, so it is fuzzed by
+/// perturbing the cryptographic fields (chains, counter), which always breaks
+/// WOTS-C reconstruction. The wrapper envelope's byte/bit-flip mutation tests
+/// were removed with the canonicity walk: a framing mutation now reverts
+/// inside abi.decode and a `bytes` tail-padding mutation decodes to the same
+/// signature and still verifies (byte-malleable), so a single-mutation
+/// "always rejected" property no longer holds. Adversarial wrapper/verifier
+/// input coverage lives in SHRINCSGuardPinning's never-wrong-accept suite.
 contract SHRINCSMutationFuzzTest is Test {
     bytes4 internal constant MAGIC_VALUE = 0x1626ba7e;
     bytes4 internal constant INVALID_SIGNATURE = 0xffffffff;
@@ -94,42 +96,6 @@ contract SHRINCSMutationFuzzTest is Test {
             rawVerifier.verify(rawKey, rawHash, rawEnvelope),
             IERC7913SignatureVerifier.verify.selector,
             "pristine raw must verify"
-        );
-    }
-
-    // Any single-byte change to the canonical 1271 envelope is rejected: the
-    // wrapper's re-encode canonicity check, hash binding, or signature check
-    // fails. No second encoding is accepted.
-    function testFuzz_wrapper1271ByteFlipRejected(
-        uint256 byteSelector,
-        uint8 xorValue
-    ) public view {
-        uint256 index = bound(byteSelector, 0, wrapperEnvelope.length - 1);
-        uint8 delta = xorValue == 0 ? 1 : xorValue;
-        bytes memory mutated = _clone(wrapperEnvelope);
-        mutated[index] = bytes1(uint8(mutated[index]) ^ delta);
-        assertEq(
-            account.isValidSignature(wrapperHash, mutated),
-            INVALID_SIGNATURE,
-            "byte-flipped 1271 envelope accepted"
-        );
-    }
-
-    // Same property at bit granularity.
-    function testFuzz_wrapper1271BitFlipRejected(uint256 bitSelector)
-        public
-        view
-    {
-        uint256 bitIndex =
-            bound(bitSelector, 0, wrapperEnvelope.length * 8 - 1);
-        bytes memory mutated = _clone(wrapperEnvelope);
-        uint256 byteIndex = bitIndex >> 3;
-        uint8 mask = uint8(1) << uint8(7 - (bitIndex & 7));
-        mutated[byteIndex] = bytes1(uint8(mutated[byteIndex]) ^ mask);
-        assertEq(
-            account.isValidSignature(wrapperHash, mutated),
-            INVALID_SIGNATURE,
-            "bit-flipped 1271 envelope accepted"
         );
     }
 
@@ -215,16 +181,5 @@ contract SHRINCSMutationFuzzTest is Test {
         rawKey = abi.encodePacked(commitment);
         rawEnvelope =
             SHRINCSCodec.encodeStatefulEnvelope(publicKey, signature);
-    }
-
-    function _clone(bytes memory input)
-        internal
-        pure
-        returns (bytes memory copy)
-    {
-        copy = new bytes(input.length);
-        for (uint256 i = 0; i < input.length; i++) {
-            copy[i] = input[i];
-        }
     }
 }

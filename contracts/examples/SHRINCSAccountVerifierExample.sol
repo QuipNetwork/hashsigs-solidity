@@ -19,7 +19,6 @@ pragma solidity ^0.8.28;
 import {SHRINCS} from "../SHRINCS.sol";
 import {SPHINCSPlusC} from "../SPHINCSPlusC.sol";
 import {SHRINCSParams} from "shrincs-profile/SHRINCSParams.sol";
-import {SHRINCSAccountEnvelope} from "./SHRINCSAccountEnvelope.sol";
 
 contract SHRINCSAccountVerifierExample {
     // ERC-1271 success return value.
@@ -107,44 +106,40 @@ contract SHRINCSAccountVerifierExample {
 
     /// @notice ERC-1271 compatibility view for canonical SHRINCS
     /// account-action signatures.
-    /// @dev Decodes the leading envelope mode byte, structurally validates
-    /// the remainder as a canonical stateful or stateless action envelope
-    /// (the SHRINCSAccountEnvelope walk, never reverting), rebuilds the
+    /// @dev Decodes the leading envelope mode byte and abi.decodes the
+    /// remainder as a stateful or stateless action envelope, rebuilds the
     /// current action context from wrapper-owned state, checks the supplied
     /// hash against the canonical action hash, and verifies the embedded
     /// SHRINCS signature without mutating state.
-    /// @dev Revert model (mirrors the SHRINCSVerifier). A malformed or
-    /// non-canonical envelope returns 0xffffffff, reached only through the
-    /// non-reverting structural walk before abi.decode (which is then
-    /// infallible) — there is no try/catch. Every other failure, including
-    /// an inner out-of-gas, reverts to the caller. The read-only signature
-    /// check runs directly on the decoded memory structs through the
-    /// memory-typed SHRINCS library, with no self-call hop. Reference gas: a
-    /// stateful check costs roughly 180k gas and a stateless check roughly
-    /// 2.41M gas; callers must forward comfortably above those figures or the
-    /// verification reverts.
+    /// @dev Revert model (mirrors the SHRINCSVerifier). An empty signature
+    /// (no mode byte) and a malformed envelope revert (the mode read indexes
+    /// empty bytes; abi.decode reverts on a short buffer, out-of-range offset
+    /// or length, or dirty value-type high bits — the canonicity walk is
+    /// gone). An unknown mode byte and a well-formed but invalid signature
+    /// return 0xffffffff. There is no try/catch; every other failure,
+    /// including an inner out-of-gas, reverts. A non-canonical but
+    /// ABI-tolerated re-encoding decodes to the same value and verifies, so
+    /// envelopes are byte-malleable. The read-only signature check runs
+    /// directly on the decoded memory structs through the memory-typed
+    /// SHRINCS library, with no self-call hop. Reference gas: a stateful
+    /// check costs roughly 180k gas and a stateless check roughly 2.08M gas;
+    /// callers must forward comfortably above those or the verification
+    /// reverts.
     /// @param hash The 32-byte hash the signature must authorize.
     /// @param signature The mode-prefixed ERC-1271 envelope.
-    /// @return The ERC-1271 magic value on success, 0xffffffff on malformed
-    /// input.
+    /// @return The ERC-1271 magic value on success, 0xffffffff on an unknown
+    /// mode or a well-formed but invalid signature. Malformed input reverts.
     function isValidSignature(bytes32 hash, bytes calldata signature)
         external
         view
         returns (bytes4)
     {
-        // A one-byte mode prefix is required before any envelope payload.
-        if (signature.length < 1) return INVALID_SIGNATURE;
-
+        // An empty signature has no mode byte: the read below reverts.
         uint8 mode = uint8(signature[0]);
         bytes calldata payload = signature[1:];
 
         if (mode == ERC1271_MODE_STATEFUL_ACTION) {
-            // Structural walk first (non-reverting); abi.decode is then
-            // infallible on the validated bytes.
-            if (!SHRINCSAccountEnvelope.isCanonicalStatefulEnvelope(payload))
-            {
-                return INVALID_SIGNATURE;
-            }
+            // abi.decode reverts on a malformed envelope.
             (
                 SHRINCS.PublicKey memory publicKey,
                 bytes32 actionType,
@@ -166,11 +161,7 @@ contract SHRINCSAccountVerifierExample {
         }
 
         if (mode == ERC1271_MODE_STATELESS_ACTION) {
-            // Structural walk first (non-reverting); abi.decode is then
-            // infallible on the validated bytes.
-            if (!SHRINCSAccountEnvelope.isCanonicalStatelessEnvelope(
-                    payload
-                )) return INVALID_SIGNATURE;
+            // abi.decode reverts on a malformed envelope.
             (
                 SHRINCS.PublicKey memory publicKey,
                 bytes32 actionType,

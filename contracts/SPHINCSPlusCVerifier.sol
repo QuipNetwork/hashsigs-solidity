@@ -32,11 +32,16 @@ import {SPHINCSPlusC} from "./SPHINCSPlusC.sol";
 /// the caller (or the SHRINCSVerifier delegating here) owns the bundle and
 /// commitment binding.
 ///
-/// Revert model (same as the SHRINCSVerifier). A malformed key or envelope
-/// returns 0xffffffff, reached only through the SPHINCSPlusC facade's
-/// non-reverting structural validation — no try/catch anywhere. Every other
-/// failure, including an inner out-of-gas, reverts to the caller; ERC-7913
-/// permits this. verify runs entirely in-contract through the memory-typed
+/// Revert model (same as the SHRINCSVerifier). A malformed key (wrong
+/// length) returns 0xffffffff through the length-guarded key decoder; a
+/// malformed envelope reverts inside abi.decode (the canonicity walk is gone;
+/// a short buffer, out-of-range offset or length, or dirty value-type high
+/// bits reverts there); a well-formed but invalid signature returns
+/// 0xffffffff. No try/catch anywhere. Every other failure, including an inner
+/// out-of-gas, reverts to the caller; ERC-7913 permits this. A non-canonical
+/// but ABI-tolerated re-encoding decodes to the same value and verifies, so
+/// envelopes are byte-malleable; consumers must key on decoded fields, not
+/// envelope bytes. verify runs entirely in-contract through the memory-typed
 /// SPHINCSPlusC library, with no external call.
 ///
 /// Caller obligations. Every SPHINCSPlusC library is `pure` and this
@@ -68,21 +73,20 @@ abstract contract SPHINCSPlusCVerifier is IERC7913SignatureVerifier {
 
     /// @notice ERC-7913 verification entrypoint for stateless SPHINCSPlusC
     /// signatures.
-    /// @dev Decodes the 64-byte key into the two stateless seed words and the
-    /// stateless-signature envelope through the SPHINCSPlusC facade's
-    /// non-reverting decoders (malformed -> 0xffffffff). After validation
-    /// abi.decode is infallible, so verify hands the two seed words and the
-    /// decoded signature to the memory-typed SPHINCSPlusC library, which
-    /// verifies FORS-C plus the hypertree over the 32 hash bytes under the
-    /// public seed and root. No external call, no try/catch: an
+    /// @dev Decodes the 64-byte key into the two stateless seed words (wrong
+    /// length -> 0xffffffff) and abi.decodes the stateless-signature envelope
+    /// (a malformed envelope reverts there). verify hands the two seed words
+    /// and the decoded signature to the memory-typed SPHINCSPlusC library,
+    /// which verifies FORS-C plus the hypertree over the 32 hash bytes under
+    /// the public seed and root. No external call, no try/catch: an
     /// execution failure, including out-of-gas, reverts. See the
     /// contract-level revert model.
     /// @param key abi.encode(bytes32 pkSeed, bytes32 hypertreeRoot).
     /// @param hash The 32-byte message hash to verify.
     /// @param signature The stateless-signature envelope.
-    /// @return The verify selector on success; 0xffffffff for a
-    /// malformed key or envelope, or a well-formed but invalid
-    /// signature. Execution failures revert.
+    /// @return The verify selector on success; 0xffffffff for a malformed key
+    /// (wrong length) or a well-formed but invalid signature. A malformed
+    /// envelope and other execution failures revert.
     function verify(
         bytes calldata key,
         bytes32 hash,
