@@ -523,6 +523,52 @@ contract SHRINCSCalldataRetagTest is Test {
         }
     }
 
+    /// @dev Byte-flip battery for the signature-only (shape-2) envelope,
+    /// the modern stand-in for the shape-2 differential walk dropped with
+    /// the canonicity channel in fe472df. Flip exactly one byte of the
+    /// valid SPHINCSPlusC.Signature envelope and drive it through the real
+    /// SPHINCSPlusC verify with the real vector key. A single flip lands in
+    /// the framing trichotomy: a revert or the invalid selector (a load-
+    /// bearing byte changed, or the framing broke), or success. The codec
+    /// is ABI-tolerant of non-canonical framing since fe472df, so a flip
+    /// the fixed-width calldata reads ignore (e.g. a length word of a
+    /// 32-byte field) still verifies the same signature; on an accepted
+    /// framing, confirm the zero-copy re-tag still reads byte-identically
+    /// to abi.decode (this suite's core invariant, exercised here on an
+    /// adversarial envelope rather than a re-encoded canonical one).
+    function testFuzzSignatureEnvelopeByteFlip(uint256 position, uint8 flip)
+        public
+        view
+    {
+        vm.assume(flip != 0);
+        bytes memory mutant = _flipByte(signatureEnvelope, position, flip);
+        try sphincs.verify(signatureKey, statelessHash, mutant) returns (
+            bytes4 result
+        ) {
+            if (result == SELECTOR) {
+                // A materializing digest can itself revert on a
+                // pathological-but-accepted framing (e.g. a length word
+                // grown past the buffer); that is not a re-tag/abi.decode
+                // disagreement, so only compare when abi.decode succeeds.
+                try digest.abiSignature(mutant) returns (bytes32 abiD) {
+                    assertEq(
+                        digest.retagSignature(mutant),
+                        abiD,
+                        "re-tag must match abi.decode on accepted framing"
+                    );
+                } catch {}
+            } else {
+                assertEq(
+                    result,
+                    INVALID_SIGNATURE,
+                    "non-success must be the invalid selector"
+                );
+            }
+        } catch {
+            // A revert on a malformed envelope is a safe rejection.
+        }
+    }
+
     /// @dev Demonstrates the success-and-equivalent trichotomy branch: a
     /// non-canonical re-encoding (trailing padding bytes) of the valid
     /// envelope still verifies and decodes to the same fields.
@@ -657,6 +703,19 @@ contract SHRINCSCalldataRetagTest is Test {
         assembly {
             mstore(add(out, 96), mload(add(out, 64)))
         }
+    }
+
+    /// @dev Flip exactly one byte: XOR `flip` (non-zero) into the byte at
+    /// `position % length`. In-place, so the envelope length is unchanged.
+    function _flipByte(bytes memory envelope, uint256 position, uint8 flip)
+        internal
+        pure
+        returns (bytes memory out)
+    {
+        out = bytes.concat(envelope);
+        if (out.length == 0) return out;
+        uint256 idx = position % out.length;
+        out[idx] = bytes1(uint8(out[idx]) ^ flip);
     }
 
     /// @dev Overlay fuzzed bytes onto the envelope at a wrapped position.

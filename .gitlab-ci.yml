@@ -53,10 +53,9 @@ format-and-checks:
 # profiles via foundry.toml until the T6 vector regeneration
 # ([DESIGN §3.6]). The 256s leg runs under the `ci` profile: 256s
 # params (inherited from default) plus bounded, deterministic
-# fuzz/invariant runs
-# (foundry.toml). FOUNDRY_FUZZ_SEED (global) pins the seed; the
-# failure_persist cache replays any counterexample a nightly or prior MR
-# found before exploring new cases.
+# fuzz/invariant runs (foundry.toml). FOUNDRY_FUZZ_SEED (global) pins
+# the seed; the failure_persist cache replays any counterexample a
+# nightly or prior MR found before exploring new cases.
 build-lint-test:
   extends: .foundry
   rules:
