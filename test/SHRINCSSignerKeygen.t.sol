@@ -82,15 +82,10 @@ contract SHRINCSSignerKeygenTest is Test {
     // line-length: allow — one unbreakable test vector literal token
     hex"a4a372b30187a5bf20d242a6e0a87206cf281bc0fdbbc44c835b3811f800587e4f26a29da785b7d9c0194e409dff00c4234e3708ad80a5506f40c0bc83d78f4e00000004";
 
-    // 128s-keccak (q18 and q20 share every golden except the commitment).
+    // 128s-keccak (q18 and q20 share these; the stateless hypertree root
+    // and commitment goldens live in the vector-backed suite instead).
     bytes32 internal constant G128_STATEFUL_ROOT =
         0xb745e962fce45192d99c9f841789953700000000000000000000000000000000;
-    bytes32 internal constant G128_HYPERTREE_ROOT =
-        0x0e1a87d5b8ae4daa9a3356f0155eca1900000000000000000000000000000000;
-    bytes32 internal constant G128_Q18_COMMITMENT =
-        0xba9114ff94644c95f09cde656d179aa9fd1e162fa0e294d615ac0600a132876d;
-    bytes32 internal constant G128_Q20_COMMITMENT =
-        0x573ec4f0829ee2b7a30c5303b8c480f2b5ea3f9f71d6169aa67eea0e5dd74389;
     bytes internal constant G128_STATEFUL_PUBLIC_KEY =
     // line-length: allow — one unbreakable test vector literal token
     hex"a4a372b30187a5bf20d242a6e0a87206cf281bc0fdbbc44c835b3811f800587eb745e962fce45192d99c9f84178995370000000000000000000000000000000000000004";
@@ -100,8 +95,10 @@ contract SHRINCSSignerKeygenTest is Test {
     }
 
     // expectedProfileGoldens: return the active profile's keygen goldens.
-    // 256s vs 128s split on HASH_LEN; q18 vs q20 split on the stateless
-    // signature budget (their only divergence is the commitment tag).
+    // 256s vs 128s split on HASH_LEN. Under 128s the stateless-derived
+    // fields (hypertreeRoot, publicKeyCommitment) stay zero: only the
+    // HASH_LEN == 32 assertions read them; the 128s canonical values are
+    // pinned by the vector-backed SHRINCSSphincs128sVectors suite.
     function expectedProfileGoldens()
         internal
         pure
@@ -115,12 +112,7 @@ contract SHRINCSSignerKeygenTest is Test {
             return g;
         }
         g.statefulRoot = G128_STATEFUL_ROOT;
-        g.hypertreeRoot = G128_HYPERTREE_ROOT;
         g.statefulPublicKey = G128_STATEFUL_PUBLIC_KEY;
-        g.publicKeyCommitment = SHRINCSParams.STATELESS_SIGNATURE_LIMIT
-            == 262_144
-            ? G128_Q18_COMMITMENT
-            : G128_Q20_COMMITMENT;
     }
 
     function testKeygenRejectsZeroStatefulBudget() public view {

@@ -203,7 +203,7 @@ graph TD
     HH --> PA
 ```
 
-Tests (26 suites, 239 tests as of 2026-07-12, ci profile):
+Tests (28 suites, 254 tests as of 2026-07-12, ci profile):
 
 - [test/SHRINCSSphincs256sVectors.t.sol](./test/SHRINCSSphincs256sVectors.t.sol)
   - vector-backed verification and rotation-authorization tests
@@ -1171,7 +1171,7 @@ forge test
 ```
 
 Expected result as of 2026-07-12 on the default profile:
-`239 tests passed, 0 failed`.
+`254 tests passed, 0 failed`.
 
 ### Using Rust-Generated SHRINCS Vectors
 
