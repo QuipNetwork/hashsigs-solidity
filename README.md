@@ -35,10 +35,10 @@ Citation keys follow [CODINGSTANDARDS.md §1](./CODINGSTANDARDS.md).
     Reviewed and anchored to Rust-generated signature vectors.
   - `128s-q18` — 16-byte truncated hashes, single-layer `h = 18`
     hypertree, `a = 24`, `k = 6`, 32 WOTS-C chains, 2^18 stateless
-    budget. Compiles and passes the structural test set; signature
-    vectors pending Rust regeneration.
-  - `128s-q20` — as `128s-q18` with a 2^20 stateless budget; same
-    status.
+    budget. Anchored to Rust-generated signature vectors; the stateless
+    path is verified against them by `SHRINCSSphincs128sVectors`.
+  - `128s-q20` — as `128s-q18` with a 2^20 stateless budget; shares the
+    128s vectors except the profile-bound commitment.
 - **SPHINCS+C** ([contracts/SPHINCSPlusC.sol](./contracts/SPHINCSPlusC.sol))
   — the stateless SPHINCS+C construction `[SPHINCSPLUSC]` (M. Kudinov,
   A. Hülsing, E. Ronen, E. Yogev, *SPHINCS+C: Compressing SPHINCS+ With
