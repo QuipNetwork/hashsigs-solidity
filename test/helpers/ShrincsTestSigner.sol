@@ -180,9 +180,9 @@ library ShrincsTestSigner {
         return keccak256(abi.encodePacked(domain, seed, data));
     }
 
-    // compactSingleLaneKeygen: Build a deterministic test-only JARDIN compact lane.
+    // compactSingleLaneKeygen: Build a deterministic JARDIN compact key for lane q.
     // 1. Derive compact SK.seed and PK.seed from the fixture seed.
-    // 2. Commit one FORS+C lane plus deterministic Merkle siblings into subPkRoot.
+    // 2. Materialize all 128 FORS+C lane public keys and commit them to subPkRoot.
     function compactSingleLaneKeygen(bytes memory seedMaterial, uint8 q)
         internal
         pure
@@ -194,8 +194,8 @@ library ShrincsTestSigner {
         skSeed = derive32("shrincs-compact-sk-seed", seedMaterial, "");
         // Derive the compact public seed used by tweakable hashes.
         pkSeed = derive32("shrincs-compact-pk-seed", seedMaterial, "");
-        // Commit this lane's FORS+C public key through the 7-level compact Merkle tree.
-        pkRoot = compactSingleLaneRoot(skSeed, pkSeed, q);
+        // Commit all 128 lane FORS+C public keys through the 7-level compact Merkle tree.
+        (pkRoot,) = compactMerkleRootAndAuth(skSeed, pkSeed, q);
         return (skSeed, pkSeed, pkRoot, true);
     }
 
@@ -222,6 +222,10 @@ library ShrincsTestSigner {
     {
         // Reject out-of-range compact Merkle leaves before deriving any signature bytes.
         if (q >= ShrincsTypes.COMPACT_Q_MAX) return (signature, false);
+
+        // Build the real JARDIN compact Merkle auth path from all 128 lane public keys.
+        (bytes32 computedRoot, bytes32[7] memory merkleAuth) = compactMerkleRootAndAuth(skSeed, pkSeed, q);
+        if (computedRoot != pkRoot) return (signature, false);
 
         // Use deterministic fixture randomness so tests are reproducible.
         bytes32 randomizer = keccak256(abi.encodePacked("jardin-r", skSeed, pkSeed, pkRoot, q, message));
@@ -284,11 +288,7 @@ library ShrincsTestSigner {
         // Append the 7-node compact Merkle authentication path.
         for (uint32 j = 0; j < ShrincsTypes.COMPACT_MERKLE_HEIGHT;) {
             // Each Merkle sibling occupies one 32-byte word after q.
-            setSlice32(
-                signature,
-                compactMerkleAuth(skSeed, pkSeed, q, j),
-                uint256(COMPACT_MERKLE_AUTH_OFFSET) + uint256(j) * 32
-            );
+            setSlice32(signature, merkleAuth[j], uint256(COMPACT_MERKLE_AUTH_OFFSET) + uint256(j) * 32);
             unchecked {
                 // The loop bound is the fixed compact Merkle height.
                 ++j;
@@ -298,29 +298,55 @@ library ShrincsTestSigner {
         return (signature, true);
     }
 
-    // compactSingleLaneRoot: Compute subPkRoot for the FORS+C instance at compact Merkle leaf q.
-    function compactSingleLaneRoot(bytes32 skSeed, bytes32 pkSeed, uint8 q) internal pure returns (bytes32 node) {
-        // The compact Merkle leaf is the FORS+C public key for index q.
-        node = compactForsPk(skSeed, pkSeed, q);
-        // Fold that FORS+C public key up the 7-level balanced Merkle tree.
+    // compactMerkleRootAndAuth: Compute the 128-lane compact Merkle root and auth path for q.
+    function compactMerkleRootAndAuth(bytes32 skSeed, bytes32 pkSeed, uint8 q)
+        internal
+        pure
+        returns (bytes32 root, bytes32[7] memory authPath)
+    {
+        // Materialize every JARDIN compact Merkle leaf as a FORS+C public key.
+        bytes32[128] memory nodes;
+        for (uint32 lane = 0; lane < ShrincsTypes.COMPACT_Q_MAX;) {
+            // Each lane has ci=q inside its FORS addresses.
+            nodes[lane] = compactForsPk(skSeed, pkSeed, uint8(lane));
+            unchecked {
+                // The loop bound is the fixed 128-lane compact tree.
+                ++lane;
+            }
+        }
+
+        // Fold the 128 leaves upward while recording q's sibling at each level.
+        uint32 pathIndex = q;
+        uint32 nodeCount = ShrincsTypes.COMPACT_Q_MAX;
         for (uint32 j = 0; j < ShrincsTypes.COMPACT_MERKLE_HEIGHT;) {
-            // Derive the deterministic sibling for this compact Merkle level.
-            bytes32 auth = compactMerkleAuth(skSeed, pkSeed, q, j);
-            // Place the current node on the left or right according to bit j of q.
-            (bytes32 left, bytes32 right) = uint32(q) & (uint32(1) << j) == 0 ? (node, auth) : (auth, node);
+            // The sibling beside q's current path node is pathIndex xor 1.
+            authPath[j] = nodes[pathIndex ^ 1];
             // JARDIN ADRS x uses top-down level numbering for Merkle parents.
             uint32 level = uint32(ShrincsTypes.COMPACT_MERKLE_HEIGHT) - 1 - j;
-            // JARDIN ADRS y is the parent index at this level.
-            uint32 parentIndex = uint32(q) >> (j + 1);
-            // Hash the ordered pair into its parent with ADRS(type=JARDIN_MERKLE).
-            node = compactH(
-                pkSeed, compactAdrs(ShrincsTypes.AddressTypeJardinMerkle, 0, 0, level, parentIndex), left, right
-            );
+            // Fold adjacent pairs into the next parent level.
+            for (uint32 parent = 0; parent < nodeCount >> 1;) {
+                // JARDIN ADRS y is the parent index at this level.
+                nodes[parent] = compactH(
+                    pkSeed,
+                    compactAdrs(ShrincsTypes.AddressTypeJardinMerkle, 0, 0, level, parent),
+                    nodes[parent << 1],
+                    nodes[(parent << 1) | 1]
+                );
+                unchecked {
+                    // The loop bound is the parent count at this level.
+                    ++parent;
+                }
+            }
+            // Move q's path index to its parent.
+            pathIndex >>= 1;
+            // The active node count halves at each Merkle level.
+            nodeCount >>= 1;
             unchecked {
                 // The loop bound is the fixed compact Merkle height.
                 ++j;
             }
         }
+        root = nodes[0];
     }
 
     // compactForsPk: Compute the JARDIN FORS+C public key from the 51 opened FORS tree roots.
@@ -464,22 +490,27 @@ library ShrincsTestSigner {
     function compactForsSecret(bytes32 skSeed, bytes32 pkSeed, uint8 q, uint32 tree, uint32 leaf)
         internal
         pure
-        returns (bytes32)
+        returns (bytes32 out)
     {
         // FIPS/JARDIN treeIndex is continuous across all compact FORS trees.
         uint32 treeIndex = (tree << ShrincsTypes.COMPACT_FORS_TREE_HEIGHT) + leaf;
-        // Domain-separate the test fixture PRF and bind ADRS(type=FORS_PRF, ci=q).
-        return keccak256(
-            abi.encodePacked(
-                "jardin-fors-prf", skSeed, pkSeed, compactAdrs(ShrincsTypes.AddressTypeForsPrf, 0, q, 0, treeIndex)
-            )
-        );
-    }
-
-    // compactMerkleAuth: Deterministically derive one compact Merkle sibling for leaf q.
-    function compactMerkleAuth(bytes32 skSeed, bytes32 pkSeed, uint8 q, uint32 level) internal pure returns (bytes32) {
-        // The fixture does not build all 128 FORS+C leaves; it derives stable sibling nodes instead.
-        return keccak256(abi.encodePacked("jardin-merkle-auth", skSeed, pkSeed, q, level));
+        // Domain-separated PRF preimage:
+        //   "jardin-fors-prf" || skSeed32 || pkSeed32 || ADRS(FORS_PRF, ci=q)32.
+        bytes32 addressWord = compactAdrs(ShrincsTypes.AddressTypeForsPrf, 0, q, 0, treeIndex);
+        assembly {
+            // Use free-memory scratch without allocating.
+            let ptr := mload(0x40)
+            // Write the 15-byte domain tag.
+            mstore(ptr, "jardin-fors-prf")
+            // Write skSeed immediately after the tag.
+            mstore(add(ptr, 15), skSeed)
+            // Write pkSeed.
+            mstore(add(ptr, 47), pkSeed)
+            // Write ADRS(type=FORS_PRF, ci=q).
+            mstore(add(ptr, 79), addressWord)
+            // Hash the exact packed preimage length.
+            out := keccak256(ptr, 111)
+        }
     }
 
     // compactHMsg: Mirror ShrincsCompact.hMsg for memory-based test signing.
@@ -538,19 +569,43 @@ library ShrincsTestSigner {
     }
 
     // compactF: JARDIN/FIPS tweakable hash for a compact FORS leaf.
-    function compactF(bytes32 pkSeed, bytes32 addressWord, bytes32 input) internal pure returns (bytes32) {
+    function compactF(bytes32 pkSeed, bytes32 addressWord, bytes32 input) internal pure returns (bytes32 out) {
         // F(pkSeed, ADRS, secretLeaf) is modeled with keccak256 for the Solidity fixture.
-        return keccak256(abi.encodePacked(pkSeed, addressWord, input));
+        assembly {
+            // Use free-memory scratch without allocating.
+            let ptr := mload(0x40)
+            // Write pkSeed.
+            mstore(ptr, pkSeed)
+            // Write ADRS.
+            mstore(add(ptr, 32), addressWord)
+            // Write secretLeaf.
+            mstore(add(ptr, 64), input)
+            // Hash pkSeed32 || ADRS32 || secretLeaf32.
+            out := keccak256(ptr, 96)
+        }
     }
 
     // compactH: JARDIN/FIPS tweakable hash for compact FORS or Merkle parent nodes.
     function compactH(bytes32 pkSeed, bytes32 addressWord, bytes32 left, bytes32 right)
         internal
         pure
-        returns (bytes32)
+        returns (bytes32 out)
     {
         // H(pkSeed, ADRS, left, right) is modeled with keccak256 for the Solidity fixture.
-        return keccak256(abi.encodePacked(pkSeed, addressWord, left, right));
+        assembly {
+            // Use free-memory scratch without allocating.
+            let ptr := mload(0x40)
+            // Write pkSeed.
+            mstore(ptr, pkSeed)
+            // Write ADRS.
+            mstore(add(ptr, 32), addressWord)
+            // Write left child.
+            mstore(add(ptr, 64), left)
+            // Write right child.
+            mstore(add(ptr, 96), right)
+            // Hash pkSeed32 || ADRS32 || left32 || right32.
+            out := keccak256(ptr, 128)
+        }
     }
 
     // signStatefulRawAtLeaf: Sign raw bytes at one explicit stateful WOTS-C leaf.

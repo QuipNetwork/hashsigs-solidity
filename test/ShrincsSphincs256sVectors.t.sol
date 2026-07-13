@@ -19,7 +19,6 @@ pragma solidity ^0.8.28;
 import {Test} from "../lib/forge-std/src/Test.sol";
 import {SHRINCS} from "../contracts/SHRINCS.sol";
 import {ShrincsTypes} from "../contracts/ShrincsTypes.sol";
-import {ShrincsTestSigner} from "./helpers/ShrincsTestSigner.sol";
 
 contract StatefulHarness {
     function verifyUnsafeRaw(
@@ -169,6 +168,9 @@ contract RotationHarness {
 contract ShrincsSphincs256sVectorsTest is Test {
     string internal constant VECTOR_PATH = "test/test_vectors/shrincs_sphincs_256s_keccak.json";
     uint256 internal constant COMPACT_SIGNATURE_BYTES = 10053;
+    uint256 internal constant COMPACT_FORS_OFFSET = 36;
+    uint256 internal constant COMPACT_Q_OFFSET = 9828;
+    uint256 internal constant COMPACT_MERKLE_AUTH_OFFSET = 9829;
 
     struct LegacyStatefulPublicKey {
         bytes32 pkSeed;
@@ -993,22 +995,99 @@ contract ShrincsSphincs256sVectorsTest is Test {
         );
     }
 
-    function testCompactVerifyAcceptsSignedRawFixture() public view {
-        uint8 q = 11;
-        (bytes32 skSeed, bytes32 subPkSeed, bytes32 subPkRoot, bool keygenOk) =
-            ShrincsTestSigner.compactSingleLaneKeygen(bytes("compact signed raw fixture"), q);
-        assertTrue(keygenOk, "compact fixture keygen must succeed");
-
-        bytes32 message = keccak256("compact raw message");
-        (bytes memory signature, bool signOk) =
-            ShrincsTestSigner.signCompactRaw(skSeed, subPkSeed, subPkRoot, message, q);
-        assertTrue(signOk, "compact fixture signing must succeed");
+    function testCompactVerifyAcceptsRustSignedRawVector() public {
+        (bytes32 subPkSeed, bytes32 subPkRoot, bytes32 message, bytes memory signature) =
+            decodeCompactVector(".compact.cases.valid.calldata");
 
         assertTrue(compact.verifyUnsafeRaw(subPkSeed, subPkRoot, message, signature), "signed compact fixture");
         assertFalse(
             compact.verifyUnsafeRaw(subPkSeed, subPkRoot, keccak256("wrong compact raw message"), signature),
             "compact fixture must bind message"
         );
+    }
+
+    function testCompactVerifyAcceptsRustSignedActionVectors() public {
+        (
+            bytes32 firstSeed,
+            bytes32 firstRoot,
+            ShrincsTypes.ActionContext memory firstContext,
+            bytes memory firstSignature
+        ) = decodeCompactActionVector(".compact.actionCases.first.calldata");
+        (
+            bytes32 secondSeed,
+            bytes32 secondRoot,
+            ShrincsTypes.ActionContext memory secondContext,
+            bytes memory secondSignature
+        ) = decodeCompactActionVector(".compact.actionCases.sameQSecond.calldata");
+
+        assertTrue(
+            compact.verify(firstSeed, firstRoot, firstContext, firstSignature), "first Rust compact action fixture"
+        );
+        assertTrue(
+            compact.verify(secondSeed, secondRoot, secondContext, secondSignature), "second Rust compact action fixture"
+        );
+        assertEq(firstSeed, secondSeed, "stable compact fixtures share slot seed");
+        assertEq(firstRoot, secondRoot, "stable compact fixtures share slot root");
+        assertEq(readCompactQ(firstSignature), readCompactQ(secondSignature), "q reuse is off-chain");
+        assertFalse(
+            compact.verify(firstSeed, firstRoot, secondContext, firstSignature),
+            "first compact action fixture must bind context"
+        );
+        assertFalse(
+            compact.verify(secondSeed, secondRoot, firstContext, secondSignature),
+            "second compact action fixture must bind context"
+        );
+    }
+
+    function testCompactVerifyRejectsWrongQ() public {
+        (bytes32 subPkSeed, bytes32 subPkRoot, bytes32 message, bytes memory signature) =
+            decodeCompactVector(".compact.cases.valid.calldata");
+
+        bytes memory tampered = cloneBytes(signature);
+        flipByte(tampered, COMPACT_Q_OFFSET);
+
+        assertFalse(compact.verifyUnsafeRaw(subPkSeed, subPkRoot, message, tampered), "compact wrong q");
+    }
+
+    function testCompactVerifyRejectsWrongSubPkRoot() public {
+        (bytes32 subPkSeed, bytes32 subPkRoot, bytes32 message, bytes memory signature) =
+            decodeCompactVector(".compact.cases.valid.calldata");
+        bytes32 wrongSubPkRoot = bytes32(uint256(subPkRoot) ^ uint256(1));
+
+        assertFalse(compact.verifyUnsafeRaw(subPkSeed, wrongSubPkRoot, message, signature), "compact wrong subPkRoot");
+    }
+
+    function testCompactVerifyRejectsWrongMerkleAuth() public {
+        (bytes32 subPkSeed, bytes32 subPkRoot, bytes32 message, bytes memory signature) =
+            decodeCompactVector(".compact.cases.valid.calldata");
+
+        bytes memory tampered = cloneBytes(signature);
+        flipByte(tampered, COMPACT_MERKLE_AUTH_OFFSET);
+
+        assertFalse(compact.verifyUnsafeRaw(subPkSeed, subPkRoot, message, tampered), "compact wrong Merkle auth");
+    }
+
+    function testCompactVerifyRejectsWrongForsAuth() public {
+        (bytes32 subPkSeed, bytes32 subPkRoot, bytes32 message, bytes memory signature) =
+            decodeCompactVector(".compact.cases.valid.calldata");
+
+        bytes memory tampered = cloneBytes(signature);
+        flipByte(tampered, COMPACT_FORS_OFFSET + 32);
+
+        assertFalse(compact.verifyUnsafeRaw(subPkSeed, subPkRoot, message, tampered), "compact wrong FORS auth");
+    }
+
+    function testCompactVerifyRejectsWrongRAndCounter() public {
+        (bytes32 subPkSeed, bytes32 subPkRoot, bytes32 message, bytes memory signature) =
+            decodeCompactVector(".compact.cases.valid.calldata");
+
+        bytes memory wrongR = cloneBytes(signature);
+        flipByte(wrongR, 0);
+        assertFalse(compact.verifyUnsafeRaw(subPkSeed, subPkRoot, message, wrongR), "compact wrong R");
+
+        bytes memory wrongCounter = cloneBytes(signature);
+        flipByte(wrongCounter, 35);
+        assertFalse(compact.verifyUnsafeRaw(subPkSeed, subPkRoot, message, wrongCounter), "compact wrong counter");
     }
 
     function testCompactVerifyRejectsZeroDomainSeparator() public view {
@@ -1309,6 +1388,28 @@ contract ShrincsSphincs256sVectorsTest is Test {
         signature = convertLegacyStatelessSignature(legacySignature);
     }
 
+    function decodeCompactVector(string memory vectorKey)
+        internal
+        returns (bytes32 subPkSeed, bytes32 subPkRoot, bytes32 message, bytes memory signature)
+    {
+        bytes memory args = vectorArgs(vectorKey);
+        (subPkSeed, subPkRoot, message, signature) = abi.decode(args, (bytes32, bytes32, bytes32, bytes));
+    }
+
+    function decodeCompactActionVector(string memory vectorKey)
+        internal
+        returns (
+            bytes32 subPkSeed,
+            bytes32 subPkRoot,
+            ShrincsTypes.ActionContext memory context,
+            bytes memory signature
+        )
+    {
+        bytes memory args = vectorArgs(vectorKey);
+        (subPkSeed, subPkRoot, context, signature) =
+            abi.decode(args, (bytes32, bytes32, ShrincsTypes.ActionContext, bytes));
+    }
+
     function convertLegacyStatelessSignature(LegacyStatelessSignature memory legacy)
         internal
         pure
@@ -1459,5 +1560,20 @@ contract ShrincsSphincs256sVectorsTest is Test {
         for (uint256 i = 4; i < input.length; ++i) {
             output[i - 4] = input[i];
         }
+    }
+
+    function cloneBytes(bytes memory source) internal pure returns (bytes memory out) {
+        out = new bytes(source.length);
+        for (uint256 i = 0; i < source.length; ++i) {
+            out[i] = source[i];
+        }
+    }
+
+    function flipByte(bytes memory data, uint256 offset) internal pure {
+        data[offset] = bytes1(uint8(data[offset]) ^ uint8(1));
+    }
+
+    function readCompactQ(bytes memory signature) internal pure returns (uint8) {
+        return uint8(signature[COMPACT_Q_OFFSET]);
     }
 }
