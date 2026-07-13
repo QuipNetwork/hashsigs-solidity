@@ -127,8 +127,8 @@ contract SHRINCSAccountVerifierExample {
     /// wrong-accept. The read-only
     /// signature check runs on the re-tagged calldata structs through
     /// the calldata-typed SHRINCS library, with no self-call hop. Reference
-    /// gas: a stateful check costs 171,561 gas and
-    /// a stateless check 1,658,664 gas; callers must
+    /// gas: a stateful check costs 167,779 gas and
+    /// a stateless check 1,607,077 gas; callers must
     /// forward comfortably above those or the verification reverts.
     /// @param hash The 32-byte hash the signature must authorize.
     /// @param signature The mode-prefixed ERC-1271 envelope.
