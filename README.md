@@ -609,8 +609,11 @@ These examples are intentionally thin:
 
 - they do not own nonce, `keyVersion`, stateful-leaf tracking, or rotation
   state
-- they do not normalize verifier reverts to `false`
-- they do not validate the stored key bytes at construction time
+- the soft `isAuthorized`/`isAuthorizedStateless` path normalizes verifier
+  reverts (including out-of-gas) to `false`; `requireAuthorized`/
+  `requireAuthorizedStateless` bubble them
+- constructors validate only the 32-byte length of the stored key, not its
+  content
 - they model an external consumer of the verifier, not an account wrapper
 
 Concrete consumer flow:
@@ -1168,9 +1171,9 @@ encoding.
 | --- | --- | --- | --- | --- |
 | `stateful.canonical_wrapper_call_gas` | 190,792 | 117,759 | 117,759 | 281,063 |
 | `stateful.erc1271_call_gas` | 167,779 | 94,746 | 94,746 | 258,050 |
-| `stateless.canonical_wrapper_call_gas` | 1,629,307 | 192,130† | 192,130† | 2,420,861 |
-| `stateless.erc1271_call_gas` | 1,607,077 | 191,927† | 191,927† | 2,398,565 |
-| `stateless.verify_stateless_delegation_gas` | 1,661,184 | 204,635 | 204,635 | 2,455,228 |
+| `stateless.canonical_wrapper_call_gas` | 1,629,049 | 192,109† | 192,109† | 2,420,861 |
+| `stateless.erc1271_call_gas` | 1,606,819 | 191,906† | 191,906† | 2,398,565 |
+| `stateless.verify_stateless_delegation_gas` | 1,660,931 | 204,614 | 204,614 | 2,455,228 |
 
 † raw `SHRINCS.verifyStatelessUncheckedMessage` call (wrapper context-hash derivation excluded); see README.md "Gas Measurements" for detail.
 
@@ -1225,6 +1228,12 @@ or a single profile directly:
 ```bash
 FOUNDRY_PROFILE=128s-q18 forge test --match-contract SHRINCSMeasurements -vv
 ```
+
+These figures require a clean full build per profile, which
+`scripts/gas-report.sh` performs; running the single-profile command above
+over an `out/` directory a different profile already populated can read
+stale harness bytecode and shift a cell (the delegation row drifts by a few
+hundred gas from its 1,660,931 clean-build value this way).
 
 The stateful entrypoints make no external call, so their execution
 failures (including out-of-gas) simply revert. The stateless delegation

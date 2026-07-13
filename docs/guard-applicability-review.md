@@ -10,6 +10,17 @@ guards and test code excluded. Spike project:
 `scratchpad/guard-spike/` (solc 0.8.28, via-ir, optimizer 200 —
 matching the repo's test profile).
 
+Note: `SHRINCSCodec.sol` was dissolved into `SHRINCS.sol` and
+`SPHINCSPlusC.sol` in commit `0f190b0` ("Dissolve SHRINCSCodec into
+SHRINCS and SPHINCSPlusC"), after this review was ratified at HEAD
+e4002d5. The `SHRINCSCodec.sol:<line>` citations throughout this
+document are historical, against the pre-dissolution source. The code
+moved byte-for-byte under the same function names: 15 codec/decode
+functions now live in `SHRINCS.sol`, and the 4 stateless key/message/
+signature-envelope helpers (`decodeStatelessKey`, `toMessage`,
+`encodeStatelessSignatureEnvelope`, `statelessSignatureEnvelope`) now
+live in `SPHINCSPlusC.sol`.
+
 Classes: **S** = soundness (dropping admits a wrong-accept, directly or
 under a stated condition), **A** = API contract (non-reverting
 0xffffffff model; ERC-7913 permits plain reverts instead), **M** =
