@@ -46,7 +46,7 @@ contract SHRINCSStatefulSignerHarness {
         SHRINCS.PublicKey calldata publicKey,
         bytes calldata message,
         SHRINCS.Signature calldata signature
-    ) external pure returns (bool) {
+    ) external view returns (bool) {
         return SHRINCS.verifyStatefulUncheckedMessage(
             expectedPublicKeyCommitment, publicKey, message, signature
         );

@@ -82,7 +82,7 @@ library UXMSS {
         uint32 maxSignatures,
         bytes memory message,
         UXMSS.Signature calldata signature
-    ) internal pure returns (bool) {
+    ) internal view returns (bool) {
         // In this unbalanced stateful tree, the leaf index is encoded by
         // auth-path length.
         uint32 leafIndex = uint32(signature.authPath.length);
@@ -124,7 +124,7 @@ library UXMSS {
         uint32 leafIndex,
         bytes memory message,
         UXMSS.Signature calldata signature
-    ) internal pure returns (bytes32 pkHash, bool ok) {
+    ) internal view returns (bytes32 pkHash, bool ok) {
         // Bind the stateful WOTS-C digest to the seed, leaf, randomizer,
         // counter, and signed message.
         bytes32 digest = HashSuite.uxmssWotsDigits32(
@@ -214,7 +214,7 @@ library UXMSS {
         uint32 leafIndex,
         bytes32 leaf,
         bytes32[] calldata authPath
-    ) internal pure returns (bytes32 root, bool ok) {
+    ) internal view returns (bytes32 root, bool ok) {
         // The first parent hashes the leaf with the first auth-path node on
         // its right.
         root = HashSuite.statefulParentHash32(

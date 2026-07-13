@@ -34,7 +34,7 @@ contract ExampleStatefulHarness {
         SHRINCS.PublicKey calldata publicKey,
         SHRINCS.ActionContext calldata context,
         SHRINCS.Signature calldata signature
-    ) external pure returns (bool) {
+    ) external view returns (bool) {
         return SHRINCS.verifyStateful(
             expectedCompositePublicKey, publicKey, context, signature
         );
@@ -47,7 +47,7 @@ contract ExampleStatelessHarness {
         SHRINCS.PublicKey calldata publicKey,
         SHRINCS.ActionContext calldata context,
         SPHINCSPlusC.Signature calldata signature
-    ) external pure returns (bool) {
+    ) external view returns (bool) {
         return SHRINCS.verifyStateless(
             expectedCompositePublicKey, publicKey, context, signature
         );
@@ -61,7 +61,7 @@ contract ExampleRotationHarness {
         SHRINCS.RotationContext calldata context,
         SPHINCSPlusC.Signature calldata recoverySignature,
         SHRINCS.StatefulRotationTarget calldata nextKey
-    ) external pure returns (bytes32) {
+    ) external view returns (bytes32) {
         return SHRINCS.rotateStatefulViaStateless(
             expectedCompositePublicKey,
             currentPublicKey,
@@ -77,7 +77,7 @@ contract ExampleRotationHarness {
         SHRINCS.RotationContext calldata context,
         SPHINCSPlusC.Signature calldata recoverySignature,
         SHRINCS.RotationTarget calldata nextKey
-    ) external pure returns (bytes32) {
+    ) external view returns (bytes32) {
         return SHRINCS.statelessRotate(
             expectedCompositePublicKey,
             currentPublicKey,

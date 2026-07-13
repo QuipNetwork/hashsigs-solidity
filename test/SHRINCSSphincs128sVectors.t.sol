@@ -32,7 +32,7 @@ contract Stateless128sHarness {
         SHRINCS.PublicKey calldata publicKey,
         bytes calldata message,
         SPHINCSPlusC.Signature calldata signature
-    ) external pure returns (bool) {
+    ) external view returns (bool) {
         return SHRINCS.verifyStatelessUncheckedMessage(
             expectedCommitment, publicKey, message, signature
         );

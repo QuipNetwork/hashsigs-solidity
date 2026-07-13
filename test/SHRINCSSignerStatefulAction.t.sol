@@ -48,7 +48,7 @@ contract SHRINCSStatefulActionSignerHarness {
         SHRINCS.PublicKey calldata publicKey,
         SHRINCS.ActionContext calldata context,
         SHRINCS.Signature calldata signature
-    ) external pure returns (bool) {
+    ) external view returns (bool) {
         return SHRINCS.verifyStateful(
             expectedPublicKeyCommitment, publicKey, context, signature
         );

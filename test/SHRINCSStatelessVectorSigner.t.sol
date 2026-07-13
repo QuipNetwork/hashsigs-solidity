@@ -35,7 +35,7 @@ contract SHRINCSStatelessVectorSignerHarness is
         SHRINCS.PublicKey calldata publicKey,
         bytes calldata message,
         SPHINCSPlusC.Signature calldata signature
-    ) external pure returns (bool) {
+    ) external view returns (bool) {
         return SHRINCS.verifyStatelessUncheckedMessage(
             expectedPublicKeyCommitment, publicKey, message, signature
         );

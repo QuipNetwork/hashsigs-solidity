@@ -75,7 +75,7 @@ library WOTSPlusC {
         uint32 chainIdx,
         bytes32 value,
         uint32 digit
-    ) internal pure returns (bytes32 out) {
+    ) internal view returns (bytes32 out) {
         // Start from the revealed chain value supplied by the caller.
         out = value;
         uint256 chainAddressBase = addressBase | (uint256(chainIdx) << 32);

@@ -54,7 +54,7 @@ library Hypertree {
         uint64 seedTreeIndex,
         uint32 seedLeafIndex,
         Hypertree.HypertreeLayerSignature[] calldata layers
-    ) internal pure returns (bool) {
+    ) internal view returns (bool) {
         // Every hypertree layer must be present exactly once.
         if (layers.length != SHRINCSParams.NUM_HYPERTREE_LAYERS) {
             return false;
@@ -181,7 +181,7 @@ library Hypertree {
         bytes calldata expectedPkHashBytes,
         bytes32 message,
         WOTSPlusC.WotsCSignature calldata signature
-    ) internal pure returns (bool) {
+    ) internal view returns (bool) {
         uint256 chainCount = uint256(SHRINCSParams.NUM_WOTS_CHAINS);
         // The base-w digits are read from the first len/2 bytes of the
         // 32-byte digest word (baseW16Digit32). A profile whose digest
@@ -333,7 +333,7 @@ library Hypertree {
         uint32 leafIndex,
         bytes32 leaf,
         bytes[] calldata authPath
-    ) internal pure returns (bytes32 node, bool ok) {
+    ) internal view returns (bytes32 node, bool ok) {
         bytes32 pkSeedWord;
         // Memory-safe: reads one calldata word into a stack variable; no
         // memory is written.

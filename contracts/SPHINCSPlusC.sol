@@ -78,7 +78,7 @@ library SPHINCSPlusC {
         bytes calldata hypertreeRoot,
         bytes32 hash,
         Signature calldata signature
-    ) internal pure returns (bool) {
+    ) internal view returns (bool) {
         return verify(pkSeed, hypertreeRoot, toMessage(hash), signature);
     }
 
@@ -95,7 +95,7 @@ library SPHINCSPlusC {
         bytes calldata hypertreeRoot,
         bytes memory message,
         Signature calldata signature
-    ) internal pure returns (bool) {
+    ) internal view returns (bool) {
         // Reconstruct the FORS root from the message, FORS
         // randomness/counter, and revealed leaves. The FORS digest also
         // yields the layer-0 hypertree coordinates (T6: no longer carried in

@@ -23,6 +23,26 @@ gas_limit = "18446744073709551615" # u64::MAX
 # production factory init-code hash (see DeployBase.s.sol FACTORY_SALT).
 bytecode_hash = "none"
 cbor_metadata = false
+# Suppress solc warning 2018 ("state mutability can be restricted to pure")
+# in addition to Foundry's defaults. Under the hash-suite seam (mechanism
+# (c), [DESIGN §5.1]) the shared verifier stack is declared `view` so it can
+# call the SHA-256 suite's staticcall-based helpers; under a keccak build the
+# same functions reach only pure keccak256, so solc would flag them as
+# restrictable to pure. The widening is deliberate and source-only (keccak
+# bytecode is bit-identical), and the lost compiler-enforced statelessness is
+# replaced by the vm.record zero-storage guard (HashSuiteStatelessGuard).
+# solc has no per-function suppression for 2018, so it is ignored globally.
+# The remaining entries are Foundry's own defaults, restated because setting
+# this key replaces (not extends) them.
+ignored_error_codes = [
+    "license",
+    "code-size",
+    "init-code-size",
+    "transient-storage",
+    "transfer-deprecated",
+    "natspec-memory-safe-assembly-deprecated",
+    2018,
+]
 # Profile selection ([DESIGN §3.4]): the `shrincs-profile/` prefix
 # resolves to the active profile's SHRINCSParams library. Default is
 # the 256s profile. Other profiles override this remapping AND the

@@ -79,7 +79,7 @@ library FORSMinusC {
         FORSMinusC.ForsSignature calldata signature
     )
         internal
-        pure
+        view
         returns (
             bytes32 forsRoot,
             uint64 treeIndex,
@@ -219,7 +219,7 @@ library FORSMinusC {
         uint32 forsTreeIndex,
         uint32 entryLeafIndex,
         FORSMinusC.ForsEntry calldata entry
-    ) internal pure returns (bytes32 node) {
+    ) internal view returns (bytes32 node) {
         // Build the shared address prefix used by all nodes in this FORS tree
         // location.
         uint256 addressBase = forsAddressBase(treeIndex, leafIndex);
@@ -326,7 +326,7 @@ library FORSMinusC {
         bytes memory message,
         bytes calldata randomizer,
         uint32 counter
-    ) internal pure returns (FORSMinusC.ForsDigest memory out) {
+    ) internal view returns (FORSMinusC.ForsDigest memory out) {
         // Reserve bits for all signed FORS tree leaf choices.
         uint32 indexBits = uint32(SHRINCSParams.NUM_FORS_TREES)
             * uint32(SHRINCSParams.FORS_TREE_HEIGHT);
@@ -380,7 +380,7 @@ library FORSMinusC {
         uint32 counter,
         bytes memory message,
         uint256 digestBytes
-    ) internal pure returns (bytes memory out) {
+    ) internal view returns (bytes memory out) {
         // Allocate the requested digest bytes plus one spare 32-byte word.
         // readBits32/64 loads a full 32-byte word at its byte offset, so it
         // may touch up to 31 bytes past the logical end of this buffer; the

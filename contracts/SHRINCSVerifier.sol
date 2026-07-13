@@ -106,7 +106,7 @@ abstract contract SHRINCSVerifier is IERC7913SignatureVerifier {
         bytes calldata key,
         bytes32 hash,
         bytes calldata signature
-    ) external pure returns (bytes4) {
+    ) external view returns (bytes4) {
         (bytes32 publicKeyCommitment, bool okKey) =
             SHRINCS.decodePublicKeyCommitment(key);
         if (!okKey) return INVALID_SIGNATURE;

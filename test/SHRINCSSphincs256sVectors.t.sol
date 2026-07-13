@@ -30,7 +30,7 @@ contract StatefulHarness {
         SHRINCS.PublicKey calldata publicKey,
         bytes calldata message,
         SHRINCS.Signature calldata signature
-    ) external pure returns (bool) {
+    ) external view returns (bool) {
         return SHRINCS.verifyStatefulUncheckedMessage(
             expectedCompositePublicKey, publicKey, message, signature
         );
@@ -41,7 +41,7 @@ contract StatefulHarness {
         SHRINCS.PublicKey calldata publicKey,
         SHRINCS.ActionContext calldata context,
         SHRINCS.Signature calldata signature
-    ) external pure returns (bool) {
+    ) external view returns (bool) {
         return SHRINCS.verifyStateful(
             expectedCompositePublicKey, publicKey, context, signature
         );
@@ -63,7 +63,7 @@ contract StatelessHarness {
         SHRINCS.PublicKey calldata publicKey,
         bytes calldata message,
         SPHINCSPlusC.Signature calldata signature
-    ) external pure returns (bool) {
+    ) external view returns (bool) {
         return SHRINCS.verifyStatelessUncheckedMessage(
             expectedCompositePublicKey, publicKey, message, signature
         );
@@ -74,7 +74,7 @@ contract StatelessHarness {
         SHRINCS.PublicKey calldata publicKey,
         SHRINCS.ActionContext calldata context,
         SPHINCSPlusC.Signature calldata signature
-    ) external pure returns (bool) {
+    ) external view returns (bool) {
         return SHRINCS.verifyStateless(
             expectedCompositePublicKey, publicKey, context, signature
         );
@@ -122,7 +122,7 @@ contract RotationHarness {
         SHRINCS.RotationContext calldata context,
         SPHINCSPlusC.Signature calldata recoverySignature,
         SHRINCS.StatefulRotationTarget calldata nextStatefulKey
-    ) external pure returns (bytes32) {
+    ) external view returns (bytes32) {
         return SHRINCS.rotateStatefulViaStateless(
             expectedCompositePublicKey,
             currentPublicKey,
@@ -138,7 +138,7 @@ contract RotationHarness {
         SHRINCS.RotationContext calldata context,
         SPHINCSPlusC.Signature calldata recoverySignature,
         SHRINCS.RotationTarget calldata nextKey
-    ) external pure returns (bytes32) {
+    ) external view returns (bytes32) {
         return SHRINCS.statelessRotate(
             expectedCompositePublicKey,
             currentPublicKey,

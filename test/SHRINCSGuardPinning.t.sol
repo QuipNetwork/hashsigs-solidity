@@ -67,7 +67,7 @@ contract StatefulHarness {
         SHRINCS.PublicKey calldata publicKey,
         bytes calldata message,
         SHRINCS.Signature calldata signature
-    ) external pure returns (bool) {
+    ) external view returns (bool) {
         return SHRINCS.verifyStatefulUncheckedMessage(
             expectedCompositePublicKey, publicKey, message, signature
         );
@@ -81,7 +81,7 @@ contract StatelessHarness {
         SHRINCS.PublicKey calldata publicKey,
         bytes calldata message,
         SPHINCSPlusC.Signature calldata signature
-    ) external pure returns (bool) {
+    ) external view returns (bool) {
         return SHRINCS.verifyStatelessUncheckedMessage(
             expectedCompositePublicKey, publicKey, message, signature
         );

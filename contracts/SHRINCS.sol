@@ -173,7 +173,7 @@ library SHRINCS {
         bytes32 hash,
         PublicKey calldata publicKey,
         Signature calldata signature
-    ) internal pure returns (bool) {
+    ) internal view returns (bool) {
         return verifyStatefulUncheckedMessage(
             expectedPublicKeyCommitment,
             publicKey,
@@ -244,7 +244,7 @@ library SHRINCS {
         SHRINCS.PublicKey calldata publicKey,
         SHRINCS.ActionContext memory context,
         SHRINCS.Signature calldata signature
-    ) internal pure returns (bool) {
+    ) internal view returns (bool) {
         // Reject malformed or unscoped action contexts before hashing them.
         if (!validActionContext(context)) return false;
         // Canonical stateful verification signs the typed action context
@@ -270,7 +270,7 @@ library SHRINCS {
         SHRINCS.PublicKey calldata publicKey,
         SHRINCS.ActionContext memory context,
         SPHINCSPlusC.Signature calldata signature
-    ) internal pure returns (bool) {
+    ) internal view returns (bool) {
         // Reject malformed or unscoped action contexts before hashing them.
         if (!validActionContext(context)) return false;
         // Canonical stateless verification signs the typed action context
@@ -302,7 +302,7 @@ library SHRINCS {
         SHRINCS.RotationContext memory context,
         SPHINCSPlusC.Signature calldata recoverySignature,
         SHRINCS.StatefulRotationTarget calldata nextStatefulKey
-    ) internal pure returns (bytes32 nextPublicKeyCommitment) {
+    ) internal view returns (bytes32 nextPublicKeyCommitment) {
         if (!SHRINCS.validPublicKey(currentPublicKey)) {
             return bytes32(0);
         }
@@ -407,7 +407,7 @@ library SHRINCS {
         SHRINCS.RotationContext memory context,
         SPHINCSPlusC.Signature calldata recoverySignature,
         SHRINCS.RotationTarget calldata nextKey
-    ) internal pure returns (bytes32 nextPublicKeyCommitment) {
+    ) internal view returns (bytes32 nextPublicKeyCommitment) {
         if (!SHRINCS.validPublicKey(currentPublicKey)) {
             return bytes32(0);
         }
@@ -505,7 +505,7 @@ library SHRINCS {
         SHRINCS.PublicKey calldata publicKey,
         bytes memory message,
         SHRINCS.Signature calldata signature
-    ) internal pure returns (bool) {
+    ) internal view returns (bool) {
         // The public key must satisfy the compiled fixed key shape.
         if (!SHRINCS.validPublicKey(publicKey)) return false;
         // The bundled public key must match the installed public-key
@@ -1161,7 +1161,7 @@ library SHRINCS {
         SHRINCS.PublicKey calldata publicKey,
         bytes memory message,
         SPHINCSPlusC.Signature calldata signature
-    ) internal pure returns (bool) {
+    ) internal view returns (bool) {
         // The current public key must match the installed bundle commitment
         // expected by the caller.
         if (!SHRINCS.matchesExpectedPublicKeyCommitment(
