@@ -1154,45 +1154,74 @@ Current tests cover:
 
 ## Gas Measurements
 
-Measured 2026-07-12 at this repository's default profile
-settings (`via_ir = true`, optimizer runs 200) by
-[test/SHRINCSMeasurements.t.sol](./test/SHRINCSMeasurements.t.sol), except
-the `stateful, adapter direct` row, which is measured by
-`SHRINCSVerifier.t.sol::testGasSnapshotHappyPathVerify`. The
-ERC-1271 figures verify the envelope in place over calldata; the ERC-7913
-delegation figure is `verifyStateless` calling its SPHINCS+C sibling.
+Per-profile call gas for the five paths measured by
+[test/SHRINCSMeasurements.t.sol](./test/SHRINCSMeasurements.t.sol): the
+stateful and stateless canonical wrapper calls, the stateful and
+stateless ERC-1271 checks, and the ERC-7913 `verifyStateless` delegation
+to the pinned SPHINCSPlusC sibling. The ERC-1271 figures verify the
+envelope in place over calldata; the delegation figure calls
+`verifyStateless` directly. Each cell is the gas the measured `.call()`
+consumed (`vm.lastCallGas().gasTotalUsed`), excluding setup and calldata
+encoding.
 
-| Path                              | Gas       |
-|-----------------------------------|-----------|
-| stateful, canonical wrapper call  | 190,792   |
-| stateful, ERC-1271                | 167,779   |
-| stateful, adapter direct          | 349,162   |
-| stateless, canonical wrapper call | 1,629,307 |
-| stateless, ERC-1271               | 1,607,077 |
-| stateless delegation, ERC-7913    | 1,661,184 |
+| Measurement | default | 128s-q18 | 128s-q20 | 256s-sha2 |
+| --- | --- | --- | --- | --- |
+| `stateful.canonical_wrapper_call_gas` | 190,792 | 117,759 | 117,759 | 281,063 |
+| `stateful.erc1271_call_gas` | 167,779 | 94,746 | 94,746 | 258,050 |
+| `stateless.canonical_wrapper_call_gas` | 1,629,307 | 192,130 | 192,130 | 2,420,861 |
+| `stateless.erc1271_call_gas` | 1,607,077 | 191,927 | 191,927 | 2,398,565 |
+| `stateless.verify_stateless_delegation_gas` | 1,661,184 | 204,635 | 204,635 | 2,455,228 |
 
-The stateless figures fall ~50k from earlier baselines: the T6 wire
-change drops the carried per-layer tree/leaf coordinates from the
-stateless signature (the verifier now derives them from the FORS
-digest), shrinking the envelope calldata and its decode. Because T6 also
-changes the stateful chain-hash preimage (F-08) and the profile-bound
-commitment, and because WOTS/FORS chain-walk lengths are data-dependent
-on the regenerated vectors, these figures are recorded actuals, not
-equality anchors. The 128s profiles verify a stateless signature in
-~243k gas (measured over the Rust-anchored 128s vector by
-`SHRINCSSphincs128sVectors.t.sol`).
+Measured 2026-07-13 at each profile's own solc/`via_ir`/optimizer
+settings (default and 256s-sha2: optimizer runs 200; 128s-q18/q20 share
+the same settings). Regenerate this table with `scripts/gas-report.sh`,
+which runs every profile's `SHRINCSMeasurements` suite and re-emits it.
 
-For the stateful profile the ERC-1271 figure falls below the canonical
-wrapper call: the wrapper builds and validates the typed `ActionContext`
-and canonical hash on-chain, whereas the ERC-1271 path verifies a
-precomputed hash, and the in-place re-tag verification costs less than
-that context machinery.
+The default-profile stateless figures fall ~50k from earlier baselines:
+the T6 wire change drops the carried per-layer tree/leaf coordinates
+from the stateless signature (the verifier now derives them from the
+FORS digest), shrinking the envelope calldata and its decode. Because T6
+also changes the stateful chain-hash preimage (F-08) and the
+profile-bound commitment, and because WOTS/FORS chain-walk lengths are
+data-dependent on the regenerated vectors, these figures are recorded
+actuals, not equality anchors.
 
-Reproduce with:
+For the stateful rows, the ERC-1271 figure falls below the canonical
+wrapper call in every profile: the wrapper builds and validates the
+typed `ActionContext` and canonical hash on-chain, whereas the ERC-1271
+path verifies a precomputed hash, and the in-place re-tag verification
+costs less than that context machinery.
+
+In-process stateless keygen/signing is compute-infeasible at 128s (full
+2^a FORS trees plus the fixed hypertree), so the 128s-q18/q20 stateless
+rows measure a different call shape than the other profiles: instead of
+the account wrapper, they call the same underlying SHRINCS library
+verification through a raw-message test harness
+(`MeasurementRawStatelessHarness`) fed by the profile's Rust-anchored
+vector, since the wrapper's context-derived hash cannot match a fixed
+vector signature. The delegation row still calls the
+production `verifyStateless` entrypoint directly at every profile, since
+that entrypoint already takes the hash as a parameter. A narrower
+verify-only figure over the same 128s vector, excluding call overhead,
+is in `SHRINCSSphincs128sVectors.t.sol` (`stateless.128s_verify_gas`,
+~243k).
+
+A default-profile-only data point,
+`SHRINCSVerifier.t.sol::testGasSnapshotHappyPathVerify` (stateful,
+adapter-direct verify without the account wrapper), measures 349,162
+gas; reproduce with `forge test --match-test
+testGasSnapshotHappyPathVerify -vv`.
+
+Reproduce the table with:
 
 ```bash
-forge test --match-contract SHRINCSMeasurements -vv
-forge test --match-test testGasSnapshotHappyPathVerify -vv
+scripts/gas-report.sh
+```
+
+or a single profile directly:
+
+```bash
+FOUNDRY_PROFILE=128s-q18 forge test --match-contract SHRINCSMeasurements -vv
 ```
 
 The stateful entrypoints make no external call, so their execution
