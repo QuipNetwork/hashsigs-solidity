@@ -8,6 +8,19 @@ set -euo pipefail
 FORGE=/opt/homebrew/bin/forge
 PROFILES=(default 128s-q18 128s-q20 256s-sha2)
 
+# Mirrors test/SHRINCSMeasurements.t.sol's isStateless128sVectorProfile()
+# gate: under these profiles, these two labels measure the raw
+# SHRINCS.verifyStatelessUncheckedMessage call through
+# MeasurementRawStatelessHarness (wrapper context-hash derivation
+# excluded) instead of the full account wrapper. The delegation label is
+# excluded: it calls the real verifyStateless entrypoint on every
+# profile, vector-sourced inputs at 128s notwithstanding.
+RAW_HARNESS_PROFILES=(128s-q18 128s-q20)
+RAW_HARNESS_LABELS=(
+	stateless.canonical_wrapper_call_gas
+	stateless.erc1271_call_gas
+)
+
 WORKDIR=$(mktemp -d)
 trap 'rm -rf "$WORKDIR"' EXIT
 
@@ -41,6 +54,36 @@ for profile in "${PROFILES[@]}"; do
 	fi
 done
 
+# Formats a non-negative integer with thousands separators (e.g. 190792
+# -> 190,792) without depending on locale (`printf %'d` is locale-gated
+# and not portable to the alpine-based CI image).
+comma_format() {
+	local n=$1
+	local out="" len=${#n} tail
+	while ((len > 3)); do
+		tail=${n:len-3:3}
+		n=${n:0:len-3}
+		out=",$tail$out"
+		len=${#n}
+	done
+	printf '%s' "$n$out"
+}
+
+array_contains() {
+	local needle=$1 item
+	shift
+	for item in "$@"; do
+		[[ "$item" == "$needle" ]] && return 0
+	done
+	return 1
+}
+
+is_raw_harness_cell() {
+	local profile=$1 label=$2
+	array_contains "$profile" "${RAW_HARNESS_PROFILES[@]}" || return 1
+	array_contains "$label" "${RAW_HARNESS_LABELS[@]}"
+}
+
 header="| Measurement |"
 divider="| --- |"
 for profile in "${PROFILES[@]}"; do
@@ -50,12 +93,29 @@ done
 echo "$header"
 echo "$divider"
 
+footnote_needed=0
 while IFS= read -r label; do
 	row="| \`$label\` |"
 	for profile in "${PROFILES[@]}"; do
 		value=$(awk -F'\t' -v p="$profile" -v l="$label" \
 			'$1 == p && $2 == l { print $3 }' "$RESULTS")
-		row="$row ${value:-—} |"
+		if [[ -z "$value" ]]; then
+			cell="—"
+		else
+			cell=$(comma_format "$value")
+			if is_raw_harness_cell "$profile" "$label"; then
+				cell="${cell}†"
+				footnote_needed=1
+			fi
+		fi
+		row="$row $cell |"
 	done
 	echo "$row"
 done <"$LABELS"
+
+if [[ "$footnote_needed" -eq 1 ]]; then
+	echo
+	echo "† raw \`SHRINCS.verifyStatelessUncheckedMessage\` call (wrapper" \
+		"context-hash derivation excluded); see README.md \"Gas" \
+		"Measurements\" for detail."
+fi

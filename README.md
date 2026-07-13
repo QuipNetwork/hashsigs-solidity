@@ -1168,9 +1168,11 @@ encoding.
 | --- | --- | --- | --- | --- |
 | `stateful.canonical_wrapper_call_gas` | 190,792 | 117,759 | 117,759 | 281,063 |
 | `stateful.erc1271_call_gas` | 167,779 | 94,746 | 94,746 | 258,050 |
-| `stateless.canonical_wrapper_call_gas` | 1,629,307 | 192,130 | 192,130 | 2,420,861 |
-| `stateless.erc1271_call_gas` | 1,607,077 | 191,927 | 191,927 | 2,398,565 |
+| `stateless.canonical_wrapper_call_gas` | 1,629,307 | 192,130† | 192,130† | 2,420,861 |
+| `stateless.erc1271_call_gas` | 1,607,077 | 191,927† | 191,927† | 2,398,565 |
 | `stateless.verify_stateless_delegation_gas` | 1,661,184 | 204,635 | 204,635 | 2,455,228 |
+
+† raw `SHRINCS.verifyStatelessUncheckedMessage` call (wrapper context-hash derivation excluded); see README.md "Gas Measurements" for detail.
 
 Measured 2026-07-13 at each profile's own solc/`via_ir`/optimizer
 settings (default and 256s-sha2: optimizer runs 200; 128s-q18/q20 share
