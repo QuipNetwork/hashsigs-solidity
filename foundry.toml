@@ -87,7 +87,18 @@ skip = [
 
 ffi = true
 fs_permissions = [
-    { access = "read-write", path = "./test/test_vectors/" }
+    { access = "read-write", path = "./test/test_vectors/" },
+    # Read access to every profile's build artifacts: SHRINCSMeasurements
+    # (task 1vn) selects its profile-gated harness contracts (e.g.
+    # SHRINCSPinned256s.t.sol:SHRINCS256sPinHarness) by artifact-name
+    # string via deployCode, and vm.getCode only auto-allows artifacts
+    # compiled from `src` (contracts/); test/-sourced artifacts need an
+    # explicit grant. Each profile builds into its own `out*` dir
+    # ([profile.*] `out`) so every one needs its own entry.
+    { access = "read", path = "./out" },
+    { access = "read", path = "./out-128s-q18" },
+    { access = "read", path = "./out-128s-q20" },
+    { access = "read", path = "./out-256s-sha2" }
 ]
 
 [profile.production]
@@ -113,7 +124,10 @@ gas_limit = "18446744073709551615" # u64::MAX
 # WOTS+, and profile-invariant tests run under every profile.
 # Each 128s `skip` excludes the non-matching concrete verifiers and
 # deploy scripts (so only this profile's verifier compiles, with this
-# profile's constants) and the 256s-specific tests.
+# profile's constants) and the 256s-specific tests. SHRINCSMeasurements
+# (task 1vn) runs here too: stateful measurements sign in-process
+# (cheap at maxSignatures = 4), stateless measurements read the 128s
+# vector JSON instead of signing in-process.
 [profile.128s-q18]
 out = "out-128s-q18"
 remappings = [
@@ -139,7 +153,6 @@ skip = [
     "test/SHRINCSStatelessVectorSigner.t.sol",
     "test/SHRINCSAccountSigningFacade.t.sol",
     "test/SHRINCSAccountVectorExport.t.sol",
-    "test/SHRINCSMeasurements.t.sol",
     "test/HashSuiteStatelessGuard.t.sol",
     "test/SHRINCSAccountVerifierExample.t.sol",
     "test/SHRINCSEnvelope.t.sol",
@@ -178,7 +191,6 @@ skip = [
     "test/SHRINCSStatelessVectorSigner.t.sol",
     "test/SHRINCSAccountSigningFacade.t.sol",
     "test/SHRINCSAccountVectorExport.t.sol",
-    "test/SHRINCSMeasurements.t.sol",
     "test/HashSuiteStatelessGuard.t.sol",
     "test/SHRINCSAccountVerifierExample.t.sol",
     "test/SHRINCSEnvelope.t.sol",
@@ -265,8 +277,9 @@ skip = [
 # (HashSuiteKat); the vector-backed end-to-end suite SHRINCSSphincs256sSha2
 # Vectors (Rust sha2 vector through the production verifier); the seam-routed
 # self-signing suites (keygen goldens anchored to the Rust sha2 signer, plus
-# stateful and stateless produce-then-verify); and the non-signing
-# structural/profile suites (incl. the params drift guard in
+# stateful and stateless produce-then-verify); the call-level gas suite
+# SHRINCSMeasurements (profile-selected artifacts, task 1vn); and the
+# non-signing structural/profile suites (incl. the params drift guard in
 # SHRINCSProfileInvariants).
 [profile.256s-sha2]
 out = "out-256s-sha2"
@@ -294,10 +307,12 @@ skip = [
     #  - Pinned* pin keccak runtime codehashes;
     #  - StatefulPolicyExamples, AccountVerifierExample, GuardPinning, and
     #    Envelope read the 256s keccak vector file;
-    #  - Measurements, StatelessDelegation, CalldataRetag, ConsumerExamples,
-    #    and HashSuiteStatelessGuard import the concrete SHRINCS256sKeccak
+    #  - StatelessDelegation, CalldataRetag, ConsumerExamples, and
+    #    HashSuiteStatelessGuard import the concrete SHRINCS256sKeccak
     #    verifier (skipped under this profile); the sha2 statelessness guard
-    #    is HashSuiteStatelessGuardSha2 instead;
+    #    is HashSuiteStatelessGuardSha2 instead. Measurements no longer
+    #    imports a concrete verifier (it selects artifacts by
+    #    SHRINCSParams.PROFILE_ID via deployCode) and runs here instead;
     #  - AccountVectorExport, AccountInvariants, and MutationFuzz drive
     #    stateless in-Solidity signing under randomized/export loops; under the
     #    sha2 precompile path that is prohibitively slow, and their sha2
@@ -313,7 +328,6 @@ skip = [
     "test/SHRINCSAccountVectorExport.t.sol",
     "test/SHRINCSAccountInvariants.t.sol",
     "test/SHRINCSGuardPinning.t.sol",
-    "test/SHRINCSMeasurements.t.sol",
     "test/SHRINCSMutationFuzz.t.sol",
     "test/SHRINCSEnvelope.t.sol",
     "test/SHRINCSStatelessDelegation.t.sol",
