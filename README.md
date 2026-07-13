@@ -123,6 +123,14 @@ Main contracts:
   - not used by the SHRINCS paths or the ERC-7913 verifiers
 - [contracts/examples/SHRINCSAccountVerifierExample.sol](./contracts/examples/SHRINCSAccountVerifierExample.sol)
   - example account wrapper that owns nonce, rotation, and policy state
+- [contracts/examples/SHRINCSERC7913ConsumerExample.sol](./contracts/examples/SHRINCSERC7913ConsumerExample.sol)
+  - minimal consumer-side example for the generic
+    `IERC7913SignatureVerifier.verify(...)` flow: stores a verifier address
+    plus opaque key bytes and treats the verifier as a pure signature-validity
+    oracle
+- [contracts/examples/SHRINCSStatelessConsumerExample.sol](./contracts/examples/SHRINCSStatelessConsumerExample.sol)
+  - minimal consumer-side example for the SHRINCS-specific
+    `verifyStateless(...)` path on the concrete verifier surface
 
 Deployment and tooling:
 
@@ -222,6 +230,9 @@ Tests (28 suites, 254 tests as of 2026-07-12, ci profile):
 - [test/SHRINCSVerifier.t.sol](./test/SHRINCSVerifier.t.sol) and
   [test/SHRINCSEnvelope.t.sol](./test/SHRINCSEnvelope.t.sol)
   - ERC-7913 raw verifier and envelope encoder/decoder tests
+- [test/SHRINCSConsumerExamples.t.sol](./test/SHRINCSConsumerExamples.t.sol)
+  - consumer-example coverage for the generic ERC-7913 and explicit
+    stateless integration contracts
 - [test/SHRINCSProfileInvariants.t.sol](./test/SHRINCSProfileInvariants.t.sol)
   - structural invariants and the profile-identity guard for the active
     `SHRINCSParams` profile
@@ -581,6 +592,43 @@ The ERC-7913 verifier is intentionally narrow:
   family, and each deployable subclass adds a `PROFILE_TAG` identifying
   its compiled parameter set
 
+Minimal consumer-side examples:
+
+- [contracts/examples/SHRINCSERC7913ConsumerExample.sol](./contracts/examples/SHRINCSERC7913ConsumerExample.sol)
+  - stores a verifier address and opaque key bytes
+  - calls `IERC7913SignatureVerifier.verify(...)`
+  - suitable for integrators who already own message construction and only
+    need a yes/no authorization check over an ERC-7913 blob
+- [contracts/examples/SHRINCSStatelessConsumerExample.sol](./contracts/examples/SHRINCSStatelessConsumerExample.sol)
+  - stores a concrete `SHRINCSVerifier` address and key bytes
+  - calls `verifyStateless(...)` on that verifier directly
+  - shows the non-generic SHRINCS stateless recovery flow separately from the
+    base ERC-7913 interface
+
+These examples are intentionally thin:
+
+- they do not own nonce, `keyVersion`, stateful-leaf tracking, or rotation
+  state
+- they do not normalize verifier reverts to `false`
+- they do not validate the stored key bytes at construction time
+- they model an external consumer of the verifier, not an account wrapper
+
+Concrete consumer flow:
+
+1. Deploy the desired verifier contract
+   - for example `SHRINCS256sKeccak`
+2. Store the verifier key bytes
+   - for SHRINCS this is normally the 32-byte `publicKeyCommitment`
+3. Compute the 32-byte message hash the verifier should authorize
+   - typically a domain-separated application digest
+4. Call the verifier
+   - directly:
+     `IERC7913SignatureVerifier(verifier).verify(key, hash, signature)`
+   - or through
+     [SHRINCSERC7913ConsumerExample.sol](./contracts/examples/SHRINCSERC7913ConsumerExample.sol),
+     which stores `verifier` and `key` and exposes
+     `isAuthorized(hash, signature)`
+
 `SHRINCSVerifier` itself is an abstract base; the deployable contracts are
 the per-profile subclasses (`SHRINCS256sKeccak`, `SHRINCS128sQ18Keccak`,
 `SHRINCS128sQ20Keccak`), each compiled under its own build profile.
@@ -634,6 +682,10 @@ the missing replay protection and policy checks externally.
 
 Use the verifier surfaces for different purposes:
 
+- `SHRINCSERC7913ConsumerExample`: minimal external-app integration over the
+  generic ERC-7913 `verify(...)` interface
+- `SHRINCSStatelessConsumerExample`: minimal external-app integration over the
+  verifier's explicit stateless delegation path
 - canonical wrapper functions: account authorization with nonce, keyVersion,
   action, and policy enforcement
 - ERC-1271 on the example account: snapshot validation of canonical
@@ -803,6 +855,22 @@ state should interact with the library for:
 - ERC-1271 view-only validation of canonical account-action envelopes
 - stateless full-key rotation
 - stateless usage-limit enforcement
+
+This is not the same integration model as the consumer examples above.
+
+- [contracts/examples/SHRINCSERC7913ConsumerExample.sol](./contracts/examples/SHRINCSERC7913ConsumerExample.sol)
+  and
+  [contracts/examples/SHRINCSStatelessConsumerExample.sol](./contracts/examples/SHRINCSStatelessConsumerExample.sol)
+  show an external contract that calls a verifier and stores only verifier
+  configuration (`verifier`, `key`)
+- [contracts/examples/SHRINCSAccountVerifierExample.sol](./contracts/examples/SHRINCSAccountVerifierExample.sol)
+  shows an account-style wrapper that owns freshness, policy, and rotation
+  state and rebuilds canonical wrapper-controlled hashes on-chain
+
+Use the consumer examples when the integrator already has its own message
+framing and only wants signature validity. Use the account wrapper when the
+contract itself must enforce replay scoping, key epochs, stateful-leaf policy,
+and recovery rotation.
 
 ### Stateful-use policies
 
