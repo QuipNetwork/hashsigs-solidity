@@ -210,8 +210,6 @@ library HashSuite {
             mstore(add(ptr, 110), message)
             // Hash the full WOTS-C message preimage.
             out := keccak256(ptr, 142)
-            // Bump the free-memory pointer to the next 32-byte aligned slot.
-            mstore(0x40, add(ptr, 160))
         }
     }
 

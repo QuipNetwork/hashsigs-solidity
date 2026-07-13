@@ -293,7 +293,10 @@ library Hypertree {
         // WOTS-C does not carry an explicit checksum chain suffix. Instead
         // the message expansion is accepted only when the reconstructed
         // base-w digits add up to the fixed target sum ([SHRINCS §5]).
-        if (digitSum != SHRINCSParams.WOTS_TARGET_SUM_STATEFUL) {
+        // This is the stateless hypertree WOTS-C check (chainCount =
+        // NUM_WOTS_CHAINS), so it compares against the matching
+        // stateless target sum, not the stateful side's constant.
+        if (digitSum != SHRINCSParams.WOTS_TARGET_SUM_STATELESS) {
             return false;
         }
 

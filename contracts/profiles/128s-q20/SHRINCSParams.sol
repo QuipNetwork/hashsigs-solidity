@@ -94,4 +94,11 @@ library SHRINCSParams {
     // number of hash chains per WOTS signature. WOTS-C carries no
     // checksum chains, so len = 2n = 32 for w = 16.
     uint16 internal constant NUM_WOTS_CHAINS = 32;
+    // WOTS_TARGET_SUM_STATELESS: the WOTS-C constant digit-sum target
+    // for the stateless hypertree WOTS chains (Hypertree.verifyWotsC32)
+    // = len * (w - 1) / 2
+    // -> NUM_WOTS_CHAINS * (WOTS_CHAIN_LEN - 1) / 2
+    //    = 32 * (16 - 1) / 2 = 240
+    // Python: 32 * (16 - 1) // 2
+    uint32 internal constant WOTS_TARGET_SUM_STATELESS = 240;
 }

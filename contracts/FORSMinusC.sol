@@ -442,10 +442,13 @@ library FORSMinusC {
                 dst := add(dst, 32)
             }
         }
-        // Single-block fast path. The sole in-repo caller (forsDigest)
-        // always requests 47 bytes, so digestBytes <= 32 is unreachable
-        // today; kept as a correct general-purpose branch and deliberate
-        // defense-in-depth.
+        // Single-block fast path. digestBytes = ceil((k*a + h) / 8)
+        // [SHRINCS §9.2], k = NUM_FORS_TREES, a = FORS_TREE_HEIGHT,
+        // h = HYPERTREE_HEIGHT. 256s: (22*14+64+7)/8 = 47, so this branch
+        // is unreachable there; kept as defense-in-depth. 128s-q18 and
+        // 128s-q20: (6*24+18+7)/8 = 21, so this branch is the LIVE path
+        // for those profiles, exercised by the 128s vector suites.
+        // Python: (22*14 + 64 + 7) // 8, (6*24 + 18 + 7) // 8
         if (digestBytes <= 32) {
             // One digest block is enough for the whole FORS and hypertree
             // coordinate stream. The suite helper returns the raw block.

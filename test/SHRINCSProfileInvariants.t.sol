@@ -44,6 +44,7 @@ contract SHRINCSProfileInvariantsTest is Test {
         uint256 statelessLimit;
         uint256 wotsChainsStateful;
         uint256 wotsTargetSumStateful;
+        uint256 wotsTargetSumStateless;
         uint256 statefulPublicKeyBytes;
     }
 
@@ -77,6 +78,7 @@ contract SHRINCSProfileInvariantsTest is Test {
                 statelessLimit: 1 << 20,
                 wotsChainsStateful: 64,
                 wotsTargetSumStateful: 480,
+                wotsTargetSumStateless: 480,
                 statefulPublicKeyBytes: 68
             });
         }
@@ -102,6 +104,7 @@ contract SHRINCSProfileInvariantsTest is Test {
                 statelessLimit: 1 << 20,
                 wotsChainsStateful: 64,
                 wotsTargetSumStateful: 480,
+                wotsTargetSumStateless: 480,
                 statefulPublicKeyBytes: 68
             });
         }
@@ -121,6 +124,7 @@ contract SHRINCSProfileInvariantsTest is Test {
                 statelessLimit: 1 << 18,
                 wotsChainsStateful: 32,
                 wotsTargetSumStateful: 240,
+                wotsTargetSumStateless: 240,
                 statefulPublicKeyBytes: 68
             });
         }
@@ -140,6 +144,7 @@ contract SHRINCSProfileInvariantsTest is Test {
                 statelessLimit: 1 << 20,
                 wotsChainsStateful: 32,
                 wotsTargetSumStateful: 240,
+                wotsTargetSumStateless: 240,
                 statefulPublicKeyBytes: 68
             });
         }
@@ -192,6 +197,11 @@ contract SHRINCSProfileInvariantsTest is Test {
             "target_sum"
         );
         assertEq(
+            uint256(SHRINCSParams.WOTS_TARGET_SUM_STATELESS),
+            want.wotsTargetSumStateless,
+            "target_sum_stateless"
+        );
+        assertEq(
             uint256(SHRINCSParams.STATEFUL_PUBLIC_KEY_BYTES),
             want.statefulPublicKeyBytes,
             "pk_bytes"
@@ -224,6 +234,18 @@ contract SHRINCSProfileInvariantsTest is Test {
             uint256(SHRINCSParams.WOTS_TARGET_SUM_STATEFUL),
             uint256(SHRINCSParams.WOTS_CHAINS_STATEFUL) * (base - 1) / 2,
             "target_sum == len*(w-1)/2"
+        );
+    }
+
+    // WOTS-C target sum equals len * (w - 1) / 2 on the stateless
+    // hypertree side too (Hypertree.verifyWotsC32's chainCount is
+    // NUM_WOTS_CHAINS, not WOTS_CHAINS_STATEFUL).
+    function testWotsTargetSumStatelessMatchesChainCount() public pure {
+        uint256 base = uint256(SHRINCSParams.WOTS_CHAIN_LEN);
+        assertEq(
+            uint256(SHRINCSParams.WOTS_TARGET_SUM_STATELESS),
+            uint256(SHRINCSParams.NUM_WOTS_CHAINS) * (base - 1) / 2,
+            "target_sum_stateless == len*(w-1)/2"
         );
     }
 
