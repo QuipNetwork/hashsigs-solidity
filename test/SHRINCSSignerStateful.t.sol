@@ -24,9 +24,11 @@ import {SHRINCSParams} from "shrincs-profile/SHRINCSParams.sol";
 contract SHRINCSStatefulSignerHarness {
     function keygen(bytes memory seedMaterial, uint32 maxStatefulSignatures)
         external
-        pure
+        view
         returns (SHRINCS.SigningKey memory, SHRINCS.PublicKey memory, bool)
     {
+        // `view`: the seam-routed signer reaches the production HashSuite,
+        // whose sha2 helpers staticcall the 0x02 precompile.
         return SHRINCSTestSigner.keygen(seedMaterial, maxStatefulSignatures);
     }
 
@@ -35,7 +37,7 @@ contract SHRINCSStatefulSignerHarness {
         bytes memory message
     )
         external
-        pure
+        view
         returns (SHRINCS.SigningKey memory, SHRINCS.Signature memory, bool)
     {
         return SHRINCSTestSigner.signStatefulRaw(signingKey, message);

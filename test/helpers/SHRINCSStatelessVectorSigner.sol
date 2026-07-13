@@ -22,8 +22,11 @@ import {SPHINCSPlusC} from "../../contracts/SPHINCSPlusC.sol";
 import {FORSMinusC} from "../../contracts/FORSMinusC.sol";
 import {Hypertree} from "../../contracts/Hypertree.sol";
 import {UXMSS} from "../../contracts/UXMSS.sol";
+import {WOTSPlusC} from "../../contracts/WOTSPlusC.sol";
 import {SHRINCSParams} from "shrincs-profile/SHRINCSParams.sol";
 import {Hash} from "../../contracts/Hash.sol";
+import {HashSuite} from "shrincs-hash/HashSuite.sol";
+import {SignerHashSuite} from "./SignerHashSuite.sol";
 
 /// @notice TEST-ONLY staged stateless SHRINCS signer for on-demand vector
 /// generation.
@@ -85,6 +88,9 @@ contract SHRINCSStatelessVectorSigner {
         SHRINCS.PublicKey memory publicKey,
         bytes memory message
     ) public returns (bytes32 sessionId, bool ok) {
+        // Not a scheme hash: this is a purely internal session identifier for
+        // the staged signer's storage map, never part of any signature. It
+        // stays keccak under every suite (no SignerHashSuite routing needed).
         sessionId = keccak256(
             abi.encodePacked(address(this), msg.sender, nextSessionNonce)
         );
@@ -98,7 +104,9 @@ contract SHRINCSStatelessVectorSigner {
         session.publicKey = publicKey;
         session.message = message;
 
-        bytes32 randomizer = keccak256(
+        // Signer-only FORS randomizer PRF (no verifier counterpart):
+        // SignerHashSuite so it swaps to SHA-256 under the sha2 suite.
+        bytes32 randomizer = SignerHashSuite.schemeHash(
             abi.encodePacked(
                 "fors-randomizer", signingKey.statelessPrfSeed, message
             )
@@ -215,9 +223,20 @@ contract SHRINCSStatelessVectorSigner {
             }
         }
 
-        forsRoot = keccak256(
-            abi.encodePacked("fors-pk", session.signingKey.pkSeed, roots)
-        );
+        // Verifier-shape FORS public value: route through the production
+        // finalizer HashSuite.hashForsPk32 (the same helper
+        // FORSMinusC.verify hashes the per-tree roots with; masking applied
+        // internally, no-op at 256s). The [tag | pkSeed | roots] buffer is
+        // suite-independent, so build it here and pass (ptr, len).
+        bytes memory forsPkInput =
+            abi.encodePacked("fors-pk", session.signingKey.pkSeed, roots);
+        uint256 forsPkPtr;
+        // Memory-safe: reads forsPkInput's data pointer (length word + 32)
+        // without writing memory; the finalizer only hashes the buffer.
+        assembly ("memory-safe") {
+            forsPkPtr := add(forsPkInput, 32)
+        }
+        forsRoot = HashSuite.hashForsPk32(forsPkPtr, forsPkInput.length);
         session.currentHypertreeRoot = forsRoot;
         session.currentHypertreeTreeIndex = session.bottomTreeIndex;
         session.currentHypertreeLeafIndex = session.bottomLeafIndex;
@@ -287,11 +306,14 @@ contract SHRINCSStatelessVectorSigner {
         bytes32 layerSeed = hypertreeLayerSeed(
             session.signingKey.statelessSkSeed, layerByte
         );
-        bytes32 leafSeed = keccak256(
+        // Signer-only leaf/sk-seed derivations (no verifier counterpart):
+        // SignerHashSuite so they swap under the sha2 suite.
+        bytes32 leafSeed = SignerHashSuite.schemeHash(
             abi.encodePacked("hypertree-leaf-seed", layerSeed, tree, leaf)
         );
-        bytes32 skSeed =
-            keccak256(abi.encodePacked("hypertree-wots-sk-seed", leafSeed));
+        bytes32 skSeed = SignerHashSuite.schemeHash(
+            abi.encodePacked("hypertree-wots-sk-seed", leafSeed)
+        );
         bytes32 pkHash = statelessWotsCPublicKey(
             session.signingKey.pkSeed, skSeed, layer, tree, leaf
         );
@@ -299,7 +321,9 @@ contract SHRINCSStatelessVectorSigner {
         session.currentLayerSeed = layerSeed;
         session.currentLayerSkSeed = skSeed;
         session.currentLayerPkHash = pkHash;
-        session.currentLayerRandomizer = keccak256(
+        // Signer-only WOTS-C randomizer PRF (no verifier counterpart):
+        // SignerHashSuite so it swaps under the sha2 suite.
+        session.currentLayerRandomizer = SignerHashSuite.schemeHash(
             abi.encodePacked(
                 "wots-c-randomizer",
                 session.signingKey.statelessPrfSeed,
@@ -340,15 +364,15 @@ contract SHRINCSStatelessVectorSigner {
         }
 
         for (uint32 counter = session.currentWotsCounter; counter < limit;) {
-            bytes32 fullDigest = keccak256(
-                abi.encodePacked(
-                    "wots-c-msg",
-                    session.signingKey.pkSeed,
-                    session.currentLayerPkHash,
-                    session.currentLayerRandomizer,
-                    counter,
-                    session.currentHypertreeRoot
-                )
+            // Verifier-shape WOTS-C message digest: production
+            // HashSuite.wotsDigest32, the same shape Hypertree.verify
+            // recomputes to place the chain positions.
+            bytes32 fullDigest = HashSuite.wotsDigest32(
+                session.signingKey.pkSeed,
+                session.currentLayerPkHash,
+                session.currentLayerRandomizer,
+                counter,
+                session.currentHypertreeRoot
             );
             // line-length: allow — fmt canonical tuple head exceeds cap
             (bytes32[] memory chains, uint32 digitSum) = buildStatelessWotsChains(
@@ -627,7 +651,7 @@ contract SHRINCSStatelessVectorSigner {
         uint32 counter
     )
         internal
-        pure
+        view
         returns (bytes memory digest, uint64 treeIndex, uint32 leafIndex)
     {
         uint32 indexBits = uint32(SHRINCSParams.NUM_FORS_TREES)
@@ -658,7 +682,7 @@ contract SHRINCSStatelessVectorSigner {
         uint32 counter,
         bytes memory message,
         uint256 digestBytes
-    ) internal pure returns (bytes memory out) {
+    ) internal view returns (bytes memory out) {
         bytes memory base = abi.encodePacked(
             "fors-digest",
             pkSeed,
@@ -667,9 +691,22 @@ contract SHRINCSStatelessVectorSigner {
             counter,
             message
         );
+        // Verifier-shape FORS digest block: route each block through the
+        // production finalizer HashSuite.hashForsDigestBlock32 (the helper
+        // FORSMinusC.forsDigestBytes emits; it returns the RAW block, no
+        // masking, because a bit stream is read out of it). The
+        // [tag | pkSeed | root | randomizer | counter | message] buffer (plus
+        // an optional 4-byte block counter) is suite-independent, built here.
         if (digestBytes <= 32) {
             out = new bytes(digestBytes);
-            bytes32 digestWord = keccak256(base);
+            uint256 basePtr;
+            // Memory-safe: reads base's data pointer (length word + 32); the
+            // finalizer only hashes the buffer.
+            assembly ("memory-safe") {
+                basePtr := add(base, 32)
+            }
+            bytes32 digestWord =
+                HashSuite.hashForsDigestBlock32(basePtr, base.length);
             Hash.setHashChunk(out, digestWord, 0, digestBytes);
             return out;
         }
@@ -678,8 +715,15 @@ contract SHRINCSStatelessVectorSigner {
         uint256 offset;
         uint32 blockCounter;
         while (offset < digestBytes) {
+            bytes memory blockInput = abi.encodePacked(base, blockCounter);
+            uint256 blockPtr;
+            // Memory-safe: reads blockInput's data pointer (len word + 32);
+            // the finalizer only hashes the buffer.
+            assembly ("memory-safe") {
+                blockPtr := add(blockInput, 32)
+            }
             bytes32 digestWord =
-                keccak256(abi.encodePacked(base, blockCounter));
+                HashSuite.hashForsDigestBlock32(blockPtr, blockInput.length);
             uint256 chunk = digestBytes - offset;
             if (chunk > 32) chunk = 32;
             Hash.setHashChunk(out, digestWord, offset, chunk);
@@ -725,7 +769,14 @@ contract SHRINCSStatelessVectorSigner {
                 bytes32 addressWord = forsAddressWord(
                     treeIndex, leafIndex, nodeHeight, parentLowIndex
                 );
-                parents[parentIndex] = keccak256(
+                // Verifier-SHAPE FORS node (matches
+                // HashSuite.hashForsNode32), routed through SignerHashSuite:
+                // the production helper reads pkSeed from CALLDATA, and this
+                // staged signer builds the tree in memory. The preimage is
+                // byte-identical; this contract runs 256s-only, where the
+                // verifier's maskHash is the identity, so the raw scheme hash
+                // matches the masked verifier node.
+                parents[parentIndex] = SignerHashSuite.schemeHash(
                     abi.encodePacked(
                         "fors-node",
                         pkSeed,
@@ -760,10 +811,11 @@ contract SHRINCSStatelessVectorSigner {
                 + uint64(leaf);
         bytes32 addressWord =
             forsAddressWord(treeIndex, leafIndex, 0, treeLeaf);
-        return
-            keccak256(
-                abi.encodePacked("fors-sk", skSeed, pkSeed, addressWord)
-            );
+        // Signer-only FORS leaf secret (no verifier counterpart):
+        // SignerHashSuite so it swaps under the sha2 suite.
+        return SignerHashSuite.schemeHash(
+            abi.encodePacked("fors-sk", skSeed, pkSeed, addressWord)
+        );
     }
 
     function forsLeafHash(
@@ -781,7 +833,11 @@ contract SHRINCSStatelessVectorSigner {
                     << SHRINCSParams.FORS_TREE_HEIGHT) + uint64(leaf);
         bytes32 addressWord =
             forsAddressWord(treeIndex, leafIndex, 0, treeLeaf);
-        return keccak256(
+        // Verifier-SHAPE FORS leaf (matches HashSuite.hashForsLeaf32), routed
+        // through SignerHashSuite for the same calldata-vs-memory reason as
+        // the FORS node above: byte-identical preimage, 256s-only where the
+        // verifier's maskHash is the identity.
+        return SignerHashSuite.schemeHash(
             abi.encodePacked("fors-leaf", pkSeed, addressWord, secret)
         );
     }
@@ -811,7 +867,7 @@ contract SHRINCSStatelessVectorSigner {
         bytes32 message
     )
         internal
-        pure
+        view
         returns (
             bytes32 randomizer,
             uint32 counter,
@@ -819,19 +875,16 @@ contract SHRINCSStatelessVectorSigner {
             bool ok
         )
     {
-        randomizer = keccak256(
+        // Signer-only WOTS-C randomizer PRF (no verifier counterpart):
+        // SignerHashSuite so it swaps under the sha2 suite.
+        randomizer = SignerHashSuite.schemeHash(
             abi.encodePacked("wots-c-randomizer", statelessPrfSeed, message)
         );
         for (counter = 0; counter < MAX_GRIND_COUNTER;) {
-            bytes32 fullDigest = keccak256(
-                abi.encodePacked(
-                    "wots-c-msg",
-                    pkSeed,
-                    pkHash,
-                    randomizer,
-                    counter,
-                    message
-                )
+            // Verifier-shape WOTS-C message digest: production
+            // HashSuite.wotsDigest32 (message is a bytes32 here).
+            bytes32 fullDigest = HashSuite.wotsDigest32(
+                pkSeed, pkHash, randomizer, counter, message
             );
             uint32 digitSum;
             (chains, digitSum) = buildStatelessWotsChains(
@@ -854,7 +907,7 @@ contract SHRINCSStatelessVectorSigner {
         uint64 tree,
         uint32 keypair,
         bytes32 digest
-    ) internal pure returns (bytes32[] memory chains, uint32 digitSum) {
+    ) internal view returns (bytes32[] memory chains, uint32 digitSum) {
         chains = new bytes32[](SHRINCSParams.NUM_WOTS_CHAINS);
         for (uint32 chain = 0; chain < SHRINCSParams.NUM_WOTS_CHAINS;) {
             uint32 digit = baseW16Digit(digest, chain);
@@ -871,7 +924,7 @@ contract SHRINCSStatelessVectorSigner {
 
     function hypertreePublicRoot(bytes32 statelessSkSeed, bytes32 pkSeed)
         internal
-        pure
+        view
         returns (bytes32)
     {
         bytes32[NUM_HYPERTREE_LAYERS] memory layerSeeds =
@@ -902,7 +955,9 @@ contract SHRINCSStatelessVectorSigner {
         pure
         returns (bytes32)
     {
-        return keccak256(
+        // Signer-only layer-seed derivation (no verifier counterpart):
+        // SignerHashSuite so it swaps under the sha2 suite.
+        return SignerHashSuite.schemeHash(
             abi.encodePacked(
                 "hypertree-layer-seed", statelessSkSeed, bytes1(layer)
             )
@@ -916,7 +971,7 @@ contract SHRINCSStatelessVectorSigner {
         uint64 tree,
         uint32 height,
         uint32 index
-    ) internal pure returns (bytes32) {
+    ) internal view returns (bytes32) {
         if (height == 0) {
             return hypertreeLeaf(pkSeed, layerSeed, layer, tree, index);
         }
@@ -929,11 +984,11 @@ contract SHRINCSStatelessVectorSigner {
         );
         bytes32 addressWord =
             hypertreeAddressWord(layer, tree, height, index);
-        return keccak256(
-            abi.encodePacked(
-                "hypertree-node", pkSeed, addressWord, left, right
-            )
-        );
+        // Verifier-shape hypertree node: production
+        // HashSuite.hashHypertreeNode32 (masking applied internally, no-op at
+        // 256s).
+        return
+            HashSuite.hashHypertreeNode32(pkSeed, addressWord, left, right);
     }
 
     function hypertreeLeaf(
@@ -942,12 +997,15 @@ contract SHRINCSStatelessVectorSigner {
         uint32 layer,
         uint64 tree,
         uint32 leaf
-    ) internal pure returns (bytes32) {
-        bytes32 leafSeed = keccak256(
+    ) internal view returns (bytes32) {
+        // Signer-only leaf/sk-seed derivations (no verifier counterpart):
+        // SignerHashSuite so they swap under the sha2 suite.
+        bytes32 leafSeed = SignerHashSuite.schemeHash(
             abi.encodePacked("hypertree-leaf-seed", layerSeed, tree, leaf)
         );
-        bytes32 skSeed =
-            keccak256(abi.encodePacked("hypertree-wots-sk-seed", leafSeed));
+        bytes32 skSeed = SignerHashSuite.schemeHash(
+            abi.encodePacked("hypertree-wots-sk-seed", leafSeed)
+        );
         return statelessWotsCPublicKey(pkSeed, skSeed, layer, tree, leaf);
     }
 
@@ -957,7 +1015,7 @@ contract SHRINCSStatelessVectorSigner {
         uint32 layer,
         uint64 tree,
         uint32 keypair
-    ) internal pure returns (bytes32) {
+    ) internal view returns (bytes32) {
         bytes memory endpoints = new bytes(
             uint256(SHRINCSParams.NUM_WOTS_CHAINS) * 32
         );
@@ -978,7 +1036,18 @@ contract SHRINCSStatelessVectorSigner {
                 ++chain;
             }
         }
-        return keccak256(abi.encodePacked("wots-c-pk", pkSeed, endpoints));
+        // Verifier-shape WOTS-C public-key hash: production finalizer
+        // HashSuite.hashWotsCPk32 (masking applied internally, no-op at
+        // 256s). The [tag | pkSeed | endpoints] buffer is suite-independent.
+        bytes memory pkInput =
+            abi.encodePacked("wots-c-pk", pkSeed, endpoints);
+        uint256 pkInputPtr;
+        // Memory-safe: reads pkInput's data pointer (length word + 32); the
+        // finalizer only hashes the buffer.
+        assembly ("memory-safe") {
+            pkInputPtr := add(pkInput, 32)
+        }
+        return HashSuite.hashWotsCPk32(pkInputPtr, pkInput.length);
     }
 
     function hypertreeAuthPath(
@@ -987,7 +1056,7 @@ contract SHRINCSStatelessVectorSigner {
         uint32 layer,
         uint64 tree,
         uint32 leaf
-    ) internal pure returns (bytes32[] memory path) {
+    ) internal view returns (bytes32[] memory path) {
         uint32 subtreeHeight = uint32(
             SHRINCSParams.HYPERTREE_HEIGHT
                 / SHRINCSParams.NUM_HYPERTREE_LAYERS
@@ -1009,7 +1078,10 @@ contract SHRINCSStatelessVectorSigner {
         pure
         returns (bytes32)
     {
-        return keccak256(abi.encodePacked("wots-c-secret", skSeed, chain));
+        // Signer-only chain secret (no verifier shape): SignerHashSuite.
+        return SignerHashSuite.schemeHash(
+            abi.encodePacked("wots-c-secret", skSeed, chain)
+        );
     }
 
     function statelessWotsCChain(
@@ -1021,14 +1093,17 @@ contract SHRINCSStatelessVectorSigner {
         bytes32 value,
         uint32 start,
         uint32 steps
-    ) internal pure returns (bytes32 out) {
+    ) internal view returns (bytes32 out) {
         out = value;
         for (uint32 step = start; step < start + steps;) {
             bytes32 addressWord = Hash.addressWord32(
                 layer, tree, UXMSS.AddressTypeWotsHash, keypair, chain, step
             );
-            out = keccak256(
-                abi.encodePacked("wots-c-chain", pkSeed, addressWord, out)
+            // Verifier-shape chain step: production
+            // HashSuite.hashWotsCChainNoMask32 with the shared
+            // WOTS_C_CHAIN_TAG (12 bytes); masking applied (no-op at 256s).
+            out = HashSuite.hashWotsCChainNoMask32(
+                WOTSPlusC.WOTS_C_CHAIN_TAG, 12, pkSeed, addressWord, out
             );
             unchecked {
                 ++step;

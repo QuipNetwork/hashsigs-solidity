@@ -43,13 +43,16 @@ library SHRINCSAccountSigningFacade {
 
     function keygen(bytes memory seedMaterial, uint32 maxStatefulSignatures)
         internal
-        pure
+        view
         returns (
             SHRINCS.SigningKey memory signingKey,
             SHRINCS.PublicKey memory publicKey,
             bool ok
         )
     {
+        // `view` (not `pure`): SHRINCSTestSigner.keygen routes verifier-shape
+        // hashes through the production HashSuite, whose sha2 helpers use the
+        // 0x02 precompile (staticcall), widening the signer stack to `view`.
         return SHRINCSTestSigner.keygen(seedMaterial, maxStatefulSignatures);
     }
 

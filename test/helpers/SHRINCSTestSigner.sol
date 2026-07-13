@@ -18,8 +18,11 @@ pragma solidity ^0.8.28;
 
 import {SHRINCS} from "../../contracts/SHRINCS.sol";
 import {UXMSS} from "../../contracts/UXMSS.sol";
+import {WOTSPlusC} from "../../contracts/WOTSPlusC.sol";
 import {SHRINCSParams} from "shrincs-profile/SHRINCSParams.sol";
 import {Hash} from "../../contracts/Hash.sol";
+import {HashSuite} from "shrincs-hash/HashSuite.sol";
+import {SignerHashSuite} from "./SignerHashSuite.sol";
 
 /// @notice TEST-ONLY Solidity signer helpers that mirror the Rust signer for
 /// stateful flows.
@@ -42,7 +45,7 @@ library SHRINCSTestSigner {
 
     function keygen(bytes memory seedMaterial, uint32 maxStatefulSignatures)
         internal
-        pure
+        view
         returns (
             SHRINCS.SigningKey memory signingKey,
             SHRINCS.PublicKey memory publicKey,
@@ -110,7 +113,7 @@ library SHRINCSTestSigner {
         bytes memory message
     )
         internal
-        pure
+        view
         returns (
             SHRINCS.SigningKey memory nextSigningKey,
             SHRINCS.Signature memory signature,
@@ -138,7 +141,7 @@ library SHRINCSTestSigner {
         SHRINCS.ActionContext memory context
     )
         internal
-        pure
+        view
         returns (
             SHRINCS.SigningKey memory nextSigningKey,
             SHRINCS.Signature memory signature,
@@ -166,14 +169,18 @@ library SHRINCSTestSigner {
         bytes memory seed,
         bytes memory data
     ) internal pure returns (bytes32) {
-        return keccak256(abi.encodePacked(domain, seed, data));
+        // Signer-only keygen KDF: no verifier counterpart, so route through
+        // the test SignerHashSuite. It stays keccak under the keccak suites
+        // and swaps to SHA-256 under 256s-sha2, matching the Rust derive32.
+        return
+            SignerHashSuite.schemeHash(abi.encodePacked(domain, seed, data));
     }
 
     function signStatefulRawAtLeaf(
         SHRINCS.SigningKey memory signingKey,
         uint32 leafIndex,
         bytes memory message
-    ) internal pure returns (SHRINCS.Signature memory signature, bool ok) {
+    ) internal view returns (SHRINCS.Signature memory signature, bool ok) {
         if (leafIndex == 0) return (signature, false);
         if (leafIndex > signingKey.maxStatefulSignatures) {
             return (signature, false);
@@ -209,7 +216,7 @@ library SHRINCSTestSigner {
         bytes32 pkSeed,
         uint32 leafIndex,
         uint32 maxSignatures
-    ) internal pure returns (bytes32 right) {
+    ) internal view returns (bytes32 right) {
         right = statefulEmptyTail(pkSeed, maxSignatures);
         for (uint32 currentLeaf = maxSignatures; currentLeaf >= leafIndex;) {
             bytes32 leaf = statefulWotsPkHash(skSeed, pkSeed, currentLeaf);
@@ -225,7 +232,7 @@ library SHRINCSTestSigner {
         bytes32 skSeed,
         bytes32 pkSeed,
         uint32 leafIndex
-    ) internal pure returns (bytes32) {
+    ) internal view returns (bytes32) {
         bytes memory endpoints = new bytes(
             uint256(SHRINCSParams.WOTS_CHAINS_STATEFUL) * 32
         );
@@ -249,16 +256,12 @@ library SHRINCSTestSigner {
                 ++chainIndex;
             }
         }
-        // Mirror the verifier's high-aligned truncation (maskHash): the
-        // reconstructed stateful WOTS-C leaf is masked, so the signer's
-        // leaf must be too. No-op at 256s (all-ones mask).
-        return Hash.maskHash(
-            keccak256(
-                abi.encodePacked(
-                    "uxmss-wots-pk", pkSeed, leafIndex, endpoints
-                )
-            )
-        );
+        // Verifier-shape scheme hash: route through the production
+        // HashSuite.uxmssWotsPk32 (the same helper UXMSS.verify uses), so the
+        // signer's reconstructed stateful WOTS-C leaf (masked) is
+        // byte-identical to the verifier by construction and swaps with it
+        // under the sha2 suite.
+        return HashSuite.uxmssWotsPk32(pkSeed, leafIndex, endpoints);
     }
 
     function signStatefulWotsC(
@@ -267,23 +270,20 @@ library SHRINCSTestSigner {
         bytes32 pkSeed,
         uint32 leafIndex,
         bytes memory message
-    ) internal pure returns (SHRINCS.Signature memory signature, bool ok) {
-        bytes32 randomizer = keccak256(
+    ) internal view returns (SHRINCS.Signature memory signature, bool ok) {
+        // Signer-only randomizer PRF (no verifier counterpart):
+        // SignerHashSuite, so it swaps to SHA-256 alongside the digest.
+        bytes32 randomizer = SignerHashSuite.schemeHash(
             abi.encodePacked(
                 "uxmss-wots-randomizer", prfSeed, leafIndex, message
             )
         );
 
         for (uint32 counter = 0; counter < WOTS_C_MAX_GRIND_COUNTER;) {
-            bytes32 digest = keccak256(
-                abi.encodePacked(
-                    "uxmss-wots-digits",
-                    pkSeed,
-                    leafIndex,
-                    randomizer,
-                    counter,
-                    message
-                )
+            // Verifier-shape digest: production HashSuite.uxmssWotsDigits32,
+            // the same shape UXMSS.verify recomputes.
+            bytes32 digest = HashSuite.uxmssWotsDigits32(
+                pkSeed, leafIndex, randomizer, counter, message
             );
             uint32 digitSum;
             bytes32[] memory chains =
@@ -327,7 +327,8 @@ library SHRINCSTestSigner {
         uint32 leafIndex,
         uint32 chainIndex
     ) internal pure returns (bytes32) {
-        return keccak256(
+        // Signer-only chain secret (no verifier shape): SignerHashSuite.
+        return SignerHashSuite.schemeHash(
             abi.encodePacked(
                 "uxmss-wots-chain-secret",
                 skSeed,
@@ -345,7 +346,7 @@ library SHRINCSTestSigner {
         bytes32 value,
         uint32 start,
         uint32 steps
-    ) internal pure returns (bytes32 out) {
+    ) internal view returns (bytes32 out) {
         out = value;
         for (uint32 stepOffset = 0; stepOffset < steps;) {
             bytes32 addressWord = Hash.addressWord32(
@@ -356,16 +357,14 @@ library SHRINCSTestSigner {
                 chainIndex,
                 start + stepOffset
             );
-            // Truncate each chain step, mirroring the verifier's
-            // HashSuite.hashWotsCChainNoMask32 maskHash. No-op at 256s.
-            // F-08: the stateful walk uses "uxmss-wots-chain" (16 bytes)
-            // to separate its chain domain from the stateless hypertree.
-            out = Hash.maskHash(
-                keccak256(
-                    abi.encodePacked(
-                        "uxmss-wots-chain", pkSeed, addressWord, out
-                    )
-                )
+            // Verifier-shape chain step: route through the production
+            // HashSuite.hashWotsCChainNoMask32 (the same helper UXMSS.verify
+            // walks). It applies the maskHash truncation internally (no-op at
+            // 256s). F-08: the stateful walk passes UXMSS_WOTS_CHAIN_TAG
+            // (16 bytes) to separate its chain domain from the stateless
+            // hypertree walk.
+            out = HashSuite.hashWotsCChainNoMask32(
+                UXMSS.UXMSS_WOTS_CHAIN_TAG, 16, pkSeed, addressWord, out
             );
             unchecked {
                 ++stepOffset;
@@ -378,16 +377,14 @@ library SHRINCSTestSigner {
         uint32 leftLeafIndex,
         bytes32 left,
         bytes32 right
-    ) internal pure returns (bytes32) {
-        // Truncate the parent node, mirroring the verifier's
-        // statefulParentHash maskHash. No-op at 256s.
-        return Hash.maskHash(
-            keccak256(
-                abi.encodePacked(
-                    "uxmss-node", pkSeed, leftLeafIndex, left, right
-                )
-            )
-        );
+    ) internal view returns (bytes32) {
+        // Verifier-shape parent node: production
+        // HashSuite.statefulParentHash32 (the same helper UXMSS.verify folds
+        // the auth path with). Masking applied internally (no-op at 256s).
+        return
+            HashSuite.statefulParentHash32(
+                pkSeed, leftLeafIndex, left, right
+            );
     }
 
     function statefulEmptyTail(bytes32 pkSeed, uint32 leafIndex)
@@ -395,7 +392,11 @@ library SHRINCSTestSigner {
         pure
         returns (bytes32)
     {
-        return keccak256(
+        // Signer-only empty-tail padding node: the verifier receives this
+        // value through the auth path rather than recomputing it, so it has
+        // no verifier-side helper. Route through SignerHashSuite to swap
+        // under the sha2 suite alongside the rest of the stateful subtree.
+        return SignerHashSuite.schemeHash(
             abi.encodePacked("uxmss-empty-tail", pkSeed, leafIndex)
         );
     }
@@ -405,7 +406,7 @@ library SHRINCSTestSigner {
         bytes32 pkSeed,
         uint32 leafIndex,
         uint32 maxSignatures
-    ) internal pure returns (bytes32[] memory path) {
+    ) internal view returns (bytes32[] memory path) {
         path = new bytes32[](leafIndex);
         if (leafIndex < maxSignatures) {
             path[0] = statefulSubtreeRoot(
@@ -429,7 +430,7 @@ library SHRINCSTestSigner {
 
     function hypertreePublicRoot(bytes32 statelessSkSeed, bytes32 pkSeed)
         internal
-        pure
+        view
         returns (bytes32)
     {
         bytes32[NUM_HYPERTREE_LAYERS] memory layerSeeds =
@@ -448,7 +449,9 @@ library SHRINCSTestSigner {
         returns (bytes32[NUM_HYPERTREE_LAYERS] memory layerSeeds)
     {
         for (uint8 layer = 0; layer < NUM_HYPERTREE_LAYERS;) {
-            layerSeeds[layer] = keccak256(
+            // Signer-only layer-seed derivation (no verifier counterpart):
+            // SignerHashSuite so it swaps under the sha2 suite.
+            layerSeeds[layer] = SignerHashSuite.schemeHash(
                 abi.encodePacked(
                     "hypertree-layer-seed", statelessSkSeed, bytes1(layer)
                 )
@@ -466,7 +469,7 @@ library SHRINCSTestSigner {
         uint64 tree,
         uint32 height,
         uint32 index
-    ) internal pure returns (bytes32) {
+    ) internal view returns (bytes32) {
         if (height == 0) {
             return hypertreeLeaf(pkSeed, layerSeed, layer, tree, index);
         }
@@ -479,15 +482,12 @@ library SHRINCSTestSigner {
         );
         bytes32 addressWord =
             hypertreeAddressWord(layer, tree, height, index);
-        // Truncate the hypertree node, mirroring the verifier's
-        // hashHypertreeNode32 maskHash. No-op at 256s.
-        return Hash.maskHash(
-            keccak256(
-                abi.encodePacked(
-                    "hypertree-node", pkSeed, addressWord, left, right
-                )
-            )
-        );
+        // Verifier-shape hypertree node: production
+        // HashSuite.hashHypertreeNode32 (the same helper Hypertree.verify
+        // folds the auth path with). Masking applied internally (no-op at
+        // 256s).
+        return
+            HashSuite.hashHypertreeNode32(pkSeed, addressWord, left, right);
     }
 
     function hypertreeLeaf(
@@ -496,12 +496,15 @@ library SHRINCSTestSigner {
         uint32 layer,
         uint64 tree,
         uint32 leaf
-    ) internal pure returns (bytes32) {
-        bytes32 leafSeed = keccak256(
+    ) internal view returns (bytes32) {
+        // Signer-only leaf/sk-seed derivations (no verifier counterpart):
+        // SignerHashSuite so they swap under the sha2 suite.
+        bytes32 leafSeed = SignerHashSuite.schemeHash(
             abi.encodePacked("hypertree-leaf-seed", layerSeed, tree, leaf)
         );
-        bytes32 skSeed =
-            keccak256(abi.encodePacked("hypertree-wots-sk-seed", leafSeed));
+        bytes32 skSeed = SignerHashSuite.schemeHash(
+            abi.encodePacked("hypertree-wots-sk-seed", leafSeed)
+        );
         return statelessWotsCPublicKey(pkSeed, skSeed, layer, tree, leaf);
     }
 
@@ -511,7 +514,7 @@ library SHRINCSTestSigner {
         uint32 layer,
         uint64 tree,
         uint32 keypair
-    ) internal pure returns (bytes32) {
+    ) internal view returns (bytes32) {
         bytes memory endpoints = new bytes(
             uint256(SHRINCSParams.NUM_WOTS_CHAINS) * 32
         );
@@ -532,11 +535,20 @@ library SHRINCSTestSigner {
                 ++chain;
             }
         }
-        // Truncate the WOTS-C public-key hash, mirroring the verifier's
-        // verifyWotsC32 maskHash. No-op at 256s.
-        return Hash.maskHash(
-            keccak256(abi.encodePacked("wots-c-pk", pkSeed, endpoints))
-        );
+        // Verifier-shape WOTS-C public-key hash: route through the production
+        // finalizer HashSuite.hashWotsCPk32 (the same helper Hypertree.verify
+        // hashes the chain endpoints with; masking applied internally, no-op
+        // at 256s). The [tag | pkSeed | endpoints] buffer is
+        // suite-independent, so build it here and pass (ptr, len).
+        bytes memory pkInput =
+            abi.encodePacked("wots-c-pk", pkSeed, endpoints);
+        uint256 pkInputPtr;
+        // Memory-safe: reads pkInput's data pointer (len word + 32) without
+        // writing memory; the finalizer only hashes the buffer.
+        assembly ("memory-safe") {
+            pkInputPtr := add(pkInput, 32)
+        }
+        return HashSuite.hashWotsCPk32(pkInputPtr, pkInput.length);
     }
 
     function statelessWotsCSecret(bytes32 skSeed, uint32 chain)
@@ -544,7 +556,10 @@ library SHRINCSTestSigner {
         pure
         returns (bytes32)
     {
-        return keccak256(abi.encodePacked("wots-c-secret", skSeed, chain));
+        // Signer-only chain secret (no verifier shape): SignerHashSuite.
+        return SignerHashSuite.schemeHash(
+            abi.encodePacked("wots-c-secret", skSeed, chain)
+        );
     }
 
     function statelessWotsCChain(
@@ -556,21 +571,19 @@ library SHRINCSTestSigner {
         bytes32 value,
         uint32 start,
         uint32 steps
-    ) internal pure returns (bytes32 out) {
+    ) internal view returns (bytes32 out) {
         out = value;
         for (uint32 step = start; step < start + steps;) {
             bytes32 addressWord = Hash.addressWord32(
                 layer, tree, UXMSS.AddressTypeWotsHash, keypair, chain, step
             );
-            // Truncate each stateless chain step, mirroring the
-            // verifier's WOTSPlusC.hashWotsCChainNoMask32 maskHash.
-            // No-op at 256s.
-            out = Hash.maskHash(
-                keccak256(
-                    abi.encodePacked(
-                        "wots-c-chain", pkSeed, addressWord, out
-                    )
-                )
+            // Verifier-shape chain step: production
+            // HashSuite.hashWotsCChainNoMask32 (the same helper the stateless
+            // hypertree walk uses in WOTSPlusC.verify), passing the shared
+            // WOTS_C_CHAIN_TAG (12 bytes). Masking is applied internally
+            // (no-op at 256s).
+            out = HashSuite.hashWotsCChainNoMask32(
+                WOTSPlusC.WOTS_C_CHAIN_TAG, 12, pkSeed, addressWord, out
             );
             unchecked {
                 ++step;
