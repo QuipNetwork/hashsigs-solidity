@@ -364,7 +364,11 @@ library SHRINCSTestSigner {
             // (16 bytes) to separate its chain domain from the stateless
             // hypertree walk.
             out = HashSuite.hashWotsCChainNoMask32(
-                UXMSS.UXMSS_WOTS_CHAIN_TAG, 16, pkSeed, addressWord, out
+                UXMSS.UXMSS_WOTS_CHAIN_TAG,
+                UXMSS.UXMSS_WOTS_CHAIN_TAG_LEN,
+                pkSeed,
+                addressWord,
+                out
             );
             unchecked {
                 ++stepOffset;
@@ -583,7 +587,11 @@ library SHRINCSTestSigner {
             // WOTS_C_CHAIN_TAG (12 bytes). Masking is applied internally
             // (no-op at 256s).
             out = HashSuite.hashWotsCChainNoMask32(
-                WOTSPlusC.WOTS_C_CHAIN_TAG, 12, pkSeed, addressWord, out
+                WOTSPlusC.WOTS_C_CHAIN_TAG,
+                WOTSPlusC.WOTS_C_CHAIN_TAG_LEN,
+                pkSeed,
+                addressWord,
+                out
             );
             unchecked {
                 ++step;

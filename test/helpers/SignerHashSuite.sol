@@ -47,6 +47,12 @@ library SignerHashSuite {
         if (HashSuite.HASH_SUITE_ID == 1) {
             return keccak256(data);
         }
-        return sha256(data);
+        if (HashSuite.HASH_SUITE_ID == 2) {
+            return sha256(data);
+        }
+        // Fail closed on an unknown suite id: a future suite must add its
+        // branch here deliberately rather than silently inheriting SHA-256.
+        // Only 1 and 2 exist today, so this is unreachable on both builds.
+        revert("SignerHashSuite: unknown hash suite");
     }
 }

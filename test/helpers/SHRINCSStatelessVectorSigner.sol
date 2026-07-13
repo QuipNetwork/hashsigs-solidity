@@ -1103,7 +1103,11 @@ contract SHRINCSStatelessVectorSigner {
             // HashSuite.hashWotsCChainNoMask32 with the shared
             // WOTS_C_CHAIN_TAG (12 bytes); masking applied (no-op at 256s).
             out = HashSuite.hashWotsCChainNoMask32(
-                WOTSPlusC.WOTS_C_CHAIN_TAG, 12, pkSeed, addressWord, out
+                WOTSPlusC.WOTS_C_CHAIN_TAG,
+                WOTSPlusC.WOTS_C_CHAIN_TAG_LEN,
+                pkSeed,
+                addressWord,
+                out
             );
             unchecked {
                 ++step;
