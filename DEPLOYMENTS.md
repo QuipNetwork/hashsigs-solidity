@@ -132,6 +132,28 @@ envelope is `abi.encode(StatelessSignature)`, with no commitment logic.
 | Runtime codehash | *(capture on first deploy)* | *(capture on first deploy)* | *(capture on first deploy)* |
 | Chains deployed | *(none yet)* | *(none yet)* | *(none yet)* |
 
+### SHA-256 suite (256s-sha2)
+
+The SHA-256 twin of the 256s profile: identical parameters, SHA-256 in
+place of keccak-256 as the scheme hash. Its own CREATE3 salts and
+addresses, served by the same shared factory (the metadata-stripped
+factory creation code is suite-independent). Predicted addresses below are
+derived and pinned by `test/SHRINCSPinned256sSha2.t.sol`. **Signature
+vectors are pending the second Rust round** ([DESIGN §5.2]); until they
+land, no bytes have been deployed and the on-chain runtime codehashes are
+captured on first deploy.
+
+| Field | SHRINCS256sSha2 | SPHINCSPlusC256sSha2 |
+|---|---|---|
+| Build profile | `production-256s-sha2` | `production-256s-sha2` |
+| CREATE3 salt string | `QUIP:SHRINCS256sSha2:V1.0` | `QUIP:SPHINCSPlusC256sSha2:V1.0` |
+| `PROFILE_TAG()` | `keccak256("shrincs-256s-sha2")` | `keccak256("shrincs-256s-sha2")` |
+| `VERSION_TAG()` | `keccak256("quip.shrincs-verifier.v1")` | `keccak256("quip.sphincsplusc-verifier.v1")` |
+| Predicted address | `0x47C7041BcABc941764D59cb3e973e7e77a46b76f` | `0x4634950D028606e7E0db97FC3CEd91511DAdE6cb` |
+| Stateless delegate | `SPHINCSPlusC256sSha2` (right) | — |
+| Runtime codehash | *(capture on first deploy)* | *(capture on first deploy)* |
+| Chains deployed | *(none yet)* | *(none yet)* |
+
 ### WOTS+ library
 
 | Field | Value |

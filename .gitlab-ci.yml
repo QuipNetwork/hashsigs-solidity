@@ -55,14 +55,18 @@ format-and-checks:
 # params (inherited from default) plus bounded, deterministic
 # fuzz/invariant runs (foundry.toml). FOUNDRY_FUZZ_SEED (global) pins
 # the seed; the failure_persist cache replays any counterexample a
-# nightly or prior MR found before exploring new cases.
+# nightly or prior MR found before exploring new cases. The `256s-sha2`
+# leg builds the SHA-256 suite and runs its coverage — compile, the
+# per-helper sha2 KATs, and the non-signing structural/profile suites;
+# signature-dependent suites are skipped there (the in-Solidity signers
+# are keccak-hardcoded) until the sha2 Rust vectors land ([DESIGN §5.2]).
 build-lint-test:
   extends: .foundry
   rules:
     - if: $CI_PIPELINE_SOURCE != "schedule"
   parallel:
     matrix:
-      - FOUNDRY_PROFILE: ["ci", "128s-q18", "128s-q20"]
+      - FOUNDRY_PROFILE: ["ci", "128s-q18", "128s-q20", "256s-sha2"]
   script:
     - forge build
     - forge lint --deny warnings contracts/ test/ script/

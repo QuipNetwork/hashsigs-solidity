@@ -73,8 +73,13 @@ skip = [
     "script/DeploySHRINCS128sQ20Keccak.s.sol",
     "script/DeploySPHINCSPlusC128sQ18Keccak.s.sol",
     "script/DeploySPHINCSPlusC128sQ20Keccak.s.sol",
+    "contracts/SHRINCS256sSha2.sol",
+    "contracts/SPHINCSPlusC256sSha2.sol",
+    "script/DeploySHRINCS256sSha2.s.sol",
+    "script/DeploySPHINCSPlusC256sSha2.s.sol",
     "test/SHRINCSPinned128sQ18.t.sol",
     "test/SHRINCSPinned128sQ20.t.sol",
+    "test/SHRINCSPinned256sSha2.t.sol",
     "test/SHRINCSSphincs128sVectors.t.sol",
 ]
 
@@ -122,6 +127,10 @@ skip = [
     "script/DeploySHRINCS128sQ20Keccak.s.sol",
     "script/DeploySPHINCSPlusC256sKeccak.s.sol",
     "script/DeploySPHINCSPlusC128sQ20Keccak.s.sol",
+    "contracts/SHRINCS256sSha2.sol",
+    "contracts/SPHINCSPlusC256sSha2.sol",
+    "script/DeploySHRINCS256sSha2.s.sol",
+    "script/DeploySPHINCSPlusC256sSha2.s.sol",
     "test/SHRINCSSphincs256sVectors.t.sol",
     "test/SHRINCSGuardPinning.t.sol",
     "test/SHRINCSStatelessVectorSigner.t.sol",
@@ -137,6 +146,7 @@ skip = [
     "test/SHRINCSCalldataRetag.t.sol",
     "test/SHRINCSPinned256s.t.sol",
     "test/SHRINCSPinned128sQ20.t.sol",
+    "test/SHRINCSPinned256sSha2.t.sol",
 ]
 
 [profile.128s-q20]
@@ -154,6 +164,10 @@ skip = [
     "script/DeploySHRINCS128sQ18Keccak.s.sol",
     "script/DeploySPHINCSPlusC256sKeccak.s.sol",
     "script/DeploySPHINCSPlusC128sQ18Keccak.s.sol",
+    "contracts/SHRINCS256sSha2.sol",
+    "contracts/SPHINCSPlusC256sSha2.sol",
+    "script/DeploySHRINCS256sSha2.s.sol",
+    "script/DeploySPHINCSPlusC256sSha2.s.sol",
     "test/SHRINCSSphincs256sVectors.t.sol",
     "test/SHRINCSGuardPinning.t.sol",
     "test/SHRINCSStatelessVectorSigner.t.sol",
@@ -168,6 +182,7 @@ skip = [
     "test/SHRINCSStatelessSliceCopy.t.sol",
     "test/SHRINCSCalldataRetag.t.sol",
     "test/SHRINCSPinned256s.t.sol",
+    "test/SHRINCSPinned256sSha2.t.sol",
     "test/SHRINCSPinned128sQ18.t.sol",
 ]
 
@@ -195,6 +210,10 @@ skip = [
     "script/DeploySHRINCS128sQ20Keccak.s.sol",
     "script/DeploySPHINCSPlusC256sKeccak.s.sol",
     "script/DeploySPHINCSPlusC128sQ20Keccak.s.sol",
+    "contracts/SHRINCS256sSha2.sol",
+    "contracts/SPHINCSPlusC256sSha2.sol",
+    "script/DeploySHRINCS256sSha2.s.sol",
+    "script/DeploySPHINCSPlusC256sSha2.s.sol",
 ]
 
 [profile.production-128s-q20]
@@ -217,6 +236,97 @@ skip = [
     "script/DeploySHRINCS128sQ18Keccak.s.sol",
     "script/DeploySPHINCSPlusC256sKeccak.s.sol",
     "script/DeploySPHINCSPlusC128sQ18Keccak.s.sol",
+    "contracts/SHRINCS256sSha2.sol",
+    "contracts/SPHINCSPlusC256sSha2.sol",
+    "script/DeploySHRINCS256sSha2.s.sol",
+    "script/DeploySPHINCSPlusC256sSha2.s.sol",
+]
+
+# SHA-256 suite profiles ([DESIGN §3.3]). The suite axis multiplies only
+# where a deployable exists: 256s-sha2 is the first (and, for now, only)
+# SHA-256 deployable. Both axes are listed explicitly because Foundry
+# REPLACES the remapping array per profile — `shrincs-profile/` selects the
+# 256s-sha2 params duplicate, `shrincs-hash/` selects the sha2 HashSuite.
+# The skip list excludes every keccak deployable/script (the sha2 twins
+# compile instead) and every signature-dependent test. The in-Solidity test
+# signers (test/helpers/SHRINCSTestSigner.sol and
+# SHRINCSStatelessVectorSigner.sol) hardcode keccak256 rather than routing
+# through the HashSuite seam, so under the sha2 suite a keccak signer and a
+# sha2 verifier disagree and any produce-then-verify (or Rust-vector) test
+# fails. Until the sha2 vector set lands from the second Rust round
+# ([DESIGN §5.2 Q3]) — or a signer is refactored onto the seam — 256s-sha2
+# coverage is: compile, the per-helper sha2 KATs (HashSuiteKat, which use a
+# suite-aware sha256 reference), and the non-signing structural/profile
+# suites (including the 256s-sha2 params drift guard in
+# SHRINCSProfileInvariants).
+[profile.256s-sha2]
+out = "out-256s-sha2"
+remappings = [
+    "shrincs-profile/=contracts/profiles/256s-sha2/",
+    "shrincs-hash/=contracts/hash/sha2/",
+]
+skip = [
+    "contracts/SHRINCS256sKeccak.sol",
+    "contracts/SHRINCS128sQ18Keccak.sol",
+    "contracts/SHRINCS128sQ20Keccak.sol",
+    "contracts/SPHINCSPlusC256sKeccak.sol",
+    "contracts/SPHINCSPlusC128sQ18Keccak.sol",
+    "contracts/SPHINCSPlusC128sQ20Keccak.sol",
+    "script/DeploySHRINCS256sKeccak.s.sol",
+    "script/DeploySHRINCS128sQ18Keccak.s.sol",
+    "script/DeploySHRINCS128sQ20Keccak.s.sol",
+    "script/DeploySPHINCSPlusC256sKeccak.s.sol",
+    "script/DeploySPHINCSPlusC128sQ18Keccak.s.sol",
+    "script/DeploySPHINCSPlusC128sQ20Keccak.s.sol",
+    "test/SHRINCSSphincs256sVectors.t.sol",
+    "test/SHRINCSSphincs128sVectors.t.sol",
+    "test/SHRINCSPinned256s.t.sol",
+    "test/SHRINCSPinned128sQ18.t.sol",
+    "test/SHRINCSPinned128sQ20.t.sol",
+    "test/SHRINCSVerifier.t.sol",
+    "test/SHRINCSSignerStateful.t.sol",
+    "test/SHRINCSSignerStatefulAction.t.sol",
+    "test/SHRINCSSignerKeygen.t.sol",
+    "test/SHRINCSStatelessVectorSigner.t.sol",
+    "test/SHRINCSStatefulPolicyExamples.t.sol",
+    "test/SHRINCSAccountVerifierExample.t.sol",
+    "test/SHRINCSAccountSigningFacade.t.sol",
+    "test/SHRINCSAccountVectorExport.t.sol",
+    "test/SHRINCSAccountInvariants.t.sol",
+    "test/SHRINCSGuardPinning.t.sol",
+    "test/SHRINCSMeasurements.t.sol",
+    "test/SHRINCSMutationFuzz.t.sol",
+    "test/SHRINCSEnvelope.t.sol",
+    "test/SHRINCSStatelessDelegation.t.sol",
+    "test/SHRINCSStatelessSliceCopy.t.sol",
+    "test/SHRINCSCalldataRetag.t.sol",
+    "test/HashSuiteStatelessGuard.t.sol",
+]
+
+[profile.production-256s-sha2]
+solc = "0.8.35"
+via_ir = true
+optimizer = true
+optimizer_runs = 1000000
+gas_limit = "18446744073709551615" # u64::MAX
+out = "out-256s-sha2-prod"
+remappings = [
+    "shrincs-profile/=contracts/profiles/256s-sha2/",
+    "shrincs-hash/=contracts/hash/sha2/",
+]
+skip = [
+    "contracts/SHRINCS256sKeccak.sol",
+    "contracts/SHRINCS128sQ18Keccak.sol",
+    "contracts/SHRINCS128sQ20Keccak.sol",
+    "contracts/SPHINCSPlusC256sKeccak.sol",
+    "contracts/SPHINCSPlusC128sQ18Keccak.sol",
+    "contracts/SPHINCSPlusC128sQ20Keccak.sol",
+    "script/DeploySHRINCS256sKeccak.s.sol",
+    "script/DeploySHRINCS128sQ18Keccak.s.sol",
+    "script/DeploySHRINCS128sQ20Keccak.s.sol",
+    "script/DeploySPHINCSPlusC256sKeccak.s.sol",
+    "script/DeploySPHINCSPlusC128sQ18Keccak.s.sol",
+    "script/DeploySPHINCSPlusC128sQ20Keccak.s.sol",
 ]
 
 # Per-MR security gate: the 256s (default) profile plus bounded,

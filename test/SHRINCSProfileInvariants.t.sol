@@ -76,6 +76,29 @@ contract SHRINCSProfileInvariantsTest is Test {
                 wotsTargetSumStateful: 480
             });
         }
+        // 256s-sha2: the SHA-256 twin of 256s. Its params directory is a
+        // deliberate duplicate ([DESIGN §5.2 option (b)]), so every crypto
+        // constant MUST equal the 256s values above; only the suite-
+        // qualified profile id differs ("shrincs-256s-sha2"). This branch
+        // is the drift guard: run under the 256s-sha2 profile it fails
+        // closed if the duplicated params diverge on any constant.
+        if (
+            nameHash == keccak256("256s-sha2")
+                || nameHash == keccak256("production-256s-sha2")
+        ) {
+            return ProfileExpectation({
+                profileId: keccak256("shrincs-256s-sha2"),
+                hashLen: 32,
+                hypertreeHeight: 64,
+                numHypertreeLayers: 8,
+                forsTreeHeight: 14,
+                numForsTrees: 22,
+                numWotsChains: 64,
+                statelessLimit: 1 << 20,
+                wotsChainsStateful: 64,
+                wotsTargetSumStateful: 480
+            });
+        }
         if (
             nameHash == keccak256("128s-q18")
                 || nameHash == keccak256("production-128s-q18")

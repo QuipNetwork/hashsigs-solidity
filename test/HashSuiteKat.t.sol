@@ -33,7 +33,7 @@ contract HashSuiteHarness {
         bytes32 pkSeed,
         bytes32 addressWord,
         bytes32 segment
-    ) external pure returns (bytes32) {
+    ) external view returns (bytes32) {
         return HashSuite.hashWotsCChainNoMask32(
             tag, tagLen, pkSeed, addressWord, segment
         );
@@ -43,7 +43,7 @@ contract HashSuiteHarness {
         bytes calldata pkSeed,
         bytes32 addressWord,
         bytes calldata sk
-    ) external pure returns (bytes32) {
+    ) external view returns (bytes32) {
         return HashSuite.hashForsLeaf32(pkSeed, addressWord, sk);
     }
 
@@ -52,7 +52,7 @@ contract HashSuiteHarness {
         bytes32 addressWord,
         bytes32 left,
         bytes32 right
-    ) external pure returns (bytes32) {
+    ) external view returns (bytes32) {
         return HashSuite.hashForsNode32(pkSeed, addressWord, left, right);
     }
 
@@ -62,7 +62,7 @@ contract HashSuiteHarness {
         bytes32 randomizer,
         uint32 counter,
         bytes32 message
-    ) external pure returns (bytes32) {
+    ) external view returns (bytes32) {
         return HashSuite.wotsDigest32(
             pkSeed, expectedPkHash, randomizer, counter, message
         );
@@ -73,7 +73,7 @@ contract HashSuiteHarness {
         bytes32 addressWord,
         bytes32 left,
         bytes32 right
-    ) external pure returns (bytes32) {
+    ) external view returns (bytes32) {
         return HashSuite.hashHypertreeNode32(
             pkSeed, addressWord, left, right
         );
@@ -84,25 +84,25 @@ contract HashSuiteHarness {
         uint32 leftLeafIndex,
         bytes32 left,
         bytes32 right
-    ) external pure returns (bytes32) {
+    ) external view returns (bytes32) {
         return HashSuite.statefulParentHash32(
             pkSeed, leftLeafIndex, left, right
         );
     }
 
-    function forsPk(bytes memory buffer) external pure returns (bytes32) {
+    function forsPk(bytes memory buffer) external view returns (bytes32) {
         (uint256 ptr, uint256 len) = _coords(buffer);
         return HashSuite.hashForsPk32(ptr, len);
     }
 
-    function wotsCPk(bytes memory buffer) external pure returns (bytes32) {
+    function wotsCPk(bytes memory buffer) external view returns (bytes32) {
         (uint256 ptr, uint256 len) = _coords(buffer);
         return HashSuite.hashWotsCPk32(ptr, len);
     }
 
     function forsDigestBlock(bytes memory buffer)
         external
-        pure
+        view
         returns (bytes32)
     {
         (uint256 ptr, uint256 len) = _coords(buffer);
@@ -142,13 +142,15 @@ contract HashSuiteHarness {
 }
 
 /// @title HashSuiteKatTest
-/// @notice Per-helper known-answer tests for the keccak hash suite. Each KAT
+/// @notice Per-helper known-answer tests for the active hash suite. Each KAT
 /// pins one helper's tag and preimage layout against a readable
-/// abi.encodePacked reference plus keccak256, applying the profile
+/// abi.encodePacked reference plus the suite primitive (keccak256 under the
+/// keccak suite, SHA-256 under the sha2 suite), applying the profile
 /// HASH_MASK exactly where the helper masks. This is the suite-divergence
-/// guard: the SHA-256 suite (83d.4) reuses these layouts, so any drift in a
-/// helper's offsets or tag fails its KAT. The masking is profile-
-/// parameterized, so the same KATs truncate correctly under every profile.
+/// guard: both suites reuse these layouts, so any drift in a helper's offsets
+/// or tag fails its KAT under that suite. The masking is profile-
+/// parameterized and the reference primitive is suite-parameterized
+/// (_suiteHash), so the same KATs run under every profile.
 contract HashSuiteKatTest is Test {
     HashSuiteHarness internal h;
 
@@ -175,6 +177,21 @@ contract HashSuiteKatTest is Test {
         return value & SHRINCSParams.HASH_MASK;
     }
 
+    // Suite-aware reference primitive: the KAT's independent derivation must
+    // use the SAME hash as the active suite. HASH_SUITE_ID is a compile-time
+    // constant, so the inactive branch folds away and the keccak reference
+    // is byte-for-byte unchanged under the keccak suite.
+    function _suiteHash(bytes memory preimage)
+        internal
+        pure
+        returns (bytes32)
+    {
+        if (HashSuite.HASH_SUITE_ID == 2) {
+            return sha256(preimage);
+        }
+        return keccak256(preimage);
+    }
+
     function test_kat_wotsCChain() public view {
         bytes32 got = h.wotsCChain(
             WOTSPlusC.WOTS_C_CHAIN_TAG,
@@ -184,7 +201,7 @@ contract HashSuiteKatTest is Test {
             SEGMENT
         );
         bytes32 want = _mask(
-            keccak256(
+            _suiteHash(
                 abi.encodePacked("wots-c-chain", PK_SEED, ADDR, SEGMENT)
             )
         );
@@ -205,7 +222,7 @@ contract HashSuiteKatTest is Test {
             SEGMENT
         );
         bytes32 want = _mask(
-            keccak256(
+            _suiteHash(
                 abi.encodePacked("uxmss-wots-chain", PK_SEED, ADDR, SEGMENT)
             )
         );
@@ -229,7 +246,7 @@ contract HashSuiteKatTest is Test {
             abi.encodePacked(PK_SEED), ADDR, abi.encodePacked(SK)
         );
         bytes32 want = _mask(
-            keccak256(abi.encodePacked("fors-leaf", PK_SEED, ADDR, SK))
+            _suiteHash(abi.encodePacked("fors-leaf", PK_SEED, ADDR, SK))
         );
         assertEq(got, want, "fors-leaf KAT");
     }
@@ -238,7 +255,7 @@ contract HashSuiteKatTest is Test {
         bytes32 got =
             h.forsNode(abi.encodePacked(PK_SEED), ADDR, LEFT, RIGHT);
         bytes32 want = _mask(
-            keccak256(
+            _suiteHash(
                 abi.encodePacked("fors-node", PK_SEED, ADDR, LEFT, RIGHT)
             )
         );
@@ -249,7 +266,7 @@ contract HashSuiteKatTest is Test {
         bytes32 got =
             h.wotsDigest(PK_SEED, EXPECTED_PK, RANDOMIZER, COUNTER, MESSAGE);
         // Unmasked: the caller reads base-16 digits out of the full word.
-        bytes32 want = keccak256(
+        bytes32 want = _suiteHash(
             abi.encodePacked(
                 "wots-c-msg",
                 PK_SEED,
@@ -265,7 +282,7 @@ contract HashSuiteKatTest is Test {
     function test_kat_hypertreeNode() public view {
         bytes32 got = h.hypertreeNode(PK_SEED, ADDR, LEFT, RIGHT);
         bytes32 want = _mask(
-            keccak256(
+            _suiteHash(
                 abi.encodePacked(
                     "hypertree-node", PK_SEED, ADDR, LEFT, RIGHT
                 )
@@ -277,7 +294,7 @@ contract HashSuiteKatTest is Test {
     function test_kat_statefulParent() public view {
         bytes32 got = h.statefulParent(PK_SEED, LEAF_INDEX, LEFT, RIGHT);
         bytes32 want = _mask(
-            keccak256(
+            _suiteHash(
                 abi.encodePacked(
                     "uxmss-node", PK_SEED, LEAF_INDEX, LEFT, RIGHT
                 )
@@ -290,7 +307,7 @@ contract HashSuiteKatTest is Test {
         bytes memory buffer =
             abi.encodePacked("fors-pk", PK_SEED, LEFT, RIGHT);
         bytes32 got = h.forsPk(buffer);
-        bytes32 want = _mask(keccak256(buffer));
+        bytes32 want = _mask(_suiteHash(buffer));
         assertEq(got, want, "fors-pk KAT");
     }
 
@@ -298,7 +315,7 @@ contract HashSuiteKatTest is Test {
         bytes memory buffer =
             abi.encodePacked("wots-c-pk", PK_SEED, SEGMENT, SEGMENT);
         bytes32 got = h.wotsCPk(buffer);
-        bytes32 want = _mask(keccak256(buffer));
+        bytes32 want = _mask(_suiteHash(buffer));
         assertEq(got, want, "wots-c-pk KAT");
     }
 
@@ -308,7 +325,7 @@ contract HashSuiteKatTest is Test {
         );
         bytes32 got = h.forsDigestBlock(buffer);
         // Unmasked raw digest block.
-        bytes32 want = keccak256(buffer);
+        bytes32 want = _suiteHash(buffer);
         assertEq(got, want, "fors-digest KAT");
     }
 
@@ -317,7 +334,7 @@ contract HashSuiteKatTest is Test {
         bytes32 got =
             h.uxmssDigits(PK_SEED, LEAF_INDEX, RANDOMIZER, COUNTER, message);
         // Unmasked stateful WOTS-C message digest.
-        bytes32 want = keccak256(
+        bytes32 want = _suiteHash(
             abi.encodePacked(
                 "uxmss-wots-digits",
                 PK_SEED,
@@ -334,7 +351,7 @@ contract HashSuiteKatTest is Test {
         bytes memory segments = abi.encodePacked(SEGMENT, SEGMENT);
         bytes32 got = h.uxmssPk(PK_SEED, LEAF_INDEX, segments);
         bytes32 want = _mask(
-            keccak256(
+            _suiteHash(
                 abi.encodePacked(
                     "uxmss-wots-pk", PK_SEED, LEAF_INDEX, segments
                 )
