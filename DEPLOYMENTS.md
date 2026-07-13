@@ -138,10 +138,11 @@ The SHA-256 twin of the 256s profile: identical parameters, SHA-256 in
 place of keccak-256 as the scheme hash. Its own CREATE3 salts and
 addresses, served by the same shared factory (the metadata-stripped
 factory creation code is suite-independent). Predicted addresses below are
-derived and pinned by `test/SHRINCSPinned256sSha2.t.sol`. **Signature
-vectors are pending the second Rust round** ([DESIGN §5.2]); until they
-land, no bytes have been deployed and the on-chain runtime codehashes are
-captured on first deploy.
+derived and pinned by `test/SHRINCSPinned256sSha2.t.sol`. The 256s-sha2
+stateless signature vector verifies end-to-end through the production
+verifier (`SHRINCSSphincs256sSha2Vectors`); per-helper coverage is the
+`HashSuiteKat` sha2 KATs. No bytes are deployed yet — SHRINCS is
+testnet-only — so runtime codehashes are captured on first deploy.
 
 | Field | SHRINCS256sSha2 | SPHINCSPlusC256sSha2 |
 |---|---|---|

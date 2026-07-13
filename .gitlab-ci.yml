@@ -57,9 +57,10 @@ format-and-checks:
 # the seed; the failure_persist cache replays any counterexample a
 # nightly or prior MR found before exploring new cases. The `256s-sha2`
 # leg builds the SHA-256 suite and runs its coverage — compile, the
-# per-helper sha2 KATs, and the non-signing structural/profile suites;
-# signature-dependent suites are skipped there (the in-Solidity signers
-# are keccak-hardcoded) until the sha2 Rust vectors land ([DESIGN §5.2]).
+# per-helper sha2 KATs, the vector-backed end-to-end suite
+# (SHRINCSSphincs256sSha2Vectors, Rust sha2 vector through the production
+# verifier), and the non-signing structural/profile suites; in-Solidity
+# signing suites stay skipped (the test signers are keccak-hardcoded).
 build-lint-test:
   extends: .foundry
   rules:

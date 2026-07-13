@@ -81,6 +81,7 @@ skip = [
     "test/SHRINCSPinned128sQ20.t.sol",
     "test/SHRINCSPinned256sSha2.t.sol",
     "test/SHRINCSSphincs128sVectors.t.sol",
+    "test/SHRINCSSphincs256sSha2Vectors.t.sol",
 ]
 
 ffi = true
@@ -132,6 +133,7 @@ skip = [
     "script/DeploySHRINCS256sSha2.s.sol",
     "script/DeploySPHINCSPlusC256sSha2.s.sol",
     "test/SHRINCSSphincs256sVectors.t.sol",
+    "test/SHRINCSSphincs256sSha2Vectors.t.sol",
     "test/SHRINCSGuardPinning.t.sol",
     "test/SHRINCSStatelessVectorSigner.t.sol",
     "test/SHRINCSAccountSigningFacade.t.sol",
@@ -169,6 +171,7 @@ skip = [
     "script/DeploySHRINCS256sSha2.s.sol",
     "script/DeploySPHINCSPlusC256sSha2.s.sol",
     "test/SHRINCSSphincs256sVectors.t.sol",
+    "test/SHRINCSSphincs256sSha2Vectors.t.sol",
     "test/SHRINCSGuardPinning.t.sol",
     "test/SHRINCSStatelessVectorSigner.t.sol",
     "test/SHRINCSAccountSigningFacade.t.sol",
@@ -248,16 +251,17 @@ skip = [
 # REPLACES the remapping array per profile — `shrincs-profile/` selects the
 # 256s-sha2 params duplicate, `shrincs-hash/` selects the sha2 HashSuite.
 # The skip list excludes every keccak deployable/script (the sha2 twins
-# compile instead) and every signature-dependent test. The in-Solidity test
+# compile instead) and every SIGNING-dependent test. The in-Solidity test
 # signers (test/helpers/SHRINCSTestSigner.sol and
 # SHRINCSStatelessVectorSigner.sol) hardcode keccak256 rather than routing
 # through the HashSuite seam, so under the sha2 suite a keccak signer and a
-# sha2 verifier disagree and any produce-then-verify (or Rust-vector) test
-# fails. Until the sha2 vector set lands from the second Rust round
-# ([DESIGN §5.2 Q3]) — or a signer is refactored onto the seam — 256s-sha2
-# coverage is: compile, the per-helper sha2 KATs (HashSuiteKat, which use a
-# suite-aware sha256 reference), and the non-signing structural/profile
-# suites (including the 256s-sha2 params drift guard in
+# sha2 verifier disagree and any produce-then-verify (in-Solidity signing)
+# test fails; those stay skipped until a signer is refactored onto the seam.
+# 256s-sha2 coverage is: compile; the per-helper sha2 KATs (HashSuiteKat,
+# suite-aware sha256 reference); the vector-backed end-to-end suite
+# SHRINCSSphincs256sSha2Vectors, which verifies the Rust sha2 vector through
+# the production verifier (pre-made vectors, no in-Solidity signing); and the
+# non-signing structural/profile suites (incl. the params drift guard in
 # SHRINCSProfileInvariants).
 [profile.256s-sha2]
 out = "out-256s-sha2"
