@@ -722,10 +722,11 @@ Foundry remapping in `foundry.toml` (each build profile also gets its own
   (`HASH_LEN = 16`, high-aligned via `HASH_MASK`), single-layer `h = 18`
   hypertree, `a = 24`, `k = 6`, 32 stateful WOTS chains. They differ only
   in the stateless budget: `2^18` for q18, `2^20` for q20. Both compile
-  and pass the structural and profile-invariant test sets. Their
-  signature vectors await Rust-signer regeneration, so vector-backed
-  stateless coverage does not exist yet and neither profile is
-  production-ready.
+  and pass the structural and profile-invariant test sets, and their
+  stateless paths are verified against Rust-generated signature vectors
+  by `SHRINCSSphincs128sVectors`. Deployment stays testnet-only; the
+  `128s-q20` `2^20` budget wants profile security-analysis backing before
+  production use.
 
 Build a non-default profile with `FOUNDRY_PROFILE`:
 
@@ -1374,9 +1375,8 @@ FOUNDRY_PROFILE=production forge script \
 ```
 
 SHRINCS is testnet-only. The 128s-q20 stateless budget (2^20) wants
-profile security-analysis backing before production use, and the 128s
-verifiers need the regenerated 128s vectors before a deploy is
-production-ready. The example wrapper
+profile security-analysis backing before production use. The example
+wrapper
 (`contracts/examples/SHRINCSAccountVerifierExample.sol`) is a reference
 integration, not a canonical deployment; deploy it directly with
 `forge create` when you need one.
