@@ -54,8 +54,10 @@ format-and-checks:
 # ([DESIGN §3.6]). The 256s leg runs under the `ci` profile: 256s
 # params (inherited from default) plus bounded, deterministic
 # fuzz/invariant runs (foundry.toml). FOUNDRY_FUZZ_SEED (global) pins
-# the seed; the failure_persist cache replays any counterexample a
-# nightly or prior MR found before exploring new cases. The `256s-sha2`
+# the seed; the failure_persist cache (cache: when: always, key
+# fuzz-failures-ci shared with fuzz-deep) replays any counterexample a
+# nightly or prior MR found before exploring new cases — see the
+# nightly section below for the promotion path. The `256s-sha2`
 # leg builds the SHA-256 suite and runs its coverage — compile, the
 # per-helper sha2 KATs, the vector-backed end-to-end suite
 # (SHRINCSSphincs256sSha2Vectors, Rust sha2 vector through the production
@@ -74,24 +76,35 @@ build-lint-test:
     - forge test
   cache:
     key: "fuzz-failures-$FOUNDRY_PROFILE"
+    when: always
     paths:
       - cache/fuzz
       - cache/invariant
 
-# Static analysis (Slither 0.11.5). Slither reads the solc compact AST via
+# Static analysis (Slither 0.11.5), matrixed over the same profiles as
+# build-lint-test: crytic-compile shells out to `forge`, which honors
+# FOUNDRY_PROFILE for remappings/skip, and each profile's skip list
+# excludes a different set of concrete verifiers/deploy scripts
+# (foundry.toml) — a single default-profile run would never analyze the
+# 128s and sha2 deployables. Slither reads the solc compact AST via
 # crytic-compile, so via_ir does not change what it sees. slither.config.json
 # excludes the assembly/naming/pragma informational tiers and filters
 # lib/ and test/. The four false-positive medium findings
 # (divide-before-multiply, uninitialized-local) are suppressed inline with
 # justifications; dead-code stays enabled (F-15) and surfaces as
 # informational SARIF. --fail-medium gates the pipeline on any medium+
-# finding. python:3.12-slim is multi-arch and foundryup installs the matching
-# foundry binary, so no runner arch tag is needed.
+# finding. Each leg writes slither-$FOUNDRY_PROFILE.sarif so matrix legs
+# don't clobber each other's artifact. python:3.12-slim is multi-arch and
+# foundryup installs the matching foundry binary, so no runner arch tag is
+# needed.
 slither:
   stage: analyze
   image: python:3.12-slim
   rules:
     - if: $CI_PIPELINE_SOURCE != "schedule"
+  parallel:
+    matrix:
+      - FOUNDRY_PROFILE: ["ci", "128s-q18", "128s-q20", "256s-sha2"]
   before_script:
     - apt-get update && apt-get install -y --no-install-recommends
       curl git ca-certificates
@@ -102,29 +115,40 @@ slither:
   script:
     - git config --global --add safe.directory "$CI_PROJECT_DIR"
     - slither . --config-file slither.config.json --fail-medium
-      --sarif slither.sarif
+      --sarif "slither-$FOUNDRY_PROFILE.sarif"
   artifacts:
     when: always
     reports:
-      sarif: slither.sarif
+      sarif: slither-$FOUNDRY_PROFILE.sarif
     paths:
-      - slither.sarif
+      - slither-$FOUNDRY_PROFILE.sarif
 
 # ---------------------------------------------------------------------------
 # Nightly campaigns (schedule-only). Long randomized runs that do not block
-# MRs directly: a counterexample they persist into cache/fuzz//cache/invariant
-# fails subsequent per-MR pipelines until fixed (the promotion path). EVM
-# execution is arch-deterministic, so results are comparable across runners;
-# arch tags below pin only tool-availability (medusa binary and hevm ship
-# x86_64-only). Tag choice verified against the group's runner fleet
-# (2026-07-10): `docker` + `linux` + `x86_64` selects exactly lovelace and
-# finney (Linux/amd64 Docker executors). A bare `x86_64` tag would also
-# match hopper (Windows) and tesla-x86_64 (macOS on arm64 hardware),
-# neither of which can run these Docker-image jobs.
+# MRs directly: fuzz-deep persists a counterexample into cache/fuzz and
+# cache/invariant under the fuzz-failures-ci key — the same key
+# build-lint-test's ci-profile leg restores from — and `cache: when:
+# always` uploads it even though the job that found it fails (GitLab's
+# default is on_success, which would otherwise drop it). The next per-MR
+# pipeline then restores that cache and fails until fixed (the promotion
+# path). Only the ci leg is covered this way: nightly runs the default
+# profile's test set, whose failure dirs are the cache/fuzz +
+# cache/invariant that profile.ci also uses; the 128s-q18/128s-q20/
+# 256s-sha2 legs have their own disjoint cache keys and are not promoted
+# into. EVM execution is arch-deterministic, so results are comparable
+# across runners; arch tags below pin only tool-availability (medusa
+# binary and hevm ship x86_64-only). Tag choice verified against the
+# group's runner fleet (2026-07-10): `docker` + `linux` + `x86_64` selects
+# exactly lovelace and finney (Linux/amd64 Docker executors). A bare
+# `x86_64` tag would also match hopper (Windows) and tesla-x86_64 (macOS
+# on arm64 hardware), neither of which can run these Docker-image jobs.
 # ---------------------------------------------------------------------------
 
 # Deep forge fuzz + invariant campaign under [profile.nightly] (random seed,
 # coverage-guided corpus). Foundry is multi-arch, so no arch tag is needed.
+# Two cache entries: fuzz-failures-ci carries the failure_persist dirs (see
+# the promotion path above) with `when: always` so a failing run still
+# uploads them; nightly-corpus carries the coverage-guided corpus dirs.
 fuzz-deep:
   stage: nightly
   image:
@@ -141,12 +165,16 @@ fuzz-deep:
     - forge --version
     - FOUNDRY_PROFILE=nightly forge test
   cache:
-    key: nightly-corpus
-    paths:
-      - cache/fuzz-corpus
-      - cache/invariant-corpus
-      - cache/fuzz
-      - cache/invariant
+    - key: fuzz-failures-ci
+      when: always
+      paths:
+        - cache/fuzz
+        - cache/invariant
+    - key: nightly-corpus
+      when: always
+      paths:
+        - cache/fuzz-corpus
+        - cache/invariant-corpus
   artifacts:
     when: on_failure
     paths:
@@ -170,11 +198,12 @@ medusa:
   before_script:
     - git config --global --add safe.directory "$CI_PROJECT_DIR"
     - export PATH="$HOME/.foundry/bin:$PATH"
-    - foundryup --install v1.7.1 || true
+    - foundryup --install v1.7.1
   script:
     - medusa fuzz --config medusa.json
   cache:
     key: medusa-corpus
+    when: always
     paths:
       - medusa-corpus
   artifacts:

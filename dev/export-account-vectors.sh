@@ -4,13 +4,20 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 OUTPUT_PATH="${1:-$ROOT_DIR/test/test_vectors/shrincs_account_wrapper_vectors.json}"
 
+# Pinned the same way as scripts/gas-report.sh: a bare `forge` can resolve
+# to an unrelated PATH entry on this team's machines. Default to the
+# Foundry install location and allow an override for machines that keep
+# it elsewhere.
+FORGE="${FORGE:-/opt/homebrew/bin/forge}"
+
 mkdir -p "$(dirname "$OUTPUT_PATH")"
 
 TMP_OUTPUT="$(mktemp)"
-trap 'rm -f "$TMP_OUTPUT"' EXIT
+AWK_OUTPUT="$(mktemp)"
+trap 'rm -f "$TMP_OUTPUT" "$AWK_OUTPUT"' EXIT
 
 cd "$ROOT_DIR"
-forge test --match-path test/SHRINCSAccountVectorExport.t.sol -vv > "$TMP_OUTPUT"
+"$FORGE" test --match-path test/SHRINCSAccountVectorExport.t.sol -vv >"$TMP_OUTPUT"
 
 awk '
 function flush_test() {
@@ -66,6 +73,19 @@ END {
     }
     print "}"
 }
-' "$TMP_OUTPUT" > "$OUTPUT_PATH"
+' "$TMP_OUTPUT" >"$AWK_OUTPUT"
 
+# Guard mirrors scripts/gas-report.sh's zero-metrics check: refuse to
+# overwrite the committed fixture if forge's output yielded no test
+# vectors (e.g. the match path found no tests, or forge's log format
+# changed underneath the awk patterns above) instead of silently
+# clobbering it with an empty "{}".
+extracted_count=$(grep -c '^  "' "$AWK_OUTPUT" || true)
+if [ "${extracted_count:-0}" -eq 0 ]; then
+	echo "export-account-vectors: no test vectors extracted from forge" \
+		"output; refusing to overwrite $OUTPUT_PATH" >&2
+	exit 1
+fi
+
+mv "$AWK_OUTPUT" "$OUTPUT_PATH"
 echo "Wrote $OUTPUT_PATH"
