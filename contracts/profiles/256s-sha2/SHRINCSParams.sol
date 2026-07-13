@@ -27,11 +27,9 @@ pragma solidity ^0.8.28;
 /// suite-identity design keeps a single-literal PROFILE_NAME per profile so
 /// the commitment binding stays byte- and gas-neutral (no runtime
 /// composition); the cost is this copy. The duplication is guarded: the
-/// profile-identity test (SHRINCSProfileInvariants) asserts every crypto
-/// constant here equals the documented 256s values under the 256s-sha2
-/// profile, and scripts/check-params-drift.sh diffs the two files modulo the
-/// PROFILE_NAME/title lines, so a divergence on any non-identity constant
-/// fails CI.
+/// profile-identity test (SHRINCSProfileInvariants) pins every non-identity
+/// constant here to the documented 256s values under the 256s-sha2 profile
+/// (which CI runs), so a divergence on any crypto constant fails CI.
 library SHRINCSParams {
     // PROFILE_NAME: the canonical suite-qualified profile string. It is
     // the sole source of this profile's identity: PROFILE_ID hashes it,

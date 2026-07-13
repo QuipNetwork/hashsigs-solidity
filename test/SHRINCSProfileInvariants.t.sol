@@ -40,9 +40,11 @@ contract SHRINCSProfileInvariantsTest is Test {
         uint256 forsTreeHeight;
         uint256 numForsTrees;
         uint256 numWotsChains;
+        uint256 wotsChainLen;
         uint256 statelessLimit;
         uint256 wotsChainsStateful;
         uint256 wotsTargetSumStateful;
+        uint256 statefulPublicKeyBytes;
     }
 
     // Resolve the expected tuple for a FOUNDRY_PROFILE name. The default
@@ -71,9 +73,11 @@ contract SHRINCSProfileInvariantsTest is Test {
                 forsTreeHeight: 14,
                 numForsTrees: 22,
                 numWotsChains: 64,
+                wotsChainLen: 16,
                 statelessLimit: 1 << 20,
                 wotsChainsStateful: 64,
-                wotsTargetSumStateful: 480
+                wotsTargetSumStateful: 480,
+                statefulPublicKeyBytes: 68
             });
         }
         // 256s-sha2: the SHA-256 twin of 256s. Its params directory is a
@@ -94,9 +98,11 @@ contract SHRINCSProfileInvariantsTest is Test {
                 forsTreeHeight: 14,
                 numForsTrees: 22,
                 numWotsChains: 64,
+                wotsChainLen: 16,
                 statelessLimit: 1 << 20,
                 wotsChainsStateful: 64,
-                wotsTargetSumStateful: 480
+                wotsTargetSumStateful: 480,
+                statefulPublicKeyBytes: 68
             });
         }
         if (
@@ -111,9 +117,11 @@ contract SHRINCSProfileInvariantsTest is Test {
                 forsTreeHeight: 24,
                 numForsTrees: 6,
                 numWotsChains: 32,
+                wotsChainLen: 16,
                 statelessLimit: 1 << 18,
                 wotsChainsStateful: 32,
-                wotsTargetSumStateful: 240
+                wotsTargetSumStateful: 240,
+                statefulPublicKeyBytes: 68
             });
         }
         if (
@@ -128,9 +136,11 @@ contract SHRINCSProfileInvariantsTest is Test {
                 forsTreeHeight: 24,
                 numForsTrees: 6,
                 numWotsChains: 32,
+                wotsChainLen: 16,
                 statelessLimit: 1 << 20,
                 wotsChainsStateful: 32,
-                wotsTargetSumStateful: 240
+                wotsTargetSumStateful: 240,
+                statefulPublicKeyBytes: 68
             });
         }
         revert("unknown FOUNDRY_PROFILE for profile identity test");
@@ -164,6 +174,9 @@ contract SHRINCSProfileInvariantsTest is Test {
             uint256(SHRINCSParams.NUM_WOTS_CHAINS), want.numWotsChains, "len"
         );
         assertEq(
+            uint256(SHRINCSParams.WOTS_CHAIN_LEN), want.wotsChainLen, "w"
+        );
+        assertEq(
             uint256(SHRINCSParams.STATELESS_SIGNATURE_LIMIT),
             want.statelessLimit,
             "limit"
@@ -177,6 +190,11 @@ contract SHRINCSProfileInvariantsTest is Test {
             uint256(SHRINCSParams.WOTS_TARGET_SUM_STATEFUL),
             want.wotsTargetSumStateful,
             "target_sum"
+        );
+        assertEq(
+            uint256(SHRINCSParams.STATEFUL_PUBLIC_KEY_BYTES),
+            want.statefulPublicKeyBytes,
+            "pk_bytes"
         );
     }
 
