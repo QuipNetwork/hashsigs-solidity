@@ -34,8 +34,6 @@ library ShrincsCompact {
     //   R32 || counter4 || openedFORS[51] || q1 || merkleAuth[7].
     // JARDIN-style compact parameters here are n=32, k=52, a=5, opened trees=51,
     // and outer balanced Merkle height h=7.
-    // CompactDigestBytes = ceil(k * a / 8) = ceil(52 * 5 / 8) = 33.
-    uint16 internal constant CompactDigestBytes = 33;
     // CompactForsOffset = len(R32 || counter4) = 32 + 4 = 36.
     uint16 internal constant CompactForsOffset = 36;
     // CompactForsEntryBytes = secretLeaf32 + authPath(5 * 32) = 192.
@@ -66,12 +64,12 @@ library ShrincsCompact {
         if (q >= ShrincsTypes.COMPACT_Q_MAX) return false;
 
         // Recompute JARDIN H_msg for the Type 2 message binding.
-        bytes memory md = hMsg(pkSeed, pkRoot, message, sig);
+        (bytes32 md0, bytes32 md1) = hMsg(pkSeed, pkRoot, message, sig);
         // FORS+C omits the final tree by forcing its a-bit index to zero.
-        if (base2b(md, ShrincsTypes.COMPACT_OPEN_FORS_TREES) != 0) return false;
+        if (base2b(md0, md1, ShrincsTypes.COMPACT_OPEN_FORS_TREES) != 0) return false;
 
         // Rebuild the compact FORS+C public key from the 51 opened trees.
-        bytes32 forsPk = forsPkFromSig(sig, md, pkSeed, q);
+        bytes32 forsPk = forsPkFromSig(sig, md0, md1, pkSeed, q);
         // Rebuild the balanced 128-leaf Merkle root above that FORS+C key.
         bytes32 root = jardinRootFromAuthPath(sig, pkSeed, q, forsPk);
 
@@ -81,11 +79,13 @@ library ShrincsCompact {
 
     // forsPkFromSig: Rebuild the FORS+C public key.
     // Implements FIPS 205 Algorithm 17, with JARDIN FORS+C opening only k-1 trees.
-    function forsPkFromSig(bytes calldata sig, bytes memory md, bytes32 pkSeed, uint32 q)
+    function forsPkFromSig(bytes calldata sig, bytes32 md0, bytes32 md1, bytes32 pkSeed, uint32 q)
         internal
         pure
         returns (bytes32 pk)
     {
+        // Precompute ADRS(type=FORS_TREE, kp=0, ci=q) once for all FORS nodes.
+        uint256 forsTreeAdrsBase = adrsBase(ShrincsTypes.AddressTypeForsTree, q);
         // Reserve one packed T_k input: pkSeed || ADRS(FORS_ROOTS) || roots.
         uint256 ptr;
         assembly {
@@ -98,7 +98,7 @@ library ShrincsCompact {
         }
 
         // Write ADRS(type=FORS_ROOTS, kp=0, ci=q, x=0, y=0).
-        bytes32 rootsAdrs = adrs(ShrincsTypes.AddressTypeForsRoots, 0, q, 0, 0);
+        bytes32 rootsAdrs = bytes32(adrsBase(ShrincsTypes.AddressTypeForsRoots, q));
         assembly {
             // Store the JARDIN FORS_ROOTS address after pkSeed.
             mstore(add(ptr, 32), rootsAdrs)
@@ -107,9 +107,9 @@ library ShrincsCompact {
         // Reconstruct each opened FORS tree root and append it to the T_k input.
         for (uint32 i = 0; i < ShrincsTypes.COMPACT_OPEN_FORS_TREES;) {
             // FIPS base_2b selects the revealed leaf in this FORS tree.
-            uint32 idx = base2b(md, i);
+            uint32 idx = base2b(md0, md1, i);
             // Rebuild the root for tree i from its secret leaf and auth path.
-            bytes32 root = forsNodeFromSig(sig, pkSeed, q, i, idx);
+            bytes32 root = forsNodeFromSig(sig, pkSeed, forsTreeAdrsBase, i, idx);
             assembly {
                 // Store the root after pkSeed || ADRS, preserving tree order.
                 mstore(add(add(ptr, 64), mul(i, 32)), root)
@@ -127,7 +127,7 @@ library ShrincsCompact {
 
     // forsNodeFromSig: Rebuild one opened FORS tree root from the raw signature.
     // Implements FIPS 205 Algorithm 17 lines 3-19, using Algorithm 15 node addresses.
-    function forsNodeFromSig(bytes calldata sig, bytes32 pkSeed, uint32 q, uint32 i, uint32 idx)
+    function forsNodeFromSig(bytes calldata sig, bytes32 pkSeed, uint256 adrsBaseValue, uint32 i, uint32 idx)
         internal
         pure
         returns (bytes32 node)
@@ -139,7 +139,15 @@ library ShrincsCompact {
         // Load the revealed secret leaf directly from calldata.
         bytes32 sk = calldataWord(sig, offset);
         // Hash the revealed secret leaf into its FORS public leaf.
-        node = f(pkSeed, adrs(ShrincsTypes.AddressTypeForsTree, 0, q, 0, treeIndex), sk);
+        bytes32 addressWord = bytes32(adrsBaseValue | uint256(treeIndex));
+        assembly {
+            // Buffer: pkSeed32 || ADRS32 || secretLeaf32.
+            let ptr := mload(0x40)
+            mstore(ptr, pkSeed)
+            mstore(add(ptr, 32), addressWord)
+            mstore(add(ptr, 64), sk)
+            node := keccak256(ptr, 96)
+        }
 
         // Walk the a=5 authentication path to the root of this FORS tree.
         for (uint32 j = 0; j < ShrincsTypes.COMPACT_FORS_TREE_HEIGHT;) {
@@ -154,7 +162,16 @@ library ShrincsCompact {
             // Keep y continuous across all FORS trees, as in FIPS Algorithms 14-17.
             treeIndex = (i << (ShrincsTypes.COMPACT_FORS_TREE_HEIGHT - height)) + idx;
             // Hash this parent under ADRS(type=FORS_TREE, ci=q, x=height, y=treeIndex).
-            node = h(pkSeed, adrs(ShrincsTypes.AddressTypeForsTree, 0, q, height, treeIndex), left, right);
+            addressWord = bytes32(adrsBaseValue | (uint256(height) << 32) | uint256(treeIndex));
+            assembly {
+                // Buffer: pkSeed32 || ADRS32 || left32 || right32.
+                let ptr := mload(0x40)
+                mstore(ptr, pkSeed)
+                mstore(add(ptr, 32), addressWord)
+                mstore(add(ptr, 64), left)
+                mstore(add(ptr, 96), right)
+                node := keccak256(ptr, 128)
+            }
             unchecked {
                 ++j;
             }
@@ -170,6 +187,8 @@ library ShrincsCompact {
     {
         // Start at the compact FORS+C public key for lane q.
         node = forsPk;
+        // Precompute ADRS(type=JARDIN_MERKLE, kp=0, ci=0) once for all parents.
+        uint256 adrsBaseValue = uint256(ShrincsTypes.AddressTypeJardinMerkle) << 128;
 
         // Fold h=7 siblings from the compact lane to subPkRoot.
         for (uint32 j = 0; j < ShrincsTypes.COMPACT_MERKLE_HEIGHT;) {
@@ -182,7 +201,16 @@ library ShrincsCompact {
             // The compact Merkle ADRS y field is the parent node index.
             uint32 nodeIndex = q >> (j + 1);
             // Hash this parent under ADRS(type=JARDIN_MERKLE, ci=0, x=level, y=nodeIndex).
-            node = h(pkSeed, adrs(ShrincsTypes.AddressTypeJardinMerkle, 0, 0, level, nodeIndex), left, right);
+            bytes32 addressWord = bytes32(adrsBaseValue | (uint256(level) << 32) | uint256(nodeIndex));
+            assembly {
+                // Buffer: pkSeed32 || ADRS32 || left32 || right32.
+                let ptr := mload(0x40)
+                mstore(ptr, pkSeed)
+                mstore(add(ptr, 32), addressWord)
+                mstore(add(ptr, 64), left)
+                mstore(add(ptr, 96), right)
+                node := keccak256(ptr, 128)
+            }
             unchecked {
                 ++j;
             }
@@ -194,12 +222,12 @@ library ShrincsCompact {
     function hMsg(bytes32 pkSeed, bytes32 pkRoot, bytes32 message, bytes calldata sig)
         internal
         pure
-        returns (bytes memory out)
+        returns (bytes32 md0, bytes32 md1)
     {
-        // Allocate exactly the 33 digest bytes needed for k=52 and a=5.
-        out = new bytes(CompactDigestBytes);
         assembly {
-            // Allocate scratch after the digest bytes.
+            // Buffer:
+            // H_MSG15 || R32 || pkSeed32 || pkRoot32 || counter4 ||
+            // TYPE2_15 || pkSeed32 || pkRoot32 || q1 || message32 || block4.
             let ptr := mload(0x40)
             // Write the H_msg domain tag.
             mstore(ptr, "JARDIN/H_MSG/v1")
@@ -224,31 +252,27 @@ library ShrincsCompact {
             // Append uint32_be(0) for digest block 0.
             mstore(add(ptr, 227), 0)
             // Fill the first 32 digest bytes.
-            mstore(add(out, 32), keccak256(ptr, 231))
+            md0 := keccak256(ptr, 231)
             // Append uint32_be(1) for digest block 1.
             mstore(add(ptr, 227), shl(224, 1))
-            // Copy only the one remaining digest byte.
-            mstore8(add(out, 64), byte(0, keccak256(ptr, 231)))
+            // Only the high byte of this second block is consumed.
+            md1 := keccak256(ptr, 231)
             // Bump the free-memory pointer past the whole-word counter write.
             mstore(0x40, add(ptr, 288))
         }
     }
 
-    // base2b: Read one a-bit FORS index from md.
+    // base2b: Read one a-bit FORS index from the 33-byte H_msg digest.
     // Implements FIPS 205 base_2b for this profile's b=a=5.
-    function base2b(bytes memory md, uint32 i) internal pure returns (uint32 idx) {
+    function base2b(bytes32 md0, bytes32 md1, uint32 i) internal pure returns (uint32 idx) {
         // Compute the bit position of the i-th 5-bit digit.
         uint256 startBit = uint256(i) * ShrincsTypes.COMPACT_FORS_TREE_HEIGHT;
-        // Compute the byte containing that bit.
-        uint256 byteOffset = startBit >> 3;
-        // Compute the bit position inside that byte.
-        uint256 bitOffset = startBit & 7;
-        assembly {
-            // Load the digest word beginning at byteOffset.
-            let word := mload(add(add(md, 32), byteOffset))
-            // Align the selected five bits to the low end.
-            idx := and(shr(sub(251, bitOffset), word), 31)
+        // The first 51 digits are wholly inside the first digest word.
+        if (startBit < 252) {
+            return uint32((uint256(md0) >> (251 - startBit)) & 31);
         }
+        // The final FORS+C digit crosses md0 bit 255 and md1's high nibble.
+        return uint32(((uint256(md0) & 1) << 4) | (uint256(md1) >> 252));
     }
 
     // sigQ: Load q from the raw compact signature.
@@ -267,54 +291,12 @@ library ShrincsCompact {
         }
     }
 
-    // adrs: Pack JARDIN's 32-byte ADRS.
+    // adrsBase: Pack the fixed ADRS prefix for type/kp=0/ci.
     // ADRS = layer:4 || tree:8 || type:4 || kp:4 || ci:4 || x:4 || y:4.
-    function adrs(uint32 addressType, uint32 kp, uint32 ci, uint32 x, uint32 y) internal pure returns (bytes32) {
+    function adrsBase(uint32 addressType, uint32 ci) internal pure returns (uint256 value) {
         // Place type below the zero layer/tree prefix.
-        uint256 value = uint256(addressType) << 128;
-        // Place kp below type.
-        value |= uint256(kp) << 96;
-        // Place ci below kp.
+        value = uint256(addressType) << 128;
+        // Place ci below zero kp.
         value |= uint256(ci) << 64;
-        // Place x below ci.
-        value |= uint256(x) << 32;
-        // Place y in the low word.
-        value |= uint256(y);
-        // Return the packed address word.
-        return bytes32(value);
-    }
-
-    // f: JARDIN/FIPS tweakable hash for one FORS leaf input.
-    function f(bytes32 pkSeed, bytes32 addressWord, bytes32 input) internal pure returns (bytes32 out) {
-        assembly {
-            // Use transient free-memory scratch.
-            let ptr := mload(0x40)
-            // Write pkSeed.
-            mstore(ptr, pkSeed)
-            // Write ADRS.
-            mstore(add(ptr, 32), addressWord)
-            // Write the revealed secret leaf.
-            mstore(add(ptr, 64), input)
-            // th(seed, ADRS, input).
-            out := keccak256(ptr, 96)
-        }
-    }
-
-    // h: JARDIN/FIPS tweakable hash for two child nodes.
-    function h(bytes32 pkSeed, bytes32 addressWord, bytes32 left, bytes32 right) internal pure returns (bytes32 out) {
-        assembly {
-            // Use transient free-memory scratch.
-            let ptr := mload(0x40)
-            // Write pkSeed.
-            mstore(ptr, pkSeed)
-            // Write ADRS.
-            mstore(add(ptr, 32), addressWord)
-            // Write the left child.
-            mstore(add(ptr, 64), left)
-            // Write the right child.
-            mstore(add(ptr, 96), right)
-            // th_pair(seed, ADRS, left, right).
-            out := keccak256(ptr, 128)
-        }
     }
 }

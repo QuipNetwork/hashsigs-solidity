@@ -262,6 +262,19 @@ library SHRINCS {
     // 2. Bind the hash suite.
     // 3. Bind the account-layer action context fields.
     function compactActionMessageHash(ShrincsTypes.ActionContext memory context) internal pure returns (bytes32 out) {
+        return compactActionMessageHash(
+            context.domainSeparator, context.nonce, context.keyVersion, context.actionType, context.payloadHash
+        );
+    }
+
+    // compactActionMessageHash: Build compact Type 2 action hash from fields.
+    function compactActionMessageHash(
+        bytes32 domainSeparator,
+        uint256 nonce,
+        uint256 keyVersion,
+        bytes32 actionType,
+        bytes32 payloadHash
+    ) internal pure returns (bytes32 out) {
         // Cache constants so the assembly preimage stays close to abi.encodePacked semantics.
         bytes32 op = ShrincsTypes.OP_VERIFY_COMPACT;
         uint32 suite = ShrincsTypes.HASH_SUITE_KECCAK_256;
@@ -272,8 +285,12 @@ library SHRINCS {
             mstore(ptr, op)
             // HASH_SUITE_KECCAK_256 as uint32 in abi.encodePacked form.
             mstore(add(ptr, 32), shl(224, suite))
-            // Copy domainSeparator32 || nonce32 || keyVersion32 || actionType32 || payloadHash32.
-            mcopy(add(ptr, 36), context, 160)
+            // Write domainSeparator32 || nonce32 || keyVersion32 || actionType32 || payloadHash32.
+            mstore(add(ptr, 36), domainSeparator)
+            mstore(add(ptr, 68), nonce)
+            mstore(add(ptr, 100), keyVersion)
+            mstore(add(ptr, 132), actionType)
+            mstore(add(ptr, 164), payloadHash)
             // Hash the exact packed preimage length.
             out := keccak256(ptr, 196)
             // Bump free memory past the rounded preimage.

@@ -331,7 +331,7 @@ contract ShrincsAccountVerifierExample {
 
     // verifyCompactAction: Canonical compact account-action verification path.
     // 1. Require the compact slot to be registered.
-    // 2. Build the canonical typed action context from wrapper-owned freshness state.
+    // 2. Build the canonical compact action hash from wrapper-owned freshness state.
     // 3. Verify the raw JARDIN compact signature against that canonical action message.
     // 4. Advance nonce only after success; q remains signer-owned and untracked on-chain.
     function verifyCompactAction(
@@ -346,23 +346,25 @@ contract ShrincsAccountVerifierExample {
         // Reject any compact lane that has not been stateless-authorized.
         if (!compactSlots[slotId]) return false;
 
+        // Reject malformed action fields before computing the compact message.
+        if (actionType == bytes32(0)) return false;
+        if (payloadHash == bytes32(0)) return false;
+
         // Bind the action to this contract instance, nonce, and key epoch.
-        ShrincsTypes.ActionContext memory context = ShrincsTypes.ActionContext({
-            domainSeparator: domainSeparator(),
-            nonce: nonce,
-            keyVersion: keyVersion,
-            actionType: actionType,
-            payloadHash: payloadHash
-        });
+        bytes32 domain = domainSeparator();
+        uint256 currentNonce = nonce;
+        uint256 currentKeyVersion = keyVersion;
+        bytes32 message =
+            SHRINCS.compactActionMessageHash(domain, currentNonce, currentKeyVersion, actionType, payloadHash);
 
         // Verify the canonical compact action under the registered compact sub-key.
-        bool ok = SHRINCS.verifyCompact(subPkSeed, subPkRoot, context, signature);
+        bool ok = SHRINCS.verifyCompactUncheckedMessage(subPkSeed, subPkRoot, message, signature);
         if (!ok) return false;
 
         // Emit before nonce advancement so observers see the consumed nonce value.
-        emit CompactSignatureVerified(slotId, nonce, keyVersion);
+        emit CompactSignatureVerified(slotId, currentNonce, currentKeyVersion);
         // Advance account freshness after a successful compact action.
-        nonce += 1;
+        nonce = currentNonce + 1;
         return true;
     }
 
@@ -635,7 +637,7 @@ contract ShrincsAccountVerifierExample {
 
     // isValidCompactActionSignatureNow: Read-only self-call helper for canonical compact action verification.
     // 1. Require the compact slot to be registered without mutating state.
-    // 2. Rebuild the canonical action context from wrapper-owned state.
+    // 2. Rebuild the canonical compact action hash from wrapper-owned state.
     // 3. Require the caller-supplied hash to match the current canonical compact action hash.
     // 4. Verify the raw compact signature under the registered sub-key.
     function isValidCompactActionSignatureNow(
@@ -649,16 +651,13 @@ contract ShrincsAccountVerifierExample {
         bytes32 slotId = compactSlotId(subPkSeed, subPkRoot);
         if (!compactSlots[slotId]) return false;
 
-        ShrincsTypes.ActionContext memory context = ShrincsTypes.ActionContext({
-            domainSeparator: domainSeparator(),
-            nonce: nonce,
-            keyVersion: keyVersion,
-            actionType: actionType,
-            payloadHash: payloadHash
-        });
+        if (actionType == bytes32(0)) return false;
+        if (payloadHash == bytes32(0)) return false;
 
-        if (SHRINCS.compactActionMessageHash(context) != hash) return false;
-        return SHRINCS.verifyCompact(subPkSeed, subPkRoot, context, signature);
+        bytes32 message =
+            SHRINCS.compactActionMessageHash(domainSeparator(), nonce, keyVersion, actionType, payloadHash);
+        if (message != hash) return false;
+        return SHRINCS.verifyCompactUncheckedMessage(subPkSeed, subPkRoot, message, signature);
     }
 
     // commitStatefulLeafUse: Record a successfully verified stateful leaf under the active policy.
