@@ -141,8 +141,12 @@ factory creation code is suite-independent). Predicted addresses below are
 derived and pinned by `test/SHRINCSPinned256sSha2.t.sol`. The 256s-sha2
 stateless signature vector verifies end-to-end through the production
 verifier (`SHRINCSSphincs256sSha2Vectors`); per-helper coverage is the
-`HashSuiteKat` sha2 KATs. No bytes are deployed yet — SHRINCS is
-testnet-only — so runtime codehashes are captured on first deploy.
+`HashSuiteKat` sha2 KATs. The in-Solidity test signers route their scheme
+hashes through the hash-suite seam, so the sha2 leg also self-signs: the
+keygen goldens are anchored to the Rust sha2 signer, and the stateful and
+stateless produce-then-verify suites run under this profile. No bytes are
+deployed yet — SHRINCS is testnet-only — so runtime codehashes are captured
+on first deploy.
 
 | Field | SHRINCS256sSha2 | SPHINCSPlusC256sSha2 |
 |---|---|---|

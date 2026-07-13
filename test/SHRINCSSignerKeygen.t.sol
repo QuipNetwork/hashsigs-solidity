@@ -21,6 +21,7 @@ import {SHRINCSTestSigner} from "./helpers/SHRINCSTestSigner.sol";
 import {SHRINCS} from "../contracts/SHRINCS.sol";
 import {UXMSS} from "../contracts/UXMSS.sol";
 import {SHRINCSParams} from "shrincs-profile/SHRINCSParams.sol";
+import {HashSuite} from "shrincs-hash/HashSuite.sol";
 
 contract SHRINCSSignerHarness {
     function keygen(bytes memory seedMaterial, uint32 maxStatefulSignatures)
@@ -91,6 +92,33 @@ contract SHRINCSSignerKeygenTest is Test {
     bytes internal constant G128_STATEFUL_PUBLIC_KEY =
     // line-length: allow — one unbreakable test vector literal token
     hex"a4a372b30187a5bf20d242a6e0a87206cf281bc0fdbbc44c835b3811f800587eb745e962fce45192d99c9f84178995370000000000000000000000000000000000000004";
+
+    // 256s-sha2. Every field differs from 256s-keccak: the KDF seeds, tree
+    // nodes, leaves, and chains route through the SHA-256 scheme hash, so the
+    // seeds/roots/public key change; only the public-key commitment stays
+    // keccak (over the sha2-derived parts and the "shrincs-256s-sha2" profile
+    // tag). Anchored verbatim to the Rust sha2 signer regeneration [83d.4].
+    bytes32 internal constant G256S2_STATEFUL_SK_SEED =
+        0x461096edac4e8e810cf1c8b75c6dae4de7ffe9b7e5c3d570f198d7077c198a83;
+    bytes32 internal constant G256S2_STATEFUL_PRF_SEED =
+        0x73a1c894bff13a865c6956455ea23a78240fc308d3a2e9c023f1ab5227497a02;
+    bytes32 internal constant G256S2_STATEFUL_PK_SEED =
+        0xf494b6c697b228cdd907b2a3715b593add7c70aab70db1665420e18a857a4896;
+    bytes32 internal constant G256S2_STATELESS_SK_SEED =
+        0xd9cf83477714cd94672e738acf18254fe04efbff2d7d97cb95f9a9c5ec9003df;
+    bytes32 internal constant G256S2_STATELESS_PRF_SEED =
+        0x664dcb63594ed52008fc544790506de7cacd48de8194e41f3a000871579a0e69;
+    bytes32 internal constant G256S2_PK_SEED =
+        0x6fb692d48a54a181431c14c7835f52ac92f430bde760f417abecce0bd006f369;
+    bytes32 internal constant G256S2_STATEFUL_ROOT =
+        0x987bbbb50688c43f8cb2f721f514c505e6b5628001b30b3ac1bfd70678d47ad8;
+    bytes32 internal constant G256S2_HYPERTREE_ROOT =
+        0x731d8d0669305e5be0db9799afa1fbcd5c79e79ef1799604aa87f1069a6c805d;
+    bytes32 internal constant G256S2_COMMITMENT =
+        0xc92c4b5ac613593aa9447c635faca88241e316d5d05a78bad8ada677d3196af3;
+    bytes internal constant G256S2_STATEFUL_PUBLIC_KEY =
+    // line-length: allow — one unbreakable test vector literal token
+    hex"f494b6c697b228cdd907b2a3715b593add7c70aab70db1665420e18a857a4896987bbbb50688c43f8cb2f721f514c505e6b5628001b30b3ac1bfd70678d47ad800000004";
 
     function setUp() public {
         harness = new SHRINCSSignerHarness();
@@ -244,6 +272,40 @@ contract SHRINCSSignerKeygenTest is Test {
         ) = harness.keygen(bytes("solidity public key seed"), 4);
 
         assertTrue(ok, "keygen must succeed");
+
+        if (HashSuite.HASH_SUITE_ID == 2) {
+            // 256s-sha2: the FULL golden set is Solidity-computable now that
+            // the signer routes through the seam (stateless hypertree root
+            // and commitment included). Assert every field against the Rust
+            // sha2 signer's goldens; a mismatch means the seam's signer-only
+            // hash routing diverges from Rust's suite swap.
+            assertEq(signingKey.statefulSkSeed, G256S2_STATEFUL_SK_SEED);
+            assertEq(signingKey.statefulPrfSeed, G256S2_STATEFUL_PRF_SEED);
+            assertEq(signingKey.statefulPkSeed, G256S2_STATEFUL_PK_SEED);
+            assertEq(signingKey.statefulRoot, G256S2_STATEFUL_ROOT);
+            assertEq(signingKey.statelessSkSeed, G256S2_STATELESS_SK_SEED);
+            assertEq(signingKey.statelessPrfSeed, G256S2_STATELESS_PRF_SEED);
+            assertEq(signingKey.pkSeed, G256S2_PK_SEED);
+            assertEq(signingKey.hypertreeRoot, G256S2_HYPERTREE_ROOT);
+            assertEq(
+                keccak256(publicKey.statefulPublicKey),
+                keccak256(G256S2_STATEFUL_PUBLIC_KEY)
+            );
+            assertEq(
+                keccak256(publicKey.pkSeed),
+                keccak256(abi.encodePacked(G256S2_PK_SEED))
+            );
+            assertEq(
+                keccak256(publicKey.hypertreeRoot),
+                keccak256(abi.encodePacked(G256S2_HYPERTREE_ROOT))
+            );
+            assertEq(
+                keccak256(publicKey.publicKeyCommitment),
+                keccak256(abi.encodePacked(G256S2_COMMITMENT))
+            );
+            return;
+        }
+
         assertEq(signingKey.statefulSkSeed, EXPECTED_STATEFUL_SK_SEED);
         assertEq(signingKey.statefulPrfSeed, EXPECTED_STATEFUL_PRF_SEED);
         assertEq(signingKey.statefulPkSeed, EXPECTED_STATEFUL_PK_SEED);

@@ -80,6 +80,7 @@ skip = [
     "test/SHRINCSPinned128sQ18.t.sol",
     "test/SHRINCSPinned128sQ20.t.sol",
     "test/SHRINCSPinned256sSha2.t.sol",
+    "test/HashSuiteStatelessGuardSha2.t.sol",
     "test/SHRINCSSphincs128sVectors.t.sol",
     "test/SHRINCSSphincs256sSha2Vectors.t.sol",
 ]
@@ -149,6 +150,7 @@ skip = [
     "test/SHRINCSPinned256s.t.sol",
     "test/SHRINCSPinned128sQ20.t.sol",
     "test/SHRINCSPinned256sSha2.t.sol",
+    "test/HashSuiteStatelessGuardSha2.t.sol",
 ]
 
 [profile.128s-q20]
@@ -186,6 +188,7 @@ skip = [
     "test/SHRINCSCalldataRetag.t.sol",
     "test/SHRINCSPinned256s.t.sol",
     "test/SHRINCSPinned256sSha2.t.sol",
+    "test/HashSuiteStatelessGuardSha2.t.sol",
     "test/SHRINCSPinned128sQ18.t.sol",
 ]
 
@@ -251,17 +254,19 @@ skip = [
 # REPLACES the remapping array per profile — `shrincs-profile/` selects the
 # 256s-sha2 params duplicate, `shrincs-hash/` selects the sha2 HashSuite.
 # The skip list excludes every keccak deployable/script (the sha2 twins
-# compile instead) and every SIGNING-dependent test. The in-Solidity test
-# signers (test/helpers/SHRINCSTestSigner.sol and
-# SHRINCSStatelessVectorSigner.sol) hardcode keccak256 rather than routing
-# through the HashSuite seam, so under the sha2 suite a keccak signer and a
-# sha2 verifier disagree and any produce-then-verify (in-Solidity signing)
-# test fails; those stay skipped until a signer is refactored onto the seam.
-# 256s-sha2 coverage is: compile; the per-helper sha2 KATs (HashSuiteKat,
-# suite-aware sha256 reference); the vector-backed end-to-end suite
-# SHRINCSSphincs256sSha2Vectors, which verifies the Rust sha2 vector through
-# the production verifier (pre-made vectors, no in-Solidity signing); and the
-# non-signing structural/profile suites (incl. the params drift guard in
+# compile instead). The in-Solidity test signers
+# (test/helpers/SHRINCSTestSigner.sol and SHRINCSStatelessVectorSigner.sol)
+# now route their scheme hashes through the HashSuite seam (task 80u), so
+# under the sha2 suite the signer swaps to SHA-256 in lockstep with the
+# verifier and produce-then-verify tests pass; the signing-dependent suites
+# that are NOT bound to a keccak artifact are therefore un-skipped here. The
+# remaining test skips (below) stay for keccak-artifact reasons, documented
+# inline. 256s-sha2 coverage is: compile; the per-helper sha2 KATs
+# (HashSuiteKat); the vector-backed end-to-end suite SHRINCSSphincs256sSha2
+# Vectors (Rust sha2 vector through the production verifier); the seam-routed
+# self-signing suites (keygen goldens anchored to the Rust sha2 signer, plus
+# stateful and stateless produce-then-verify); and the non-signing
+# structural/profile suites (incl. the params drift guard in
 # SHRINCSProfileInvariants).
 [profile.256s-sha2]
 out = "out-256s-sha2"
@@ -282,19 +287,29 @@ skip = [
     "script/DeploySPHINCSPlusC256sKeccak.s.sol",
     "script/DeploySPHINCSPlusC128sQ18Keccak.s.sol",
     "script/DeploySPHINCSPlusC128sQ20Keccak.s.sol",
+    # The remaining test skips are NOT signer-hash-mismatch skips (those were
+    # lifted once the in-Solidity signers were routed onto the seam, task
+    # 80u). They stay skipped because they are bound to keccak artifacts:
+    #  - SHRINCSSphincs256s/128sVectors read shrincs_sphincs_*_keccak.json;
+    #  - Pinned* pin keccak runtime codehashes;
+    #  - StatefulPolicyExamples, AccountVerifierExample, GuardPinning, and
+    #    Envelope read the 256s keccak vector file;
+    #  - Measurements, StatelessDelegation, CalldataRetag, and
+    #    HashSuiteStatelessGuard import the concrete SHRINCS256sKeccak verifier
+    #    (skipped under this profile); the sha2 statelessness guard is
+    #    HashSuiteStatelessGuardSha2 instead;
+    #  - AccountVectorExport, AccountInvariants, and MutationFuzz drive
+    #    stateless in-Solidity signing under randomized/export loops; under the
+    #    sha2 precompile path that is prohibitively slow, and their sha2
+    #    correctness is already covered deterministically by the lifted
+    #    SHRINCSStatelessVectorSigner / SHRINCSSignerKeygen suites.
     "test/SHRINCSSphincs256sVectors.t.sol",
     "test/SHRINCSSphincs128sVectors.t.sol",
     "test/SHRINCSPinned256s.t.sol",
     "test/SHRINCSPinned128sQ18.t.sol",
     "test/SHRINCSPinned128sQ20.t.sol",
-    "test/SHRINCSVerifier.t.sol",
-    "test/SHRINCSSignerStateful.t.sol",
-    "test/SHRINCSSignerStatefulAction.t.sol",
-    "test/SHRINCSSignerKeygen.t.sol",
-    "test/SHRINCSStatelessVectorSigner.t.sol",
     "test/SHRINCSStatefulPolicyExamples.t.sol",
     "test/SHRINCSAccountVerifierExample.t.sol",
-    "test/SHRINCSAccountSigningFacade.t.sol",
     "test/SHRINCSAccountVectorExport.t.sol",
     "test/SHRINCSAccountInvariants.t.sol",
     "test/SHRINCSGuardPinning.t.sol",
@@ -302,7 +317,6 @@ skip = [
     "test/SHRINCSMutationFuzz.t.sol",
     "test/SHRINCSEnvelope.t.sol",
     "test/SHRINCSStatelessDelegation.t.sol",
-    "test/SHRINCSStatelessSliceCopy.t.sol",
     "test/SHRINCSCalldataRetag.t.sol",
     "test/HashSuiteStatelessGuard.t.sol",
 ]
