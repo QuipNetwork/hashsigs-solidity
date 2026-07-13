@@ -211,6 +211,19 @@ library ShrincsTestSigner {
         return signCompactRaw(skSeed, pkSeed, pkRoot, SHRINCS.compactActionMessageHash(context), q);
     }
 
+    // signCompactActionWithAuth: Sign a compact action with a precomputed Merkle path.
+    function signCompactActionWithAuth(
+        bytes32 skSeed,
+        bytes32 pkSeed,
+        bytes32 pkRoot,
+        ShrincsTypes.ActionContext memory context,
+        uint8 q,
+        bytes32[7] memory merkleAuth
+    ) internal pure returns (bytes memory signature, bool ok) {
+        // Reuse the caller-supplied Merkle path; verification still checks the final root.
+        return signCompactRawWithAuth(skSeed, pkSeed, pkRoot, SHRINCS.compactActionMessageHash(context), q, merkleAuth);
+    }
+
     // signCompactRaw: Build the fixed 10,053-byte JARDIN Type 2 compact signature.
     // 1. Grind H_msg until the omitted FORS+C tree selects leaf zero.
     // 2. Write 51 FORS+C openings for the selected digest digits.
@@ -226,6 +239,21 @@ library ShrincsTestSigner {
         // Build the real JARDIN compact Merkle auth path from all 128 lane public keys.
         (bytes32 computedRoot, bytes32[7] memory merkleAuth) = compactMerkleRootAndAuth(skSeed, pkSeed, q);
         if (computedRoot != pkRoot) return (signature, false);
+
+        return signCompactRawWithAuth(skSeed, pkSeed, pkRoot, message, q, merkleAuth);
+    }
+
+    // signCompactRawWithAuth: Build a compact signature using a supplied Merkle path.
+    function signCompactRawWithAuth(
+        bytes32 skSeed,
+        bytes32 pkSeed,
+        bytes32 pkRoot,
+        bytes32 message,
+        uint8 q,
+        bytes32[7] memory merkleAuth
+    ) internal pure returns (bytes memory signature, bool ok) {
+        // Reject out-of-range compact Merkle leaves before deriving any signature bytes.
+        if (q >= ShrincsTypes.COMPACT_Q_MAX) return (signature, false);
 
         // Use deterministic fixture randomness so tests are reproducible.
         bytes32 randomizer = keccak256(abi.encodePacked("jardin-r", skSeed, pkSeed, pkRoot, q, message));
@@ -296,6 +324,62 @@ library ShrincsTestSigner {
         }
 
         return (signature, true);
+    }
+
+    // compactMerkleRootAndAllAuth: Compute one root and every q authentication path.
+    function compactMerkleRootAndAllAuth(bytes32 skSeed, bytes32 pkSeed)
+        internal
+        pure
+        returns (bytes32 root, bytes32[7][128] memory authPaths)
+    {
+        // Materialize every JARDIN compact Merkle leaf as a FORS+C public key once.
+        bytes32[128] memory nodes;
+        for (uint32 lane = 0; lane < ShrincsTypes.COMPACT_Q_MAX;) {
+            // Each lane has ci=q inside its FORS addresses.
+            nodes[lane] = compactForsPk(skSeed, pkSeed, uint8(lane));
+            unchecked {
+                // The loop bound is the fixed 128-lane compact tree.
+                ++lane;
+            }
+        }
+
+        // Fold the tree upward while recording every lane's sibling at each level.
+        uint32 nodeCount = ShrincsTypes.COMPACT_Q_MAX;
+        for (uint32 j = 0; j < ShrincsTypes.COMPACT_MERKLE_HEIGHT;) {
+            // Every lane reads the sibling beside its current path node.
+            for (uint32 lane = 0; lane < ShrincsTypes.COMPACT_Q_MAX;) {
+                // q's path index at level j is q >> j.
+                authPaths[lane][j] = nodes[(lane >> j) ^ 1];
+                unchecked {
+                    // The loop bound is the fixed 128-lane compact tree.
+                    ++lane;
+                }
+            }
+
+            // JARDIN ADRS x uses top-down level numbering for Merkle parents.
+            uint32 level = uint32(ShrincsTypes.COMPACT_MERKLE_HEIGHT) - 1 - j;
+            // Fold adjacent pairs into the next parent level.
+            for (uint32 parent = 0; parent < nodeCount >> 1;) {
+                // JARDIN ADRS y is the parent index at this level.
+                nodes[parent] = compactH(
+                    pkSeed,
+                    compactAdrs(ShrincsTypes.AddressTypeJardinMerkle, 0, 0, level, parent),
+                    nodes[parent << 1],
+                    nodes[(parent << 1) | 1]
+                );
+                unchecked {
+                    // The loop bound is the parent count at this level.
+                    ++parent;
+                }
+            }
+            // The active node count halves at each Merkle level.
+            nodeCount >>= 1;
+            unchecked {
+                // The loop bound is the fixed compact Merkle height.
+                ++j;
+            }
+        }
+        root = nodes[0];
     }
 
     // compactMerkleRootAndAuth: Compute the 128-lane compact Merkle root and auth path for q.

@@ -31,6 +31,7 @@ contract ShrincsAccountSigningFacadeTest is Test {
     bytes4 internal constant INVALID_SIGNATURE = 0xffffffff;
     uint8 internal constant ERC1271_MODE_COMPACT_ACTION = 3;
     uint256 internal constant COMPACT_SIGNATURE_BYTES = 10053;
+    uint256 internal constant COMPACT_Q_OFFSET = 9828;
 
     ShrincsAccountSigningFacadeHarness internal signer;
 
@@ -439,6 +440,168 @@ contract ShrincsAccountSigningFacadeTest is Test {
             "wrapper must not track q on-chain"
         );
         assertEq(account.nonce(), 3, "second compact action must consume nonce");
+    }
+
+    // Checks that one registered compact root can verify signatures from different q lanes.
+    function testCompactSlotAcceptsDifferentQLanesUnderSameRoot() public {
+        (ShrincsTypes.SigningKey memory signingKey, ShrincsTypes.PublicKey memory publicKey, bool keygenOk) =
+            ShrincsAccountSigningFacade.keygen(bytes("compact multi q current key"), 4);
+        assertTrue(keygenOk, "keygen must succeed");
+
+        ShrincsAccountVerifierExample account =
+            new ShrincsAccountVerifierExample(ShrincsAccountSigningFacade.publicKeyCommitmentWord(publicKey));
+        uint8 firstQ = 3;
+        uint8 secondQ = 79;
+        (bytes32 skSeed, bytes32 subPkSeed, bytes32 subPkRoot, bool firstKeygenOk) =
+            ShrincsTestSigner.compactSingleLaneKeygen(bytes("compact multi q slot"), firstQ);
+        assertTrue(firstKeygenOk, "first compact fixture keygen must succeed");
+        (bytes32 secondSkSeed, bytes32 secondSubPkSeed, bytes32 secondSubPkRoot, bool secondKeygenOk) =
+            ShrincsTestSigner.compactSingleLaneKeygen(bytes("compact multi q slot"), secondQ);
+        assertTrue(secondKeygenOk, "second compact fixture keygen must succeed");
+        assertEq(secondSkSeed, skSeed, "same slot seed must derive the same compact SK.seed");
+        assertEq(secondSubPkSeed, subPkSeed, "same slot seed must derive the same subPkSeed");
+        assertEq(secondSubPkRoot, subPkRoot, "same compact tree must have one root");
+
+        registerCompactSlotNow(account, signingKey, publicKey, subPkSeed, subPkRoot);
+
+        bytes32 actionType = keccak256("multi-q execute");
+        bytes32 firstPayloadHash = keccak256("compact q three payload");
+        (, bytes memory firstSignature) =
+            signCompactActionNow(account, skSeed, subPkSeed, subPkRoot, actionType, firstPayloadHash, firstQ);
+        assertTrue(
+            account.verifyCompactAction(subPkSeed, subPkRoot, actionType, firstPayloadHash, firstSignature),
+            "first compact q lane must verify"
+        );
+        assertEq(account.nonce(), 2, "first compact q lane must consume nonce");
+
+        bytes32 secondPayloadHash = keccak256("compact q seventy nine payload");
+        (, bytes memory secondSignature) =
+            signCompactActionNow(account, skSeed, subPkSeed, subPkRoot, actionType, secondPayloadHash, secondQ);
+        assertTrue(
+            account.verifyCompactAction(subPkSeed, subPkRoot, actionType, secondPayloadHash, secondSignature),
+            "second compact q lane must verify"
+        );
+        assertEq(account.nonce(), 3, "second compact q lane must consume nonce");
+        assertTrue(
+            account.compactSlots(account.compactSlotId(subPkSeed, subPkRoot)), "compact slot must stay registered"
+        );
+    }
+
+    // Checks that a signer can rotate through all 128 compact q lanes under one slot.
+    function testCompactSlotAcceptsAll128RotatingQLanes() public {
+        (ShrincsTypes.SigningKey memory signingKey, ShrincsTypes.PublicKey memory publicKey, bool keygenOk) =
+            ShrincsAccountSigningFacade.keygen(bytes("compact all q current key"), 4);
+        assertTrue(keygenOk, "keygen must succeed");
+
+        ShrincsAccountVerifierExample account =
+            new ShrincsAccountVerifierExample(ShrincsAccountSigningFacade.publicKeyCommitmentWord(publicKey));
+        (bytes32 skSeed, bytes32 subPkSeed, bytes32 subPkRoot, bool compactKeygenOk) =
+            ShrincsTestSigner.compactSingleLaneKeygen(bytes("compact all q slot"), 0);
+        assertTrue(compactKeygenOk, "compact fixture keygen must succeed");
+
+        (bytes32 allAuthRoot, bytes32[7][128] memory authPaths) =
+            ShrincsTestSigner.compactMerkleRootAndAllAuth(skSeed, subPkSeed);
+        assertEq(allAuthRoot, subPkRoot, "precomputed compact auth paths must share root");
+        registerCompactSlotNow(account, signingKey, publicKey, subPkSeed, subPkRoot);
+
+        bytes32 actionType = keccak256("all-q execute");
+        for (uint256 i = 0; i < ShrincsTypes.COMPACT_Q_MAX;) {
+            uint8 q = uint8(i);
+            bytes32 payloadHash = keccak256(abi.encodePacked("compact all q payload", q));
+            ShrincsTypes.ActionContext memory context =
+                ShrincsAccountSigningFacade.actionContext(account, actionType, payloadHash);
+            (bytes memory signature, bool signOk) =
+                ShrincsTestSigner.signCompactActionWithAuth(skSeed, subPkSeed, subPkRoot, context, q, authPaths[i]);
+            assertTrue(signOk, "compact q signing must succeed");
+            assertEq(uint8(signature[COMPACT_Q_OFFSET]), q, "signature must encode the rotated q");
+            assertTrue(
+                account.verifyCompactAction(subPkSeed, subPkRoot, actionType, payloadHash, signature),
+                "rotated compact q lane must verify"
+            );
+            assertEq(account.nonce(), i + 2, "each rotated compact q lane must consume nonce");
+            unchecked {
+                ++i;
+            }
+        }
+
+        assertEq(account.nonce(), uint256(ShrincsTypes.COMPACT_Q_MAX) + 1, "all compact q lanes must verify");
+        assertTrue(
+            account.compactSlots(account.compactSlotId(subPkSeed, subPkRoot)),
+            "compact slot must remain registered after all q lanes"
+        );
+    }
+
+    // Checks that independent compact device slots can coexist and revoke independently.
+    function testCompactSlotsSupportMultipleIndependentDeviceLanes() public {
+        (ShrincsTypes.SigningKey memory signingKey, ShrincsTypes.PublicKey memory publicKey, bool keygenOk) =
+            ShrincsAccountSigningFacade.keygen(bytes("compact multi device current key"), 4);
+        assertTrue(keygenOk, "keygen must succeed");
+
+        ShrincsAccountVerifierExample account =
+            new ShrincsAccountVerifierExample(ShrincsAccountSigningFacade.publicKeyCommitmentWord(publicKey));
+        (bytes32 deviceASkSeed, bytes32 deviceASeed, bytes32 deviceARoot, bool deviceAOk) =
+            ShrincsTestSigner.compactSingleLaneKeygen(bytes("compact device a slot"), 5);
+        assertTrue(deviceAOk, "device A keygen must succeed");
+        (bytes32 deviceBSkSeed, bytes32 deviceBSeed, bytes32 deviceBRoot, bool deviceBOk) =
+            ShrincsTestSigner.compactSingleLaneKeygen(bytes("compact device b slot"), 91);
+        assertTrue(deviceBOk, "device B keygen must succeed");
+
+        bytes32 deviceASlot = account.compactSlotId(deviceASeed, deviceARoot);
+        bytes32 deviceBSlot = account.compactSlotId(deviceBSeed, deviceBRoot);
+        assertTrue(deviceASlot != deviceBSlot, "independent compact devices need distinct slots");
+
+        registerCompactSlotNow(account, signingKey, publicKey, deviceASeed, deviceARoot);
+        assertTrue(account.compactSlots(deviceASlot), "device A slot must register");
+        assertFalse(account.compactSlots(deviceBSlot), "device B slot must remain unregistered");
+
+        registerCompactSlotNow(account, signingKey, publicKey, deviceBSeed, deviceBRoot);
+        assertTrue(account.compactSlots(deviceASlot), "device A slot must stay registered");
+        assertTrue(account.compactSlots(deviceBSlot), "device B slot must register");
+
+        bytes32 actionType = keccak256("multi-device execute");
+        bytes32 deviceAPayloadHash = keccak256("compact device a payload");
+        (, bytes memory deviceASignature) =
+            signCompactActionNow(account, deviceASkSeed, deviceASeed, deviceARoot, actionType, deviceAPayloadHash, 5);
+        assertTrue(
+            account.verifyCompactAction(deviceASeed, deviceARoot, actionType, deviceAPayloadHash, deviceASignature),
+            "device A compact action must verify"
+        );
+
+        bytes32 deviceBPayloadHash = keccak256("compact device b payload");
+        (, bytes memory deviceBSignature) =
+            signCompactActionNow(account, deviceBSkSeed, deviceBSeed, deviceBRoot, actionType, deviceBPayloadHash, 91);
+        assertTrue(
+            account.verifyCompactAction(deviceBSeed, deviceBRoot, actionType, deviceBPayloadHash, deviceBSignature),
+            "device B compact action must verify"
+        );
+
+        revokeCompactSlotNow(account, signingKey, publicKey, deviceASeed, deviceARoot);
+        assertFalse(account.compactSlots(deviceASlot), "device A slot must revoke");
+        assertTrue(account.compactSlots(deviceBSlot), "device B slot must stay registered");
+
+        bytes32 deviceBSecondPayloadHash = keccak256("compact device b second payload");
+        (, bytes memory deviceBSecondSignature) = signCompactActionNow(
+            account, deviceBSkSeed, deviceBSeed, deviceBRoot, actionType, deviceBSecondPayloadHash, 91
+        );
+        assertTrue(
+            account.verifyCompactAction(
+                deviceBSeed, deviceBRoot, actionType, deviceBSecondPayloadHash, deviceBSecondSignature
+            ),
+            "device B compact action must still verify after device A revocation"
+        );
+
+        bytes32 deviceASecondPayloadHash = keccak256("compact device a revoked payload");
+        (, bytes memory deviceASecondSignature) = signCompactActionNow(
+            account, deviceASkSeed, deviceASeed, deviceARoot, actionType, deviceASecondPayloadHash, 5
+        );
+        uint256 nonceBeforeRevokedAction = account.nonce();
+        assertFalse(
+            account.verifyCompactAction(
+                deviceASeed, deviceARoot, actionType, deviceASecondPayloadHash, deviceASecondSignature
+            ),
+            "revoked device A compact action must fail"
+        );
+        assertEq(account.nonce(), nonceBeforeRevokedAction, "revoked device must not consume nonce");
     }
 
     function testAccountAwareStatefulOnlyRotationSignerFeedsWrapper() public {

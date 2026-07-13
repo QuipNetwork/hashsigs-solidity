@@ -297,6 +297,8 @@ library ShrincsForsC {
         // The scratch copy loop writes whole words, so reserve the rounded-up write extent.
         uint256 copiedMessageLen = (messageLen + 31) & ~uint256(31);
         uint256 scratchLen = 111 + copiedMessageLen;
+        // The fixed counter field starts at byte 107, and mstore writes one whole word.
+        if (scratchLen < 139) scratchLen = 139;
         uint256 ptr;
         assembly {
             // Set the visible bytes length of the output buffer.
@@ -340,7 +342,8 @@ library ShrincsForsC {
         }
         // Add a 4-byte block counter suffix for multi-block expansion.
         uint256 totalLen = baseLen + 4;
-        uint256 scratchLenWithCounter = scratchLen + 4;
+        // The suffix is logically 4 bytes, but mstore writes one whole word.
+        uint256 scratchLenWithCounter = scratchLen + 32;
         uint256 offset;
         uint32 blockCounter;
         while (offset < digestBytes) {

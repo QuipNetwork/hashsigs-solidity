@@ -19,6 +19,12 @@ pragma solidity ^0.8.28;
 import {SHRINCS} from "../SHRINCS.sol";
 import {ShrincsTypes} from "../ShrincsTypes.sol";
 
+// ShrincsAccountVerifierExample: Example account wrapper for SHRINCS.
+//
+// This wrapper is still an example, not the canonical SHRINCS account. It
+// demonstrates nonce/key-version binding, policy choices, stateless recovery,
+// ERC-1271, and JARDIN-style compact slots. If it graduates, preserve the
+// compact verbs: registerCompactSlot, revokeCompactSlot, verifyCompactAction.
 contract ShrincsAccountVerifierExample {
     // ERC-1271 success return value.
     bytes4 internal constant MAGIC_VALUE = 0x1626ba7e;
