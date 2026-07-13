@@ -87,8 +87,7 @@ contract SHRINCSConsumerExamplesTest is Test {
 
     function testERC7913ConsumerRejectsTamperedStatefulHash() public {
         (
-            SHRINCSERC7913ConsumerExample consumer,
-            ,
+            SHRINCSERC7913ConsumerExample consumer,,
             bytes memory validEnvelope
         ) = buildStatefulConsumerFixture();
 
@@ -116,8 +115,7 @@ contract SHRINCSConsumerExamplesTest is Test {
         public
     {
         (
-            SHRINCSERC7913ConsumerExample consumer,
-            ,
+            SHRINCSERC7913ConsumerExample consumer,,
             bytes memory validEnvelope
         ) = buildStatefulConsumerFixture();
 
@@ -128,10 +126,10 @@ contract SHRINCSConsumerExamplesTest is Test {
     }
 
     function testERC7913ConsumerReturnsFalseWhenVerifierReverts() public {
-        SHRINCSERC7913ConsumerExample consumer =
-            new SHRINCSERC7913ConsumerExample(
-                address(revertingVerifier), abi.encodePacked(bytes32(uint256(1)))
-            );
+        // line-length: allow — fmt canonical constructor head exceeds cap
+        SHRINCSERC7913ConsumerExample consumer = new SHRINCSERC7913ConsumerExample(
+            address(revertingVerifier), abi.encodePacked(bytes32(uint256(1)))
+        );
         assertFalse(
             consumer.isAuthorized(keccak256("hash"), bytes("signature")),
             "consumer must normalize verifier reverts to false"
@@ -140,10 +138,14 @@ contract SHRINCSConsumerExamplesTest is Test {
 
     function testERC7913ConsumerRejectsBadConstructionInputs() public {
         vm.expectRevert("verifier is zero");
-        new SHRINCSERC7913ConsumerExample(address(0), abi.encodePacked(bytes32(uint256(1))));
+        new SHRINCSERC7913ConsumerExample(
+            address(0), abi.encodePacked(bytes32(uint256(1)))
+        );
 
         vm.expectRevert("trustedKey must be 32 bytes");
-        new SHRINCSERC7913ConsumerExample(address(statefulVerifier), bytes(""));
+        new SHRINCSERC7913ConsumerExample(
+            address(statefulVerifier), bytes("")
+        );
     }
 
     function testStatelessConsumerAcceptsValidStatelessSignature() public {
@@ -165,8 +167,7 @@ contract SHRINCSConsumerExamplesTest is Test {
         vm.skip(SHRINCSParams.HASH_LEN != 32);
 
         (
-            SHRINCSStatelessConsumerExample consumer,
-            ,
+            SHRINCSStatelessConsumerExample consumer,,
             bytes memory validEnvelope
         ) = buildStatelessConsumerFixture();
 
@@ -198,8 +199,7 @@ contract SHRINCSConsumerExamplesTest is Test {
         vm.skip(SHRINCSParams.HASH_LEN != 32);
 
         (
-            SHRINCSStatelessConsumerExample consumer,
-            ,
+            SHRINCSStatelessConsumerExample consumer,,
             bytes memory validEnvelope
         ) = buildStatelessConsumerFixture();
 
@@ -210,10 +210,10 @@ contract SHRINCSConsumerExamplesTest is Test {
     }
 
     function testStatelessConsumerReturnsFalseWhenVerifierReverts() public {
-        SHRINCSStatelessConsumerExample consumer =
-            new SHRINCSStatelessConsumerExample(
-                address(revertingVerifier), abi.encodePacked(bytes32(uint256(1)))
-            );
+        // line-length: allow — fmt canonical constructor head exceeds cap
+        SHRINCSStatelessConsumerExample consumer = new SHRINCSStatelessConsumerExample(
+            address(revertingVerifier), abi.encodePacked(bytes32(uint256(1)))
+        );
         assertFalse(
             consumer.isAuthorizedStateless(
                 keccak256("hash"), bytes("signature")
@@ -224,7 +224,9 @@ contract SHRINCSConsumerExamplesTest is Test {
 
     function testStatelessConsumerRejectsBadConstructionInputs() public {
         vm.expectRevert("verifier is zero");
-        new SHRINCSStatelessConsumerExample(address(0), abi.encodePacked(bytes32(uint256(1))));
+        new SHRINCSStatelessConsumerExample(
+            address(0), abi.encodePacked(bytes32(uint256(1)))
+        );
 
         vm.expectRevert("trustedKey must be 32 bytes");
         new SHRINCSStatelessConsumerExample(
@@ -281,8 +283,9 @@ contract SHRINCSConsumerExamplesTest is Test {
         assertTrue(keygenOk, "in-test keygen must succeed");
 
         signedHash = keccak256("shrincs consumer stateless vector");
-        (bytes32 sessionId, bool beginOk) =
-            signer.beginSession(signingKey, publicKey, abi.encodePacked(signedHash));
+        (bytes32 sessionId, bool beginOk) = signer.beginSession(
+            signingKey, publicKey, abi.encodePacked(signedHash)
+        );
         assertTrue(beginOk, "stateless begin must succeed");
 
         SPHINCSPlusC.Signature memory signature;

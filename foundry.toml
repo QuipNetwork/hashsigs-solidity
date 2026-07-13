@@ -294,10 +294,10 @@ skip = [
     #  - Pinned* pin keccak runtime codehashes;
     #  - StatefulPolicyExamples, AccountVerifierExample, GuardPinning, and
     #    Envelope read the 256s keccak vector file;
-    #  - Measurements, StatelessDelegation, CalldataRetag, and
-    #    HashSuiteStatelessGuard import the concrete SHRINCS256sKeccak verifier
-    #    (skipped under this profile); the sha2 statelessness guard is
-    #    HashSuiteStatelessGuardSha2 instead;
+    #  - Measurements, StatelessDelegation, CalldataRetag, ConsumerExamples,
+    #    and HashSuiteStatelessGuard import the concrete SHRINCS256sKeccak
+    #    verifier (skipped under this profile); the sha2 statelessness guard
+    #    is HashSuiteStatelessGuardSha2 instead;
     #  - AccountVectorExport, AccountInvariants, and MutationFuzz drive
     #    stateless in-Solidity signing under randomized/export loops; under the
     #    sha2 precompile path that is prohibitively slow, and their sha2
@@ -318,6 +318,7 @@ skip = [
     "test/SHRINCSEnvelope.t.sol",
     "test/SHRINCSStatelessDelegation.t.sol",
     "test/SHRINCSCalldataRetag.t.sol",
+    "test/SHRINCSConsumerExamples.t.sol",
     "test/HashSuiteStatelessGuard.t.sol",
 ]
 
