@@ -448,6 +448,10 @@ contract SHRINCSAccountHandler is Test {
     }
 
     function _stateDigest() internal view returns (bytes32) {
+        bool[] memory leafUsed = new bool[](MAX_LEAF);
+        for (uint32 leaf = 1; leaf <= MAX_LEAF; leaf++) {
+            leafUsed[leaf - 1] = account.isLeafUsed(leaf);
+        }
         return keccak256(
             abi.encode(
                 account.nonce(),
@@ -458,8 +462,7 @@ contract SHRINCSAccountHandler is Test {
                 account.nextStatefulLeafIndex(),
                 account.recoveryMode(),
                 account.currentSHRINCSPublicKey(),
-                account.isLeafUsed(1),
-                account.isLeafUsed(2)
+                leafUsed
             )
         );
     }

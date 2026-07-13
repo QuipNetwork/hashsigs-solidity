@@ -149,7 +149,6 @@ skip = [
     "script/DeploySPHINCSPlusC256sSha2.s.sol",
     "test/SHRINCSSphincs256sVectors.t.sol",
     "test/SHRINCSSphincs256sSha2Vectors.t.sol",
-    "test/SHRINCSGuardPinning.t.sol",
     "test/SHRINCSStatelessVectorSigner.t.sol",
     "test/SHRINCSAccountSigningFacade.t.sol",
     "test/SHRINCSAccountVectorExport.t.sol",
@@ -157,7 +156,6 @@ skip = [
     "test/SHRINCSAccountVerifierExample.t.sol",
     "test/SHRINCSEnvelope.t.sol",
     "test/SHRINCSStatefulPolicyExamples.t.sol",
-    "test/SHRINCSStatelessDelegation.t.sol",
     "test/SHRINCSStatelessSliceCopy.t.sol",
     "test/SHRINCSCalldataRetag.t.sol",
     "test/SHRINCSPinned256s.t.sol",
@@ -187,7 +185,6 @@ skip = [
     "script/DeploySPHINCSPlusC256sSha2.s.sol",
     "test/SHRINCSSphincs256sVectors.t.sol",
     "test/SHRINCSSphincs256sSha2Vectors.t.sol",
-    "test/SHRINCSGuardPinning.t.sol",
     "test/SHRINCSStatelessVectorSigner.t.sol",
     "test/SHRINCSAccountSigningFacade.t.sol",
     "test/SHRINCSAccountVectorExport.t.sol",
@@ -195,7 +192,6 @@ skip = [
     "test/SHRINCSAccountVerifierExample.t.sol",
     "test/SHRINCSEnvelope.t.sol",
     "test/SHRINCSStatefulPolicyExamples.t.sol",
-    "test/SHRINCSStatelessDelegation.t.sol",
     "test/SHRINCSStatelessSliceCopy.t.sol",
     "test/SHRINCSCalldataRetag.t.sol",
     "test/SHRINCSPinned256s.t.sol",
@@ -305,14 +301,17 @@ skip = [
     # 80u). They stay skipped because they are bound to keccak artifacts:
     #  - SHRINCSSphincs256s/128sVectors read shrincs_sphincs_*_keccak.json;
     #  - Pinned* pin keccak runtime codehashes;
-    #  - StatefulPolicyExamples, AccountVerifierExample, GuardPinning, and
-    #    Envelope read the 256s keccak vector file;
-    #  - StatelessDelegation, CalldataRetag, ConsumerExamples, and
-    #    HashSuiteStatelessGuard import the concrete SHRINCS256sKeccak
-    #    verifier (skipped under this profile); the sha2 statelessness guard
-    #    is HashSuiteStatelessGuardSha2 instead. Measurements no longer
-    #    imports a concrete verifier (it selects artifacts by
-    #    SHRINCSParams.PROFILE_ID via deployCode) and runs here instead;
+    #  - StatefulPolicyExamples, AccountVerifierExample, and Envelope's
+    #    256s-vector-bound ERC-7913 integration half read the 256s keccak
+    #    vector file (Envelope's profile-independent codec unit tests split
+    #    to SHRINCSEnvelopeCodec.t.sol, which runs here; GuardPinning is now
+    #    profile-keyed on its own vector JSON and runs here too);
+    #  - CalldataRetag, ConsumerExamples, and HashSuiteStatelessGuard import
+    #    the concrete SHRINCS256sKeccak verifier (skipped under this profile);
+    #    the sha2 statelessness guard is HashSuiteStatelessGuardSha2 instead.
+    #    Measurements and StatelessDelegation no longer import a concrete
+    #    verifier (they select artifacts by SHRINCSParams.PROFILE_ID via
+    #    deployCode) and run here instead;
     #  - AccountVectorExport, AccountInvariants, and MutationFuzz drive
     #    stateless in-Solidity signing under randomized/export loops; under the
     #    sha2 precompile path that is prohibitively slow, and their sha2
@@ -327,10 +326,8 @@ skip = [
     "test/SHRINCSAccountVerifierExample.t.sol",
     "test/SHRINCSAccountVectorExport.t.sol",
     "test/SHRINCSAccountInvariants.t.sol",
-    "test/SHRINCSGuardPinning.t.sol",
     "test/SHRINCSMutationFuzz.t.sol",
     "test/SHRINCSEnvelope.t.sol",
-    "test/SHRINCSStatelessDelegation.t.sol",
     "test/SHRINCSCalldataRetag.t.sol",
     "test/SHRINCSConsumerExamples.t.sol",
     "test/HashSuiteStatelessGuard.t.sol",

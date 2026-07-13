@@ -42,17 +42,19 @@ import {WOTSPlusC} from "../contracts/WOTSPlusC.sol";
 //     or fails a downstream hash/target-sum compare and returns `false`.
 // No test asserts a specific error or Panic selector.
 //
-// LONG-ARRAY MALLEABILITY (review rows 20, 26, 42, ...). A valid envelope
-// with an OVER-LONG count/length array is the accepted-by-design
-// byte-malleability case: pre-drop the count guard rejects it (`false`);
-// post-drop the extra
-// element is never read, so the same-message envelope re-encodes to a second
-// byte-string that verifies IDENTICALLY (`true`). That `false` -> `true` flip
-// is the whole point of dropping the guard and therefore CANNOT be pinned
-// by a before/after-identical assertion. The two `...Long...` tests below pin
-// the half that IS invariant across the drop: padding an array grants no
-// forgery of a DIFFERENT message. The pure same-message acceptance is
-// documented here rather than asserted (see each test's comment).
+// LONG-ARRAY MALLEABILITY (review rows 20, 26). A valid envelope with an
+// OVER-LONG count/length array is the accepted-by-design byte-malleability
+// case: pre-drop the count guard rejected it (`false`); post-drop the extra
+// element is never read (UXMSS loops WOTS_CHAINS_STATEFUL times, FORS-C loops
+// NUM_FORS_TREES - 1 times — both fixed counts, never the array `.length`),
+// so the SAME-message envelope verifies IDENTICALLY (`true`). The two
+// `...Long...` tests below pin exactly that property over the CORRECT
+// (signed) message: padding the array leaves the verify outcome unchanged
+// from the unpadded anchor. Were the extra element ever read, the
+// reconstruction would change and the correct-message verification would
+// flip to `false`; asserting the outcome is unchanged is therefore a real
+// pin of "extra element never read", not the vacuous
+// rejection-over-a-wrong-message it replaced.
 //
 // NOT APPLICABLE: "stateful randomizer wrong length". SHRINCS.Signature
 // .randomizer is a fixed `bytes32` (SHRINCS.sol / UXMSS.sol twin), so there
@@ -89,14 +91,28 @@ contract StatelessHarness {
 }
 
 contract SHRINCSGuardPinningTest is Test {
-    string internal constant VECTOR_PATH =
-        "test/test_vectors/shrincs_sphincs_256s_keccak.json";
+    // Profile identities ([DESIGN §3.4]), matched against the active build's
+    // SHRINCSParams.PROFILE_ID to select the profile's Rust-anchored vector
+    // JSON (mirrors SHRINCSMeasurements.t.sol). The loop-bound constants each
+    // dropped-guard backstop relies on differ per profile (chains 64 vs 32,
+    // FORS trees 22 vs 6, tree height 14 vs 24, layers 8 vs 1), so the
+    // never-wrong-accept battery must run against every profile's own
+    // vectors, not the 256s-keccak file alone.
+    bytes32 internal constant PROFILE_256S_KECCAK =
+        keccak256(bytes("shrincs-256s-keccak"));
+    bytes32 internal constant PROFILE_256S_SHA2 =
+        keccak256(bytes("shrincs-256s-sha2"));
+    bytes32 internal constant PROFILE_128S_Q18 =
+        keccak256(bytes("shrincs-128s-q18-keccak"));
+    bytes32 internal constant PROFILE_128S_Q20 =
+        keccak256(bytes("shrincs-128s-q20-keccak"));
 
-    // A 32-byte message the vector signers never signed; used by the long-
-    // array malleability tests to force a rejection through the crypto (not
-    // the dropped count guard).
-    bytes internal constant WRONG_MESSAGE =
-        hex"5a315a315a315a315a315a315a315a315a315a315a315a315a315a315a315a31";
+    // The profile's stateful WOTS-C chain count discriminates the fixed-array
+    // decode struct below: solc rejects a cross-library constant member as a
+    // fixed-array length, so the two shipped sizes (64 at 256s, 32 at 128s)
+    // get one concrete struct each and decodeStatefulVector branches on this.
+    uint256 internal constant STATEFUL_CHAINS =
+        SHRINCSParams.WOTS_CHAINS_STATEFUL;
 
     struct LegacyStatefulPublicKey {
         bytes32 pkSeed;
@@ -104,10 +120,20 @@ contract SHRINCSGuardPinningTest is Test {
         uint32 maxSignatures;
     }
 
-    struct LegacyStatefulSignature {
+    // 256s/256s-sha2 stateful WOTS-C reveals 64 chains; both 128s profiles
+    // reveal 32 (WOTS_CHAINS_STATEFUL). One concrete struct per shipped size;
+    // decodeStatefulVector picks by STATEFUL_CHAINS.
+    struct LegacyStatefulSignature64 {
         bytes32 randomizer;
         uint32 counter;
         bytes32[64] chains;
+        bytes32[] authPath;
+    }
+
+    struct LegacyStatefulSignature32 {
+        bytes32 randomizer;
+        uint32 counter;
+        bytes32[32] chains;
         bytes32[] authPath;
     }
 
@@ -152,7 +178,28 @@ contract SHRINCSGuardPinningTest is Test {
     function setUp() public {
         stateful = new StatefulHarness();
         stateless = new StatelessHarness();
-        vectors = vm.readFile(VECTOR_PATH);
+        vectors = vm.readFile(vectorPath());
+    }
+
+    // vectorPath: select the active profile's Rust-anchored vector JSON by
+    // PROFILE_ID (mirrors SHRINCSMeasurements.t.sol). Every profile's file
+    // carries both a stateful and a stateless valid case plus tamper cases;
+    // the guard-pinning mutations are applied to the valid case in-Solidity.
+    function vectorPath() internal pure returns (string memory) {
+        bytes32 id = SHRINCSParams.PROFILE_ID;
+        if (id == PROFILE_256S_KECCAK) {
+            return "test/test_vectors/shrincs_sphincs_256s_keccak.json";
+        }
+        if (id == PROFILE_256S_SHA2) {
+            return "test/test_vectors/shrincs_sphincs_256s_sha2.json";
+        }
+        if (id == PROFILE_128S_Q18) {
+            return "test/test_vectors/shrincs_sphincs_128s_q18_keccak.json";
+        }
+        if (id == PROFILE_128S_Q20) {
+            return "test/test_vectors/shrincs_sphincs_128s_q20_keccak.json";
+        }
+        revert("SHRINCSGuardPinning: unknown profile");
     }
 
     // ---------------------------------------------------------------------
@@ -246,29 +293,30 @@ contract SHRINCSGuardPinningTest is Test {
     }
 
     // Class: wrong stateful chains count (LONG) — malleability safety pin.
-    // Review row 20. Pre-drop UXMSS.sol:84 rejects the 65-chain array
-    // (`false`). Post-drop the extra chain is never read, so the SAME-message
-    // envelope re-encodes to a second byte-string that verifies IDENTICALLY
-    // (accepted-by-design malleability). That false->true flip is not
-    // pinnable by a before/after-identical assertion; what IS invariant, and
-    // pinned here, is that padding the chains cannot forge a DIFFERENT
-    // message:
-    // over WRONG_MESSAGE the reconstruction misses the target sum / root in
-    // both worlds.
+    // Review row 20. Post-drop the extra chain is never read (UXMSS loops
+    // WOTS_CHAINS_STATEFUL times, not chains.length), so padding a valid
+    // signature over its CORRECT message leaves the verify outcome
+    // unchanged from the unpadded anchor (`true`). Were the extra chain
+    // read, the WOTS-C target sum / root reconstruction would change and
+    // verification would flip to `false`; asserting the outcome is
+    // unchanged pins "extra element never read" for real (replaces the
+    // vacuous rejection-over-WRONG_MESSAGE check, which rejected with or
+    // without the padding).
     function testStatefulLongChainCountMalleabilitySafety() public {
         (
-            SHRINCS.PublicKey memory publicKey,,
+            SHRINCS.PublicKey memory publicKey,
+            bytes memory message,
             SHRINCS.Signature memory signature
         ) = decodeStatefulVector(".stateful.cases.valid.calldata");
+        bytes32 word = compositePublicKeyWord(publicKey);
+        bool baseline =
+            stateful.verifyUnsafeRaw(word, publicKey, message, signature);
+        assertTrue(baseline, "anchor: unpadded stateful vector verifies");
         signature.chains = appendBytes32(signature.chains);
-        assertTrue(
-            statefulRejected(
-                compositePublicKeyWord(publicKey),
-                publicKey,
-                WRONG_MESSAGE,
-                signature
-            ),
-            "padded stateful chains must not forge a different message"
+        assertEq(
+            stateful.verifyUnsafeRaw(word, publicKey, message, signature),
+            baseline,
+            "padding valid chains must not change correct-message outcome"
         );
     }
 
@@ -298,24 +346,29 @@ contract SHRINCSGuardPinningTest is Test {
     }
 
     // Class: FORS entries count wrong (LONG) — malleability safety pin.
-    // Review row 26. Pre-drop FORSMinusC.sol:83 rejects the k-th entry
-    // (`false`); post-drop the extra entry is never read, so a same-message
-    // envelope re-encodes and verifies identically (accepted malleability).
-    // Pinned invariant: a padded entries array cannot forge WRONG_MESSAGE.
+    // Review row 26. Post-drop the extra entry is never read (FORS-C loops
+    // NUM_FORS_TREES - 1 times, not entries.length), so padding a valid
+    // signature over its CORRECT message leaves the verify outcome
+    // unchanged from the unpadded anchor (`true`). Were the extra entry
+    // read, the FORS digest / root reconstruction would change and
+    // verification would flip to `false`; asserting the outcome is
+    // unchanged pins "extra element never read" for real (replaces the
+    // vacuous rejection-over-WRONG_MESSAGE check).
     function testStatelessLongForsEntriesMalleabilitySafety() public {
         (
-            SHRINCS.PublicKey memory publicKey,,
+            SHRINCS.PublicKey memory publicKey,
+            bytes memory message,
             SPHINCSPlusC.Signature memory signature
         ) = decodeStatelessVector(".stateless.cases.valid.calldata");
+        bytes32 word = compositePublicKeyWord(publicKey);
+        bool baseline =
+            stateless.verifyUnsafeRaw(word, publicKey, message, signature);
+        assertTrue(baseline, "anchor: unpadded stateless vector verifies");
         signature.fors.entries = appendForsEntry(signature.fors.entries);
-        assertTrue(
-            statelessRejected(
-                compositePublicKeyWord(publicKey),
-                publicKey,
-                WRONG_MESSAGE,
-                signature
-            ),
-            "padded FORS entries must not forge a different message"
+        assertEq(
+            stateless.verifyUnsafeRaw(word, publicKey, message, signature),
+            baseline,
+            "padding valid FORS entries must not change outcome"
         );
     }
 
@@ -592,13 +645,8 @@ contract SHRINCSGuardPinningTest is Test {
         )
     {
         bytes memory args = vectorArgs(vectorKey);
-        (
-            LegacyStatefulPublicKey memory legacyKey,
-            bytes memory legacyMessage,
-            LegacyStatefulSignature memory legacySignature
-        ) = abi.decode(
-            args, (LegacyStatefulPublicKey, bytes, LegacyStatefulSignature)
-        );
+        LegacyStatefulPublicKey memory legacyKey;
+        (legacyKey, message, signature) = decodeLegacyStateful(args);
 
         (SHRINCS.PublicKey memory statelessPublicKey,,) =
             decodeStatelessVector(".stateless.cases.valid.calldata");
@@ -612,13 +660,54 @@ contract SHRINCSGuardPinningTest is Test {
             statelessPublicKey.pkSeed,
             statelessPublicKey.hypertreeRoot
         );
+    }
 
-        message = legacyMessage;
+    // decodeLegacyStateful: abi.decode the stateful vector calldata against
+    // the profile's fixed-chain-count struct and rebuild the
+    // profile-agnostic SHRINCS.Signature. Branches on STATEFUL_CHAINS
+    // because the Rust calldata inlines the chains as a fixed-size array
+    // whose length must match the decode struct exactly.
+    function decodeLegacyStateful(bytes memory args)
+        internal
+        pure
+        returns (
+            LegacyStatefulPublicKey memory legacyKey,
+            bytes memory message,
+            SHRINCS.Signature memory signature
+        )
+    {
+        if (STATEFUL_CHAINS == 64) {
+            LegacyStatefulSignature64 memory legacySignature;
+            (legacyKey, message, legacySignature) = abi.decode(
+                args,
+                (LegacyStatefulPublicKey, bytes, LegacyStatefulSignature64)
+            );
+            bytes32[] memory chains = new bytes32[](64);
+            for (uint256 i = 0; i < 64; ++i) {
+                chains[i] = legacySignature.chains[i];
+            }
+            signature = SHRINCS.Signature({
+                randomizer: legacySignature.randomizer,
+                counter: legacySignature.counter,
+                chains: chains,
+                authPath: legacySignature.authPath
+            });
+            return (legacyKey, message, signature);
+        }
+
+        LegacyStatefulSignature32 memory legacySignature32;
+        (legacyKey, message, legacySignature32) = abi.decode(
+            args, (LegacyStatefulPublicKey, bytes, LegacyStatefulSignature32)
+        );
+        bytes32[] memory chains32 = new bytes32[](32);
+        for (uint256 i = 0; i < 32; ++i) {
+            chains32[i] = legacySignature32.chains[i];
+        }
         signature = SHRINCS.Signature({
-            randomizer: legacySignature.randomizer,
-            counter: legacySignature.counter,
-            chains: fixedToDynamicChains(legacySignature.chains),
-            authPath: legacySignature.authPath
+            randomizer: legacySignature32.randomizer,
+            counter: legacySignature32.counter,
+            chains: chains32,
+            authPath: legacySignature32.authPath
         });
     }
 
@@ -696,17 +785,6 @@ contract SHRINCSGuardPinningTest is Test {
             }),
             hypertree: layers
         });
-    }
-
-    function fixedToDynamicChains(bytes32[64] memory fixedChains)
-        internal
-        pure
-        returns (bytes32[] memory chains)
-    {
-        chains = new bytes32[](64);
-        for (uint256 i = 0; i < 64; ++i) {
-            chains[i] = fixedChains[i];
-        }
     }
 
     function publicKeyFromParts(

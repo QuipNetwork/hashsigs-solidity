@@ -35,6 +35,8 @@ import {
 contract SHRINCSAccountVectorExportHarness is SHRINCSStatelessVectorSigner {}
 
 contract SHRINCSAccountVectorExportTest is Test {
+    bytes4 internal constant ERC1271_MAGIC_VALUE = 0x1626ba7e;
+
     SHRINCSAccountVectorExportHarness internal signer;
 
     function setUp() public {
@@ -81,6 +83,34 @@ contract SHRINCSAccountVectorExportTest is Test {
                 signature
             );
 
+        // Execute the exported artifacts against the account before
+        // emitting: a wrong selector or swapped arg in the helper's
+        // abi.encodeCall/encode must fail here, not ship silently.
+        bytes32 exportedHash = abi.decode(vector_.message, (bytes32));
+        (bool envOk, bytes memory envRet) = address(account)
+            .staticcall(
+                abi.encodeCall(
+                    account.isValidSignature,
+                    (exportedHash, vector_.erc1271Envelope)
+                )
+            );
+        assertTrue(envOk, "exported 1271 envelope must not revert");
+        assertEq(
+            abi.decode(envRet, (bytes4)),
+            ERC1271_MAGIC_VALUE,
+            "exported 1271 envelope must return the magic value"
+        );
+
+        // The exported verify calldata mutates leaf/nonce state; snapshot
+        // and revert so the direct-call flow below is unaffected.
+        uint256 snap = vm.snapshotState();
+        (bool rawOk, bytes memory rawRet) =
+            address(account).call(vector_.verifyCalldata);
+        assertTrue(rawOk, "exported verify calldata must not revert");
+        bool rawVerifyOk = abi.decode(rawRet, (bool));
+        assertTrue(rawVerifyOk, "exported verify calldata must verify");
+        vm.revertToState(snap);
+
         emit log_named_bytes("stateful_vector_abi", abi.encode(vector_));
         emit log_named_bytes(
             "stateful_verify_calldata", vector_.verifyCalldata
@@ -94,6 +124,11 @@ contract SHRINCSAccountVectorExportTest is Test {
         );
         assertTrue(
             verifyOk, "exported stateful vector must feed the wrapper"
+        );
+        assertEq(
+            rawVerifyOk,
+            verifyOk,
+            "exported calldata result must match direct call"
         );
         assertEq(
             nextSigningKey.nextStatefulLeafIndex,
@@ -155,6 +190,34 @@ contract SHRINCSAccountVectorExportTest is Test {
                 signature
             );
 
+        // Execute the exported artifacts against the account before
+        // emitting: a wrong selector or swapped arg in the helper's
+        // abi.encodeCall/encode must fail here, not ship silently.
+        bytes32 exportedHash = abi.decode(vector_.message, (bytes32));
+        (bool envOk, bytes memory envRet) = address(account)
+            .staticcall(
+                abi.encodeCall(
+                    account.isValidSignature,
+                    (exportedHash, vector_.erc1271Envelope)
+                )
+            );
+        assertTrue(envOk, "exported 1271 envelope must not revert");
+        assertEq(
+            abi.decode(envRet, (bytes4)),
+            ERC1271_MAGIC_VALUE,
+            "exported 1271 envelope must return the magic value"
+        );
+
+        // The exported verify calldata mutates nonce/usage state; snapshot
+        // and revert so the direct-call flow below is unaffected.
+        uint256 snap = vm.snapshotState();
+        (bool rawOk, bytes memory rawRet) =
+            address(account).call(vector_.verifyCalldata);
+        assertTrue(rawOk, "exported verify calldata must not revert");
+        bool rawVerifyOk = abi.decode(rawRet, (bool));
+        assertTrue(rawVerifyOk, "exported verify calldata must verify");
+        vm.revertToState(snap);
+
         emit log_named_bytes("stateless_vector_abi", abi.encode(vector_));
         emit log_named_bytes(
             "stateless_verify_calldata", vector_.verifyCalldata
@@ -168,6 +231,11 @@ contract SHRINCSAccountVectorExportTest is Test {
         );
         assertTrue(
             verifyOk, "exported stateless vector must feed the wrapper"
+        );
+        assertEq(
+            rawVerifyOk,
+            verifyOk,
+            "exported calldata result must match direct call"
         );
     }
 
@@ -229,6 +297,18 @@ contract SHRINCSAccountVectorExportTest is Test {
                 recoverySignature
             );
 
+        // Execute the exported rotate calldata before emitting: a wrong
+        // selector or swapped arg in the helper's abi.encodeCall must fail
+        // here, not ship silently. Rotation mutates key/usage state, so
+        // snapshot and revert before the direct-call flow below.
+        uint256 snap = vm.snapshotState();
+        (bool rawOk, bytes memory rawRet) =
+            address(account).call(vector_.rotateCalldata);
+        assertTrue(rawOk, "exported rotate calldata must not revert");
+        bool rawRotateOk = abi.decode(rawRet, (bool));
+        assertTrue(rawRotateOk, "exported rotate calldata must rotate");
+        vm.revertToState(snap);
+
         emit log_named_bytes(
             "stateful_rotation_vector_abi", abi.encode(vector_)
         );
@@ -242,6 +322,11 @@ contract SHRINCSAccountVectorExportTest is Test {
         assertTrue(
             rotateOk,
             "exported stateful-only rotation vector must feed the wrapper"
+        );
+        assertEq(
+            rawRotateOk,
+            rotateOk,
+            "exported calldata result must match direct call"
         );
     }
 
@@ -300,6 +385,18 @@ contract SHRINCSAccountVectorExportTest is Test {
                 recoverySignature
             );
 
+        // Execute the exported rotate calldata before emitting: a wrong
+        // selector or swapped arg in the helper's abi.encodeCall must fail
+        // here, not ship silently. Rotation mutates key/usage state, so
+        // snapshot and revert before the direct-call flow below.
+        uint256 snap = vm.snapshotState();
+        (bool rawOk, bytes memory rawRet) =
+            address(account).call(vector_.rotateCalldata);
+        assertTrue(rawOk, "exported rotate calldata must not revert");
+        bool rawRotateOk = abi.decode(rawRet, (bool));
+        assertTrue(rawRotateOk, "exported rotate calldata must rotate");
+        vm.revertToState(snap);
+
         emit log_named_bytes("full_rotation_vector_abi", abi.encode(vector_));
         emit log_named_bytes(
             "full_rotation_calldata", vector_.rotateCalldata
@@ -310,6 +407,11 @@ contract SHRINCSAccountVectorExportTest is Test {
         );
         assertTrue(
             rotateOk, "exported full rotation vector must feed the wrapper"
+        );
+        assertEq(
+            rawRotateOk,
+            rotateOk,
+            "exported calldata result must match direct call"
         );
     }
 }

@@ -27,6 +27,9 @@ import {SHRINCSParams} from "shrincs-profile/SHRINCSParams.sol";
 import {
     SHRINCSAccountVerifierExample
 } from "../contracts/examples/SHRINCSAccountVerifierExample.sol";
+import {
+    SHRINCSAccountSigningFacade
+} from "./helpers/SHRINCSAccountSigningFacade.sol";
 
 contract ExampleStatefulHarness {
     function verify(
@@ -110,7 +113,7 @@ contract SHRINCSAccountVerifierExampleHarness is
     function installFreshKeyForTest(bytes32 nextCompositePublicKey)
         external
     {
-        installFreshKey(nextCompositePublicKey);
+        installFreshFullKey(nextCompositePublicKey);
     }
 
     function installFreshStatefulKeyForTest(bytes32 nextCompositePublicKey)
@@ -1065,6 +1068,67 @@ contract SHRINCSAccountVerifierExampleTest is Test {
 
         assertTrue(
             domainA != domainB, "wrapper domains must bind contract identity"
+        );
+    }
+
+    // line-length: allow — test name is one unbreakable token
+    function testExampleIsValidSignatureRejectsAfterChainIdChanges() public {
+        bytes32 actionType = keccak256("execute");
+        bytes32 payloadHash = keccak256("payload");
+        (
+            SHRINCS.SigningKey memory signingKey,
+            SHRINCS.PublicKey memory publicKey,
+            bool keygenOk
+        ) = SHRINCSAccountSigningFacade.keygen(
+            bytes("chainid-replay-current-key"), 4
+        );
+        assertTrue(keygenOk, "keygen must succeed");
+
+        // forgefmt: disable-next-line
+        SHRINCSAccountVerifierExample account =
+            new SHRINCSAccountVerifierExample(
+                SHRINCSAccountSigningFacade.publicKeyCommitmentWord(
+                    publicKey
+                )
+            );
+
+        (
+            ,
+            SHRINCS.ActionContext memory context,
+            SHRINCS.Signature memory signature,
+            bool signOk
+        ) = SHRINCSAccountSigningFacade.signStatefulActionNow(
+            account, signingKey, actionType, payloadHash
+        );
+        assertTrue(signOk, "stateful signing must succeed");
+
+        bytes32 hash = SHRINCS.statefulActionMessageHash(
+            account.currentSHRINCSPublicKey(), context
+        );
+        bytes memory envelope = abi.encodePacked(
+            bytes1(ERC1271_MODE_STATEFUL_ACTION),
+            abi.encode(publicKey, actionType, payloadHash, signature)
+        );
+
+        // Positive control: a freshly self-signed action validates on the
+        // chain it was signed for.
+        bytes4 acceptedHere = account.isValidSignature(hash, envelope);
+        assertEq(
+            acceptedHere,
+            MAGIC_VALUE,
+            "freshly signed action must validate on the signing chain"
+        );
+
+        // domainSeparator() binds block.chainid; flipping it must invalidate
+        // the same (hash, envelope) pair that just validated (cross-chain
+        // replay pin).
+        vm.chainId(block.chainid + 1);
+
+        bytes4 afterChainIdFlip = account.isValidSignature(hash, envelope);
+        assertTrue(
+            afterChainIdFlip != MAGIC_VALUE,
+            // line-length: allow — one unbreakable string literal token
+            "a chain-id flip must invalidate a previously-valid ERC-1271 result"
         );
     }
 

@@ -23,6 +23,13 @@ import {SPHINCSPlusC} from "../contracts/SPHINCSPlusC.sol";
 import {FORSMinusC} from "../contracts/FORSMinusC.sol";
 import {Hypertree} from "../contracts/Hypertree.sol";
 import {WOTSPlusC} from "../contracts/WOTSPlusC.sol";
+import {SHRINCSTestSigner} from "./helpers/SHRINCSTestSigner.sol";
+import {
+    SHRINCSStatelessVectorSigner
+} from "./helpers/SHRINCSStatelessVectorSigner.sol";
+import {
+    SHRINCSStatelessVectorSigningFacade
+} from "./helpers/SHRINCSStatelessVectorSigningFacade.sol";
 
 contract StatefulHarness {
     function verifyUnsafeRaw(
@@ -205,11 +212,37 @@ contract SHRINCSSphincs256sVectorsTest is Test {
     RotationHarness internal rotation;
     string internal vectors;
 
+    // Single in-Solidity signing baseline shared by every context-verify and
+    // rotation positive control below. Keygen is heavy, so it runs exactly
+    // once here (a second keygen in the same call frame hits MemoryLimitOOG);
+    // each expensive stateless signature is then produced in its own test
+    // call frame from this cached key. This is the real signer the vacuous
+    // "Rejects..." cluster was missing: it signs the exact context-derived
+    // message hash the entrypoints recompute, so a valid signature exists and
+    // only the guard under test can reject it.
+    SHRINCSStatelessVectorSigner internal statelessSigner;
+    SHRINCS.SigningKey internal baseSigningKey;
+    SHRINCS.PublicKey internal basePublicKey;
+    bytes32 internal baseCommitment;
+
     function setUp() public {
         stateful = new StatefulHarness();
         stateless = new StatelessHarness();
         rotation = new RotationHarness();
         vectors = vm.readFile(VECTOR_PATH);
+
+        statelessSigner = new SHRINCSStatelessVectorSigner();
+        (
+            SHRINCS.SigningKey memory signingKey,
+            SHRINCS.PublicKey memory publicKey,
+            bool keygenOk
+        ) = SHRINCSTestSigner.keygen(
+            bytes("shrincs-256s-vectors positive-control baseline"), 4
+        );
+        require(keygenOk, "baseline keygen must succeed");
+        baseSigningKey = signingKey;
+        basePublicKey = publicKey;
+        baseCommitment = readWord(publicKey.publicKeyCommitment);
     }
 
     function testStatefulSphincs256sValidSignatureVerifies() public {
@@ -987,80 +1020,61 @@ contract SHRINCSSphincs256sVectorsTest is Test {
         );
     }
 
+    // Positive control for the stateful context-verify accept path. The
+    // in-Solidity signer signs the exact hash verifyStateful recomputes, so a
+    // well-formed action context verifies. Every stateful "Rejects..." case
+    // below is a single-field flip away from this accepting baseline.
+    function testStatefulVerifyAcceptsSignedActionContext() public {
+        SHRINCS.ActionContext memory context = acceptingActionContext();
+        SHRINCS.Signature memory signature = signStatefulContext(context);
+        assertTrue(
+            stateful.verify(
+                baseCommitment, loadPublicKey(), context, signature
+            ),
+            "signed stateful action context must verify"
+        );
+    }
+
+    // Non-vacuous: the signature is valid over the zero-domain-separator
+    // hash, so only validActionContext's domain-separator guard rejects it.
+    // Delete that guard and verifyStateful accepts, failing this assertion.
     function testStatefulVerifyRejectsZeroDomainSeparator() public {
-        (
-            SHRINCS.PublicKey memory publicKey,
-            bytes memory message,
-            SHRINCS.Signature memory signature
-        ) = decodeStatefulVector(".stateful.cases.valid.calldata");
-        bytes32 expectedCompositePublicKey =
-            compositePublicKeyWord(publicKey);
-        // forgefmt: disable-next-line
-        SHRINCS.ActionContext memory context =
-            SHRINCS.ActionContext({
-                domainSeparator: bytes32(0),
-                nonce: 1,
-                keyVersion: 1,
-                actionType: keccak256("execute"),
-                payloadHash: keccak256("payload")
-            });
-        message;
-        assertEq(
+        SHRINCS.ActionContext memory context = acceptingActionContext();
+        context.domainSeparator = bytes32(0);
+        SHRINCS.Signature memory signature = signStatefulContext(context);
+        assertFalse(
             stateful.verify(
-                expectedCompositePublicKey, publicKey, context, signature
+                baseCommitment, loadPublicKey(), context, signature
             ),
-            false,
-            "stateful zero domain separator"
+            "zero domain separator rejected despite valid signature"
         );
     }
 
+    // Non-vacuous: valid signature over the zero-action-type hash; only the
+    // action-type guard rejects it.
     function testStatefulVerifyRejectsZeroActionType() public {
-        (
-            SHRINCS.PublicKey memory publicKey,,
-            SHRINCS.Signature memory signature
-        ) = decodeStatefulVector(".stateful.cases.valid.calldata");
-        bytes32 expectedCompositePublicKey =
-            compositePublicKeyWord(publicKey);
-        // forgefmt: disable-next-line
-        SHRINCS.ActionContext memory context =
-            SHRINCS.ActionContext({
-                domainSeparator: keccak256("shrincs-account"),
-                nonce: 1,
-                keyVersion: 1,
-                actionType: bytes32(0),
-                payloadHash: keccak256("payload")
-            });
-        assertEq(
+        SHRINCS.ActionContext memory context = acceptingActionContext();
+        context.actionType = bytes32(0);
+        SHRINCS.Signature memory signature = signStatefulContext(context);
+        assertFalse(
             stateful.verify(
-                expectedCompositePublicKey, publicKey, context, signature
+                baseCommitment, loadPublicKey(), context, signature
             ),
-            false,
-            "stateful zero action type"
+            "zero action type rejected despite valid signature"
         );
     }
 
+    // Non-vacuous: valid signature over the zero-payload-hash hash; only the
+    // payload-hash guard rejects it.
     function testStatefulVerifyRejectsZeroPayloadHash() public {
-        (
-            SHRINCS.PublicKey memory publicKey,,
-            SHRINCS.Signature memory signature
-        ) = decodeStatefulVector(".stateful.cases.valid.calldata");
-        bytes32 expectedCompositePublicKey =
-            compositePublicKeyWord(publicKey);
-        // forgefmt: disable-next-line
-        SHRINCS.ActionContext memory context =
-            SHRINCS.ActionContext({
-                domainSeparator: keccak256("shrincs-account"),
-                nonce: 1,
-                keyVersion: 1,
-                actionType: keccak256("execute"),
-                payloadHash: bytes32(0)
-            });
-        assertEq(
+        SHRINCS.ActionContext memory context = acceptingActionContext();
+        context.payloadHash = bytes32(0);
+        SHRINCS.Signature memory signature = signStatefulContext(context);
+        assertFalse(
             stateful.verify(
-                expectedCompositePublicKey, publicKey, context, signature
+                baseCommitment, loadPublicKey(), context, signature
             ),
-            false,
-            "stateful zero payload hash"
+            "zero payload hash rejected despite valid signature"
         );
     }
 
@@ -1095,78 +1109,63 @@ contract SHRINCSSphincs256sVectorsTest is Test {
         );
     }
 
+    // Positive control for the stateless context-verify accept path. The
+    // staged in-Solidity stateless signer signs the exact hash
+    // verifyStateless recomputes, so a well-formed action context verifies.
+    function testStatelessVerifyAcceptsSignedActionContext() public {
+        SHRINCS.ActionContext memory context = acceptingActionContext();
+        SPHINCSPlusC.Signature memory signature =
+            signStatelessContext(context);
+        assertTrue(
+            stateless.verify(
+                baseCommitment, loadPublicKey(), context, signature
+            ),
+            "signed stateless action context must verify"
+        );
+    }
+
+    // Non-vacuous: valid stateless signature over the zero-domain-separator
+    // hash; only validActionContext's domain-separator guard rejects it.
     function testStatelessVerifyRejectsZeroDomainSeparator() public {
-        (
-            SHRINCS.PublicKey memory publicKey,,
-            SPHINCSPlusC.Signature memory signature
-        ) = decodeStatelessVector(".stateless.cases.valid.calldata");
-        bytes32 expectedCompositePublicKey =
-            compositePublicKeyWord(publicKey);
-        // forgefmt: disable-next-line
-        SHRINCS.ActionContext memory context =
-            SHRINCS.ActionContext({
-                domainSeparator: bytes32(0),
-                nonce: 1,
-                keyVersion: 1,
-                actionType: keccak256("execute"),
-                payloadHash: keccak256("payload")
-            });
-        assertEq(
+        SHRINCS.ActionContext memory context = acceptingActionContext();
+        context.domainSeparator = bytes32(0);
+        SPHINCSPlusC.Signature memory signature =
+            signStatelessContext(context);
+        assertFalse(
             stateless.verify(
-                expectedCompositePublicKey, publicKey, context, signature
+                baseCommitment, loadPublicKey(), context, signature
             ),
-            false,
-            "stateless zero domain separator"
+            "zero domain separator rejected despite valid signature"
         );
     }
 
+    // Non-vacuous: valid stateless signature over the zero-action-type hash;
+    // only the action-type guard rejects it.
     function testStatelessVerifyRejectsZeroActionType() public {
-        (
-            SHRINCS.PublicKey memory publicKey,,
-            SPHINCSPlusC.Signature memory signature
-        ) = decodeStatelessVector(".stateless.cases.valid.calldata");
-        bytes32 expectedCompositePublicKey =
-            compositePublicKeyWord(publicKey);
-        // forgefmt: disable-next-line
-        SHRINCS.ActionContext memory context =
-            SHRINCS.ActionContext({
-                domainSeparator: keccak256("shrincs-account"),
-                nonce: 1,
-                keyVersion: 1,
-                actionType: bytes32(0),
-                payloadHash: keccak256("payload")
-            });
-        assertEq(
+        SHRINCS.ActionContext memory context = acceptingActionContext();
+        context.actionType = bytes32(0);
+        SPHINCSPlusC.Signature memory signature =
+            signStatelessContext(context);
+        assertFalse(
             stateless.verify(
-                expectedCompositePublicKey, publicKey, context, signature
+                baseCommitment, loadPublicKey(), context, signature
             ),
-            false,
-            "stateless zero action type"
+            "zero action type rejected despite valid signature"
         );
     }
 
+    // Non-vacuous: valid stateless signature over the zero-payload-hash hash;
+    // only the payload-hash guard rejects it.
     function testStatelessVerifyRejectsZeroPayloadHash() public {
-        (
-            SHRINCS.PublicKey memory publicKey,,
-            SPHINCSPlusC.Signature memory signature
-        ) = decodeStatelessVector(".stateless.cases.valid.calldata");
-        bytes32 expectedCompositePublicKey =
-            compositePublicKeyWord(publicKey);
-        // forgefmt: disable-next-line
-        SHRINCS.ActionContext memory context =
-            SHRINCS.ActionContext({
-                domainSeparator: keccak256("shrincs-account"),
-                nonce: 1,
-                keyVersion: 1,
-                actionType: keccak256("execute"),
-                payloadHash: bytes32(0)
-            });
-        assertEq(
+        SHRINCS.ActionContext memory context = acceptingActionContext();
+        context.payloadHash = bytes32(0);
+        SPHINCSPlusC.Signature memory signature =
+            signStatelessContext(context);
+        assertFalse(
             stateless.verify(
-                expectedCompositePublicKey, publicKey, context, signature
+                baseCommitment, loadPublicKey(), context, signature
             ),
-            false,
-            "stateless zero payload hash"
+            "zero payload hash rejected despite valid signature"
         );
     }
 
@@ -1204,117 +1203,118 @@ contract SHRINCSSphincs256sVectorsTest is Test {
         );
     }
 
-    function testRotateStatefulViaStatelessRejectsLegacyVectorAuthorization()
-        public
-    {
-        (
-            SHRINCS.PublicKey memory publicKey,,
-            SPHINCSPlusC.Signature memory signature
-        ) = decodeStatelessVector(".stateless.cases.valid.calldata");
-
-        SHRINCS.RotationContext memory context = SHRINCS.RotationContext({
-            domainSeparator: keccak256("shrincs-test"),
-            nonce: 7,
-            keyVersion: 1
-        });
+    // Positive control for the stateful-subkey rotation accept path, with a
+    // folded replay negative. A stateless recovery signature over the exact
+    // statefulRotationMessageHash authorizes the rotation and returns the
+    // next installed commitment; the SAME signature applied to a different
+    // rotation context (bumped nonce) no longer authorizes it, exercising the
+    // recovery signature-binding non-vacuously (delete that verify and the
+    // replay succeeds).
+    function testRotateStatefulViaStatelessAcceptsSignedRotation() public {
+        SHRINCS.PublicKey memory publicKey = loadPublicKey();
+        SHRINCS.RotationContext memory context = acceptingRotationContext();
         SHRINCS.StatefulRotationTarget memory target =
             statefulRotationTargetFromParts(
                 publicKey, publicKey.statefulPublicKey
             );
-
-        bytes32 result = rotation.rotateStatefulViaStateless(
-            compositePublicKeyWord(publicKey),
-            publicKey,
-            context,
-            signature,
-            target
+        bytes32 hash = rotation.statefulRotationMessageHash(
+            baseCommitment, publicKey, context, target
         );
-        assertEq(result, bytes32(0));
+        SPHINCSPlusC.Signature memory recovery = signStatelessMessage(hash);
+
+        assertEq(
+            rotation.rotateStatefulViaStateless(
+                baseCommitment, publicKey, context, recovery, target
+            ),
+            readWord(target.publicKeyCommitment),
+            "valid stateful rotation must install the next commitment"
+        );
+
+        context.nonce += 1;
+        assertEq(
+            rotation.rotateStatefulViaStateless(
+                baseCommitment, publicKey, context, recovery, target
+            ),
+            bytes32(0),
+            "recovery signature must not authorize a different rotation"
+        );
     }
 
-    function testRotateStatefulViaStatelessRejectsMalformedNextStatefulKey()
-        public
-    {
-        (
-            SHRINCS.PublicKey memory publicKey,,
-            SPHINCSPlusC.Signature memory signature
-        ) = decodeStatelessVector(".stateless.cases.valid.calldata");
-
-        SHRINCS.RotationContext memory context = SHRINCS.RotationContext({
-            domainSeparator: keccak256("shrincs-test"),
-            nonce: 7,
-            keyVersion: 1
-        });
-        SHRINCS.StatefulRotationTarget memory target =
-            statefulRotationTargetFromParts(publicKey, hex"1234");
-
-        bytes32 result = rotation.rotateStatefulViaStateless(
-            compositePublicKeyWord(publicKey),
-            publicKey,
-            context,
-            signature,
-            target
-        );
-        assertEq(result, bytes32(0));
-    }
-
+    // Non-vacuous: valid recovery signature over the zero-domain-separator
+    // rotation hash; only validRotationContext rejects it.
     function testRotateStatefulViaStatelessRejectsZeroDomainSeparator()
         public
     {
-        (
-            SHRINCS.PublicKey memory publicKey,,
-            SPHINCSPlusC.Signature memory signature
-        ) = decodeStatelessVector(".stateless.cases.valid.calldata");
-
-        SHRINCS.RotationContext memory context = SHRINCS.RotationContext({
-            domainSeparator: bytes32(0), nonce: 7, keyVersion: 1
-        });
+        SHRINCS.PublicKey memory publicKey = loadPublicKey();
+        SHRINCS.RotationContext memory context = acceptingRotationContext();
+        context.domainSeparator = bytes32(0);
         SHRINCS.StatefulRotationTarget memory target =
             statefulRotationTargetFromParts(
                 publicKey, publicKey.statefulPublicKey
             );
-
-        bytes32 result = rotation.rotateStatefulViaStateless(
-            compositePublicKeyWord(publicKey),
-            publicKey,
-            context,
-            signature,
-            target
+        bytes32 hash = rotation.statefulRotationMessageHash(
+            baseCommitment, publicKey, context, target
         );
-        assertEq(result, bytes32(0));
+        SPHINCSPlusC.Signature memory recovery = signStatelessMessage(hash);
+
+        assertEq(
+            rotation.rotateStatefulViaStateless(
+                baseCommitment, publicKey, context, recovery, target
+            ),
+            bytes32(0),
+            "zero rotation domain separator rejected despite valid recovery"
+        );
     }
 
+    // Non-vacuous: the next stateful key is well-formed but carries
+    // maxSignatures == 0, and the recovery signature is valid over its
+    // rotation hash. Only the zero-budget guard rejects it; delete that guard
+    // and the rotation installs an unusable key.
     // line-length: allow — test name is one unbreakable token
     function testRotateStatefulViaStatelessRejectsZeroMaxSignaturesNextStatefulKey()
         public
     {
-        (
-            SHRINCS.PublicKey memory publicKey,,
-            SPHINCSPlusC.Signature memory signature
-        ) = decodeStatelessVector(".stateless.cases.valid.calldata");
-
-        SHRINCS.RotationContext memory context = SHRINCS.RotationContext({
-            domainSeparator: keccak256("shrincs-test"),
-            nonce: 7,
-            keyVersion: 1
-        });
+        SHRINCS.PublicKey memory publicKey = loadPublicKey();
+        SHRINCS.RotationContext memory context = acceptingRotationContext();
         bytes memory nextStatefulPublicKey =
-            bytes.concat(publicKey.statefulPublicKey);
-        nextStatefulPublicKey[64] = bytes1(0);
-        nextStatefulPublicKey[65] = bytes1(0);
-        nextStatefulPublicKey[66] = bytes1(0);
-        nextStatefulPublicKey[67] = bytes1(0);
+            zeroMaxSignatures(publicKey.statefulPublicKey);
         SHRINCS.StatefulRotationTarget memory target =
             statefulRotationTargetFromParts(publicKey, nextStatefulPublicKey);
-
-        bytes32 result = rotation.rotateStatefulViaStateless(
-            compositePublicKeyWord(publicKey),
-            publicKey,
-            context,
-            signature,
-            target
+        bytes32 hash = rotation.statefulRotationMessageHash(
+            baseCommitment, publicKey, context, target
         );
-        assertEq(result, bytes32(0));
+        SPHINCSPlusC.Signature memory recovery = signStatelessMessage(hash);
+
+        assertEq(
+            rotation.rotateStatefulViaStateless(
+                baseCommitment, publicKey, context, recovery, target
+            ),
+            bytes32(0),
+            "zero-budget next stateful key rejected despite valid recovery"
+        );
+    }
+
+    // Defense-in-depth pin (not a single-guard witness): a malformed next
+    // stateful key is rejected by the fixed-width length guard before the
+    // recovery signature is examined, so an empty recovery suffices. The
+    // decode guard also rejects it, so no single guard removal flips this
+    // assertion; the accept-path binding is proven by the positive control.
+    function testRotateStatefulViaStatelessRejectsMalformedNextStatefulKey()
+        public
+    {
+        SHRINCS.PublicKey memory publicKey = loadPublicKey();
+        SHRINCS.RotationContext memory context = acceptingRotationContext();
+        SHRINCS.StatefulRotationTarget memory target =
+            statefulRotationTargetFromParts(publicKey, hex"1234");
+        SPHINCSPlusC.Signature memory emptyRecovery;
+
+        assertEq(
+            rotation.rotateStatefulViaStateless(
+                baseCommitment, publicKey, context, emptyRecovery, target
+            ),
+            bytes32(0),
+            "malformed next stateful key must be rejected"
+        );
     }
 
     function testRotateFullSHRINCSKeyMessageHashBindsNextKeyBundle() public {
@@ -1354,120 +1354,223 @@ contract SHRINCSSphincs256sVectorsTest is Test {
         );
     }
 
-    function testRotateFullSHRINCSKeyRejectsLegacyVectorAuthorization()
-        public
-    {
-        (
-            SHRINCS.PublicKey memory publicKey,,
-            SPHINCSPlusC.Signature memory signature
-        ) = decodeStatelessVector(".stateless.cases.valid.calldata");
-
-        SHRINCS.RotationContext memory context = SHRINCS.RotationContext({
-            domainSeparator: keccak256("shrincs-test"),
-            nonce: 11,
-            keyVersion: 2
-        });
+    // Positive control for the full-bundle rotation accept path, with a
+    // folded replay negative. A stateless recovery signature over the exact
+    // fullRotationMessageHash authorizes the rotation; the same signature
+    // does not authorize a rotation under a bumped nonce.
+    function testRotateFullSHRINCSKeyAcceptsSignedRotation() public {
+        SHRINCS.PublicKey memory publicKey = loadPublicKey();
+        SHRINCS.RotationContext memory context = acceptingRotationContext();
         SHRINCS.RotationTarget memory target = rotationTargetFromParts(
             publicKey.statefulPublicKey,
             publicKey.pkSeed,
             publicKey.hypertreeRoot
         );
-
-        bytes32 result = rotation.statelessRotate(
-            compositePublicKeyWord(publicKey),
-            publicKey,
-            context,
-            signature,
-            target
+        bytes32 hash = rotation.fullRotationMessageHash(
+            baseCommitment, publicKey, context, target
         );
-        assertEq(result, bytes32(0));
+        SPHINCSPlusC.Signature memory recovery = signStatelessMessage(hash);
+
+        assertEq(
+            rotation.statelessRotate(
+                baseCommitment, publicKey, context, recovery, target
+            ),
+            readWord(target.publicKeyCommitment),
+            "valid full rotation must install the next commitment"
+        );
+
+        context.nonce += 1;
+        assertEq(
+            rotation.statelessRotate(
+                baseCommitment, publicKey, context, recovery, target
+            ),
+            bytes32(0),
+            "recovery signature must not authorize a different rotation"
+        );
     }
 
-    function testRotateFullSHRINCSKeyRejectsMismatchedCompositeCommitment()
-        public
-    {
-        (
-            SHRINCS.PublicKey memory publicKey,,
-            SPHINCSPlusC.Signature memory signature
-        ) = decodeStatelessVector(".stateless.cases.valid.calldata");
-
-        SHRINCS.RotationContext memory context = SHRINCS.RotationContext({
-            domainSeparator: keccak256("shrincs-test"),
-            nonce: 11,
-            keyVersion: 2
-        });
-        SHRINCS.RotationTarget memory target = rotationTargetFromParts(
-            publicKey.statefulPublicKey,
-            publicKey.pkSeed,
-            publicKey.hypertreeRoot
-        );
-
-        bytes32 result = rotation.statelessRotate(
-            compositePublicKeyWord(publicKey),
-            publicKey,
-            context,
-            signature,
-            target
-        );
-        assertEq(result, bytes32(0));
-    }
-
+    // Non-vacuous: valid recovery signature over the zero-domain-separator
+    // full-rotation hash; only validRotationContext rejects it.
     function testRotateFullSHRINCSKeyRejectsZeroDomainSeparator() public {
-        (
-            SHRINCS.PublicKey memory publicKey,,
-            SPHINCSPlusC.Signature memory signature
-        ) = decodeStatelessVector(".stateless.cases.valid.calldata");
-
-        SHRINCS.RotationContext memory context = SHRINCS.RotationContext({
-            domainSeparator: bytes32(0), nonce: 11, keyVersion: 2
-        });
+        SHRINCS.PublicKey memory publicKey = loadPublicKey();
+        SHRINCS.RotationContext memory context = acceptingRotationContext();
+        context.domainSeparator = bytes32(0);
         SHRINCS.RotationTarget memory target = rotationTargetFromParts(
             publicKey.statefulPublicKey,
             publicKey.pkSeed,
             publicKey.hypertreeRoot
         );
-
-        bytes32 result = rotation.statelessRotate(
-            compositePublicKeyWord(publicKey),
-            publicKey,
-            context,
-            signature,
-            target
+        bytes32 hash = rotation.fullRotationMessageHash(
+            baseCommitment, publicKey, context, target
         );
-        assertEq(result, bytes32(0));
+        SPHINCSPlusC.Signature memory recovery = signStatelessMessage(hash);
+
+        assertEq(
+            rotation.statelessRotate(
+                baseCommitment, publicKey, context, recovery, target
+            ),
+            bytes32(0),
+            "zero rotation domain separator rejected despite valid recovery"
+        );
     }
 
+    // Non-vacuous: the next bundle's stateful key carries maxSignatures == 0,
+    // and the recovery signature is valid over its rotation hash. Only the
+    // zero-budget guard rejects it.
+    // line-length: allow — test name is one unbreakable token
     function testRotateFullSHRINCSKeyRejectsZeroMaxSignaturesNextStatefulKey()
         public
     {
-        (
-            SHRINCS.PublicKey memory publicKey,,
-            SPHINCSPlusC.Signature memory signature
-        ) = decodeStatelessVector(".stateless.cases.valid.calldata");
-
-        SHRINCS.RotationContext memory context = SHRINCS.RotationContext({
-            domainSeparator: keccak256("shrincs-test"),
-            nonce: 11,
-            keyVersion: 2
-        });
+        SHRINCS.PublicKey memory publicKey = loadPublicKey();
+        SHRINCS.RotationContext memory context = acceptingRotationContext();
         bytes memory nextStatefulPublicKey =
-            bytes.concat(publicKey.statefulPublicKey);
+            zeroMaxSignatures(publicKey.statefulPublicKey);
+        SHRINCS.RotationTarget memory target = rotationTargetFromParts(
+            nextStatefulPublicKey, publicKey.pkSeed, publicKey.hypertreeRoot
+        );
+        bytes32 hash = rotation.fullRotationMessageHash(
+            baseCommitment, publicKey, context, target
+        );
+        SPHINCSPlusC.Signature memory recovery = signStatelessMessage(hash);
+
+        assertEq(
+            rotation.statelessRotate(
+                baseCommitment, publicKey, context, recovery, target
+            ),
+            bytes32(0),
+            "zero-budget next stateful key rejected despite valid recovery"
+        );
+    }
+
+    // Non-vacuous: the recovery signature is valid over a rotation hash that
+    // binds the DECLARED next commitment, but that commitment does not match
+    // the recomputed commitment of the declared next-key parts. Only the
+    // commitment-consistency guard rejects it; delete that guard and the
+    // rotation installs a bundle whose commitment lies about its contents.
+    function testRotateFullSHRINCSKeyRejectsMismatchedCompositeCommitment()
+        public
+    {
+        SHRINCS.PublicKey memory publicKey = loadPublicKey();
+        SHRINCS.RotationContext memory context = acceptingRotationContext();
+        SHRINCS.RotationTarget memory target = rotationTargetFromParts(
+            publicKey.statefulPublicKey,
+            publicKey.pkSeed,
+            publicKey.hypertreeRoot
+        );
+        // Declare a commitment that does not match the recomputed parts.
+        target.publicKeyCommitment =
+            abi.encodePacked(keccak256("mismatched-next-commitment"));
+        bytes32 hash = rotation.fullRotationMessageHash(
+            baseCommitment, publicKey, context, target
+        );
+        SPHINCSPlusC.Signature memory recovery = signStatelessMessage(hash);
+
+        assertEq(
+            rotation.statelessRotate(
+                baseCommitment, publicKey, context, recovery, target
+            ),
+            bytes32(0),
+            "mismatched next commitment rejected despite valid recovery"
+        );
+    }
+
+    // ---- positive-control signing helpers ------------------------------
+
+    function loadPublicKey()
+        internal
+        view
+        returns (SHRINCS.PublicKey memory)
+    {
+        return basePublicKey;
+    }
+
+    function acceptingActionContext()
+        internal
+        pure
+        returns (SHRINCS.ActionContext memory)
+    {
+        return SHRINCS.ActionContext({
+            domainSeparator: keccak256("shrincs-account"),
+            nonce: 1,
+            keyVersion: 1,
+            actionType: keccak256("execute"),
+            payloadHash: keccak256("payload")
+        });
+    }
+
+    function acceptingRotationContext()
+        internal
+        pure
+        returns (SHRINCS.RotationContext memory)
+    {
+        return SHRINCS.RotationContext({
+            domainSeparator: keccak256("shrincs-account"),
+            nonce: 7,
+            keyVersion: 1
+        });
+    }
+
+    function signStatefulContext(SHRINCS.ActionContext memory context)
+        internal
+        view
+        returns (SHRINCS.Signature memory signature)
+    {
+        bytes memory message = abi.encodePacked(
+            SHRINCS.statefulActionMessageHash(baseCommitment, context)
+        );
+        bool ok;
+        (signature, ok) = SHRINCSTestSigner.signStatefulRawAtLeaf(
+            baseSigningKey, 1, message
+        );
+        require(ok, "stateful signing must succeed");
+    }
+
+    function signStatelessContext(SHRINCS.ActionContext memory context)
+        internal
+        returns (SPHINCSPlusC.Signature memory)
+    {
+        return signStatelessMessage(
+            SHRINCS.statelessActionMessageHash(baseCommitment, context)
+        );
+    }
+
+    function signStatelessMessage(bytes32 messageHash)
+        internal
+        returns (SPHINCSPlusC.Signature memory signature)
+    {
+        (bytes32 sessionId, bool beginOk) = statelessSigner.beginSession(
+            baseSigningKey, basePublicKey, abi.encodePacked(messageHash)
+        );
+        require(beginOk, "stateless session begin must succeed");
+        bool completeOk;
+        (, signature, completeOk) =
+            SHRINCSStatelessVectorSigningFacade.completeSession(
+                statelessSigner, sessionId
+            );
+        require(completeOk, "stateless signing must succeed");
+    }
+
+    function zeroMaxSignatures(bytes memory statefulPublicKey)
+        internal
+        pure
+        returns (bytes memory nextStatefulPublicKey)
+    {
+        nextStatefulPublicKey = bytes.concat(statefulPublicKey);
         nextStatefulPublicKey[64] = bytes1(0);
         nextStatefulPublicKey[65] = bytes1(0);
         nextStatefulPublicKey[66] = bytes1(0);
         nextStatefulPublicKey[67] = bytes1(0);
-        SHRINCS.RotationTarget memory target = rotationTargetFromParts(
-            nextStatefulPublicKey, publicKey.pkSeed, publicKey.hypertreeRoot
-        );
+    }
 
-        bytes32 result = rotation.statelessRotate(
-            compositePublicKeyWord(publicKey),
-            publicKey,
-            context,
-            signature,
-            target
-        );
-        assertEq(result, bytes32(0));
+    function readWord(bytes memory data)
+        internal
+        pure
+        returns (bytes32 word)
+    {
+        // Reads the first 32-byte word of a >=32-byte buffer (commitment).
+        assembly {
+            word := mload(add(data, 32))
+        }
     }
 
     function compositePublicKeyWord(SHRINCS.PublicKey memory publicKey)

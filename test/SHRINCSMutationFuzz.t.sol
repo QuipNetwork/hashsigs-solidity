@@ -119,6 +119,29 @@ contract SHRINCSMutationFuzzTest is Test {
         );
     }
 
+    // Mutating the per-signature randomizer breaks the committed stateful
+    // message digest (the randomizer is bound into the digest the leaf's
+    // WOTS-C signature is over).
+    function testFuzz_rawRandomizerMutationRejected(bytes32 flip)
+        public
+        view
+    {
+        (
+            SHRINCS.PublicKey memory publicKey,
+            SHRINCS.Signature memory signature
+        ) = abi.decode(rawEnvelope, (SHRINCS.PublicKey, SHRINCS.Signature));
+        // `| 1` guarantees a non-no-op flip regardless of the fuzzed value.
+        signature.randomizer =
+            bytes32(uint256(signature.randomizer) ^ (uint256(flip) | 1));
+        bytes memory mutated =
+            SHRINCS.encodeStatefulEnvelope(publicKey, signature);
+        assertEq(
+            rawVerifier.verify(rawKey, rawHash, mutated),
+            INVALID_SIGNATURE,
+            "mutated randomizer accepted"
+        );
+    }
+
     // Perturbing the WOTS-C grind counter breaks the target-sum digest.
     function testFuzz_rawCounterMutationRejected(uint32 delta) public view {
         (

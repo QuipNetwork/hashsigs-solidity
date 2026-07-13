@@ -1083,4 +1083,86 @@ contract SHRINCSToyStatelessProfileTest is Test {
             "toy stateless signature must be deterministic"
         );
     }
+
+    // Mirrors GuardPinning's never-wrong-accept posture, scaled to the toy
+    // profile: a message swapped after signing must not verify. Without
+    // this the in-file reference verify() could regress to `return true`
+    // and every other test here would stay green.
+    function testToyProfileStatelessRejectsFlippedMessage() public view {
+        (
+            SHRINCSToyStatelessProfile.SigningKey memory signingKey,
+            SHRINCSToyStatelessProfile.PublicKey memory publicKey
+        ) = harness.keygen(bytes("toy tamper message seed"));
+
+        bytes memory message =
+            abi.encodePacked(keccak256("toy tamper message"));
+        (
+            SHRINCSToyStatelessProfile.StatelessSignature memory signature,
+            bool ok
+        ) = harness.sign(signingKey, message);
+        assertTrue(ok, "toy stateless signing must succeed");
+
+        bytes memory flippedMessage =
+            abi.encodePacked(keccak256("toy tamper message flipped"));
+        assertFalse(
+            harness.verify(publicKey, flippedMessage, signature),
+            "flipped message must not verify"
+        );
+    }
+
+    // Flips one FORS secret-leaf element of a valid signature (the "flip a
+    // signature element" mutation class). The `| 1` guarantees a non-no-op
+    // flip regardless of the fuzzed value.
+    // line-length: allow — fmt canonical function head exceeds cap
+    function testFuzzToyProfileStatelessRejectsFlippedSignatureElement(bytes32 flip)
+        public
+        view
+    {
+        (
+            SHRINCSToyStatelessProfile.SigningKey memory signingKey,
+            SHRINCSToyStatelessProfile.PublicKey memory publicKey
+        ) = harness.keygen(bytes("toy tamper element seed"));
+
+        bytes memory message =
+            abi.encodePacked(keccak256("toy tamper element message"));
+        (
+            SHRINCSToyStatelessProfile.StatelessSignature memory signature,
+            bool ok
+        ) = harness.sign(signingKey, message);
+        assertTrue(ok, "toy stateless signing must succeed");
+
+        SHRINCSToyStatelessProfile.ForsEntry memory entry =
+            signature.fors.entries[0];
+        entry.secretLeaf =
+            bytes32(uint256(entry.secretLeaf) ^ (uint256(flip) | 1));
+        signature.fors.entries[0] = entry;
+
+        assertFalse(
+            harness.verify(publicKey, message, signature),
+            "flipped FORS secret leaf must not verify"
+        );
+    }
+
+    // Verifying under an unrelated key's PublicKey (the "wrong key"
+    // mutation class) must fail even though the signature itself is
+    // internally well-formed.
+    function testToyProfileStatelessRejectsWrongKey() public view {
+        (SHRINCSToyStatelessProfile.SigningKey memory signingKey,) =
+            harness.keygen(bytes("toy wrong key seed a"));
+        (, SHRINCSToyStatelessProfile.PublicKey memory otherPublicKey) =
+            harness.keygen(bytes("toy wrong key seed b"));
+
+        bytes memory message =
+            abi.encodePacked(keccak256("toy wrong key message"));
+        (
+            SHRINCSToyStatelessProfile.StatelessSignature memory signature,
+            bool ok
+        ) = harness.sign(signingKey, message);
+        assertTrue(ok, "toy stateless signing must succeed");
+
+        assertFalse(
+            harness.verify(otherPublicKey, message, signature),
+            "signature must not verify under an unrelated public key"
+        );
+    }
 }

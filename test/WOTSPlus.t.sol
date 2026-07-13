@@ -150,6 +150,159 @@ contract WOTSPlusTest is Test {
         assertTrue(isValid, "known vector signature should verify");
     }
 
+    // Mutating any single signature chunk must break verification: the
+    // tampered chunk continues the WOTS+ chain from a wrong intermediate
+    // value, so the recomputed public key hash almost certainly diverges.
+    function testFuzzVerifyRejectsFlippedSignatureElement(
+        uint8 chainSelector,
+        bytes32 flip
+    ) public {
+        vm.pauseGasMetering();
+        bytes32 privateSeed = bytes32(uint256(7));
+        (WOTSPlus.WinternitzAddress memory publicKey, bytes32 privateKey) =
+            WOTSPlus.generateKeyPair(privateSeed);
+        WOTSPlus.WinternitzMessage memory messageData =
+            WOTSPlus.WinternitzMessage({
+                messageHash: _messageHashFromSequence()
+            });
+        bytes32[NUM_SIGNATURE_CHUNKS] memory signatureArray =
+            WOTSPlus.sign(privateKey, messageData);
+
+        uint256 index = bound(chainSelector, 0, NUM_SIGNATURE_CHUNKS - 1);
+        // `| 1` guarantees a non-no-op flip regardless of the fuzzed value.
+        signatureArray[index] =
+            bytes32(uint256(signatureArray[index]) ^ (uint256(flip) | 1));
+        WOTSPlus.WinternitzElements memory signature =
+            WOTSPlus.WinternitzElements({elements: signatureArray});
+        vm.resumeGasMetering();
+
+        bool isValid = WOTSPlus.verify(publicKey, messageData, signature);
+        assertTrue(!isValid, "flipped signature chunk must not verify");
+    }
+
+    // Restored from the pre-rewrite suite (originally 199 iterations); cut
+    // to 49 here to match testVerifyManyDeterministicSignatures's runtime
+    // budget while keeping the randomization-elements verify path under
+    // deterministic multi-key regression coverage.
+    function testVerifyManyWithRandomizationElements() public {
+        for (uint256 i = 1; i < 50; ++i) {
+            vm.pauseGasMetering();
+            bytes32 privateSeed = bytes32(i);
+            (
+                WOTSPlus.WinternitzAddress memory publicKey,
+                bytes32 privateKey
+            ) = WOTSPlus.generateKeyPair(privateSeed);
+            WOTSPlus.WinternitzMessage memory message =
+                WOTSPlus.WinternitzMessage({
+                    messageHash: keccak256(
+                        abi.encodePacked("Hello World", i)
+                    )
+                });
+            WOTSPlus.WinternitzElements memory signature =
+                WOTSPlus.WinternitzElements({
+                    elements: WOTSPlus.sign(privateKey, message)
+                });
+            WOTSPlus.WinternitzElements memory randomizationElements =
+                WOTSPlus.generateRandomizationElements(publicKey.publicSeed);
+            vm.resumeGasMetering();
+
+            bool isValid = WOTSPlus.verifyWithRandomizationElements(
+                publicKey, message, signature, randomizationElements
+            );
+            assertTrue(
+                isValid,
+                "randomization-elements signature verification failed"
+            );
+        }
+    }
+
+    // Full-signature regression against the committed 5-vector JSON golden
+    // (test/test_vectors/wotsplus_keccak256.json), restoring the multi-
+    // vector depth the earlier rewrite reduced to a single signature[0]
+    // check. Compares every one of the 67 signature chunks per vector, not
+    // just the first, and still exercises the production verify() path.
+    function testKnownVectorsFullSignatureMatchesJsonGolden() public {
+        vm.pauseGasMetering();
+        string memory vectorsJson =
+            vm.readFile("test/test_vectors/wotsplus_keccak256.json");
+        uint256 numVectors = 5;
+
+        for (uint256 i = 0; i < numVectors; i++) {
+            string memory prefix = string.concat(".vector", vm.toString(i));
+            bytes32 privateSeed = keccak256(abi.encodePacked("seed", i));
+            (
+                WOTSPlus.WinternitzAddress memory publicKey,
+                bytes32 privateKey
+            ) = WOTSPlus.generateKeyPair(privateSeed);
+
+            assertEq(
+                privateKey,
+                vm.parseJsonBytes32(
+                    vectorsJson, string.concat(prefix, ".privateKey")
+                ),
+                "vector privateKey mismatch"
+            );
+            assertEq(
+                publicKey.publicSeed,
+                vm.parseJsonBytes32(
+                    vectorsJson, string.concat(prefix, ".publicSeed")
+                ),
+                "vector publicSeed mismatch"
+            );
+            assertEq(
+                publicKey.publicKeyHash,
+                vm.parseJsonBytes32(
+                    vectorsJson, string.concat(prefix, ".publicKey")
+                ),
+                "vector publicKey mismatch"
+            );
+
+            bytes memory messageBytes = new bytes(WOTSPlus.MessageLen);
+            for (uint256 j = 0; j < WOTSPlus.MessageLen; j++) {
+                // forge-lint: disable-next-line(unsafe-typecast)
+                messageBytes[j] = bytes1(uint8((i * j) % 256));
+            }
+            WOTSPlus.WinternitzMessage memory messageData =
+                WOTSPlus.WinternitzMessage({
+                    messageHash: bytes32(abi.encodePacked(messageBytes))
+                });
+            assertEq(
+                messageData.messageHash,
+                vm.parseJsonBytes32(
+                    vectorsJson, string.concat(prefix, ".message")
+                ),
+                "vector message mismatch"
+            );
+
+            bytes32[] memory expectedSignature = vm.parseJsonBytes32Array(
+                vectorsJson, string.concat(prefix, ".signature")
+            );
+            assertEq(
+                expectedSignature.length,
+                NUM_SIGNATURE_CHUNKS,
+                "vector signature length mismatch"
+            );
+
+            bytes32[NUM_SIGNATURE_CHUNKS] memory signatureArray =
+                WOTSPlus.sign(privateKey, messageData);
+            for (uint256 k = 0; k < NUM_SIGNATURE_CHUNKS; k++) {
+                assertEq(
+                    signatureArray[k],
+                    expectedSignature[k],
+                    "vector signature chunk mismatch"
+                );
+            }
+
+            WOTSPlus.WinternitzElements memory signature =
+                WOTSPlus.WinternitzElements({elements: signatureArray});
+            vm.resumeGasMetering();
+            bool isValid = WOTSPlus.verify(publicKey, messageData, signature);
+            vm.pauseGasMetering();
+            assertTrue(isValid, "vector signature must verify");
+        }
+        vm.resumeGasMetering();
+    }
+
     function _messageHashFromSequence() internal pure returns (bytes32 out) {
         bytes memory message = new bytes(WOTSPlus.MessageLen);
         for (uint256 i = 0; i < WOTSPlus.MessageLen; ++i) {

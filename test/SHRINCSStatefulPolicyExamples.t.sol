@@ -26,6 +26,12 @@ import {WOTSPlusC} from "../contracts/WOTSPlusC.sol";
 import {
     SHRINCSAccountVerifierExample
 } from "../contracts/examples/SHRINCSAccountVerifierExample.sol";
+import {
+    SHRINCSStatelessVectorSigner
+} from "./helpers/SHRINCSStatelessVectorSigner.sol";
+import {
+    SHRINCSAccountSigningFacade
+} from "./helpers/SHRINCSAccountSigningFacade.sol";
 
 contract SHRINCSStatefulPolicyHarness is SHRINCSAccountVerifierExample {
     constructor(bytes32 initialSHRINCSPublicKey)
@@ -296,6 +302,73 @@ contract SHRINCSStatefulPolicyExamplesTest is Test {
         );
         assertEq(
             account.currentSHRINCSPublicKey(), expectedCompositePublicKey
+        );
+    }
+
+    // Positive control for the two Rejects tests above: a rotation
+    // authorization signed against the account's own rotation-context hash
+    // (via the in-Solidity stateless signer helpers
+    // SHRINCSAccountVectorExport.t.sol already exercises) must succeed once
+    // recovery mode is armed. Without this, the Rejects tests could not
+    // distinguish "always closed" from "correctly gated."
+    function testRecoveryRotationExampleAcceptsProperlySignedRotation()
+        public
+    {
+        (
+            SHRINCS.SigningKey memory currentSigningKey,
+            SHRINCS.PublicKey memory currentPublicKey,
+            bool currentOk
+        ) = SHRINCSAccountSigningFacade.keygen(
+            bytes("policy-examples recovery rotation current key"), 4
+        );
+        assertTrue(currentOk, "current keygen must succeed");
+
+        // forgefmt: disable-next-line
+        SHRINCSAccountVerifierExample account =
+            new SHRINCSAccountVerifierExample(
+                SHRINCSAccountSigningFacade.publicKeyCommitmentWord(
+                    currentPublicKey
+                )
+            );
+        account.setStatefulPolicyRecoveryRotation();
+        account.enterRecoveryMode();
+
+        // line-length: allow — fmt canonical tuple head exceeds cap
+        (, SHRINCS.PublicKey memory nextPublicKey, bool nextOk) = SHRINCSAccountSigningFacade.keygen(
+            bytes("policy-examples recovery rotation next key"), 4
+        );
+        assertTrue(nextOk, "next keygen must succeed");
+
+        SHRINCS.StatefulRotationTarget memory nextKey =
+            SHRINCSAccountSigningFacade.statefulRotationTarget(
+                currentPublicKey, nextPublicKey.statefulPublicKey
+            );
+
+        SHRINCSStatelessVectorSigner signer =
+            new SHRINCSStatelessVectorSigner();
+        // line-length: allow — fmt canonical tuple head exceeds cap
+        (, bytes32 sessionId, bool signOk) = SHRINCSAccountSigningFacade.beginStatefulOnlyRotationSessionNow(
+            signer, account, currentSigningKey, currentPublicKey, nextKey
+        );
+        assertTrue(signOk, "stateful-only rotation must start");
+
+        // line-length: allow — fmt canonical tuple head exceeds cap
+        (SPHINCSPlusC.Signature memory recoverySignature, bool completeOk) = SHRINCSAccountSigningFacade.completeStatelessSession(
+            signer, sessionId
+        );
+        assertTrue(completeOk, "stateful-only rotation must complete");
+
+        bool rotateOk = account.rotateToFreshKey(
+            currentPublicKey, recoverySignature, nextKey
+        );
+
+        assertTrue(
+            rotateOk, "properly signed rotation authorization must succeed"
+        );
+        assertEq(
+            account.currentSHRINCSPublicKey(),
+            SHRINCSAccountSigningFacade.publicKeyCommitmentWord(nextKey),
+            "wrapper key must advance to the rotation target"
         );
     }
 
