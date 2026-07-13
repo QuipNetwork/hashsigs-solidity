@@ -120,11 +120,26 @@ abstract contract Create3Deployer is Script {
     }
 
     // Deploy `initCode` under `salt` via CREATE3, after asserting the
-    // build profile. Idempotent: skips if the address already has code.
+    // build profile. Idempotent on our own prior deploy; fails closed on
+    // any other occupant.
+    //
+    // `expectedCodehash` is the pinned runtime codehash of the artifact
+    // (each concrete script pins it and regenerates it the way
+    // FACTORY_INITCODE_HASH above is regenerated; see DEPLOYMENTS.md).
+    // CREATE3 child addresses are a function of (factory, salt) ONLY — the
+    // factory is permissionless and ignores init code (Create3Factory
+    // NatSpec), so a third party can pre-deploy arbitrary code at a
+    // documented salt and permanently capture the advertised address. The
+    // occupied-address branch therefore cannot assume the code is ours: it
+    // logs the on-chain codehash, then reverts unless it equals the pin. A
+    // squatted salt or a stale pin aborts the deploy instead of passing
+    // silently as "already deployed" (fail closed, F-17). A genuine re-run
+    // (our own prior deploy) matches the pin and skips.
     function _deploy(
         string memory label,
         string memory expectedProfile,
         bytes32 salt,
+        bytes32 expectedCodehash,
         bytes memory initCode
     ) internal {
         _requireProfile(expectedProfile);
@@ -136,9 +151,18 @@ abstract contract Create3Deployer is Script {
         console.log("  expected addr:  ", expected);
 
         if (expected.code.length != 0) {
-            console.log("  already deployed. Skipping.");
-            console.log("  runtime codehash:");
+            // Log the on-chain codehash BEFORE asserting (pin regeneration
+            // reads this value), then fail closed unless it matches the
+            // pinned artifact hash. A mismatch is a squatted salt or a
+            // stale pin, never a safe skip.
+            console.log("  already occupied; runtime codehash:");
             console.logBytes32(expected.codehash);
+            require(
+                expected.codehash == expectedCodehash,
+                "deploy: address occupied by unexpected code: "
+                "squatted or stale pin"
+            );
+            console.log("  matches pinned codehash. Skipping.");
             return;
         }
 
@@ -148,8 +172,16 @@ abstract contract Create3Deployer is Script {
 
         console.log("  deployed at:    ", deployed);
         // The registry value; consumers pin (address, codehash) from
-        // DEPLOYMENTS.md, never from a local rebuild.
+        // DEPLOYMENTS.md, never from a local rebuild. Log it BEFORE the pin
+        // assert so a first deploy still prints the value to record even
+        // when the pin is a placeholder (same log-before-assert flow as
+        // FACTORY_INITCODE_HASH), then fail closed if the freshly deployed
+        // code drifts from the pin.
         console.log("  runtime codehash (record in DEPLOYMENTS.md):");
         console.logBytes32(deployed.codehash);
+        require(
+            deployed.codehash == expectedCodehash,
+            "deploy: deployed codehash != pinned artifact"
+        );
     }
 }

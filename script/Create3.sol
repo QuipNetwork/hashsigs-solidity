@@ -104,9 +104,17 @@ library Create3 {
 /// deterministic address (via the canonical CREATE2 proxy) so every
 /// CREATE3 child address is a function of (factory, salt) only —
 /// chain-invariant and independent of the child's init code.
-/// @dev Deploy-only (script/). The factory carries no state and no owner;
-/// anyone may call `deploy`, and a given (factory, salt) yields exactly
-/// one address, so front-running only reproduces the same address.
+/// @dev Deploy-only (script/). The factory carries no state and no owner
+/// and `deploy` is permissionless. A CREATE3 child address is a function
+/// of (factory, salt) ONLY and ignores the init code, so a third party
+/// CAN pre-deploy DIFFERENT code at any documented salt and permanently
+/// capture that address on a chain (the CREATE2 proxy at the salt is then
+/// occupied and cannot be redeployed). This is not a wrong-accept risk:
+/// consumers verify each artifact's runtime codehash against DEPLOYMENTS.md
+/// (never a local rebuild), so squatted code fails their pin, and the
+/// deploy tooling (DeployBase._deploy) fails closed on a codehash mismatch
+/// at an occupied address rather than treating it as already deployed.
+/// A squatted salt is recovered by bumping its salt version.
 contract Create3Factory {
     /// @notice Deploy `initCode` through CREATE3 under `salt`.
     /// @param salt The deployment salt.

@@ -40,11 +40,21 @@ contract DeploySPHINCSPlusC128sQ20Keccak is Create3Deployer {
     bytes32 internal constant SALT =
         keccak256("QUIP:SPHINCSPlusC128sQ20Keccak:V1.0");
 
+    // Pinned runtime codehash of this artifact (production profile).
+    // _deploy fails closed if the CREATE3 address is occupied by code whose
+    // hash differs from this pin (squatted salt or stale pin) and asserts a
+    // fresh deploy matches it. Metadata is stripped (foundry.toml), so the
+    // hash is chain-invariant and is the value published in DEPLOYMENTS.md;
+    // regenerate per DEPLOYMENTS.md.
+    bytes32 internal constant RUNTIME_CODEHASH =
+        0xb9dc1b3ddc6fe633051b27a67322c4a72536d1cd668c4332ec4f104a1518f2e4;
+
     function run() external {
         _deploy(
             "SPHINCSPlusC128sQ20Keccak:",
             "production-128s-q20",
             SALT,
+            RUNTIME_CODEHASH,
             type(SPHINCSPlusC128sQ20Keccak).creationCode
         );
     }

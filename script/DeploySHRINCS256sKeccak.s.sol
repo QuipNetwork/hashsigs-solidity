@@ -45,6 +45,15 @@ contract DeploySHRINCS256sKeccak is Create3Deployer {
     address internal constant SPHINCS_PLUS_C =
         0xf1Bd3aE9d3907bA59FB22A77eAcCbd278b51f88A;
 
+    // Pinned runtime codehash of this artifact (production profile).
+    // _deploy fails closed if the CREATE3 address is occupied by code whose
+    // hash differs from this pin (squatted salt or stale pin) and asserts a
+    // fresh deploy matches it. Metadata is stripped (foundry.toml), so the
+    // hash is chain-invariant and is the value published in DEPLOYMENTS.md;
+    // regenerate per DEPLOYMENTS.md.
+    bytes32 internal constant RUNTIME_CODEHASH =
+        0x22b7d973eb8481f2d0ae78f05a80499e1d318cf78c8bc5e4ece87b44f2f42113;
+
     function run() external {
         // Assert the build profile FIRST: _requireSibling reaches
         // _factory() (and its init-code-drift check), so a wrong-profile
@@ -56,6 +65,7 @@ contract DeploySHRINCS256sKeccak is Create3Deployer {
             "SHRINCS256sKeccak:",
             "production",
             SALT,
+            RUNTIME_CODEHASH,
             type(SHRINCS256sKeccak).creationCode
         );
     }

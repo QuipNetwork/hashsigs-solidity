@@ -33,7 +33,22 @@ contract DeployWOTSPlus is Create3Deployer {
     // CREATE3 salt for the WOTS+ library deployment.
     bytes32 internal constant SALT = keccak256("QUIP:WOTSPlus:V1.0");
 
+    // Pinned runtime codehash of this artifact (production profile).
+    // _deploy fails closed if the CREATE3 address is occupied by code whose
+    // hash differs from this pin (squatted salt or stale pin) and asserts a
+    // fresh deploy matches it. Metadata is stripped (foundry.toml), so the
+    // hash is chain-invariant and is the value published in DEPLOYMENTS.md;
+    // regenerate per DEPLOYMENTS.md.
+    bytes32 internal constant RUNTIME_CODEHASH =
+        0x0efb1b18e06862b6b16d6b9fdb0563c5ceaf435af928034cbdb94af18ae2e683;
+
     function run() external {
-        _deploy("WOTSPlus:", "production", SALT, type(WOTSPlus).creationCode);
+        _deploy(
+            "WOTSPlus:",
+            "production",
+            SALT,
+            RUNTIME_CODEHASH,
+            type(WOTSPlus).creationCode
+        );
     }
 }

@@ -17,6 +17,24 @@ identical across the three production profiles, so one factory serves
 every suite. It also drops the metadata tail from each runtime codehash.
 No chain has a deployment yet, so nothing is burned.
 
+The factory is permissionless: a child address depends only on
+`(factory, salt)` and ignores the init code, so anyone can call the
+factory first and deploy arbitrary code at a documented salt, permanently
+capturing that address on a chain (the CREATE2 proxy at the salt is then
+occupied and cannot be redeployed). This is a griefing vector, not a
+wrong-accept one, and the tooling fails closed against it. Each deploy
+script pins its artifact's expected runtime codehash (`RUNTIME_CODEHASH`);
+`DeployBase._deploy` reverts if the target address is already occupied by
+code whose hash differs from the pin — a squatted salt or a stale pin —
+instead of skipping it as "already deployed", and it also asserts a fresh
+deploy's codehash matches the pin. Consumers verify the published runtime
+codehash below against the on-chain code and never trust a squatted
+address.
+
+Recovering a squatted (or otherwise burned) salt: bump the salt version
+constant in the deploy script. A new salt is a new, unoccupied address,
+exactly as a new artifact version already is; the old salt is abandoned.
+
 ## How a deploy is produced
 
 1. Deploy the CREATE3 factory once per chain. The deploy scripts do this
@@ -73,13 +91,44 @@ No chain has a deployment yet, so nothing is burned.
 A new verifier version is a new salt, a new address, and a new row.
 Deployed artifacts are immutable; nothing is upgraded in place.
 
+### Regenerating a script's `RUNTIME_CODEHASH` pin
+
+Each deploy script pins the expected runtime codehash of its artifact so
+`_deploy` can fail closed on a squatted or drifted address (see above). The
+deployables carry no immutables, so the pin equals `keccak256` of the
+compiled runtime bytecode and is knowable before any deploy. Regenerate it
+after any change to the artifact's source or its build settings, two ways:
+
+1. Build the script's profile, then hash the artifact's deployed bytecode,
+   e.g. for the 256s keccak verifier:
+
+   ```bash
+   FOUNDRY_PROFILE=production /opt/homebrew/bin/forge build
+   cast keccak "$(jq -r .deployedBytecode.object \
+       out/SHRINCS256sKeccak.sol/SHRINCS256sKeccak.json)"
+   ```
+
+   Use the profile's `out` dir (`out` for `production`,
+   `out-128s-q18-prod`, `out-128s-q20-prod`, `out-256s-sha2-prod`).
+2. Or read it from a deploy run: `_deploy` logs the value on the
+   `runtime codehash (record in DEPLOYMENTS.md)` line (fresh deploy) or the
+   `already occupied; runtime codehash` line (occupied address). Both are
+   logged before the pin assert, so a first run with a placeholder pin
+   still prints the value to record.
+
+Copy the value into the script's `RUNTIME_CODEHASH` constant and the
+matching registry row below.
+
 ## Current registry (CREATE3)
 
 The `production` solc pin fixes each verifier's runtime codehash across
 chains. The addresses below are pre-release predictions from a local
 simulation at the current commit through the factory below. They match
 what a real deploy produces from this commit as long as the factory
-creation code is unchanged. No chain has a deployment yet.
+creation code is unchanged. No chain has a deployment yet. The runtime
+codehashes below are the pinned `RUNTIME_CODEHASH` values from the deploy
+scripts (keccak256 of each artifact's compiled runtime bytecode at this
+commit); confirm each with `cast codehash <address>` on first deploy.
 
 Shared CREATE3 factory (all rows): predicted
 `0xcE8dAc13593a359d961F91c35F8694cb2A03D005`
@@ -97,7 +146,7 @@ Shared CREATE3 factory (all rows): predicted
 | `VERSION_TAG()` | `keccak256("quip.shrincs-verifier.v1")` | same | same |
 | Predicted address | `0xb76f5acfa4f1e993b36C9c72eD7514eC2c80F00A` | `0x1bcb84Bd8BcB0038Ad601405e693c2B326b0967a` | `0x48ccFf174F6e5CdabD1e0CC0f769068E3E806816` |
 | Stateless delegate | `SPHINCSPlusC256sKeccak` (below) | `SPHINCSPlusC128sQ18Keccak` (below) | `SPHINCSPlusC128sQ20Keccak` (below) |
-| Runtime codehash | *(capture on first deploy)* | *(capture on first deploy)* | *(capture on first deploy)* |
+| Runtime codehash | `0x22b7d973eb8481f2d0ae78f05a80499e1d318cf78c8bc5e4ece87b44f2f42113` | `0x869178b11cf888fe7de7fc1debf66345c1c24b1e8e2b87aa09ab17db030aa7f5` | `0xf2e75ac078e1287a80b961e01bf722a2fc91c4e7ce3eff431183e552b5b77662` |
 | Chains deployed | *(none yet)* | *(none yet)* | *(none yet)* |
 
 Each SHRINCS verifier's `verifyStateless` delegates to the pinned
@@ -129,7 +178,7 @@ envelope is `abi.encode(StatelessSignature)`, with no commitment logic.
 | Predicted address | `0xf1Bd3aE9d3907bA59FB22A77eAcCbd278b51f88A` | `0xBc7Fefc3D757Fa81E3C7d65905e32722b1a044A6` | `0x7C30ef553deE8F6DF59eE1FF4477f382607d330f` |
 | Key format | `abi.encode(pkSeed, hypertreeRoot)` | same | same |
 | Signature envelope | `abi.encode(StatelessSignature)` | same | same |
-| Runtime codehash | *(capture on first deploy)* | *(capture on first deploy)* | *(capture on first deploy)* |
+| Runtime codehash | `0x998bb84a9cf85aeca5dfaffd88edbe1d62aa5b7fac9d9229b0a437f5c9a91e70` | `0xf6ad5f990d817ed947a152e54135324a90aa1b3bd1104bcdc99a4ddb4cd866a3` | `0xb9dc1b3ddc6fe633051b27a67322c4a72536d1cd668c4332ec4f104a1518f2e4` |
 | Chains deployed | *(none yet)* | *(none yet)* | *(none yet)* |
 
 ### SHA-256 suite (256s-sha2)
@@ -145,8 +194,9 @@ verifier (`SHRINCSSphincs256sSha2Vectors`); per-helper coverage is the
 hashes through the hash-suite seam, so the sha2 leg also self-signs: the
 keygen goldens are anchored to the Rust sha2 signer, and the stateful and
 stateless produce-then-verify suites run under this profile. No bytes are
-deployed yet — SHRINCS is testnet-only — so runtime codehashes are captured
-on first deploy.
+deployed yet — SHRINCS is testnet-only — so the runtime codehashes below
+are the pinned `RUNTIME_CODEHASH` predictions at this commit, confirmed on
+first deploy.
 
 | Field | SHRINCS256sSha2 | SPHINCSPlusC256sSha2 |
 |---|---|---|
@@ -156,7 +206,7 @@ on first deploy.
 | `VERSION_TAG()` | `keccak256("quip.shrincs-verifier.v1")` | `keccak256("quip.sphincsplusc-verifier.v1")` |
 | Predicted address | `0x47C7041BcABc941764D59cb3e973e7e77a46b76f` | `0x4634950D028606e7E0db97FC3CEd91511DAdE6cb` |
 | Stateless delegate | `SPHINCSPlusC256sSha2` (right) | — |
-| Runtime codehash | *(capture on first deploy)* | *(capture on first deploy)* |
+| Runtime codehash | `0x022f9c42a75ada629c3c3d7cc8591dd983c5aebf7dfc23f576f4ef21575e840b` | `0x6f609f9d426a1d54c6f578ecb8518185c2623574829a3abeb4998352ed2ca9bd` |
 | Chains deployed | *(none yet)* | *(none yet)* |
 
 ### WOTS+ library
@@ -167,7 +217,7 @@ on first deploy.
 | Build profile | `production` |
 | CREATE3 salt string | `QUIP:WOTSPlus:V1.0` |
 | Predicted address | `0xe440897Eb9Df111FA48b0d62f7093BDe9a5B5dC7` |
-| Runtime codehash | *(capture on first deploy)* |
+| Runtime codehash | `0x0efb1b18e06862b6b16d6b9fdb0563c5ceaf435af928034cbdb94af18ae2e683` |
 | Chains deployed | *(none yet)* |
 
 WOTS+ is profile-independent (its parameters are its own constants, not
