@@ -3,6 +3,18 @@
 ## Unreleased
 
 ### Added
+- Transient attestation registry on the SHRINCS ERC-7913 verifier
+  (`IERC7913TransientAttestation`): `verifyAndAttest` runs the exact
+  stateful `verify` path (shared `_verifyStateful`) and, on success,
+  TSTOREs 1 at `keccak256(abi.encode(msg.sender, keccak256(key),
+  hash))` — an ERC-7562 *associated* transient slot (address-first) so
+  ERC-4337 accounts may attest during validation; `wasVerified(account,
+  keyHash, hash)` TLOADs it. Nothing is written on failure; failure
+  values and reverts mirror `verify`; the attestation clears when the
+  transaction ends. The `view` `verify` is unchanged and never attests.
+  Requires Cancun (EIP-1153); `verifyAndAttest` reverts under
+  `staticcall` on a valid signature. Measured overhead vs `verify` is
+  ~0.8k gas (test profile, warm).
 - Compile-time profile selection. Per-profile `ShrincsParams` libraries
   under `contracts/profiles/<profile>/`, chosen by a `shrincs-profile/`
   Foundry remapping and re-exported as aliases in `ShrincsTypes`.

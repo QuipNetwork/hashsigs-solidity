@@ -19,6 +19,9 @@ pragma solidity ^0.8.28;
 import {
     IERC7913SignatureVerifier
 } from "./interfaces/IERC7913SignatureVerifier.sol";
+import {
+    IERC7913TransientAttestation
+} from "./interfaces/IERC7913TransientAttestation.sol";
 import {SHRINCS} from "./SHRINCS.sol";
 
 /// @title SHRINCSVerifier
@@ -58,10 +61,13 @@ import {SHRINCS} from "./SHRINCS.sol";
 /// being misreported as an invalid signature.
 ///
 /// Caller obligations. Every SHRINCS library is `pure` and both adapters
-/// are storage-free (their entrypoints are `view` or `pure`); they verify a
-/// signature and nothing more. All statefulness is the WRAPPER contract's
-/// job: single-use tracking of stateful leaves, nonce and keyVersion replay
-/// scoping, and installing the commitment a rotation returns.
+/// are storage-free: no entrypoint touches persistent storage, and the
+/// only non-`view` entrypoint, `verifyAndAttest`, writes exclusively
+/// EIP-1153 transient storage (cleared when the transaction ends); they
+/// verify a signature and nothing more. All statefulness is the WRAPPER
+/// contract's job: single-use tracking of stateful leaves, nonce and
+/// keyVersion replay scoping, and installing the commitment a rotation
+/// returns.
 /// SHRINCSAccountVerifierExample is the reference wrapper. Any future
 /// storage-needing helper belongs in a separate wrapper/base contract at the
 /// top of the inheritance chain, never in these libraries or adapters.
@@ -73,9 +79,12 @@ import {SHRINCS} from "./SHRINCS.sol";
 /// adds a PROFILE_TAG, pins its sibling SPHINCSPlusC verifier address, and is
 /// compiled under that profile's constants. This is `abstract` so the
 /// unsuffixed, profile-ambiguous artifact can never be deployed. The ABI
-/// surface (verify, verifyStateless, VERSION_TAG) is preserved on every
-/// concrete subclass.
-abstract contract SHRINCSVerifier is IERC7913SignatureVerifier {
+/// surface (verify, verifyStateless, verifyAndAttest, wasVerified,
+/// VERSION_TAG) is preserved on every concrete subclass.
+abstract contract SHRINCSVerifier is
+    IERC7913SignatureVerifier,
+    IERC7913TransientAttestation
+{
     // Version tag identifying this verifier's key/envelope format family.
     // Shared across profiles: it names the ERC-7913 key/envelope format,
     // not the parameter set. The per-profile parameter identity lives in
@@ -85,6 +94,50 @@ abstract contract SHRINCSVerifier is IERC7913SignatureVerifier {
         keccak256("quip.shrincs-verifier.v1");
     // Any non-magic value denotes signature failure.
     bytes4 private constant INVALID_SIGNATURE = 0xffffffff;
+    // Transient attestation slot value for a successful verification
+    // (IERC7913TransientAttestation shared spec). Written by
+    // `verifyAndAttest`, read by `wasVerified`, never written on failure.
+    uint256 private constant ATTESTED = 1;
+
+    /// @notice Stateful verification with a transaction-scoped attestation:
+    /// verifies exactly like `verify` and, on success, records the
+    /// verification for `msg.sender` in EIP-1153 transient storage so
+    /// downstream contracts in the same transaction can query it via
+    /// `wasVerified` instead of demanding (and burning a one-time leaf
+    /// for) a fresh signature.
+    /// @dev Runs the same `_verifyStateful` path as `verify` — identical
+    /// acceptance, failure values, and reverts (see the contract-level
+    /// revert model); only the attestation write is added. On success it
+    /// TSTOREs `ATTESTED` (1) at
+    /// `keccak256(abi.encode(msg.sender, keccak256(key), hash))`
+    /// (the IERC7913TransientAttestation shared spec); on any failure
+    /// nothing is written. `msg.sender` first makes the slot ERC-7562
+    /// *associated* transient storage, so an ERC-4337 account may call
+    /// this during validation. TSTORE is illegal in a static context:
+    /// reaching this through a `staticcall` reverts on a valid signature,
+    /// so never wrap it in one.
+    /// @param key The 32-byte SHRINCS publicKeyCommitment.
+    /// @param hash The 32-byte message hash to verify.
+    /// @param signature The SHRINCS stateful envelope.
+    /// @return The verify selector on success; 0xffffffff for a malformed key
+    /// (wrong length) or a well-formed but invalid signature. A malformed
+    /// envelope and other execution failures revert.
+    function verifyAndAttest(
+        bytes calldata key,
+        bytes32 hash,
+        bytes calldata signature
+    ) external returns (bytes4) {
+        bytes4 result = _verifyStateful(key, hash, signature);
+        if (result == IERC7913SignatureVerifier.verify.selector) {
+            bytes32 keyHash = keccak256(key);
+            bytes32 slot = _attestationSlot(msg.sender, keyHash, hash);
+            // Bare EIP-1153 transient write; touches no memory.
+            assembly ("memory-safe") {
+                tstore(slot, ATTESTED)
+            }
+        }
+        return result;
+    }
 
     /// @notice ERC-7913 verification entrypoint for stateful signatures.
     /// @dev Decodes the 32-byte key into the installed bundle commitment
@@ -95,7 +148,9 @@ abstract contract SHRINCSVerifier is IERC7913SignatureVerifier {
     /// leaf-index bounds, WOTS-C
     /// reconstruction, and the unbalanced-tree root over exactly the 32 hash
     /// bytes. No external call, no try/catch: an execution failure, including
-    /// out-of-gas, reverts. See the contract-level revert model.
+    /// out-of-gas, reverts. See the contract-level revert model. The whole
+    /// check is `_verifyStateful`, shared verbatim with `verifyAndAttest`;
+    /// this entrypoint stays `view` and never attests.
     /// @param key The 32-byte SHRINCS publicKeyCommitment.
     /// @param hash The 32-byte message hash to verify.
     /// @param signature The SHRINCS stateful envelope.
@@ -107,21 +162,7 @@ abstract contract SHRINCSVerifier is IERC7913SignatureVerifier {
         bytes32 hash,
         bytes calldata signature
     ) external view returns (bytes4) {
-        (bytes32 publicKeyCommitment, bool okKey) =
-            SHRINCS.decodePublicKeyCommitment(key);
-        if (!okKey) return INVALID_SIGNATURE;
-
-        (
-            SHRINCS.PublicKey calldata publicKey,
-            SHRINCS.Signature calldata statefulSignature
-        ) = SHRINCS.statefulEnvelope(signature);
-
-        if (SHRINCS.verify(
-                publicKeyCommitment, hash, publicKey, statefulSignature
-            )) {
-            return IERC7913SignatureVerifier.verify.selector;
-        }
-        return INVALID_SIGNATURE;
+        return _verifyStateful(key, hash, signature);
     }
 
     /// @notice ERC-7913-style verification entrypoint for stateless
@@ -169,6 +210,33 @@ abstract contract SHRINCSVerifier is IERC7913SignatureVerifier {
             .verify(delegateKey, hash, delegateSignature);
     }
 
+    /// @notice Whether `verifyAndAttest` succeeded for the exact triple
+    /// `(account, keyHash, hash)` earlier in the current transaction.
+    /// @dev TLOADs the IERC7913TransientAttestation shared-spec slot
+    /// `keccak256(abi.encode(account, keyHash, hash))` (TLOAD is legal in
+    /// `view`). A positive answer is a transaction-scoped PUBLIC fact: it
+    /// proves "`account` had a valid signature by the key hashing to
+    /// `keyHash` over `hash` verified this transaction", nothing more.
+    /// Consumers are responsible for trusting `account` and for
+    /// domain-separating the hashes they query.
+    /// @param account The address that called the attesting verification.
+    /// @param keyHash keccak256 of the raw 32-byte ERC-7913 key.
+    /// @param hash The 32-byte message hash that was verified.
+    /// @return True when the attestation slot holds `ATTESTED` (1).
+    function wasVerified(address account, bytes32 keyHash, bytes32 hash)
+        external
+        view
+        returns (bool)
+    {
+        bytes32 slot = _attestationSlot(account, keyHash, hash);
+        uint256 attested;
+        // Bare EIP-1153 transient read; touches no memory.
+        assembly ("memory-safe") {
+            attested := tload(slot)
+        }
+        return attested == ATTESTED;
+    }
+
     /// @notice Address of the pinned SPHINCSPlusC verifier this profile
     /// delegates stateless verification to.
     /// @dev The abstract base cannot know the profile, so each concrete
@@ -177,4 +245,44 @@ abstract contract SHRINCSVerifier is IERC7913SignatureVerifier {
     /// test so C8's deploy scripts cannot drift from it.
     /// @return The pinned SPHINCSPlusC verifier address.
     function _pinnedSphincsPlusC() internal view virtual returns (address);
+
+    // _verifyStateful: the single stateful ERC-7913 check, shared verbatim
+    // by `verify` (view, never attests) and `verifyAndAttest` (attests on
+    // success) so the two entrypoints cannot diverge. Behavior and revert
+    // model are documented on `verify`.
+    function _verifyStateful(
+        bytes calldata key,
+        bytes32 hash,
+        bytes calldata signature
+    ) private view returns (bytes4) {
+        (bytes32 publicKeyCommitment, bool okKey) =
+            SHRINCS.decodePublicKeyCommitment(key);
+        if (!okKey) return INVALID_SIGNATURE;
+
+        (
+            SHRINCS.PublicKey calldata publicKey,
+            SHRINCS.Signature calldata statefulSignature
+        ) = SHRINCS.statefulEnvelope(signature);
+
+        if (SHRINCS.verify(
+                publicKeyCommitment, hash, publicKey, statefulSignature
+            )) {
+            return IERC7913SignatureVerifier.verify.selector;
+        }
+        return INVALID_SIGNATURE;
+    }
+
+    // _attestationSlot: the IERC7913TransientAttestation shared-spec
+    // transient slot, keccak256(abi.encode(account, keyHash, messageHash)).
+    // `account` is deliberately the first encoded word so the slot has the
+    // keccak256(A || X) shape of ERC-7562 associated storage. Solidity has
+    // no transient mappings, so the slot is computed manually; assembly is
+    // confined to the bare tstore/tload at the two call sites.
+    function _attestationSlot(
+        address account,
+        bytes32 keyHash,
+        bytes32 messageHash
+    ) private pure returns (bytes32) {
+        return keccak256(abi.encode(account, keyHash, messageHash));
+    }
 }
