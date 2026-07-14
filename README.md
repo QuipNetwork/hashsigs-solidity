@@ -6,8 +6,6 @@ Solidity verification code for the current SHRINCS account surface:
 - a compact JARDIN-style path using compact `FORS-C` plus a small Merkle auth path
 - an example account wrapper that exposes only stateless and compact actions
 
-The older stateful WOTS-C / unbalanced-XMSS action path has been removed from the production surface. The standalone stateful ERC-7913 verifier and stateful account policy examples were removed with it.
-
 ## Contracts
 
 - [contracts/SHRINCS.sol](./contracts/SHRINCS.sol)

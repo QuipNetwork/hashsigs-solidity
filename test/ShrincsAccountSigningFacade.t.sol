@@ -41,7 +41,7 @@ contract ShrincsAccountSigningFacadeTest is Test {
 
     function testAccountAwareStatelessActionSignerFeedsWrapper() public {
         (ShrincsTypes.SigningKey memory signingKey, ShrincsTypes.PublicKey memory publicKey, bool keygenOk) =
-            ShrincsAccountSigningFacade.keygen(bytes("account-aware stateless current key"), 4);
+            ShrincsAccountSigningFacade.keygen(bytes("account-aware stateless current key"));
         assertTrue(keygenOk, "keygen must succeed");
 
         ShrincsAccountVerifierExample account = newAccount(publicKey);
@@ -68,7 +68,7 @@ contract ShrincsAccountSigningFacadeTest is Test {
     // Checks that a stateless ERC-1271 signature works now, then fails after the nonce is used.
     function testAccountAwareStateless1271SnapshotIsValidBeforeNonceUseAndInvalidAfter() public {
         (ShrincsTypes.SigningKey memory signingKey, ShrincsTypes.PublicKey memory publicKey, bool keygenOk) =
-            ShrincsAccountSigningFacade.keygen(bytes("account-aware 1271 stateless current key"), 4);
+            ShrincsAccountSigningFacade.keygen(bytes("account-aware 1271 stateless current key"));
         assertTrue(keygenOk, "keygen must succeed");
 
         ShrincsAccountVerifierExample account = newAccount(publicKey);
@@ -106,7 +106,7 @@ contract ShrincsAccountSigningFacadeTest is Test {
 
     function testAccountAwareCompactSlotRegistrationAndRevocationSignerFeedsWrapper() public {
         (ShrincsTypes.SigningKey memory signingKey, ShrincsTypes.PublicKey memory publicKey, bool keygenOk) =
-            ShrincsAccountSigningFacade.keygen(bytes("account-aware compact slot current key"), 4);
+            ShrincsAccountSigningFacade.keygen(bytes("account-aware compact slot current key"));
         assertTrue(keygenOk, "keygen must succeed");
 
         ShrincsAccountVerifierExample account = newAccount(publicKey);
@@ -173,7 +173,7 @@ contract ShrincsAccountSigningFacadeTest is Test {
 
     function testCompact1271RejectsMalformedSignatureAndPreservesState() public {
         (ShrincsTypes.SigningKey memory signingKey, ShrincsTypes.PublicKey memory publicKey, bool keygenOk) =
-            ShrincsAccountSigningFacade.keygen(bytes("account-aware compact 1271 current key"), 4);
+            ShrincsAccountSigningFacade.keygen(bytes("account-aware compact 1271 current key"));
         assertTrue(keygenOk, "keygen must succeed");
 
         ShrincsAccountVerifierExample account = newAccount(publicKey);
@@ -221,7 +221,7 @@ contract ShrincsAccountSigningFacadeTest is Test {
 
     function testCompact1271AcceptsSignedSignatureBeforeNonceUseAndRejectsAfterNonceUse() public {
         (ShrincsTypes.SigningKey memory signingKey, ShrincsTypes.PublicKey memory publicKey, bool keygenOk) =
-            ShrincsAccountSigningFacade.keygen(bytes("account-aware compact 1271 signed key"), 4);
+            ShrincsAccountSigningFacade.keygen(bytes("account-aware compact 1271 signed key"));
         assertTrue(keygenOk, "keygen must succeed");
 
         ShrincsAccountVerifierExample account = newAccount(publicKey);
@@ -265,7 +265,7 @@ contract ShrincsAccountSigningFacadeTest is Test {
 
     function testCompactActionRejectsUnregisteredAndRevokedSlots() public {
         (ShrincsTypes.SigningKey memory signingKey, ShrincsTypes.PublicKey memory publicKey, bool keygenOk) =
-            ShrincsAccountSigningFacade.keygen(bytes("account-aware compact slot negative key"), 4);
+            ShrincsAccountSigningFacade.keygen(bytes("account-aware compact slot negative key"));
         assertTrue(keygenOk, "keygen must succeed");
 
         ShrincsAccountVerifierExample account = newAccount(publicKey);
@@ -319,7 +319,7 @@ contract ShrincsAccountSigningFacadeTest is Test {
 
     function testAccountAwareCompactActionSignerFeedsWrapperAndDoesNotTrackQ() public {
         (ShrincsTypes.SigningKey memory signingKey, ShrincsTypes.PublicKey memory publicKey, bool keygenOk) =
-            ShrincsAccountSigningFacade.keygen(bytes("account-aware compact action current key"), 4);
+            ShrincsAccountSigningFacade.keygen(bytes("account-aware compact action current key"));
         assertTrue(keygenOk, "keygen must succeed");
 
         ShrincsAccountVerifierExample account = newAccount(publicKey);
@@ -379,7 +379,7 @@ contract ShrincsAccountSigningFacadeTest is Test {
     // Checks that one registered compact root can verify signatures from different q lanes.
     function testCompactSlotAcceptsDifferentQLanesUnderSameRoot() public {
         (ShrincsTypes.SigningKey memory signingKey, ShrincsTypes.PublicKey memory publicKey, bool keygenOk) =
-            ShrincsAccountSigningFacade.keygen(bytes("compact multi q current key"), 4);
+            ShrincsAccountSigningFacade.keygen(bytes("compact multi q current key"));
         assertTrue(keygenOk, "keygen must succeed");
 
         ShrincsAccountVerifierExample account = newAccount(publicKey);
@@ -423,7 +423,7 @@ contract ShrincsAccountSigningFacadeTest is Test {
     // Checks that a signer can rotate through all 128 compact q lanes under one slot.
     function testCompactSlotAcceptsAll128RotatingQLanes() public {
         (ShrincsTypes.SigningKey memory signingKey, ShrincsTypes.PublicKey memory publicKey, bool keygenOk) =
-            ShrincsAccountSigningFacade.keygen(bytes("compact all q current key"), 4);
+            ShrincsAccountSigningFacade.keygen(bytes("compact all q current key"));
         assertTrue(keygenOk, "keygen must succeed");
 
         ShrincsAccountVerifierExample account = newAccount(publicKey);
@@ -466,7 +466,7 @@ contract ShrincsAccountSigningFacadeTest is Test {
     // Checks that independent compact device slots can coexist and revoke independently.
     function testCompactSlotsSupportMultipleIndependentDeviceLanes() public {
         (ShrincsTypes.SigningKey memory signingKey, ShrincsTypes.PublicKey memory publicKey, bool keygenOk) =
-            ShrincsAccountSigningFacade.keygen(bytes("compact multi device current key"), 4);
+            ShrincsAccountSigningFacade.keygen(bytes("compact multi device current key"));
         assertTrue(keygenOk, "keygen must succeed");
 
         ShrincsAccountVerifierExample account = newAccount(publicKey);
@@ -540,13 +540,13 @@ contract ShrincsAccountSigningFacadeTest is Test {
             ShrincsTypes.SigningKey memory currentSigningKey,
             ShrincsTypes.PublicKey memory currentPublicKey,
             bool currentOk
-        ) = ShrincsAccountSigningFacade.keygen(bytes("account-aware full rotation current key"), 4);
+        ) = ShrincsAccountSigningFacade.keygen(bytes("account-aware full rotation current key"));
         assertTrue(currentOk, "current keygen must succeed");
 
         ShrincsAccountVerifierExample account = newAccount(currentPublicKey);
 
         (, ShrincsTypes.PublicKey memory nextPublicKey, bool nextOk) =
-            ShrincsAccountSigningFacade.keygen(bytes("account-aware full rotation next key"), 4);
+            ShrincsAccountSigningFacade.keygen(bytes("account-aware full rotation next key"));
         assertTrue(nextOk, "next keygen must succeed");
 
         ShrincsTypes.RotationTarget memory nextKey = ShrincsAccountSigningFacade.fullRotationTarget(nextPublicKey);

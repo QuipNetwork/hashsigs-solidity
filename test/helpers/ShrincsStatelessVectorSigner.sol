@@ -60,13 +60,13 @@ contract ShrincsStatelessVectorSigner {
     uint256 internal nextSessionNonce;
     mapping(bytes32 sessionId => Session session) internal sessions;
 
-    function beginSessionFromSeed(bytes memory seedMaterial, uint32 maxStatefulSignatures, bytes memory message)
+    function beginSessionFromSeed(bytes memory seedMaterial, bytes memory message)
         external
         returns (bytes32 sessionId, bool ok)
     {
         ShrincsTypes.SigningKey memory signingKey;
         ShrincsTypes.PublicKey memory publicKey;
-        (signingKey, publicKey, ok) = ShrincsTestSigner.keygen(seedMaterial, maxStatefulSignatures);
+        (signingKey, publicKey, ok) = ShrincsTestSigner.keygen(seedMaterial);
         if (!ok) return (bytes32(0), false);
         return beginSession(signingKey, publicKey, message);
     }
@@ -277,7 +277,7 @@ contract ShrincsStatelessVectorSigner {
             (bytes32[] memory chains, uint32 digitSum) = buildStatelessWotsChains(
                 session.signingKey.pkSeed, session.currentLayerSkSeed, layer, tree, leaf, fullDigest
             );
-            if (digitSum == ShrincsTypes.WOTS_TARGET_SUM_STATEFUL) {
+            if (digitSum == ShrincsTypes.WOTS_TARGET_SUM) {
                 ShrincsTypes.HypertreeLayerSignature storage layerSig =
                     session.signature.hypertree[session.nextHypertreeLayer];
                 layerSig.wotsCSignature.randomizer = abi.encodePacked(session.currentLayerRandomizer);
@@ -605,7 +605,7 @@ contract ShrincsStatelessVectorSigner {
             bytes32 fullDigest = keccak256(abi.encodePacked("wots-c-msg", pkSeed, pkHash, randomizer, counter, message));
             uint32 digitSum;
             (chains, digitSum) = buildStatelessWotsChains(pkSeed, skSeed, layer, tree, keypair, fullDigest);
-            if (digitSum == ShrincsTypes.WOTS_TARGET_SUM_STATEFUL) {
+            if (digitSum == ShrincsTypes.WOTS_TARGET_SUM) {
                 return (randomizer, counter, chains, true);
             }
             unchecked {

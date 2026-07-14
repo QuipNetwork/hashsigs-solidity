@@ -22,10 +22,8 @@ import {ShrincsUtils} from "../../contracts/ShrincsUtils.sol";
 
 /// @notice TEST-ONLY Solidity signer helpers that mirror the Rust signer for stateless and compact flows.
 /// @dev This library is kept under `test/helpers` so it does not become part of the
-/// production Solidity surface. Legacy stateful material is retained only for deterministic fixtures.
+/// production Solidity surface.
 library ShrincsTestSigner {
-    uint32 internal constant INITIAL_STATEFUL_LEAF_INDEX = 1;
-    uint32 internal constant MAX_STATEFUL_SIGNATURES_LIMIT = 4096;
     uint32 internal constant WOTS_C_MAX_GRIND_COUNTER = 1 << 24;
     // COMPACT_C_MAX_GRIND_COUNTER: Test-only bound for finding the omitted FORS+C tree.
     uint32 internal constant COMPACT_C_MAX_GRIND_COUNTER = 1 << 16;
@@ -48,30 +46,15 @@ library ShrincsTestSigner {
     uint16 internal constant COMPACT_FORS_PK_INPUT_BYTES = 1696;
     uint8 internal constant NUM_HYPERTREE_LAYERS = 8;
 
-    // keygen: Build a deterministic SHRINCS test key bundle from seed material.
-    // 1. Reject impossible stateful signing budgets.
-    // 2. Derive independent stateful, stateless, and public seeds.
-    // 3. Build the stateful subtree root and stateless hypertree root.
-    // 4. Commit the public key parts into the wrapper-facing public-key commitment.
-    function keygen(bytes memory seedMaterial, uint32 maxStatefulSignatures)
+    // keygen: Build a deterministic stateless SHRINCS test key bundle from seed material.
+    // 1. Derive independent stateless and public seeds.
+    // 2. Build the stateless hypertree root.
+    // 3. Return the public pkSeed/root pair used by account wrappers.
+    function keygen(bytes memory seedMaterial)
         internal
         pure
         returns (ShrincsTypes.SigningKey memory signingKey, ShrincsTypes.PublicKey memory publicKey, bool ok)
     {
-        // A stateful key with zero allowed signatures is unusable.
-        if (maxStatefulSignatures == 0) return (signingKey, publicKey, false);
-        // Keep the test helper inside the verifier profile's supported stateful range.
-        if (maxStatefulSignatures > MAX_STATEFUL_SIGNATURES_LIMIT) return (signingKey, publicKey, false);
-
-        // Derive the stateful WOTS-C secret seed.
-        bytes32 statefulSkSeed = derive32("shrincs-stateful-sk-seed", seedMaterial, "");
-        // Derive the stateful WOTS-C PRF seed.
-        bytes32 statefulPrfSeed = derive32("shrincs-stateful-prf-seed", seedMaterial, "");
-        // Derive the stateful WOTS-C public seed.
-        bytes32 statefulPkSeed = derive32("shrincs-stateful-pk-seed", seedMaterial, "");
-        // Build the stateful Merkle root for leaves [1, maxStatefulSignatures].
-        bytes32 statefulRoot =
-            statefulSubtreeRoot(statefulSkSeed, statefulPkSeed, INITIAL_STATEFUL_LEAF_INDEX, maxStatefulSignatures);
         // Derive the stateless FORS/WOTS hypertree secret seed.
         bytes32 statelessSkSeed = derive32("shrincs-stateless-sk-seed", seedMaterial, "");
         // Derive the stateless message-randomization seed.
@@ -83,12 +66,6 @@ library ShrincsTestSigner {
 
         // Store all signing material needed by the test-only signer helpers.
         signingKey = ShrincsTypes.SigningKey({
-            statefulSkSeed: statefulSkSeed,
-            statefulPrfSeed: statefulPrfSeed,
-            statefulPkSeed: statefulPkSeed,
-            statefulRoot: statefulRoot,
-            maxStatefulSignatures: maxStatefulSignatures,
-            nextStatefulLeafIndex: INITIAL_STATEFUL_LEAF_INDEX,
             statelessSkSeed: statelessSkSeed,
             statelessPrfSeed: statelessPrfSeed,
             pkSeed: pkSeed,
@@ -99,38 +76,6 @@ library ShrincsTestSigner {
         publicKey =
             ShrincsTypes.PublicKey({pkSeed: abi.encodePacked(pkSeed), hypertreeRoot: abi.encodePacked(hypertreeRoot)});
         return (signingKey, publicKey, true);
-    }
-
-    // signStatefulRaw: Sign raw message bytes with the next available stateful leaf.
-    // 1. Reject an exhausted or uninitialized stateful cursor.
-    // 2. Sign at the current leaf.
-    // 3. Return a copied signing key with the leaf cursor advanced.
-    function signStatefulRaw(ShrincsTypes.SigningKey memory signingKey, bytes memory message)
-        internal
-        pure
-        returns (
-            ShrincsTypes.SigningKey memory nextSigningKey,
-            ShrincsTypes.StatefulSignature memory signature,
-            bool ok
-        )
-    {
-        // Read the next leaf before signing so the caller's input key remains immutable.
-        uint32 leafIndex = signingKey.nextStatefulLeafIndex;
-        // Zero is reserved as an invalid cursor value.
-        if (leafIndex == 0) return (nextSigningKey, signature, false);
-        // Stop once the configured stateful signing budget is exhausted.
-        if (leafIndex > signingKey.maxStatefulSignatures) return (nextSigningKey, signature, false);
-
-        // Produce the WOTS-C signature and stateful auth path at this exact leaf.
-        (signature, ok) = signStatefulRawAtLeaf(signingKey, leafIndex, message);
-        // Keep the original cursor unchanged on signing failure.
-        if (!ok) return (nextSigningKey, signature, false);
-
-        // Copy the caller's key and advance only the returned key.
-        nextSigningKey = signingKey;
-        // The next call will consume the next stateful leaf.
-        nextSigningKey.nextStatefulLeafIndex = leafIndex + 1;
-        return (nextSigningKey, signature, true);
     }
 
     // derive32: Deterministically derive one fixture word under a human-readable domain.
@@ -647,212 +592,6 @@ library ShrincsTestSigner {
             mstore(add(ptr, 96), right)
             // Hash pkSeed32 || ADRS32 || left32 || right32.
             out := keccak256(ptr, 128)
-        }
-    }
-
-    // signStatefulRawAtLeaf: Sign raw bytes at one explicit stateful WOTS-C leaf.
-    // 1. Reject leaves outside the configured stateful signing budget.
-    // 2. Build the WOTS-C signature for this leaf.
-    // 3. Attach the auth path proving this WOTS-C public key to the stateful root.
-    function signStatefulRawAtLeaf(ShrincsTypes.SigningKey memory signingKey, uint32 leafIndex, bytes memory message)
-        internal
-        pure
-        returns (ShrincsTypes.StatefulSignature memory signature, bool ok)
-    {
-        // Leaf zero is reserved as invalid for this fixture.
-        if (leafIndex == 0) return (signature, false);
-        // Reject signatures beyond the stateful key's declared budget.
-        if (leafIndex > signingKey.maxStatefulSignatures) return (signature, false);
-
-        // Sign with WOTS-C at the requested stateful leaf.
-        (signature, ok) = signStatefulWotsC(
-            signingKey.statefulSkSeed, signingKey.statefulPrfSeed, signingKey.statefulPkSeed, leafIndex, message
-        );
-        // Preserve the empty return value on WOTS-C grinding failure.
-        if (!ok) return (signature, false);
-        // Attach the authentication path from this leaf to the stateful subtree root.
-        signature.authPath = statefulAuthPath(
-            signingKey.statefulSkSeed, signingKey.statefulPkSeed, leafIndex, signingKey.maxStatefulSignatures
-        );
-        return (signature, true);
-    }
-
-    // statefulSubtreeRoot: Build the right-folded stateful subtree root used by tests.
-    // 1. Start with the empty tail after maxSignatures.
-    // 2. Walk backward from maxSignatures to leafIndex.
-    // 3. Fold each WOTS-C public-key hash into the root accumulator.
-    function statefulSubtreeRoot(bytes32 skSeed, bytes32 pkSeed, uint32 leafIndex, uint32 maxSignatures)
-        internal
-        pure
-        returns (bytes32 right)
-    {
-        // The right edge after the final usable leaf is a deterministic empty tail.
-        right = statefulEmptyTail(pkSeed, maxSignatures);
-        // Fold leaves backward until the requested starting leaf has been included.
-        for (uint32 currentLeaf = maxSignatures; currentLeaf >= leafIndex;) {
-            // Recompute this leaf's WOTS-C public key hash.
-            bytes32 leaf = statefulWotsPkHash(skSeed, pkSeed, currentLeaf);
-            // Parent the current leaf with the accumulated right subtree.
-            right = statefulParentHash(pkSeed, currentLeaf, leaf, right);
-            // Stop before underflowing the unsigned loop counter.
-            if (currentLeaf == leafIndex) break;
-            unchecked {
-                // Safe because the break above handles the lower bound.
-                --currentLeaf;
-            }
-        }
-    }
-
-    // statefulWotsPkHash: Compute the compressed WOTS-C public key for one stateful leaf.
-    function statefulWotsPkHash(bytes32 skSeed, bytes32 pkSeed, uint32 leafIndex) internal pure returns (bytes32) {
-        // The stateful WOTS-C public key is the concatenation of all chain endpoints.
-        bytes memory endpoints = new bytes(uint256(ShrincsTypes.WOTS_CHAINS_STATEFUL) * 32);
-        // Derive every WOTS-C chain endpoint for this leaf.
-        for (uint32 chainIndex = 0; chainIndex < ShrincsTypes.WOTS_CHAINS_STATEFUL;) {
-            // Derive the chain secret for this leaf and chain.
-            bytes32 secret = statefulChainSecret(skSeed, pkSeed, leafIndex, chainIndex);
-            // Advance the chain to its public endpoint.
-            bytes32 endpoint =
-                statefulChainNoMask(pkSeed, leafIndex, chainIndex, secret, 0, ShrincsTypes.WOTS_BASE_STATEFUL - 1);
-            // Store the endpoint in the packed public-key buffer.
-            setSlice32(endpoints, endpoint, uint256(chainIndex) * 32);
-            unchecked {
-                // The loop bound is the fixed stateful WOTS-C chain count.
-                ++chainIndex;
-            }
-        }
-        // Compress all endpoints into the stateful WOTS-C public-key hash.
-        return keccak256(abi.encodePacked("uxmss-wots-pk", pkSeed, leafIndex, endpoints));
-    }
-
-    // signStatefulWotsC: Build one WOTS-C signature by grinding to the target digit sum.
-    function signStatefulWotsC(bytes32 skSeed, bytes32 prfSeed, bytes32 pkSeed, uint32 leafIndex, bytes memory message)
-        internal
-        pure
-        returns (ShrincsTypes.StatefulSignature memory signature, bool ok)
-    {
-        // Derive deterministic per-signature randomness.
-        bytes32 randomizer = keccak256(abi.encodePacked("uxmss-wots-randomizer", prfSeed, leafIndex, message));
-
-        // Grind the counter until the WOTS-C checksum/digit-sum rule is satisfied.
-        for (uint32 counter = 0; counter < WOTS_C_MAX_GRIND_COUNTER;) {
-            // Expand message, randomizer, and counter into WOTS-C base-16 digits.
-            bytes32 digest =
-                keccak256(abi.encodePacked("uxmss-wots-digits", pkSeed, leafIndex, randomizer, counter, message));
-            // Track the digit sum required by WOTS-C verification.
-            uint32 digitSum;
-            // Allocate one revealed chain value per WOTS-C chain.
-            bytes32[] memory chains = new bytes32[](ShrincsTypes.WOTS_CHAINS_STATEFUL);
-            // Reveal each chain at the position selected by its digest digit.
-            for (uint32 chainIndex = 0; chainIndex < ShrincsTypes.WOTS_CHAINS_STATEFUL;) {
-                // Read this chain's base-16 digit.
-                uint32 digit = baseW16Digit(digest, chainIndex);
-                // Add it to the target-sum accumulator.
-                digitSum += digit;
-                // Derive the chain secret.
-                bytes32 secret = statefulChainSecret(skSeed, pkSeed, leafIndex, chainIndex);
-                // Advance the chain only to the selected digit position.
-                chains[chainIndex] = statefulChainNoMask(pkSeed, leafIndex, chainIndex, secret, 0, digit);
-                unchecked {
-                    // The loop bound is the fixed stateful WOTS-C chain count.
-                    ++chainIndex;
-                }
-            }
-            // Accept this counter only when the WOTS-C target sum is met.
-            if (digitSum == ShrincsTypes.WOTS_TARGET_SUM_STATEFUL) {
-                // Auth path is filled by signStatefulRawAtLeaf after WOTS-C succeeds.
-                signature = ShrincsTypes.StatefulSignature({
-                    randomizer: randomizer, counter: counter, chains: chains, authPath: new bytes32[](0)
-                });
-                return (signature, true);
-            }
-            unchecked {
-                // The loop bound is WOTS_C_MAX_GRIND_COUNTER.
-                ++counter;
-            }
-        }
-        return (signature, false);
-    }
-
-    // statefulChainSecret: Derive the secret starting value for one stateful WOTS-C chain.
-    function statefulChainSecret(bytes32 skSeed, bytes32 pkSeed, uint32 leafIndex, uint32 chainIndex)
-        internal
-        pure
-        returns (bytes32)
-    {
-        return keccak256(abi.encodePacked("uxmss-wots-chain-secret", skSeed, pkSeed, leafIndex, chainIndex));
-    }
-
-    // statefulChainNoMask: Advance a stateful WOTS-C chain without randomization masks.
-    function statefulChainNoMask(
-        bytes32 pkSeed,
-        uint32 leafIndex,
-        uint32 chainIndex,
-        bytes32 value,
-        uint32 start,
-        uint32 steps
-    ) internal pure returns (bytes32 out) {
-        // Start from the caller-supplied chain value.
-        out = value;
-        // Apply exactly `steps` chain hashes beginning at `start`.
-        for (uint32 stepOffset = 0; stepOffset < steps;) {
-            // Build the WOTS_HASH address for this chain step.
-            bytes32 addressWord = ShrincsUtils.addressWord32(
-                0, 0, ShrincsTypes.AddressTypeWotsHash, leafIndex, chainIndex, start + stepOffset
-            );
-            // Hash one step forward in the WOTS-C chain.
-            out = keccak256(abi.encodePacked("wots-c-chain", pkSeed, addressWord, out));
-            unchecked {
-                // The loop bound is caller supplied and checked by the surrounding test profile.
-                ++stepOffset;
-            }
-        }
-    }
-
-    // statefulParentHash: Hash a stateful leaf/subtree pair into its parent.
-    function statefulParentHash(bytes32 pkSeed, uint32 leftLeafIndex, bytes32 left, bytes32 right)
-        internal
-        pure
-        returns (bytes32)
-    {
-        return keccak256(abi.encodePacked("uxmss-node", pkSeed, leftLeafIndex, left, right));
-    }
-
-    // statefulEmptyTail: Derive the deterministic empty right edge after the final usable leaf.
-    function statefulEmptyTail(bytes32 pkSeed, uint32 leafIndex) internal pure returns (bytes32) {
-        return keccak256(abi.encodePacked("uxmss-empty-tail", pkSeed, leafIndex));
-    }
-
-    // statefulAuthPath: Build the stateful authentication path used by the verifier tests.
-    function statefulAuthPath(bytes32 skSeed, bytes32 pkSeed, uint32 leafIndex, uint32 maxSignatures)
-        internal
-        pure
-        returns (bytes32[] memory path)
-    {
-        // This fixture path contains one right subtree plus all previous leaf public keys.
-        path = new bytes32[](leafIndex);
-        // The first sibling is the subtree to the right, or the empty tail at the final leaf.
-        if (leafIndex < maxSignatures) {
-            path[0] = statefulSubtreeRoot(skSeed, pkSeed, leafIndex + 1, maxSignatures);
-        } else {
-            path[0] = statefulEmptyTail(pkSeed, leafIndex);
-        }
-        // Remaining entries are prior leaf WOTS-C public-key hashes.
-        uint256 offset = 1;
-        // Walk left from leafIndex - 1 down to leaf 1.
-        for (uint32 previousLeaf = leafIndex - 1; previousLeaf >= 1;) {
-            // Store the previous leaf's WOTS-C public-key hash.
-            path[offset] = statefulWotsPkHash(skSeed, pkSeed, previousLeaf);
-            unchecked {
-                // offset is bounded by path.length == leafIndex.
-                ++offset;
-            }
-            // Stop before underflowing previousLeaf.
-            if (previousLeaf == 1) break;
-            unchecked {
-                // Safe because the break above handles the lower bound.
-                --previousLeaf;
-            }
         }
     }
 

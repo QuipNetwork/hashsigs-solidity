@@ -57,7 +57,7 @@ contract ShrincsAccountVerifierExampleTest is Test {
     }
 
     function testExampleInitializesStoredState() public {
-        (, ShrincsTypes.PublicKey memory publicKey,) = ShrincsAccountSigningFacade.keygen(bytes("init key"), 4);
+        (, ShrincsTypes.PublicKey memory publicKey,) = ShrincsAccountSigningFacade.keygen(bytes("init key"));
         bytes32 expectedPkSeed = ShrincsAccountSigningFacade.pkSeedWord(publicKey);
         bytes32 expectedHypertreeRoot = ShrincsAccountSigningFacade.hypertreeRootWord(publicKey);
 
@@ -71,7 +71,7 @@ contract ShrincsAccountVerifierExampleTest is Test {
     }
 
     function testExampleRejectsMalformedAndUnknown1271Envelopes() public {
-        (, ShrincsTypes.PublicKey memory publicKey,) = ShrincsAccountSigningFacade.keygen(bytes("1271 malformed"), 4);
+        (, ShrincsTypes.PublicKey memory publicKey,) = ShrincsAccountSigningFacade.keygen(bytes("1271 malformed"));
         ShrincsAccountVerifierExample account = newAccount(publicKey);
 
         assertEq(account.isValidSignature(bytes32(0), hex""), INVALID_SIGNATURE, "empty envelope");
@@ -93,7 +93,7 @@ contract ShrincsAccountVerifierExampleTest is Test {
 
     function testExampleStatelessActionFeedsWrapper() public {
         (ShrincsTypes.SigningKey memory signingKey, ShrincsTypes.PublicKey memory publicKey, bool ok) =
-            ShrincsAccountSigningFacade.keygen(bytes("stateless action key"), 4);
+            ShrincsAccountSigningFacade.keygen(bytes("stateless action key"));
         assertTrue(ok, "keygen");
         ShrincsAccountVerifierExample account = newAccount(publicKey);
 
@@ -108,7 +108,7 @@ contract ShrincsAccountVerifierExampleTest is Test {
 
     function testExampleStateless1271SnapshotIsValidBeforeNonceUseAndInvalidAfter() public {
         (ShrincsTypes.SigningKey memory signingKey, ShrincsTypes.PublicKey memory publicKey, bool ok) =
-            ShrincsAccountSigningFacade.keygen(bytes("stateless 1271 key"), 4);
+            ShrincsAccountSigningFacade.keygen(bytes("stateless 1271 key"));
         assertTrue(ok, "keygen");
         ShrincsAccountVerifierExample account = newAccount(publicKey);
 
@@ -126,7 +126,7 @@ contract ShrincsAccountVerifierExampleTest is Test {
 
     function testExampleStatelessActionRejectsAtUsageLimit() public {
         (ShrincsTypes.SigningKey memory signingKey, ShrincsTypes.PublicKey memory publicKey, bool ok) =
-            ShrincsAccountSigningFacade.keygen(bytes("stateless limit key"), 4);
+            ShrincsAccountSigningFacade.keygen(bytes("stateless limit key"));
         assertTrue(ok, "keygen");
         ShrincsAccountVerifierExampleHarness account = newHarness(publicKey);
         (, ShrincsTypes.StatelessSignature memory signature) =
@@ -145,12 +145,12 @@ contract ShrincsAccountVerifierExampleTest is Test {
             ShrincsTypes.SigningKey memory currentSigningKey,
             ShrincsTypes.PublicKey memory currentPublicKey,
             bool currentOk
-        ) = ShrincsAccountSigningFacade.keygen(bytes("rotation current key"), 4);
+        ) = ShrincsAccountSigningFacade.keygen(bytes("rotation current key"));
         assertTrue(currentOk, "current keygen");
         ShrincsAccountVerifierExampleHarness account = newHarness(currentPublicKey);
 
         (, ShrincsTypes.PublicKey memory nextPublicKey, bool nextOk) =
-            ShrincsAccountSigningFacade.keygen(bytes("rotation next key"), 4);
+            ShrincsAccountSigningFacade.keygen(bytes("rotation next key"));
         assertTrue(nextOk, "next keygen");
         ShrincsTypes.RotationTarget memory nextKey = ShrincsAccountSigningFacade.fullRotationTarget(nextPublicKey);
         account.setStatelessSignaturesUsed(7);
@@ -174,11 +174,11 @@ contract ShrincsAccountVerifierExampleTest is Test {
             ShrincsTypes.SigningKey memory currentSigningKey,
             ShrincsTypes.PublicKey memory currentPublicKey,
             bool currentOk
-        ) = ShrincsAccountSigningFacade.keygen(bytes("rotation limit current key"), 4);
+        ) = ShrincsAccountSigningFacade.keygen(bytes("rotation limit current key"));
         assertTrue(currentOk, "current keygen");
         ShrincsAccountVerifierExampleHarness account = newHarness(currentPublicKey);
         (, ShrincsTypes.PublicKey memory nextPublicKey, bool nextOk) =
-            ShrincsAccountSigningFacade.keygen(bytes("rotation limit next key"), 4);
+            ShrincsAccountSigningFacade.keygen(bytes("rotation limit next key"));
         assertTrue(nextOk, "next keygen");
         ShrincsTypes.RotationTarget memory nextKey = ShrincsAccountSigningFacade.fullRotationTarget(nextPublicKey);
         (bytes32 sessionId, bool signOk) = beginFullRotation(account, currentSigningKey, currentPublicKey, nextKey);
@@ -197,7 +197,7 @@ contract ShrincsAccountVerifierExampleTest is Test {
 
     function testExampleCompactSlotRegistrationActionAndRevocation() public {
         (ShrincsTypes.SigningKey memory signingKey, ShrincsTypes.PublicKey memory publicKey, bool ok) =
-            ShrincsAccountSigningFacade.keygen(bytes("compact slot key"), 4);
+            ShrincsAccountSigningFacade.keygen(bytes("compact slot key"));
         assertTrue(ok, "keygen");
         ShrincsAccountVerifierExample account = newAccount(publicKey);
         uint8 q = 9;
@@ -235,7 +235,7 @@ contract ShrincsAccountVerifierExampleTest is Test {
 
     function testExampleCompact1271SnapshotIsValidBeforeNonceUseAndInvalidAfter() public {
         (ShrincsTypes.SigningKey memory signingKey, ShrincsTypes.PublicKey memory publicKey, bool ok) =
-            ShrincsAccountSigningFacade.keygen(bytes("compact 1271 key"), 4);
+            ShrincsAccountSigningFacade.keygen(bytes("compact 1271 key"));
         assertTrue(ok, "keygen");
         ShrincsAccountVerifierExample account = newAccount(publicKey);
         uint8 q = 13;
@@ -259,7 +259,7 @@ contract ShrincsAccountVerifierExampleTest is Test {
     }
 
     function testExampleDomainSeparatorDiffersAcrossContractInstances() public {
-        (, ShrincsTypes.PublicKey memory publicKey,) = ShrincsAccountSigningFacade.keygen(bytes("domain key"), 4);
+        (, ShrincsTypes.PublicKey memory publicKey,) = ShrincsAccountSigningFacade.keygen(bytes("domain key"));
 
         ShrincsAccountVerifierExample accountA = newAccount(publicKey);
         ShrincsAccountVerifierExample accountB = newAccount(publicKey);

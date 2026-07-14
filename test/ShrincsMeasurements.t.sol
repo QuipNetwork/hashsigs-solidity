@@ -153,7 +153,7 @@ contract ShrincsMeasurementsTest is Test {
     function testMeasureCompactMultiQAccountVerifyGas() public {
         vm.pauseGasMetering();
         (ShrincsTypes.SigningKey memory signingKey, ShrincsTypes.PublicKey memory publicKey, bool ok) =
-            ShrincsAccountSigningFacade.keygen(bytes("measure compact multi q key"), 4);
+            ShrincsAccountSigningFacade.keygen(bytes("measure compact multi q key"));
         assertTrue(ok, "compact multi q keygen must succeed");
 
         ShrincsAccountVerifierExample account = newAccount(publicKey);
@@ -240,7 +240,7 @@ contract ShrincsMeasurementsTest is Test {
 
     function prepareStatelessCase(bytes memory seedMaterial) internal returns (StatelessCase memory c) {
         (ShrincsTypes.SigningKey memory signingKey, ShrincsTypes.PublicKey memory publicKey, bool ok) =
-            ShrincsAccountSigningFacade.keygen(seedMaterial, 4);
+            ShrincsAccountSigningFacade.keygen(seedMaterial);
         assertTrue(ok, "stateless keygen must succeed");
 
         ShrincsAccountVerifierExample account = newAccount(publicKey);
@@ -275,7 +275,7 @@ contract ShrincsMeasurementsTest is Test {
         returns (CompactCase memory c)
     {
         (ShrincsTypes.SigningKey memory signingKey, ShrincsTypes.PublicKey memory publicKey, bool ok) =
-            ShrincsAccountSigningFacade.keygen(seedMaterial, 4);
+            ShrincsAccountSigningFacade.keygen(seedMaterial);
         assertTrue(ok, "compact keygen must succeed");
 
         ShrincsAccountVerifierExample account = newAccount(publicKey);
@@ -302,7 +302,7 @@ contract ShrincsMeasurementsTest is Test {
         returns (CompactSlotUpdateCase memory c)
     {
         (ShrincsTypes.SigningKey memory signingKey, ShrincsTypes.PublicKey memory publicKey, bool ok) =
-            ShrincsAccountSigningFacade.keygen(seedMaterial, 4);
+            ShrincsAccountSigningFacade.keygen(seedMaterial);
         assertTrue(ok, "registration keygen must succeed");
 
         ShrincsAccountVerifierExample account = newAccount(publicKey);
@@ -323,7 +323,7 @@ contract ShrincsMeasurementsTest is Test {
         returns (CompactSlotUpdateCase memory c)
     {
         (ShrincsTypes.SigningKey memory signingKey, ShrincsTypes.PublicKey memory publicKey, bool ok) =
-            ShrincsAccountSigningFacade.keygen(seedMaterial, 4);
+            ShrincsAccountSigningFacade.keygen(seedMaterial);
         assertTrue(ok, "revocation keygen must succeed");
 
         ShrincsAccountVerifierExample account = newAccount(publicKey);

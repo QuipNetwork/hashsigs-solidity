@@ -36,7 +36,7 @@ contract ShrincsAccountVectorExportTest is Test {
         bytes32 actionType = keccak256("execute");
         bytes32 payloadHash = keccak256("payload");
         (ShrincsTypes.SigningKey memory signingKey, ShrincsTypes.PublicKey memory publicKey, bool keygenOk) =
-            ShrincsAccountSigningFacade.keygen(bytes("export-stateless-current-key"), 4);
+            ShrincsAccountSigningFacade.keygen(bytes("export-stateless-current-key"));
         assertTrue(keygenOk, "keygen must succeed");
 
         ShrincsAccountVerifierExample account = newAccount(publicKey);
@@ -68,13 +68,13 @@ contract ShrincsAccountVectorExportTest is Test {
             ShrincsTypes.SigningKey memory currentSigningKey,
             ShrincsTypes.PublicKey memory currentPublicKey,
             bool currentOk
-        ) = ShrincsAccountSigningFacade.keygen(bytes("account-aware full rotation current key"), 4);
+        ) = ShrincsAccountSigningFacade.keygen(bytes("account-aware full rotation current key"));
         assertTrue(currentOk, "current keygen must succeed");
 
         ShrincsAccountVerifierExample account = newAccount(currentPublicKey);
 
         (, ShrincsTypes.PublicKey memory nextPublicKey, bool nextOk) =
-            ShrincsAccountSigningFacade.keygen(bytes("account-aware full rotation next key"), 4);
+            ShrincsAccountSigningFacade.keygen(bytes("account-aware full rotation next key"));
         assertTrue(nextOk, "next keygen must succeed");
 
         ShrincsTypes.RotationTarget memory nextKey = ShrincsAccountSigningFacade.fullRotationTarget(nextPublicKey);

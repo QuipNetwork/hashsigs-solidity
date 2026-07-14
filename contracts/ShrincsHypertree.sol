@@ -208,7 +208,7 @@ library ShrincsHypertree {
         }
         // WOTS-C does not carry an explicit checksum chain suffix. Instead the message expansion
         // is accepted only when the reconstructed base-w digits add up to the fixed target sum.
-        if (digitSum != ShrincsTypes.WOTS_TARGET_SUM_STATEFUL) return false;
+        if (digitSum != ShrincsTypes.WOTS_TARGET_SUM) return false;
 
         bytes32 computedPkHash;
         assembly {

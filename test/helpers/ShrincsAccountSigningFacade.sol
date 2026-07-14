@@ -31,12 +31,12 @@ library ShrincsAccountSigningFacade {
     uint8 internal constant ERC1271_MODE_STATELESS_ACTION = 2;
     bytes32 internal constant DOMAIN_TAG = keccak256("shrincs-account-v1");
 
-    function keygen(bytes memory seedMaterial, uint32 maxStatefulSignatures)
+    function keygen(bytes memory seedMaterial)
         internal
         pure
         returns (ShrincsTypes.SigningKey memory signingKey, ShrincsTypes.PublicKey memory publicKey, bool ok)
     {
-        return ShrincsTestSigner.keygen(seedMaterial, maxStatefulSignatures);
+        return ShrincsTestSigner.keygen(seedMaterial);
     }
 
     function actionContext(ShrincsAccountVerifierExample account, bytes32 actionType, bytes32 payloadHash)

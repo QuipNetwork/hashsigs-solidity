@@ -47,7 +47,7 @@ contract ShrincsStatelessVectorSignerTest is Test {
 
     function testStagedStatelessVectorSignerProducesVerifyingSignature() public {
         bytes memory message = abi.encodePacked(keccak256("staged stateless vector message"));
-        (bytes32 sessionId, bool ok) = signer.beginSessionFromSeed(bytes("staged stateless vector seed"), 4, message);
+        (bytes32 sessionId, bool ok) = signer.beginSessionFromSeed(bytes("staged stateless vector seed"), message);
         assertTrue(ok, "session must start");
 
         (bool active, bool forsPrepared, bool forsFinalized, uint32 nextForsTree, uint32 nextLayer) =
@@ -101,7 +101,7 @@ contract ShrincsStatelessVectorSignerTest is Test {
     function testHighLevelStatelessFacadeProducesVerifyingSignature() public {
         bytes memory message = abi.encodePacked(keccak256("high level stateless vector message"));
         (ShrincsTypes.PublicKey memory publicKey, ShrincsTypes.StatelessSignature memory signature, bool ok) =
-            signer.signFromSeed(bytes("high level stateless vector seed"), 4, message);
+            signer.signFromSeed(bytes("high level stateless vector seed"), message);
 
         assertTrue(ok, "high-level signing must succeed");
         assertEq(signature.fors.entries.length, ShrincsTypes.NUM_FORS_TREES - 1, "FORS-C entry count");

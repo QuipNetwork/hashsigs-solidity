@@ -23,17 +23,12 @@ import {ShrincsTypes} from "../../contracts/ShrincsTypes.sol";
 /// @dev This library keeps the actual signing work in the storage-backed staged signer,
 /// but hides the manual FORS / hypertree loops from tests and vector generators.
 library ShrincsStatelessVectorSigningFacade {
-    function signFromSeed(
-        ShrincsStatelessVectorSigner signer,
-        bytes memory seedMaterial,
-        uint32 maxStatefulSignatures,
-        bytes memory message
-    )
+    function signFromSeed(ShrincsStatelessVectorSigner signer, bytes memory seedMaterial, bytes memory message)
         internal
         returns (ShrincsTypes.PublicKey memory publicKey, ShrincsTypes.StatelessSignature memory signature, bool ok)
     {
         bytes32 sessionId;
-        (sessionId, ok) = signer.beginSessionFromSeed(seedMaterial, maxStatefulSignatures, message);
+        (sessionId, ok) = signer.beginSessionFromSeed(seedMaterial, message);
         if (!ok) return (publicKey, signature, false);
         return completeSession(signer, sessionId);
     }

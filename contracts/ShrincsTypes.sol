@@ -35,13 +35,6 @@ library ShrincsTypes {
     uint32 internal constant AddressTypeForsPrf = 6;
     uint32 internal constant AddressTypeJardinMerkle = 16;
 
-    // Stateful WOTS-C uses 64 chains.
-    uint16 internal constant WOTS_CHAINS_STATEFUL = 64;
-    // Stateful WOTS-C uses base-16 digits for message expansion.
-    uint16 internal constant WOTS_BASE_STATEFUL = 16;
-    // The 64 base-16 digits reconstructed from the stateful message digest must
-    // sum to 480.
-    uint32 internal constant WOTS_TARGET_SUM_STATEFUL = 480;
     // Compile-time SHRINCS/SPHINCS constants.
     uint64 internal constant STATELESS_SIGNATURE_LIMIT = 1_048_576;
     uint16 internal constant HASH_LEN = 32;
@@ -51,6 +44,8 @@ library ShrincsTypes {
     uint8 internal constant NUM_FORS_TREES = 22;
     uint16 internal constant WOTS_CHAIN_LEN = 16;
     uint16 internal constant NUM_WOTS_CHAINS = 64;
+    // The 64 base-16 digits reconstructed from a WOTS-C message digest must sum to 480.
+    uint32 internal constant WOTS_TARGET_SUM = 480;
     // JARDIN-style compact FORS-C parameters for the Type 2 path.
     uint8 internal constant COMPACT_FORS_TREE_HEIGHT = 5;
     uint8 internal constant COMPACT_NUM_FORS_TREES = 52;
@@ -75,18 +70,6 @@ library ShrincsTypes {
     }
 
     struct SigningKey {
-        // Secret seed used to derive stateful WOTS-C chain secrets.
-        bytes32 statefulSkSeed;
-        // Secret PRF seed used to derive stateful WOTS-C message randomizers.
-        bytes32 statefulPrfSeed;
-        // Public seed used in stateful WOTS-C and stateful tree hashing.
-        bytes32 statefulPkSeed;
-        // Root of the stateful unbalanced tree committed in the public key.
-        bytes32 statefulRoot;
-        // Highest stateful leaf index this key may sign with.
-        uint32 maxStatefulSignatures;
-        // Next monotonic stateful leaf index to consume.
-        uint32 nextStatefulLeafIndex;
         // Stateless SK.seed-style material used to derive FORS-C and hypertree WOTS-C secrets.
         bytes32 statelessSkSeed;
         // Stateless SK.prf-style material used to derive stateless message randomizers.
@@ -95,17 +78,6 @@ library ShrincsTypes {
         bytes32 pkSeed;
         // Top hypertree root committed in the public key.
         bytes32 hypertreeRoot;
-    }
-
-    struct StatefulSignature {
-        // Per-signature randomizer committed into the stateful message digest.
-        bytes32 randomizer;
-        // Grinding counter used to satisfy the WOTS-C target-sum rule.
-        uint32 counter;
-        // Revealed WOTS-C chain values.
-        bytes32[] chains;
-        // Unbalanced authentication path proving the selected stateful leaf.
-        bytes32[] authPath;
     }
 
     struct ForsEntry {
