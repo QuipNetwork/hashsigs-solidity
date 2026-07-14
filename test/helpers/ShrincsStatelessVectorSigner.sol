@@ -95,7 +95,10 @@ contract ShrincsStatelessVectorSigner {
             uint32 leafIndex;
             (digest, treeIndex, leafIndex) =
                 forsDigest(signingKey.pkSeed, signingKey.hypertreeRoot, message, randomizer, counter);
-            if (readBits32Memory(digest, signedTrees * ShrincsTypes.FORS_TREE_HEIGHT, ShrincsTypes.FORS_TREE_HEIGHT) == 0) {
+            if (
+                readBits32Memory(digest, signedTrees * ShrincsTypes.FORS_TREE_HEIGHT, ShrincsTypes.FORS_TREE_HEIGHT)
+                    == 0
+            ) {
                 session.signature.fors.randomizer = abi.encodePacked(randomizer);
                 session.signature.fors.counter = counter;
                 session.forsDigest = digest;
@@ -298,10 +301,7 @@ contract ShrincsStatelessVectorSigner {
         return false;
     }
 
-    function stepHypertreeAuthPath(bytes32 sessionId, uint32 maxLevels)
-        external
-        returns (uint32 processed, bool done)
-    {
+    function stepHypertreeAuthPath(bytes32 sessionId, uint32 maxLevels) external returns (uint32 processed, bool done) {
         Session storage session = sessions[sessionId];
         require(session.active, "unknown session");
         require(session.hypertreeLayerStarted, "layer not started");
@@ -317,7 +317,8 @@ contract ShrincsStatelessVectorSigner {
         while (processed < maxLevels && session.currentAuthPathLevel < subtreeHeight) {
             uint32 level = session.currentAuthPathLevel;
             uint32 sibling = (leaf >> level) ^ 1;
-            bytes32 node = hypertreeVirtualNode(session.signingKey.pkSeed, session.currentLayerSeed, layer, tree, level, sibling);
+            bytes32 node =
+                hypertreeVirtualNode(session.signingKey.pkSeed, session.currentLayerSeed, layer, tree, level, sibling);
             layerSig.authPath.push(abi.encodePacked(node));
             unchecked {
                 ++processed;
@@ -343,8 +344,9 @@ contract ShrincsStatelessVectorSigner {
         uint64 tree = session.currentHypertreeTreeIndex;
         uint32 nextLayer = session.nextHypertreeLayer + 1;
         uint64 leafMask = uint64((uint256(1) << subtreeHeight) - 1);
-        bytes32 nextRoot =
-            hypertreeVirtualNode(session.signingKey.pkSeed, session.currentLayerSeed, session.nextHypertreeLayer, tree, subtreeHeight, 0);
+        bytes32 nextRoot = hypertreeVirtualNode(
+            session.signingKey.pkSeed, session.currentLayerSeed, session.nextHypertreeLayer, tree, subtreeHeight, 0
+        );
 
         session.currentHypertreeRoot = nextRoot;
         session.currentHypertreeLeafIndex = uint32(tree & leafMask);
@@ -389,9 +391,14 @@ contract ShrincsStatelessVectorSigner {
         returns (bool active, bool forsPrepared, bool forsFinalized, uint32 nextForsTree, uint32 nextHypertreeLayer)
     {
         Session storage session = sessions[sessionId];
-        return (
-            session.active, session.forsPrepared, session.forsFinalized, session.nextForsTree, session.nextHypertreeLayer
-        );
+        return
+            (
+                session.active,
+                session.forsPrepared,
+                session.forsFinalized,
+                session.nextForsTree,
+                session.nextHypertreeLayer
+            );
     }
 
     function copyPublicKey(ShrincsTypes.PublicKey storage publicKey)
@@ -399,8 +406,6 @@ contract ShrincsStatelessVectorSigner {
         view
         returns (ShrincsTypes.PublicKey memory out)
     {
-        out.statefulPublicKey = publicKey.statefulPublicKey;
-        out.publicKeyCommitment = publicKey.publicKeyCommitment;
         out.pkSeed = publicKey.pkSeed;
         out.hypertreeRoot = publicKey.hypertreeRoot;
     }
@@ -529,11 +534,7 @@ contract ShrincsStatelessVectorSigner {
                 bytes32 addressWord = forsAddressWord(treeIndex, leafIndex, nodeHeight, parentLowIndex);
                 parents[parentIndex] = keccak256(
                     abi.encodePacked(
-                        "fors-node",
-                        pkSeed,
-                        addressWord,
-                        levelNodes[parentIndex * 2],
-                        levelNodes[parentIndex * 2 + 1]
+                        "fors-node", pkSeed, addressWord, levelNodes[parentIndex * 2], levelNodes[parentIndex * 2 + 1]
                     )
                 );
                 unchecked {
@@ -549,21 +550,27 @@ contract ShrincsStatelessVectorSigner {
         return (levelNodes[0], authPath);
     }
 
-    function forsLeafSecret(bytes32 pkSeed, bytes32 skSeed, uint64 treeIndex, uint32 leafIndex, uint32 forsTree, uint32 leaf)
-        internal
-        pure
-        returns (bytes32)
-    {
+    function forsLeafSecret(
+        bytes32 pkSeed,
+        bytes32 skSeed,
+        uint64 treeIndex,
+        uint32 leafIndex,
+        uint32 forsTree,
+        uint32 leaf
+    ) internal pure returns (bytes32) {
         uint64 treeLeaf = (uint64(forsTree) << ShrincsTypes.FORS_TREE_HEIGHT) + uint64(leaf);
         bytes32 addressWord = forsAddressWord(treeIndex, leafIndex, 0, treeLeaf);
         return keccak256(abi.encodePacked("fors-sk", skSeed, pkSeed, addressWord));
     }
 
-    function forsLeafHash(bytes32 pkSeed, bytes32 skSeed, uint64 treeIndex, uint32 leafIndex, uint32 forsTree, uint32 leaf)
-        internal
-        pure
-        returns (bytes32)
-    {
+    function forsLeafHash(
+        bytes32 pkSeed,
+        bytes32 skSeed,
+        uint64 treeIndex,
+        uint32 leafIndex,
+        uint32 forsTree,
+        uint32 leaf
+    ) internal pure returns (bytes32) {
         bytes32 secret = forsLeafSecret(pkSeed, skSeed, treeIndex, leafIndex, forsTree, leaf);
         uint64 treeLeaf = (uint64(forsTree) << ShrincsTypes.FORS_TREE_HEIGHT) + uint64(leaf);
         bytes32 addressWord = forsAddressWord(treeIndex, leafIndex, 0, treeLeaf);
@@ -652,11 +659,14 @@ contract ShrincsStatelessVectorSigner {
         return keccak256(abi.encodePacked("hypertree-layer-seed", statelessSkSeed, bytes1(layer)));
     }
 
-    function hypertreeVirtualNode(bytes32 pkSeed, bytes32 layerSeed, uint32 layer, uint64 tree, uint32 height, uint32 index)
-        internal
-        pure
-        returns (bytes32)
-    {
+    function hypertreeVirtualNode(
+        bytes32 pkSeed,
+        bytes32 layerSeed,
+        uint32 layer,
+        uint64 tree,
+        uint32 height,
+        uint32 index
+    ) internal pure returns (bytes32) {
         if (height == 0) {
             return hypertreeLeaf(pkSeed, layerSeed, layer, tree, index);
         }
@@ -727,7 +737,8 @@ contract ShrincsStatelessVectorSigner {
     ) internal pure returns (bytes32 out) {
         out = value;
         for (uint32 step = start; step < start + steps;) {
-            bytes32 addressWord = ShrincsUtils.addressWord32(layer, tree, ShrincsTypes.AddressTypeWotsHash, keypair, chain, step);
+            bytes32 addressWord =
+                ShrincsUtils.addressWord32(layer, tree, ShrincsTypes.AddressTypeWotsHash, keypair, chain, step);
             out = keccak256(abi.encodePacked("wots-c-chain", pkSeed, addressWord, out));
             unchecked {
                 ++step;

@@ -38,103 +38,38 @@ library ShrincsUtils {
         return context.domainSeparator != bytes32(0);
     }
 
-    // publicKeyCommitment: Recompute the bundle commitment from a fully encoded public key.
-    // 1. Domain-separate the commitment as a SHRINCS public-key bundle hash.
-    // 2. Bind the stateful public key, stateless public seed, and hypertree root.
-    // 3. Return the installed public-key commitment.
-    function publicKeyCommitment(ShrincsTypes.PublicKey calldata publicKey) internal pure returns (bytes32) {
-        return keccak256(
-            abi.encodePacked(
-                "shrincs-public-key", publicKey.statefulPublicKey, publicKey.pkSeed, publicKey.hypertreeRoot
-            )
-        );
-    }
-
-    // publicKeyCommitmentFromParts: Recompute the bundle commitment from explicit component fields.
-    // 1. Domain-separate the commitment as a SHRINCS public-key bundle hash.
-    // 2. Bind the stateful public key, stateless public seed, and hypertree root.
-    // 3. Return the installed public-key commitment.
-    function publicKeyCommitmentFromParts(
-        bytes memory statefulPublicKey,
-        bytes memory pkSeed,
-        bytes memory hypertreeRoot
-    ) internal pure returns (bytes32) {
-        return keccak256(abi.encodePacked("shrincs-public-key", statefulPublicKey, pkSeed, hypertreeRoot));
-    }
-
-    // matchesExpectedPublicKeyCommitment: Check that a bundled public key matches an installed commitment.
-    // 1. Require a nonzero expected installed-key commitment.
-    // 2. Require a 32-byte encoded commitment field inside the public key.
-    // 3. Load the declared commitment from calldata.
-    // 4. Check it against the caller-supplied expected commitment.
-    // 5. Recompute the bundle commitment and require it to match too.
-    function matchesExpectedPublicKeyCommitment(
+    // matchesExpectedStatelessKey: Check that a bundled public key matches installed pkSeed/root storage.
+    // 1. Require nonzero installed public key words.
+    // 2. Require fixed-width public-key fields.
+    // 3. Load pkSeed/root from calldata and compare directly to storage words.
+    function matchesExpectedStatelessKey(
         ShrincsTypes.PublicKey calldata publicKey,
-        bytes32 expectedPublicKeyCommitment
+        bytes32 expectedPkSeed,
+        bytes32 expectedHypertreeRoot
     ) internal pure returns (bool) {
-        // A missing installed-key commitment is always invalid.
-        if (expectedPublicKeyCommitment == bytes32(0)) return false;
-        // The encoded commitment field must always be one hash output wide.
-        if (publicKey.publicKeyCommitment.length != 32) return false;
-        bytes calldata encodedCommitment = publicKey.publicKeyCommitment;
-        bytes32 actualCommitment;
+        // Missing installed key material is always invalid.
+        if (expectedPkSeed == bytes32(0)) return false;
+        if (expectedHypertreeRoot == bytes32(0)) return false;
+        if (!validPublicKey(publicKey)) return false;
+        bytes calldata encodedPkSeed = publicKey.pkSeed;
+        bytes calldata encodedHypertreeRoot = publicKey.hypertreeRoot;
+        bytes32 actualPkSeed;
+        bytes32 actualHypertreeRoot;
         assembly {
-            // Load the declared 32-byte commitment directly from calldata.
-            actualCommitment := calldataload(encodedCommitment.offset)
+            // Load the two public key words directly from calldata.
+            actualPkSeed := calldataload(encodedPkSeed.offset)
+            actualHypertreeRoot := calldataload(encodedHypertreeRoot.offset)
         }
-        // First require the declared field to match the expected installed commitment.
-        if (actualCommitment != expectedPublicKeyCommitment) return false;
-        // Then require the whole public-key bundle to recompute to that same commitment.
-        return publicKeyCommitment(publicKey) == expectedPublicKeyCommitment;
+        return actualPkSeed == expectedPkSeed && actualHypertreeRoot == expectedHypertreeRoot;
     }
 
-    // validPublicKey: Validate public-key byte lengths and confirm its embedded commitment is correct.
-    // 1. Check the encoded stateful public-key length.
-    // 2. Check the commitment, public-seed, and hypertree-root lengths.
-    // 3. Load the embedded commitment from calldata.
-    // 4. Recompute the bundle commitment and require it to match the embedded field.
+    // validPublicKey: Validate public-key byte lengths.
+    // 1. Check the public-seed and hypertree-root lengths.
     function validPublicKey(ShrincsTypes.PublicKey calldata publicKey) internal pure returns (bool) {
-        // The stateful public key has a fixed packed byte width.
-        if (publicKey.statefulPublicKey.length != ShrincsTypes.STATEFUL_PUBLIC_KEY_BYTES) return false;
-        // The embedded commitment field is always one hash output wide.
-        if (publicKey.publicKeyCommitment.length != 32) return false;
         // The stateless public seed is always one hash output wide.
         if (publicKey.pkSeed.length != 32) return false;
         // The hypertree root is always one hash output wide.
-        if (publicKey.hypertreeRoot.length != 32) return false;
-        bytes calldata encodedCommitment = publicKey.publicKeyCommitment;
-        bytes32 expectedCommitment;
-        assembly {
-            // Load the embedded 32-byte commitment directly from calldata.
-            expectedCommitment := calldataload(encodedCommitment.offset)
-        }
-        return publicKeyCommitment(publicKey) == expectedCommitment;
-    }
-
-    // decodeStatefulPublicKey: Decode the fixed-width stateful public-key payload into typed fields.
-    // 1. Check the exact packed byte width of the encoded stateful public key.
-    // 2. Allocate the decoded struct in memory.
-    // 3. Copy the public seed, root, and max-signatures fields from calldata.
-    // 4. Return the decoded struct together with a success flag.
-    function decodeStatefulPublicKey(bytes calldata encoded)
-        internal
-        pure
-        returns (ShrincsTypes.StatefulPublicKey memory publicKey, bool ok)
-    {
-        if (encoded.length != ShrincsTypes.STATEFUL_PUBLIC_KEY_BYTES) return (publicKey, false);
-        assembly {
-            // Allocate the decoded struct starting at the free-memory pointer.
-            publicKey := mload(0x40)
-            // Copy the first 32 bytes as the stateful public seed.
-            mstore(publicKey, calldataload(encoded.offset))
-            // Copy the next 32 bytes as the stateful root.
-            mstore(add(publicKey, 0x20), calldataload(add(encoded.offset, 32)))
-            // Copy the high 4 bytes of the final word as maxSignatures.
-            mstore(add(publicKey, 0x40), shr(224, calldataload(add(encoded.offset, 64))))
-            // Bump the free-memory pointer past the decoded struct.
-            mstore(0x40, add(publicKey, 0x60))
-        }
-        return (publicKey, true);
+        return publicKey.hypertreeRoot.length == 32;
     }
 
     // addressWord32: Pack the SPHINCS/XMSS-style address components into one 32-byte word.

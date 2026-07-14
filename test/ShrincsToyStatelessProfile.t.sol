@@ -72,7 +72,11 @@ library ShrincsToyStatelessProfile {
         HypertreeLayerSignature[] hypertree;
     }
 
-    function keygen(bytes memory seedMaterial) internal pure returns (SigningKey memory signingKey, PublicKey memory publicKey) {
+    function keygen(bytes memory seedMaterial)
+        internal
+        pure
+        returns (SigningKey memory signingKey, PublicKey memory publicKey)
+    {
         bytes32 statelessSkSeed = derive32("toy-stateless-sk-seed", seedMaterial, "");
         bytes32 statelessPrfSeed = derive32("toy-stateless-prf-seed", seedMaterial, "");
         bytes32 pkSeed = derive32("toy-pk-seed", seedMaterial, "");
@@ -144,8 +148,9 @@ library ShrincsToyStatelessProfile {
             ForsEntry[] memory entries = new ForsEntry[](SIGNED_FORS_TREES);
             for (uint32 forsTree = 0; forsTree < SIGNED_FORS_TREES;) {
                 uint32 leaf = readBits32(digest, uint256(forsTree) * FORS_TREE_HEIGHT, FORS_TREE_HEIGHT);
-                (bytes32 root, bytes32[] memory authPath) =
-                    forsTreeRootAndAuthPath(signingKey.pkSeed, signingKey.statelessSkSeed, digestTreeIndex, digestLeafIndex, forsTree, leaf);
+                (bytes32 root, bytes32[] memory authPath) = forsTreeRootAndAuthPath(
+                    signingKey.pkSeed, signingKey.statelessSkSeed, digestTreeIndex, digestLeafIndex, forsTree, leaf
+                );
                 setSlice32(roots, root, uint256(forsTree) * 32);
                 entries[forsTree] = ForsEntry({
                     secretLeaf: forsLeafSecret(
@@ -181,7 +186,8 @@ library ShrincsToyStatelessProfile {
         bytes memory roots = new bytes(SIGNED_FORS_TREES * 32);
         for (uint32 forsTree = 0; forsTree < SIGNED_FORS_TREES;) {
             uint32 entryLeaf = readBits32(digest, uint256(forsTree) * FORS_TREE_HEIGHT, FORS_TREE_HEIGHT);
-            bytes32 root = forsEntryRoot(publicKey.pkSeed, treeIndex, leafIndex, forsTree, entryLeaf, signature.entries[forsTree]);
+            bytes32 root =
+                forsEntryRoot(publicKey.pkSeed, treeIndex, leafIndex, forsTree, entryLeaf, signature.entries[forsTree]);
             setSlice32(roots, root, uint256(forsTree) * 32);
             unchecked {
                 ++forsTree;
@@ -213,11 +219,7 @@ library ShrincsToyStatelessProfile {
             if (!ok) return (layers, false);
             bytes32[] memory authPath = hypertreeAuthPath(signingKey.pkSeed, layerSeeds[layer], layer, tree, leaf);
             layers[layer] = HypertreeLayerSignature({
-                treeIndex: tree,
-                leafIndex: leaf,
-                wotsPkHash: pkHash,
-                wotsSignature: wotsSignature,
-                authPath: authPath
+                treeIndex: tree, leafIndex: leaf, wotsPkHash: pkHash, wotsSignature: wotsSignature, authPath: authPath
             });
             current = hypertreeVirtualNode(signingKey.pkSeed, layerSeeds[layer], layer, tree, SUBTREE_HEIGHT, 0);
             leaf = uint32(tree & leafMask);
@@ -246,10 +248,20 @@ library ShrincsToyStatelessProfile {
             HypertreeLayerSignature memory layerSig = layers[layer];
             if (layerSig.treeIndex != expectedTreeIndex) return false;
             if (layerSig.leafIndex != expectedLeafIndex) return false;
-            if (!verifyWots(publicKey.pkSeed, layer, layerSig.treeIndex, layerSig.leafIndex, layerSig.wotsPkHash, current, layerSig.wotsSignature)) {
+            if (!verifyWots(
+                    publicKey.pkSeed,
+                    layer,
+                    layerSig.treeIndex,
+                    layerSig.leafIndex,
+                    layerSig.wotsPkHash,
+                    current,
+                    layerSig.wotsSignature
+                )) {
                 return false;
             }
-            bytes32 root = hypertreeRootFromPath(publicKey.pkSeed, layer, layerSig.treeIndex, layerSig.leafIndex, layerSig.wotsPkHash, layerSig.authPath);
+            bytes32 root = hypertreeRootFromPath(
+                publicKey.pkSeed, layer, layerSig.treeIndex, layerSig.leafIndex, layerSig.wotsPkHash, layerSig.authPath
+            );
             current = root;
             expectedLeafIndex = uint32(expectedTreeIndex & leafMask);
             expectedTreeIndex >>= SUBTREE_HEIGHT;
@@ -272,7 +284,8 @@ library ShrincsToyStatelessProfile {
     ) internal pure returns (WotsSignature memory signature, bool ok) {
         bytes32 randomizer = keccak256(abi.encodePacked("toy-wots-randomizer", prfSeed, message));
         for (uint32 counter = 0; counter < MAX_GRIND_COUNTER;) {
-            bytes32 fullDigest = keccak256(abi.encodePacked("toy-wots-msg", pkSeed, pkHash, randomizer, counter, message));
+            bytes32 fullDigest =
+                keccak256(abi.encodePacked("toy-wots-msg", pkSeed, pkHash, randomizer, counter, message));
             (bytes32[] memory chains, uint32 digitSum) =
                 buildSignedWotsChains(pkSeed, skSeed, layer, tree, keypair, fullDigest);
             if (digitSum == WOTS_TARGET_SUM) {
@@ -316,13 +329,17 @@ library ShrincsToyStatelessProfile {
         WotsSignature memory signature
     ) internal pure returns (bool) {
         if (signature.chains.length != NUM_WOTS_CHAINS) return false;
-        bytes32 digest = keccak256(abi.encodePacked("toy-wots-msg", pkSeed, expectedPkHash, signature.randomizer, signature.counter, message));
+        bytes32 digest = keccak256(
+            abi.encodePacked("toy-wots-msg", pkSeed, expectedPkHash, signature.randomizer, signature.counter, message)
+        );
         bytes memory endpoints = new bytes(NUM_WOTS_CHAINS * 32);
         uint32 digitSum;
         for (uint32 chain = 0; chain < NUM_WOTS_CHAINS;) {
             uint32 digit = baseW16Digit(digest, chain);
             digitSum += digit;
-            bytes32 endpoint = wotsChain(pkSeed, layer, tree, keypair, chain, signature.chains[chain], digit, WOTS_CHAIN_LEN - 1 - digit);
+            bytes32 endpoint = wotsChain(
+                pkSeed, layer, tree, keypair, chain, signature.chains[chain], digit, WOTS_CHAIN_LEN - 1 - digit
+            );
             setSlice32(endpoints, endpoint, uint256(chain) * 32);
             unchecked {
                 ++chain;
@@ -341,7 +358,8 @@ library ShrincsToyStatelessProfile {
         uint32 treeBits = HYPERTREE_HEIGHT - SUBTREE_HEIGHT;
         uint256 digestBytes = (uint256(indexBits) + uint256(HYPERTREE_HEIGHT) + 7) / 8;
         digest = new bytes(digestBytes);
-        bytes32 digestWord = keccak256(abi.encodePacked("toy-fors-digest", pkSeed, hypertreeRoot, randomizer, counter, message));
+        bytes32 digestWord =
+            keccak256(abi.encodePacked("toy-fors-digest", pkSeed, hypertreeRoot, randomizer, counter, message));
         setHashChunk(digest, digestWord, 0, digestBytes);
         treeIndex = readBits64(digest, indexBits, treeBits);
         leafIndex = readBits32(digest, indexBits + treeBits, SUBTREE_HEIGHT);
@@ -426,11 +444,7 @@ library ShrincsToyStatelessProfile {
         return hypertreeVirtualNode(pkSeed, layerSeeds[1], 1, 0, SUBTREE_HEIGHT, 0);
     }
 
-    function hypertreeLayerSeeds(bytes32 statelessSkSeed)
-        internal
-        pure
-        returns (bytes32[2] memory layerSeeds)
-    {
+    function hypertreeLayerSeeds(bytes32 statelessSkSeed) internal pure returns (bytes32[2] memory layerSeeds) {
         for (uint32 layer = 0; layer < NUM_HYPERTREE_LAYERS;) {
             layerSeeds[layer] =
                 keccak256(abi.encodePacked("toy-hypertree-layer-seed", statelessSkSeed, bytes1(uint8(layer))));
@@ -440,17 +454,24 @@ library ShrincsToyStatelessProfile {
         }
     }
 
-    function hypertreeVirtualNode(bytes32 pkSeed, bytes32 layerSeed, uint32 layer, uint64 tree, uint32 height, uint32 index)
-        internal
-        pure
-        returns (bytes32)
-    {
+    function hypertreeVirtualNode(
+        bytes32 pkSeed,
+        bytes32 layerSeed,
+        uint32 layer,
+        uint64 tree,
+        uint32 height,
+        uint32 index
+    ) internal pure returns (bytes32) {
         if (height == 0) {
             return hypertreeLeaf(pkSeed, layerSeed, layer, tree, index);
         }
         bytes32 left = hypertreeVirtualNode(pkSeed, layerSeed, layer, tree, height - 1, index << 1);
         bytes32 right = hypertreeVirtualNode(pkSeed, layerSeed, layer, tree, height - 1, (index << 1) | 1);
-        return keccak256(abi.encodePacked("toy-hypertree-node", pkSeed, hypertreeAddressWord(layer, tree, height, index), left, right));
+        return keccak256(
+            abi.encodePacked(
+                "toy-hypertree-node", pkSeed, hypertreeAddressWord(layer, tree, height, index), left, right
+            )
+        );
     }
 
     function hypertreeLeaf(bytes32 pkSeed, bytes32 layerSeed, uint32 layer, uint64 tree, uint32 leaf)
@@ -492,7 +513,13 @@ library ShrincsToyStatelessProfile {
             bytes32 sibling = authPath[height - 1];
             (bytes32 left, bytes32 right) = index & 1 == 0 ? (node, sibling) : (sibling, node);
             node = keccak256(
-                abi.encodePacked("toy-hypertree-node", pkSeed, hypertreeAddressWord(layer, tree, height, uint32(index >> 1)), left, right)
+                abi.encodePacked(
+                    "toy-hypertree-node",
+                    pkSeed,
+                    hypertreeAddressWord(layer, tree, height, uint32(index >> 1)),
+                    left,
+                    right
+                )
             );
             index >>= 1;
             unchecked {
@@ -522,25 +549,35 @@ library ShrincsToyStatelessProfile {
         return keccak256(abi.encodePacked("toy-wots-secret", skSeed, chain));
     }
 
-    function wotsChain(bytes32 pkSeed, uint32 layer, uint64 tree, uint32 keypair, uint32 chain, bytes32 value, uint32 start, uint32 steps)
-        internal
-        pure
-        returns (bytes32 out)
-    {
+    function wotsChain(
+        bytes32 pkSeed,
+        uint32 layer,
+        uint64 tree,
+        uint32 keypair,
+        uint32 chain,
+        bytes32 value,
+        uint32 start,
+        uint32 steps
+    ) internal pure returns (bytes32 out) {
         out = value;
         for (uint32 step = start; step < start + steps;) {
-            out = keccak256(abi.encodePacked("toy-wots-chain", pkSeed, wotsAddressWord(layer, tree, keypair, chain, step), out));
+            out = keccak256(
+                abi.encodePacked("toy-wots-chain", pkSeed, wotsAddressWord(layer, tree, keypair, chain, step), out)
+            );
             unchecked {
                 ++step;
             }
         }
     }
 
-    function forsLeafSecret(bytes32 pkSeed, bytes32 skSeed, uint64 treeIndex, uint32 leafIndex, uint32 forsTree, uint32 leaf)
-        internal
-        pure
-        returns (bytes32)
-    {
+    function forsLeafSecret(
+        bytes32 pkSeed,
+        bytes32 skSeed,
+        uint64 treeIndex,
+        uint32 leafIndex,
+        uint32 forsTree,
+        uint32 leaf
+    ) internal pure returns (bytes32) {
         return keccak256(
             abi.encodePacked(
                 "toy-fors-sk",
@@ -551,11 +588,14 @@ library ShrincsToyStatelessProfile {
         );
     }
 
-    function forsLeafHash(bytes32 pkSeed, bytes32 skSeed, uint64 treeIndex, uint32 leafIndex, uint32 forsTree, uint32 leaf)
-        internal
-        pure
-        returns (bytes32)
-    {
+    function forsLeafHash(
+        bytes32 pkSeed,
+        bytes32 skSeed,
+        uint64 treeIndex,
+        uint32 leafIndex,
+        uint32 forsTree,
+        uint32 leaf
+    ) internal pure returns (bytes32) {
         bytes32 secret = forsLeafSecret(pkSeed, skSeed, treeIndex, leafIndex, forsTree, leaf);
         bytes32 addressWord =
             forsAddressWord(treeIndex, leafIndex, 0, (uint64(forsTree) << FORS_TREE_HEIGHT) + uint64(leaf));
@@ -705,6 +745,10 @@ contract ShrincsToyStatelessProfileTest is Test {
         (ShrincsToyStatelessProfile.StatelessSignature memory signatureB, bool okB) = harness.sign(signingKey, message);
 
         assertTrue(okA && okB, "toy stateless signing must succeed");
-        assertEq(keccak256(abi.encode(signatureA)), keccak256(abi.encode(signatureB)), "toy stateless signature must be deterministic");
+        assertEq(
+            keccak256(abi.encode(signatureA)),
+            keccak256(abi.encode(signatureB)),
+            "toy stateless signature must be deterministic"
+        );
     }
 }

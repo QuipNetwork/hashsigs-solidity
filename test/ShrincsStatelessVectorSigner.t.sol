@@ -24,12 +24,15 @@ import {ShrincsStatelessVectorSigningFacade} from "./helpers/ShrincsStatelessVec
 
 contract ShrincsStatelessVectorSignerHarness is ShrincsStatelessVectorSigner {
     function verifyUnsafeRaw(
-        bytes32 expectedPublicKeyCommitment,
+        bytes32 expectedPkSeed,
+        bytes32 expectedHypertreeRoot,
         ShrincsTypes.PublicKey calldata publicKey,
         bytes calldata message,
         ShrincsTypes.StatelessSignature calldata signature
     ) external pure returns (bool) {
-        return SHRINCS.verifyStatelessUncheckedMessage(expectedPublicKeyCommitment, publicKey, message, signature);
+        return SHRINCS.verifyStatelessUncheckedMessage(
+            expectedPkSeed, expectedHypertreeRoot, publicKey, message, signature
+        );
     }
 }
 
@@ -44,8 +47,7 @@ contract ShrincsStatelessVectorSignerTest is Test {
 
     function testStagedStatelessVectorSignerProducesVerifyingSignature() public {
         bytes memory message = abi.encodePacked(keccak256("staged stateless vector message"));
-        (bytes32 sessionId, bool ok) =
-            signer.beginSessionFromSeed(bytes("staged stateless vector seed"), 4, message);
+        (bytes32 sessionId, bool ok) = signer.beginSessionFromSeed(bytes("staged stateless vector seed"), 4, message);
         assertTrue(ok, "session must start");
 
         (bool active, bool forsPrepared, bool forsFinalized, uint32 nextForsTree, uint32 nextLayer) =
@@ -88,39 +90,41 @@ contract ShrincsStatelessVectorSignerTest is Test {
         assertEq(signature.fors.entries.length, ShrincsTypes.NUM_FORS_TREES - 1, "FORS-C entry count");
         assertEq(signature.hypertree.length, ShrincsTypes.NUM_HYPERTREE_LAYERS, "hypertree layer count");
 
-        bytes memory commitmentBytes = publicKey.publicKeyCommitment;
-        bytes32 expectedPublicKeyCommitment;
-        assembly {
-            expectedPublicKeyCommitment := mload(add(commitmentBytes, 32))
-        }
+        (bytes32 expectedPkSeed, bytes32 expectedHypertreeRoot) = publicKeyWords(publicKey);
 
         assertTrue(
-            signer.verifyUnsafeRaw(expectedPublicKeyCommitment, publicKey, signedMessage, signature),
+            signer.verifyUnsafeRaw(expectedPkSeed, expectedHypertreeRoot, publicKey, signedMessage, signature),
             "staged stateless signer output must verify"
         );
     }
 
     function testHighLevelStatelessFacadeProducesVerifyingSignature() public {
         bytes memory message = abi.encodePacked(keccak256("high level stateless vector message"));
-        (
-            ShrincsTypes.PublicKey memory publicKey,
-            ShrincsTypes.StatelessSignature memory signature,
-            bool ok
-        ) = signer.signFromSeed(bytes("high level stateless vector seed"), 4, message);
+        (ShrincsTypes.PublicKey memory publicKey, ShrincsTypes.StatelessSignature memory signature, bool ok) =
+            signer.signFromSeed(bytes("high level stateless vector seed"), 4, message);
 
         assertTrue(ok, "high-level signing must succeed");
         assertEq(signature.fors.entries.length, ShrincsTypes.NUM_FORS_TREES - 1, "FORS-C entry count");
         assertEq(signature.hypertree.length, ShrincsTypes.NUM_HYPERTREE_LAYERS, "hypertree layer count");
 
-        bytes memory commitmentBytes = publicKey.publicKeyCommitment;
-        bytes32 expectedPublicKeyCommitment;
-        assembly {
-            expectedPublicKeyCommitment := mload(add(commitmentBytes, 32))
-        }
+        (bytes32 expectedPkSeed, bytes32 expectedHypertreeRoot) = publicKeyWords(publicKey);
 
         assertTrue(
-            signer.verifyUnsafeRaw(expectedPublicKeyCommitment, publicKey, message, signature),
+            signer.verifyUnsafeRaw(expectedPkSeed, expectedHypertreeRoot, publicKey, message, signature),
             "high-level stateless signer output must verify"
         );
+    }
+
+    function publicKeyWords(ShrincsTypes.PublicKey memory publicKey)
+        internal
+        pure
+        returns (bytes32 pkSeed, bytes32 hypertreeRoot)
+    {
+        bytes memory pkSeedBytes = publicKey.pkSeed;
+        bytes memory rootBytes = publicKey.hypertreeRoot;
+        assembly {
+            pkSeed := mload(add(pkSeedBytes, 32))
+            hypertreeRoot := mload(add(rootBytes, 32))
+        }
     }
 }

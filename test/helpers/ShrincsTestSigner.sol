@@ -20,9 +20,9 @@ import {SHRINCS} from "../../contracts/SHRINCS.sol";
 import {ShrincsTypes} from "../../contracts/ShrincsTypes.sol";
 import {ShrincsUtils} from "../../contracts/ShrincsUtils.sol";
 
-/// @notice TEST-ONLY Solidity signer helpers that mirror the Rust signer for stateful flows.
+/// @notice TEST-ONLY Solidity signer helpers that mirror the Rust signer for stateless and compact flows.
 /// @dev This library is kept under `test/helpers` so it does not become part of the
-/// production Solidity surface. It is used for deterministic keygen and stateful-signing tests.
+/// production Solidity surface. Legacy stateful material is retained only for deterministic fixtures.
 library ShrincsTestSigner {
     uint32 internal constant INITIAL_STATEFUL_LEAF_INDEX = 1;
     uint32 internal constant MAX_STATEFUL_SIGNATURES_LIMIT = 4096;
@@ -95,19 +95,9 @@ library ShrincsTestSigner {
             hypertreeRoot: hypertreeRoot
         });
 
-        // Encode the stateful public key in the verifier's fixed public-key layout.
-        bytes memory statefulPublicKey = encodeStatefulPublicKey(statefulPkSeed, statefulRoot, maxStatefulSignatures);
-        // Commit the full public bundle as statefulPk || pkSeed || hypertreeRoot.
-        bytes32 publicKeyCommitment = ShrincsUtils.publicKeyCommitmentFromParts(
-            statefulPublicKey, abi.encodePacked(pkSeed), abi.encodePacked(hypertreeRoot)
-        );
         // Build the public key object consumed by tests and account wrappers.
-        publicKey = ShrincsTypes.PublicKey({
-            statefulPublicKey: statefulPublicKey,
-            publicKeyCommitment: abi.encodePacked(publicKeyCommitment),
-            pkSeed: abi.encodePacked(pkSeed),
-            hypertreeRoot: abi.encodePacked(hypertreeRoot)
-        });
+        publicKey =
+            ShrincsTypes.PublicKey({pkSeed: abi.encodePacked(pkSeed), hypertreeRoot: abi.encodePacked(hypertreeRoot)});
         return (signingKey, publicKey, true);
     }
 
@@ -141,38 +131,6 @@ library ShrincsTestSigner {
         // The next call will consume the next stateful leaf.
         nextSigningKey.nextStatefulLeafIndex = leafIndex + 1;
         return (nextSigningKey, signature, true);
-    }
-
-    // signStatefulAction: Sign a canonical account action with the stateful path.
-    // 1. Extract the public-key commitment expected by the verifier.
-    // 2. Build SHRINCS.statefulActionMessageHash(...).
-    // 3. Delegate to the raw stateful signer.
-    function signStatefulAction(
-        ShrincsTypes.SigningKey memory signingKey,
-        ShrincsTypes.PublicKey memory publicKey,
-        ShrincsTypes.ActionContext memory context
-    )
-        internal
-        pure
-        returns (
-            ShrincsTypes.SigningKey memory nextSigningKey,
-            ShrincsTypes.StatefulSignature memory signature,
-            bool ok
-        )
-    {
-        // The commitment is loaded as one word below, so it must be exactly 32 bytes.
-        if (publicKey.publicKeyCommitment.length != 32) return (nextSigningKey, signature, false);
-        // Hold the installed public-key commitment as a bytes32 for hashing.
-        bytes32 expectedPublicKeyCommitment;
-        // Cache the dynamic bytes pointer used by the assembly load.
-        bytes memory commitmentBytes = publicKey.publicKeyCommitment;
-        assembly {
-            // Load the first 32 bytes of publicKey.publicKeyCommitment.
-            expectedPublicKeyCommitment := mload(add(commitmentBytes, 32))
-        }
-        // Build the canonical wrapper action message and sign its 32-byte hash as bytes.
-        bytes memory message = abi.encodePacked(SHRINCS.statefulActionMessageHash(expectedPublicKeyCommitment, context));
-        return signStatefulRaw(signingKey, message);
     }
 
     // derive32: Deterministically derive one fixture word under a human-readable domain.
@@ -717,15 +675,6 @@ library ShrincsTestSigner {
             signingKey.statefulSkSeed, signingKey.statefulPkSeed, leafIndex, signingKey.maxStatefulSignatures
         );
         return (signature, true);
-    }
-
-    // encodeStatefulPublicKey: Pack pkSeed32 || root32 || maxSignatures4.
-    function encodeStatefulPublicKey(bytes32 pkSeed, bytes32 root, uint32 maxSignatures)
-        internal
-        pure
-        returns (bytes memory)
-    {
-        return abi.encodePacked(pkSeed, root, maxSignatures);
     }
 
     // statefulSubtreeRoot: Build the right-folded stateful subtree root used by tests.

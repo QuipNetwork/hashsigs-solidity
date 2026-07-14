@@ -21,12 +21,10 @@ library ShrincsTypes {
     uint32 internal constant HASH_SUITE_KECCAK_256 = 1;
     uint32 internal constant HASH_SUITE_UNSUPPORTED = 2;
     // Operation tags domain-separating each signed message family.
-    bytes32 internal constant OP_VERIFY_STATEFUL = keccak256("shrincs-verify-stateful");
     bytes32 internal constant OP_VERIFY_STATELESS = keccak256("shrincs-verify-stateless");
     bytes32 internal constant OP_VERIFY_COMPACT = keccak256("shrincs-verify-compact");
     bytes32 internal constant OP_REGISTER_COMPACT_SLOT = keccak256("shrincs-register-compact-slot");
     bytes32 internal constant OP_REVOKE_COMPACT_SLOT = keccak256("shrincs-revoke-compact-slot");
-    bytes32 internal constant OP_ROTATE_STATEFUL = keccak256("shrincs-rotate-stateful");
     bytes32 internal constant OP_ROTATE_FULL = keccak256("shrincs-rotate-full");
 
     // Address-type words for the SPHINCS-style keyed hash inputs.
@@ -37,9 +35,6 @@ library ShrincsTypes {
     uint32 internal constant AddressTypeForsPrf = 6;
     uint32 internal constant AddressTypeJardinMerkle = 16;
 
-    // Encoded stateful public key layout:
-    // 32-byte pkSeed || 32-byte root || 4-byte maxSignatures.
-    uint16 internal constant STATEFUL_PUBLIC_KEY_BYTES = 68;
     // Stateful WOTS-C uses 64 chains.
     uint16 internal constant WOTS_CHAINS_STATEFUL = 64;
     // Stateful WOTS-C uses base-16 digits for message expansion.
@@ -73,23 +68,10 @@ library ShrincsTypes {
     }
 
     struct PublicKey {
-        // Encoded stateful fast-path public key.
-        bytes statefulPublicKey;
-        // Commitment binding the full hybrid public-key bundle together.
-        bytes publicKeyCommitment;
         // Stateless SPHINCS-style public seed.
         bytes pkSeed;
         // Stateless SPHINCS-style public root.
         bytes hypertreeRoot;
-    }
-
-    struct StatefulPublicKey {
-        // Public seed for stateful WOTS-C and tree hashing.
-        bytes32 pkSeed;
-        // Root of the custom stateful tree.
-        bytes32 root;
-        // Maximum number of stateful leaves/signatures under this key.
-        uint32 maxSignatures;
     }
 
     struct SigningKey {
@@ -171,13 +153,6 @@ library ShrincsTypes {
         HypertreeLayerSignature[] hypertree;
     }
 
-    struct StatefulRotationTarget {
-        // Replacement encoded stateful public key.
-        bytes statefulPublicKey;
-        // Commitment that should identify the next installed bundle.
-        bytes publicKeyCommitment;
-    }
-
     struct RotationContext {
         // Contract/application domain binding for the rotation intent.
         bytes32 domainSeparator;
@@ -201,10 +176,6 @@ library ShrincsTypes {
     }
 
     struct RotationTarget {
-        // Replacement encoded stateful public key.
-        bytes statefulPublicKey;
-        // Commitment that should identify the next installed bundle.
-        bytes publicKeyCommitment;
         // Replacement stateless public seed.
         bytes pkSeed;
         // Replacement stateless public root.

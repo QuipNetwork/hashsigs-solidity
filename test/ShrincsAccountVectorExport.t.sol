@@ -32,38 +32,6 @@ contract ShrincsAccountVectorExportTest is Test {
         signer = new ShrincsAccountVectorExportHarness();
     }
 
-    function testExportStatefulActionBundle() public {
-        bytes32 actionType = keccak256("execute");
-        bytes32 payloadHash = keccak256("payload");
-        (ShrincsTypes.SigningKey memory signingKey, ShrincsTypes.PublicKey memory publicKey, bool keygenOk) =
-            ShrincsAccountSigningFacade.keygen(bytes("export-stateful-current-key"), 4);
-        assertTrue(keygenOk, "keygen must succeed");
-
-        ShrincsAccountVerifierExample account =
-            new ShrincsAccountVerifierExample(ShrincsAccountSigningFacade.publicKeyCommitmentWord(publicKey));
-
-        (
-            ShrincsTypes.SigningKey memory nextSigningKey,
-            ShrincsTypes.ActionContext memory context,
-            ShrincsTypes.StatefulSignature memory signature,
-            bool signOk
-        ) = ShrincsAccountSigningFacade.signStatefulActionNow(account, signingKey, actionType, payloadHash);
-        assertTrue(signOk, "stateful signing must succeed");
-
-        ShrincsAccountVectorExport.StatefulActionVector memory vector_ =
-            ShrincsAccountVectorExport.statefulActionVector(
-                account, publicKey, context, actionType, payloadHash, signature
-            );
-
-        emit log_named_bytes("stateful_vector_abi", abi.encode(vector_));
-        emit log_named_bytes("stateful_verify_calldata", vector_.verifyCalldata);
-        emit log_named_bytes("stateful_1271_envelope", vector_.erc1271Envelope);
-
-        bool verifyOk = account.verifyStatefulAction(publicKey, actionType, payloadHash, signature);
-        assertTrue(verifyOk, "exported stateful vector must feed the wrapper");
-        assertEq(nextSigningKey.nextStatefulLeafIndex, 2, "stateful export should advance one leaf");
-    }
-
     function testExportStatelessActionBundle() public {
         bytes32 actionType = keccak256("execute");
         bytes32 payloadHash = keccak256("payload");
@@ -71,14 +39,9 @@ contract ShrincsAccountVectorExportTest is Test {
             ShrincsAccountSigningFacade.keygen(bytes("export-stateless-current-key"), 4);
         assertTrue(keygenOk, "keygen must succeed");
 
-        ShrincsAccountVerifierExample account =
-            new ShrincsAccountVerifierExample(ShrincsAccountSigningFacade.publicKeyCommitmentWord(publicKey));
+        ShrincsAccountVerifierExample account = newAccount(publicKey);
 
-        (
-            ShrincsTypes.ActionContext memory context,
-            bytes32 sessionId,
-            bool signOk
-        ) = ShrincsAccountSigningFacade.beginStatelessActionSessionNow(
+        (ShrincsTypes.ActionContext memory context, bytes32 sessionId, bool signOk) = ShrincsAccountSigningFacade.beginStatelessActionSessionNow(
             signer, account, signingKey, publicKey, actionType, payloadHash
         );
         assertTrue(signOk, "stateless signing must start");
@@ -100,70 +63,23 @@ contract ShrincsAccountVectorExportTest is Test {
         assertTrue(verifyOk, "exported stateless vector must feed the wrapper");
     }
 
-    function testExportStatefulOnlyRotationBundle() public {
-        (ShrincsTypes.SigningKey memory currentSigningKey, ShrincsTypes.PublicKey memory currentPublicKey, bool currentOk)
-            = ShrincsAccountSigningFacade.keygen(bytes("export-rotation-current-key"), 4);
-        assertTrue(currentOk, "current keygen must succeed");
-
-        ShrincsAccountVerifierExample account =
-            new ShrincsAccountVerifierExample(ShrincsAccountSigningFacade.publicKeyCommitmentWord(currentPublicKey));
-        account.setStatefulPolicyRecoveryRotation();
-        account.enterRecoveryMode();
-
-        (, ShrincsTypes.PublicKey memory nextPublicKey, bool nextOk) =
-            ShrincsAccountSigningFacade.keygen(bytes("export-rotation-next-key"), 4);
-        assertTrue(nextOk, "next keygen must succeed");
-
-        ShrincsTypes.StatefulRotationTarget memory nextKey =
-            ShrincsAccountSigningFacade.statefulRotationTarget(currentPublicKey, nextPublicKey.statefulPublicKey);
-
-        (
-            ShrincsTypes.RotationContext memory context,
-            bytes32 sessionId,
-            bool signOk
-        ) = ShrincsAccountSigningFacade.beginStatefulOnlyRotationSessionNow(
-            signer, account, currentSigningKey, currentPublicKey, nextKey
-        );
-        assertTrue(signOk, "stateful-only rotation must start");
-
-        (ShrincsTypes.StatelessSignature memory recoverySignature, bool completeOk) =
-            ShrincsAccountSigningFacade.completeStatelessSession(signer, sessionId);
-        assertTrue(completeOk, "stateful-only rotation must complete");
-
-        ShrincsAccountVectorExport.StatefulOnlyRotationVector memory vector_ =
-            ShrincsAccountVectorExport.statefulOnlyRotationVector(
-                account, currentPublicKey, context, nextKey, recoverySignature
-            );
-
-        emit log_named_bytes("stateful_rotation_vector_abi", abi.encode(vector_));
-        emit log_named_bytes("stateful_rotation_calldata", vector_.rotateCalldata);
-
-        bool rotateOk = account.rotateToFreshKey(currentPublicKey, recoverySignature, nextKey);
-        assertTrue(rotateOk, "exported stateful-only rotation vector must feed the wrapper");
-    }
-
     function testExportFullRotationBundle() public {
-        (ShrincsTypes.SigningKey memory currentSigningKey, ShrincsTypes.PublicKey memory currentPublicKey, bool currentOk)
-            = ShrincsAccountSigningFacade.keygen(bytes("account-aware full rotation current key"), 4);
+        (
+            ShrincsTypes.SigningKey memory currentSigningKey,
+            ShrincsTypes.PublicKey memory currentPublicKey,
+            bool currentOk
+        ) = ShrincsAccountSigningFacade.keygen(bytes("account-aware full rotation current key"), 4);
         assertTrue(currentOk, "current keygen must succeed");
 
-        ShrincsAccountVerifierExample account =
-            new ShrincsAccountVerifierExample(ShrincsAccountSigningFacade.publicKeyCommitmentWord(currentPublicKey));
-        account.setStatefulPolicyRecoveryRotation();
-        account.enterRecoveryMode();
+        ShrincsAccountVerifierExample account = newAccount(currentPublicKey);
 
         (, ShrincsTypes.PublicKey memory nextPublicKey, bool nextOk) =
             ShrincsAccountSigningFacade.keygen(bytes("account-aware full rotation next key"), 4);
         assertTrue(nextOk, "next keygen must succeed");
 
-        ShrincsTypes.RotationTarget memory nextKey =
-            ShrincsAccountSigningFacade.fullRotationTarget(nextPublicKey);
+        ShrincsTypes.RotationTarget memory nextKey = ShrincsAccountSigningFacade.fullRotationTarget(nextPublicKey);
 
-        (
-            ShrincsTypes.RotationContext memory context,
-            bytes32 sessionId,
-            bool signOk
-        ) = ShrincsAccountSigningFacade.beginFullRotationSessionNow(
+        (ShrincsTypes.RotationContext memory context, bytes32 sessionId, bool signOk) = ShrincsAccountSigningFacade.beginFullRotationSessionNow(
             signer, account, currentSigningKey, currentPublicKey, nextKey
         );
         assertTrue(signOk, "full rotation must start");
@@ -172,15 +88,23 @@ contract ShrincsAccountVectorExportTest is Test {
             ShrincsAccountSigningFacade.completeStatelessSession(signer, sessionId);
         assertTrue(completeOk, "full rotation must complete");
 
-        ShrincsAccountVectorExport.FullRotationVector memory vector_ =
-            ShrincsAccountVectorExport.fullRotationVector(
-                account, currentPublicKey, context, nextKey, recoverySignature
-            );
+        ShrincsAccountVectorExport.FullRotationVector memory vector_ = ShrincsAccountVectorExport.fullRotationVector(
+            account, currentPublicKey, context, nextKey, recoverySignature
+        );
 
         emit log_named_bytes("full_rotation_vector_abi", abi.encode(vector_));
         emit log_named_bytes("full_rotation_calldata", vector_.rotateCalldata);
 
         bool rotateOk = account.rotateFullKey(currentPublicKey, recoverySignature, nextKey);
         assertTrue(rotateOk, "exported full rotation vector must feed the wrapper");
+    }
+
+    function newAccount(ShrincsTypes.PublicKey memory publicKey)
+        internal
+        returns (ShrincsAccountVerifierExample account)
+    {
+        account = new ShrincsAccountVerifierExample(
+            ShrincsAccountSigningFacade.pkSeedWord(publicKey), ShrincsAccountSigningFacade.hypertreeRootWord(publicKey)
+        );
     }
 }

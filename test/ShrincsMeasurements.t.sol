@@ -39,22 +39,11 @@ contract CompactMeasurementHarness {
 }
 
 contract ShrincsMeasurementsTest is Test {
-    address internal constant STATEFUL_VECTOR_ACCOUNT = address(uint160(0xCAFE));
     bytes4 internal constant ERC1271_MAGIC_VALUE = 0x1626ba7e;
     uint8 internal constant ERC1271_MODE_COMPACT_ACTION = 3;
     uint8 internal constant COMPACT_Q = 11;
     bytes32 internal constant ACTION_TYPE = keccak256("measure");
     bytes32 internal constant PAYLOAD_HASH = keccak256("measurement payload");
-
-    struct StatefulCase {
-        ShrincsTypes.PublicKey publicKey;
-        ShrincsTypes.ActionContext context;
-        ShrincsTypes.StatefulSignature signature;
-        ShrincsAccountVerifierExample account;
-        bytes message;
-        bytes32 hash;
-        bytes envelope;
-    }
 
     struct StatelessCase {
         ShrincsTypes.PublicKey publicKey;
@@ -92,37 +81,6 @@ contract ShrincsMeasurementsTest is Test {
         accountSigner = new MeasurementAccountSigningHarness();
         compactHarness = new CompactMeasurementHarness();
         vm.resumeGasMetering();
-    }
-
-    function testMeasureStatefulCanonicalWrapperCallGas() public {
-        vm.pauseGasMetering();
-        StatefulCase memory c = prepareStatefulCase(bytes("measure stateful wrapper seed"));
-        bytes memory callData =
-            abi.encodeCall(c.account.verifyStatefulAction, (c.publicKey, ACTION_TYPE, PAYLOAD_HASH, c.signature));
-        vm.resumeGasMetering();
-
-        (bool success, bytes memory returnData) = address(c.account).call(callData);
-        Vm.Gas memory gas = vm.lastCallGas();
-
-        vm.pauseGasMetering();
-        assertTrue(success, "stateful wrapper call must not revert");
-        assertTrue(abi.decode(returnData, (bool)), "stateful wrapper call must verify");
-        emit log_named_uint("stateful.canonical_wrapper_call_gas", gas.gasTotalUsed);
-    }
-
-    function testMeasureStatefulERC1271CallGas() public {
-        vm.pauseGasMetering();
-        StatefulCase memory c = prepareStatefulCase(bytes("measure stateful 1271 seed"));
-        bytes memory callData = abi.encodeCall(c.account.isValidSignature, (c.hash, c.envelope));
-        vm.resumeGasMetering();
-
-        (bool success, bytes memory returnData) = address(c.account).call(callData);
-        Vm.Gas memory gas = vm.lastCallGas();
-
-        vm.pauseGasMetering();
-        assertTrue(success, "stateful 1271 call must not revert");
-        assertEq(abi.decode(returnData, (bytes4)), ERC1271_MAGIC_VALUE, "stateful 1271 must verify");
-        emit log_named_uint("stateful.erc1271_call_gas", gas.gasTotalUsed);
     }
 
     function testMeasureStatelessCanonicalWrapperCallGas() public {
@@ -198,7 +156,7 @@ contract ShrincsMeasurementsTest is Test {
             ShrincsAccountSigningFacade.keygen(bytes("measure compact multi q key"), 4);
         assertTrue(ok, "compact multi q keygen must succeed");
 
-        ShrincsAccountVerifierExample account = new ShrincsAccountVerifierExample(publicKeyCommitmentWord(publicKey));
+        ShrincsAccountVerifierExample account = newAccount(publicKey);
         (bytes32 compactSkSeed, bytes32 subPkSeed, bytes32 subPkRoot) =
             compactSlotKeygen(bytes("measure compact multi q slot"), 0);
         (bytes32 allAuthRoot, bytes32[7][128] memory authPaths) =
@@ -280,41 +238,12 @@ contract ShrincsMeasurementsTest is Test {
         emit log_named_uint("compact.slot_revocation_call_gas", gas.gasTotalUsed);
     }
 
-    function prepareStatefulCase(bytes memory seedMaterial) internal returns (StatefulCase memory c) {
-        (ShrincsTypes.SigningKey memory signingKey, ShrincsTypes.PublicKey memory publicKey, bool keygenOk) =
-            ShrincsAccountSigningFacade.keygen(seedMaterial, 4);
-        assertTrue(keygenOk, "stateful keygen must succeed");
-        deployCodeTo(
-            "ShrincsAccountVerifierExample.sol:ShrincsAccountVerifierExample",
-            abi.encode(publicKeyCommitmentWord(publicKey)),
-            STATEFUL_VECTOR_ACCOUNT
-        );
-        ShrincsAccountVerifierExample account = ShrincsAccountVerifierExample(STATEFUL_VECTOR_ACCOUNT);
-
-        (, ShrincsTypes.ActionContext memory context, ShrincsTypes.StatefulSignature memory signature, bool signOk) =
-            ShrincsAccountSigningFacade.signStatefulActionNow(account, signingKey, ACTION_TYPE, PAYLOAD_HASH);
-        assertTrue(signOk, "stateful signing must succeed");
-        account.setStatefulPolicyMonotonicIndex(uint32(signature.authPath.length));
-
-        bytes32 hash = SHRINCS.statefulActionMessageHash(account.currentShrincsPublicKey(), context);
-        bytes memory message = abi.encodePacked(hash);
-
-        c.publicKey = publicKey;
-        c.context = context;
-        c.signature = signature;
-        c.account = account;
-        c.message = message;
-        c.hash = hash;
-        c.envelope =
-            ShrincsAccountSigningFacade.encodeStateful1271Envelope(publicKey, ACTION_TYPE, PAYLOAD_HASH, signature);
-    }
-
     function prepareStatelessCase(bytes memory seedMaterial) internal returns (StatelessCase memory c) {
         (ShrincsTypes.SigningKey memory signingKey, ShrincsTypes.PublicKey memory publicKey, bool ok) =
             ShrincsAccountSigningFacade.keygen(seedMaterial, 4);
         assertTrue(ok, "stateless keygen must succeed");
 
-        ShrincsAccountVerifierExample account = new ShrincsAccountVerifierExample(publicKeyCommitmentWord(publicKey));
+        ShrincsAccountVerifierExample account = newAccount(publicKey);
         bytes32 sessionId;
         (, sessionId, ok) = ShrincsAccountSigningFacade.beginStatelessActionSessionNow(
             accountSigner, account, signingKey, publicKey, ACTION_TYPE, PAYLOAD_HASH
@@ -327,7 +256,8 @@ contract ShrincsMeasurementsTest is Test {
 
         ShrincsTypes.ActionContext memory context =
             ShrincsAccountSigningFacade.actionContext(account, ACTION_TYPE, PAYLOAD_HASH);
-        bytes32 hash = SHRINCS.statelessActionMessageHash(account.currentShrincsPublicKey(), context);
+        bytes32 hash =
+            SHRINCS.statelessActionMessageHash(account.currentPkSeed(), account.currentHypertreeRoot(), context);
         bytes memory message = abi.encodePacked(hash);
 
         c.publicKey = publicKey;
@@ -348,7 +278,7 @@ contract ShrincsMeasurementsTest is Test {
             ShrincsAccountSigningFacade.keygen(seedMaterial, 4);
         assertTrue(ok, "compact keygen must succeed");
 
-        ShrincsAccountVerifierExample account = new ShrincsAccountVerifierExample(publicKeyCommitmentWord(publicKey));
+        ShrincsAccountVerifierExample account = newAccount(publicKey);
         (bytes32 compactSkSeed, bytes32 subPkSeed, bytes32 subPkRoot) = compactSlotKeygen(slotSeedMaterial, q);
         registerCompactSlotDuringSetup(account, signingKey, publicKey, subPkSeed, subPkRoot);
 
@@ -375,7 +305,7 @@ contract ShrincsMeasurementsTest is Test {
             ShrincsAccountSigningFacade.keygen(seedMaterial, 4);
         assertTrue(ok, "registration keygen must succeed");
 
-        ShrincsAccountVerifierExample account = new ShrincsAccountVerifierExample(publicKeyCommitmentWord(publicKey));
+        ShrincsAccountVerifierExample account = newAccount(publicKey);
         (, bytes32 subPkSeed, bytes32 subPkRoot) = compactSlotKeygen(slotSeedMaterial, q);
         (ShrincsTypes.StatelessSignature memory signature, bool signOk) =
             signCompactSlotUpdate(account, signingKey, publicKey, subPkSeed, subPkRoot, true);
@@ -396,7 +326,7 @@ contract ShrincsMeasurementsTest is Test {
             ShrincsAccountSigningFacade.keygen(seedMaterial, 4);
         assertTrue(ok, "revocation keygen must succeed");
 
-        ShrincsAccountVerifierExample account = new ShrincsAccountVerifierExample(publicKeyCommitmentWord(publicKey));
+        ShrincsAccountVerifierExample account = newAccount(publicKey);
         (, bytes32 subPkSeed, bytes32 subPkRoot) = compactSlotKeygen(slotSeedMaterial, q);
         registerCompactSlotDuringSetup(account, signingKey, publicKey, subPkSeed, subPkRoot);
 
@@ -495,10 +425,24 @@ contract ShrincsMeasurementsTest is Test {
         );
     }
 
-    function publicKeyCommitmentWord(ShrincsTypes.PublicKey memory publicKey) internal pure returns (bytes32 out) {
-        bytes memory commitmentBytes = publicKey.publicKeyCommitment;
+    function pkSeedWord(ShrincsTypes.PublicKey memory publicKey) internal pure returns (bytes32 out) {
+        bytes memory keyBytes = publicKey.pkSeed;
         assembly {
-            out := mload(add(commitmentBytes, 32))
+            out := mload(add(keyBytes, 32))
         }
+    }
+
+    function hypertreeRootWord(ShrincsTypes.PublicKey memory publicKey) internal pure returns (bytes32 out) {
+        bytes memory keyBytes = publicKey.hypertreeRoot;
+        assembly {
+            out := mload(add(keyBytes, 32))
+        }
+    }
+
+    function newAccount(ShrincsTypes.PublicKey memory publicKey)
+        internal
+        returns (ShrincsAccountVerifierExample account)
+    {
+        account = new ShrincsAccountVerifierExample(pkSeedWord(publicKey), hypertreeRootWord(publicKey));
     }
 }

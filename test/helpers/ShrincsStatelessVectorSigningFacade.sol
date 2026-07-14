@@ -30,11 +30,7 @@ library ShrincsStatelessVectorSigningFacade {
         bytes memory message
     )
         internal
-        returns (
-            ShrincsTypes.PublicKey memory publicKey,
-            ShrincsTypes.StatelessSignature memory signature,
-            bool ok
-        )
+        returns (ShrincsTypes.PublicKey memory publicKey, ShrincsTypes.StatelessSignature memory signature, bool ok)
     {
         bytes32 sessionId;
         (sessionId, ok) = signer.beginSessionFromSeed(seedMaterial, maxStatefulSignatures, message);
@@ -44,11 +40,7 @@ library ShrincsStatelessVectorSigningFacade {
 
     function completeSession(ShrincsStatelessVectorSigner signer, bytes32 sessionId)
         internal
-        returns (
-            ShrincsTypes.PublicKey memory publicKey,
-            ShrincsTypes.StatelessSignature memory signature,
-            bool ok
-        )
+        returns (ShrincsTypes.PublicKey memory publicKey, ShrincsTypes.StatelessSignature memory signature, bool ok)
     {
         bool done;
         while (!done) {

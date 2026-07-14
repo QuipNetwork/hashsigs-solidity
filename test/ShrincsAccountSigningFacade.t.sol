@@ -39,73 +39,12 @@ contract ShrincsAccountSigningFacadeTest is Test {
         signer = new ShrincsAccountSigningFacadeHarness();
     }
 
-    function testAccountAwareStatefulActionSignerFeedsWrapper() public {
-        (ShrincsTypes.SigningKey memory signingKey, ShrincsTypes.PublicKey memory publicKey, bool keygenOk) =
-            ShrincsAccountSigningFacade.keygen(bytes("account-aware current key"), 4);
-        assertTrue(keygenOk, "keygen must succeed");
-
-        ShrincsAccountVerifierExample account =
-            new ShrincsAccountVerifierExample(ShrincsAccountSigningFacade.publicKeyCommitmentWord(publicKey));
-        bytes32 actionType = keccak256("execute");
-        bytes32 payloadHash = keccak256("payload");
-
-        (
-            ShrincsTypes.SigningKey memory nextSigningKey,
-            ShrincsTypes.ActionContext memory context,
-            ShrincsTypes.StatefulSignature memory signature,
-            bool signOk
-        ) = ShrincsAccountSigningFacade.signStatefulActionNow(account, signingKey, actionType, payloadHash);
-
-        assertTrue(signOk, "stateful action signing must succeed");
-        assertEq(nextSigningKey.nextStatefulLeafIndex, 2, "stateful signing must advance one leaf");
-        assertEq(context.nonce, 0, "stateful action should sign the current wrapper nonce");
-
-        bool verifyOk = account.verifyStatefulAction(publicKey, actionType, payloadHash, signature);
-        assertTrue(verifyOk, "wrapper must accept the account-aware stateful signature");
-        assertEq(account.nonce(), 1, "wrapper nonce must advance");
-    }
-
-    // Checks that a stateful ERC-1271 signature works now, then fails after the nonce is used.
-    function testAccountAwareStateful1271SnapshotIsValidBeforeNonceUseAndInvalidAfter() public {
-        (ShrincsTypes.SigningKey memory signingKey, ShrincsTypes.PublicKey memory publicKey, bool keygenOk) =
-            ShrincsAccountSigningFacade.keygen(bytes("account-aware 1271 stateful current key"), 4);
-        assertTrue(keygenOk, "keygen must succeed");
-
-        ShrincsAccountVerifierExample account =
-            new ShrincsAccountVerifierExample(ShrincsAccountSigningFacade.publicKeyCommitmentWord(publicKey));
-        bytes32 actionType = keccak256("execute");
-        bytes32 payloadHash = keccak256("payload");
-
-        (, ShrincsTypes.ActionContext memory context, ShrincsTypes.StatefulSignature memory signature, bool signOk) =
-            ShrincsAccountSigningFacade.signStatefulActionNow(account, signingKey, actionType, payloadHash);
-        assertTrue(signOk, "stateful action signing must succeed");
-
-        bytes32 hash = SHRINCS.statefulActionMessageHash(account.currentShrincsPublicKey(), context);
-        bytes memory envelope =
-            ShrincsAccountSigningFacade.encodeStateful1271Envelope(publicKey, actionType, payloadHash, signature);
-
-        assertEq(
-            account.isValidSignature(hash, envelope),
-            ERC1271_MAGIC_VALUE,
-            "stateful ERC-1271 snapshot must verify before nonce use"
-        );
-
-        bool verifyOk = account.verifyStatefulAction(publicKey, actionType, payloadHash, signature);
-        assertTrue(verifyOk, "wrapper must accept the stateful action");
-        assertEq(
-            account.isValidSignature(hash, envelope),
-            INVALID_SIGNATURE,
-            "stateful ERC-1271 snapshot must fail after nonce advances"
-        );
-    }
-
     function testAccountAwareStatelessActionSignerFeedsWrapper() public {
         (ShrincsTypes.SigningKey memory signingKey, ShrincsTypes.PublicKey memory publicKey, bool keygenOk) =
             ShrincsAccountSigningFacade.keygen(bytes("account-aware stateless current key"), 4);
         assertTrue(keygenOk, "keygen must succeed");
 
-        ShrincsAccountVerifierExample account =
-            new ShrincsAccountVerifierExample(ShrincsAccountSigningFacade.publicKeyCommitmentWord(publicKey));
+        ShrincsAccountVerifierExample account = newAccount(publicKey);
         bytes32 actionType = keccak256("execute");
         bytes32 payloadHash = keccak256("payload");
 
@@ -132,8 +71,7 @@ contract ShrincsAccountSigningFacadeTest is Test {
             ShrincsAccountSigningFacade.keygen(bytes("account-aware 1271 stateless current key"), 4);
         assertTrue(keygenOk, "keygen must succeed");
 
-        ShrincsAccountVerifierExample account =
-            new ShrincsAccountVerifierExample(ShrincsAccountSigningFacade.publicKeyCommitmentWord(publicKey));
+        ShrincsAccountVerifierExample account = newAccount(publicKey);
         bytes32 actionType = keccak256("execute");
         bytes32 payloadHash = keccak256("payload");
 
@@ -146,7 +84,8 @@ contract ShrincsAccountSigningFacadeTest is Test {
             ShrincsAccountSigningFacade.completeStatelessSession(signer, sessionId);
         assertTrue(completeOk, "stateless session completion must succeed");
 
-        bytes32 hash = SHRINCS.statelessActionMessageHash(account.currentShrincsPublicKey(), context);
+        bytes32 hash =
+            SHRINCS.statelessActionMessageHash(account.currentPkSeed(), account.currentHypertreeRoot(), context);
         bytes memory envelope =
             ShrincsAccountSigningFacade.encodeStateless1271Envelope(publicKey, actionType, payloadHash, signature);
 
@@ -170,8 +109,7 @@ contract ShrincsAccountSigningFacadeTest is Test {
             ShrincsAccountSigningFacade.keygen(bytes("account-aware compact slot current key"), 4);
         assertTrue(keygenOk, "keygen must succeed");
 
-        ShrincsAccountVerifierExample account =
-            new ShrincsAccountVerifierExample(ShrincsAccountSigningFacade.publicKeyCommitmentWord(publicKey));
+        ShrincsAccountVerifierExample account = newAccount(publicKey);
         bytes32 subPkSeed = keccak256("compact sub seed");
         bytes32 subPkRoot = keccak256("compact sub root");
         bytes32 slotId = account.compactSlotId(subPkSeed, subPkRoot);
@@ -238,8 +176,7 @@ contract ShrincsAccountSigningFacadeTest is Test {
             ShrincsAccountSigningFacade.keygen(bytes("account-aware compact 1271 current key"), 4);
         assertTrue(keygenOk, "keygen must succeed");
 
-        ShrincsAccountVerifierExample account =
-            new ShrincsAccountVerifierExample(ShrincsAccountSigningFacade.publicKeyCommitmentWord(publicKey));
+        ShrincsAccountVerifierExample account = newAccount(publicKey);
         bytes32 subPkSeed = keccak256("compact 1271 sub seed");
         bytes32 subPkRoot = keccak256("compact 1271 sub root");
         bytes32 slotId = account.compactSlotId(subPkSeed, subPkRoot);
@@ -287,8 +224,7 @@ contract ShrincsAccountSigningFacadeTest is Test {
             ShrincsAccountSigningFacade.keygen(bytes("account-aware compact 1271 signed key"), 4);
         assertTrue(keygenOk, "keygen must succeed");
 
-        ShrincsAccountVerifierExample account =
-            new ShrincsAccountVerifierExample(ShrincsAccountSigningFacade.publicKeyCommitmentWord(publicKey));
+        ShrincsAccountVerifierExample account = newAccount(publicKey);
         uint8 q = 9;
         (bytes32 compactSkSeed, bytes32 subPkSeed, bytes32 subPkRoot, bool compactKeygenOk) =
             ShrincsTestSigner.compactSingleLaneKeygen(bytes("account-aware compact 1271 slot"), q);
@@ -332,8 +268,7 @@ contract ShrincsAccountSigningFacadeTest is Test {
             ShrincsAccountSigningFacade.keygen(bytes("account-aware compact slot negative key"), 4);
         assertTrue(keygenOk, "keygen must succeed");
 
-        ShrincsAccountVerifierExample account =
-            new ShrincsAccountVerifierExample(ShrincsAccountSigningFacade.publicKeyCommitmentWord(publicKey));
+        ShrincsAccountVerifierExample account = newAccount(publicKey);
         uint8 q = 13;
         (bytes32 compactSkSeed, bytes32 subPkSeed, bytes32 subPkRoot, bool compactKeygenOk) =
             ShrincsTestSigner.compactSingleLaneKeygen(bytes("account-aware compact slot negative"), q);
@@ -387,8 +322,7 @@ contract ShrincsAccountSigningFacadeTest is Test {
             ShrincsAccountSigningFacade.keygen(bytes("account-aware compact action current key"), 4);
         assertTrue(keygenOk, "keygen must succeed");
 
-        ShrincsAccountVerifierExample account =
-            new ShrincsAccountVerifierExample(ShrincsAccountSigningFacade.publicKeyCommitmentWord(publicKey));
+        ShrincsAccountVerifierExample account = newAccount(publicKey);
         uint8 q = 7;
         (bytes32 compactSkSeed, bytes32 subPkSeed, bytes32 subPkRoot, bool compactKeygenOk) =
             ShrincsTestSigner.compactSingleLaneKeygen(bytes("account-aware compact action slot"), q);
@@ -448,8 +382,7 @@ contract ShrincsAccountSigningFacadeTest is Test {
             ShrincsAccountSigningFacade.keygen(bytes("compact multi q current key"), 4);
         assertTrue(keygenOk, "keygen must succeed");
 
-        ShrincsAccountVerifierExample account =
-            new ShrincsAccountVerifierExample(ShrincsAccountSigningFacade.publicKeyCommitmentWord(publicKey));
+        ShrincsAccountVerifierExample account = newAccount(publicKey);
         uint8 firstQ = 3;
         uint8 secondQ = 79;
         (bytes32 skSeed, bytes32 subPkSeed, bytes32 subPkRoot, bool firstKeygenOk) =
@@ -493,8 +426,7 @@ contract ShrincsAccountSigningFacadeTest is Test {
             ShrincsAccountSigningFacade.keygen(bytes("compact all q current key"), 4);
         assertTrue(keygenOk, "keygen must succeed");
 
-        ShrincsAccountVerifierExample account =
-            new ShrincsAccountVerifierExample(ShrincsAccountSigningFacade.publicKeyCommitmentWord(publicKey));
+        ShrincsAccountVerifierExample account = newAccount(publicKey);
         (bytes32 skSeed, bytes32 subPkSeed, bytes32 subPkRoot, bool compactKeygenOk) =
             ShrincsTestSigner.compactSingleLaneKeygen(bytes("compact all q slot"), 0);
         assertTrue(compactKeygenOk, "compact fixture keygen must succeed");
@@ -537,8 +469,7 @@ contract ShrincsAccountSigningFacadeTest is Test {
             ShrincsAccountSigningFacade.keygen(bytes("compact multi device current key"), 4);
         assertTrue(keygenOk, "keygen must succeed");
 
-        ShrincsAccountVerifierExample account =
-            new ShrincsAccountVerifierExample(ShrincsAccountSigningFacade.publicKeyCommitmentWord(publicKey));
+        ShrincsAccountVerifierExample account = newAccount(publicKey);
         (bytes32 deviceASkSeed, bytes32 deviceASeed, bytes32 deviceARoot, bool deviceAOk) =
             ShrincsTestSigner.compactSingleLaneKeygen(bytes("compact device a slot"), 5);
         assertTrue(deviceAOk, "device A keygen must succeed");
@@ -604,45 +535,6 @@ contract ShrincsAccountSigningFacadeTest is Test {
         assertEq(account.nonce(), nonceBeforeRevokedAction, "revoked device must not consume nonce");
     }
 
-    function testAccountAwareStatefulOnlyRotationSignerFeedsWrapper() public {
-        (
-            ShrincsTypes.SigningKey memory currentSigningKey,
-            ShrincsTypes.PublicKey memory currentPublicKey,
-            bool currentOk
-        ) = ShrincsAccountSigningFacade.keygen(bytes("account-aware rotation current key"), 4);
-        assertTrue(currentOk, "current keygen must succeed");
-
-        ShrincsAccountVerifierExample account =
-            new ShrincsAccountVerifierExample(ShrincsAccountSigningFacade.publicKeyCommitmentWord(currentPublicKey));
-        account.setStatefulPolicyRecoveryRotation();
-        account.enterRecoveryMode();
-
-        (, ShrincsTypes.PublicKey memory nextPublicKey, bool nextOk) =
-            ShrincsAccountSigningFacade.keygen(bytes("account-aware rotation next key"), 4);
-        assertTrue(nextOk, "next keygen must succeed");
-
-        ShrincsTypes.StatefulRotationTarget memory nextKey =
-            ShrincsAccountSigningFacade.statefulRotationTarget(currentPublicKey, nextPublicKey.statefulPublicKey);
-
-        (ShrincsTypes.RotationContext memory context, bytes32 sessionId, bool signOk) = ShrincsAccountSigningFacade.beginStatefulOnlyRotationSessionNow(
-            signer, account, currentSigningKey, currentPublicKey, nextKey
-        );
-
-        assertTrue(signOk, "stateful-only rotation signing must succeed");
-        assertEq(context.nonce, 0, "rotation should sign the current wrapper nonce");
-
-        (ShrincsTypes.StatelessSignature memory recoverySignature, bool completeOk) =
-            ShrincsAccountSigningFacade.completeStatelessSession(signer, sessionId);
-        assertTrue(completeOk, "stateful-only rotation session completion must succeed");
-
-        bool rotateOk = account.rotateToFreshKey(currentPublicKey, recoverySignature, nextKey);
-        assertTrue(rotateOk, "wrapper must accept the account-aware stateful-only rotation");
-        assertEq(account.currentShrincsPublicKey(), ShrincsAccountSigningFacade.publicKeyCommitmentWord(nextKey));
-        assertEq(account.keyVersion(), 1, "key epoch must advance");
-        assertEq(account.nonce(), 1, "rotation must consume the current nonce");
-        assertEq(account.statelessSignaturesUsed(), 1, "rotation must consume one stateless use");
-    }
-
     function testAccountAwareFullRotationSignerFeedsWrapper() public {
         (
             ShrincsTypes.SigningKey memory currentSigningKey,
@@ -651,10 +543,7 @@ contract ShrincsAccountSigningFacadeTest is Test {
         ) = ShrincsAccountSigningFacade.keygen(bytes("account-aware full rotation current key"), 4);
         assertTrue(currentOk, "current keygen must succeed");
 
-        ShrincsAccountVerifierExample account =
-            new ShrincsAccountVerifierExample(ShrincsAccountSigningFacade.publicKeyCommitmentWord(currentPublicKey));
-        account.setStatefulPolicyRecoveryRotation();
-        account.enterRecoveryMode();
+        ShrincsAccountVerifierExample account = newAccount(currentPublicKey);
 
         (, ShrincsTypes.PublicKey memory nextPublicKey, bool nextOk) =
             ShrincsAccountSigningFacade.keygen(bytes("account-aware full rotation next key"), 4);
@@ -675,7 +564,8 @@ contract ShrincsAccountSigningFacadeTest is Test {
 
         bool rotateOk = account.rotateFullKey(currentPublicKey, recoverySignature, nextKey);
         assertTrue(rotateOk, "wrapper must accept the account-aware full rotation");
-        assertEq(account.currentShrincsPublicKey(), ShrincsAccountSigningFacade.publicKeyCommitmentWord(nextPublicKey));
+        assertEq(account.currentPkSeed(), ShrincsAccountSigningFacade.pkSeedWord(nextPublicKey));
+        assertEq(account.currentHypertreeRoot(), ShrincsAccountSigningFacade.hypertreeRootWord(nextPublicKey));
         assertEq(account.keyVersion(), 1, "key epoch must advance");
         assertEq(account.nonce(), 1, "rotation must consume the current nonce");
         assertEq(account.statelessSignaturesUsed(), 0, "full rotation must reset stateless usage");
@@ -748,6 +638,15 @@ contract ShrincsAccountSigningFacadeTest is Test {
         return abi.encodePacked(
             bytes1(ERC1271_MODE_COMPACT_ACTION),
             abi.encode(subPkSeed, subPkRoot, actionType, payloadHash, compactSignature)
+        );
+    }
+
+    function newAccount(ShrincsTypes.PublicKey memory publicKey)
+        internal
+        returns (ShrincsAccountVerifierExample account)
+    {
+        account = new ShrincsAccountVerifierExample(
+            ShrincsAccountSigningFacade.pkSeedWord(publicKey), ShrincsAccountSigningFacade.hypertreeRootWord(publicKey)
         );
     }
 }

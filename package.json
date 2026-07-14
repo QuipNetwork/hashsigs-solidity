@@ -2,7 +2,7 @@
   "name": "@quip.network/hashsigs-solidity",
   "version": "0.0.2",
   "private": false,
-  "description": "A Solidity implementation of WOTS+ and the SHRINCS verifier-oriented signature construction",
+  "description": "Solidity verification for stateless SHRINCS and compact FORS-C account signatures",
   "license": "AGPL-3.0-or-later",
   "author": "quip.network",
   "files": [
@@ -27,7 +27,6 @@
     "wots",
     "wots-plus",
     "shrincs",
-    "xmss",
     "sphincs",
     "verifier",
     "cryptography",
