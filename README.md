@@ -67,7 +67,11 @@ and rotation authorizations; it does not track signer state. The ERC-7913
 verifiers here cover both paths: each SHRINCS verifier exposes the stateful
 `verify` plus a `verifyStateless` that delegates to a pinned SPHINCS+C
 sibling, and the standalone SPHINCS+C verifiers check the stateless recovery
-path directly.
+path directly. Each SHRINCS verifier also exposes `verifyAndAttest` /
+`wasVerified`: a successful `verifyAndAttest` records the verification for
+the calling account in EIP-1153 transient storage, so downstream contracts
+in the same transaction can query it instead of burning another one-time
+leaf on a fresh signature.
 
 ## Repository Layout
 
@@ -75,7 +79,9 @@ Main contracts:
 
 - [contracts/SHRINCSVerifier.sol](./contracts/SHRINCSVerifier.sol)
   - abstract ERC-7913 verifier for the hybrid scheme: stateful `verify`
-    plus `verifyStateless` delegating to the pinned SPHINCSPlusC sibling
+    plus `verifyStateless` delegating to the pinned SPHINCSPlusC sibling,
+    and the transient attestation surface (`verifyAndAttest` /
+    `wasVerified`)
 - [contracts/SHRINCS.sol](./contracts/SHRINCS.sol)
   - pure verification core library (facade over the component libraries):
     builds the canonical action and rotation hashes and runs the stateful
@@ -117,6 +123,10 @@ Main contracts:
     [Profiles](#profiles))
 - [contracts/interfaces/IERC7913SignatureVerifier.sol](./contracts/interfaces/IERC7913SignatureVerifier.sol)
   - ERC-7913 verifier interface
+- [contracts/interfaces/IERC7913TransientAttestation.sol](./contracts/interfaces/IERC7913TransientAttestation.sol)
+  - transaction-scoped attestation registry interface layered on the
+    ERC-7913 verifier (`verifyAndAttest` / `wasVerified`), including the
+    shared transient-slot spec consumers derive
 - [contracts/WOTSPlus.sol](./contracts/WOTSPlus.sol)
   - the standalone `WOTS+` verifier (see
     [Implementations](#implementations))
