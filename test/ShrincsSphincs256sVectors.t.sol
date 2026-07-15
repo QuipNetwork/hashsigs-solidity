@@ -475,9 +475,7 @@ contract ShrincsSphincs256sVectorsTest is Test {
                 registerContext.domainSeparator,
                 registerContext.nonce,
                 registerContext.keyVersion,
-                slotId,
-                subPkSeed,
-                subPkRoot
+                slotId
             )
         );
         bytes32 expectedRevoke = keccak256(
@@ -487,9 +485,7 @@ contract ShrincsSphincs256sVectorsTest is Test {
                 revokeContext.domainSeparator,
                 revokeContext.nonce,
                 revokeContext.keyVersion,
-                slotId,
-                subPkSeed,
-                subPkRoot
+                slotId
             )
         );
 

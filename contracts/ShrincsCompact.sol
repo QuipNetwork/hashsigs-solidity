@@ -21,19 +21,29 @@ import {ShrincsTypes} from "./ShrincsTypes.sol";
 // JARDIN-style raw compact FORS-C verification.
 //
 // References:
-// - JARDIN Section 3.3, Algorithms from forest-FORS to JARDIN:
-//   https://notes.ethereum.org/@niard/JARDIN#33-Algorithms-from-forest-FORS-to-JARDIN
-// - JARDIN Section 5, FORS+C parameter selection:
-//   https://notes.ethereum.org/@niard/JARDIN#5-FORSC-Parameter-Selection
+// - JARDIN writeUp Section 3.3, from forest-FORS to JARDIN.
+//   https://github.com/nconsigny/JARDIN/blob/main/writeUp.md
+// - JARDIN writeUp Sections 4.1, 6, and 7 for Type 2 signatures,
+//   slot registration, and q encoding.
 // - FIPS 205 Algorithms 14-17, FORS key generation/signing/verification:
 //   https://nvlpubs.nist.gov/nistpubs/FIPS/NIST.FIPS.205.pdf
 // - Gas-oriented JARDIN prototype:
-//   https://github.com/nconsigny/JARDIN/blob/main/src/JardinForsPlainVerifier.sol
+//   github.com/nconsigny/JARDIN/src/JardinForsPlainVerifier.sol
 library ShrincsCompact {
     // Raw compact signature layout:
     //   R32 || counter4 || openedFORS[51] || q1 || merkleAuth[7].
-    // JARDIN-style compact parameters here are n=32, k=52, a=5, opened trees=51,
-    // and outer balanced Merkle height h=7.
+    //
+    // Deviates from [JARDIN writeUp Section 5.1]: this repo uses n=32 and
+    // k=52 for the local SHRINCS profile. The JARDIN design pattern is the
+    // same: FORS+C leaves under a balanced compact Merkle root.
+    //
+    // Parameters:
+    // - n = 32 bytes
+    // - k = 52 FORS trees
+    // - a = 5 levels per FORS tree
+    // - opened trees = 51 because FORS+C forces the final index to zero
+    // - h = 7 levels for the balanced compact Merkle tree
+    //
     // CompactForsOffset = len(R32 || counter4) = 32 + 4 = 36.
     uint16 internal constant CompactForsOffset = 36;
     // CompactForsEntryBytes = secretLeaf32 + authPath(5 * 32) = 192.
@@ -48,14 +58,22 @@ library ShrincsCompact {
     uint16 internal constant ForsPkInputBytes = 1696;
 
     // verifyCompactRaw: Verify the raw JARDIN Type 2 compact path.
-    // Implements JARDIN Section 3.3 compact verification around FIPS 205 Algorithm 17.
-    // The caller handles account context, compact-slot authorization, and nonce freshness.
+    //
+    // The caller handles account context, compact-slot authorization, and
+    // nonce freshness. This function only checks the cryptographic Type 2
+    // equation under the supplied compact public key.
+    //
+    // 1. Enforce the fixed raw signature shape.
+    // 2. Decode q, the balanced Merkle leaf and JARDIN ci value.
+    // 3. Recompute H_msg and enforce the FORS+C forced-zero tree.
+    // 4. Reconstruct the FORS+C public key from opened trees.
+    // 5. Reconstruct the compact Merkle root and compare to pkRoot.
     function verifyCompactRaw(bytes32 pkSeed, bytes32 pkRoot, bytes32 message, bytes calldata sig)
         internal
         pure
         returns (bool)
     {
-        // Reject any signature that is not the fixed 10,053-byte compact shape.
+        // Reject signatures outside the fixed 10,053-byte compact shape.
         if (sig.length != CompactSignatureBytes) return false;
 
         // Load q, the 0-indexed balanced Merkle leaf and JARDIN ci value.
@@ -65,8 +83,11 @@ library ShrincsCompact {
 
         // Recompute JARDIN H_msg for the Type 2 message binding.
         (bytes32 md0, bytes32 md1) = hMsg(pkSeed, pkRoot, message, sig);
+
         // FORS+C omits the final tree by forcing its a-bit index to zero.
-        if (base2b(md0, md1, ShrincsTypes.COMPACT_OPEN_FORS_TREES) != 0) return false;
+        if (base2b(md0, md1, ShrincsTypes.COMPACT_OPEN_FORS_TREES) != 0) {
+            return false;
+        }
 
         // Rebuild the compact FORS+C public key from the 51 opened trees.
         bytes32 forsPk = forsPkFromSig(sig, md0, md1, pkSeed, q);
@@ -78,20 +99,28 @@ library ShrincsCompact {
     }
 
     // forsPkFromSig: Rebuild the FORS+C public key.
-    // Implements FIPS 205 Algorithm 17, with JARDIN FORS+C opening only k-1 trees.
+    //
+    // Reference: FIPS 205 Algorithm 17, adapted with JARDIN FORS+C opening
+    // only k - 1 trees. verifyCompactRaw checks the omitted final tree.
+    //
+    // 1. Allocate the packed T_k input.
+    // 2. Write pkSeed and ADRS(type=FORS_ROOTS, ci=q).
+    // 3. Reconstruct each opened FORS tree root.
+    // 4. Compress the ordered roots with JARDIN th_multi/T_k.
     function forsPkFromSig(bytes calldata sig, bytes32 md0, bytes32 md1, bytes32 pkSeed, uint32 q)
         internal
         pure
         returns (bytes32 pk)
     {
-        // Precompute ADRS(type=FORS_TREE, kp=0, ci=q) once for all FORS nodes.
+        // Precompute ADRS(type=FORS_TREE, kp=0, ci=q).
         uint256 forsTreeAdrsBase = adrsBase(ShrincsTypes.AddressTypeForsTree, q);
+
         // Reserve one packed T_k input: pkSeed || ADRS(FORS_ROOTS) || roots.
         uint256 ptr;
         assembly {
             // Start the packed input at the current free-memory pointer.
             ptr := mload(0x40)
-            // Reserve the packed input before helper hashes use free-memory scratch.
+            // Reserve the input before helper hashes use memory scratch.
             mstore(0x40, add(ptr, and(add(ForsPkInputBytes, 31), not(31))))
             // Write pkSeed as the first T_k input field.
             mstore(ptr, pkSeed)
@@ -104,7 +133,7 @@ library ShrincsCompact {
             mstore(add(ptr, 32), rootsAdrs)
         }
 
-        // Reconstruct each opened FORS tree root and append it to the T_k input.
+        // Reconstruct each opened FORS root and append it to T_k input.
         for (uint32 i = 0; i < ShrincsTypes.COMPACT_OPEN_FORS_TREES;) {
             // FIPS base_2b selects the revealed leaf in this FORS tree.
             uint32 idx = base2b(md0, md1, i);
@@ -120,13 +149,20 @@ library ShrincsCompact {
         }
 
         assembly {
-            // JARDIN th_multi/T_k: keccak256(pkSeed || ADRS || root_0 || ...).
+            // JARDIN th_multi/T_k over pkSeed || ADRS || roots.
             pk := keccak256(ptr, ForsPkInputBytes)
         }
     }
 
-    // forsNodeFromSig: Rebuild one opened FORS tree root from the raw signature.
-    // Implements FIPS 205 Algorithm 17 lines 3-19, using Algorithm 15 node addresses.
+    // forsNodeFromSig: Rebuild one opened FORS tree root.
+    //
+    // Reference: FIPS 205 Algorithm 17 lines 3-19, using Algorithm 15
+    // node addresses and JARDIN's 32-byte ADRS layout.
+    //
+    // 1. Load the secret leaf for FORS tree i.
+    // 2. Hash it with F(pkSeed, ADRS, secretLeaf).
+    // 3. Walk the a=5 authentication path.
+    // 4. Hash each parent with H(pkSeed, ADRS, left || right).
     function forsNodeFromSig(bytes calldata sig, bytes32 pkSeed, uint256 adrsBaseValue, uint32 i, uint32 idx)
         internal
         pure
@@ -134,10 +170,13 @@ library ShrincsCompact {
     {
         // Locate the raw opening for FORS tree i.
         uint256 offset = uint256(CompactForsOffset) + uint256(i) * CompactForsEntryBytes;
+
         // Compute FIPS/JARDIN's continuous FORS leaf treeIndex.
         uint32 treeIndex = (i << ShrincsTypes.COMPACT_FORS_TREE_HEIGHT) + idx;
+
         // Load the revealed secret leaf directly from calldata.
         bytes32 sk = calldataWord(sig, offset);
+
         // Hash the revealed secret leaf into its FORS public leaf.
         bytes32 addressWord = bytes32(adrsBaseValue | uint256(treeIndex));
         assembly {
@@ -153,15 +192,21 @@ library ShrincsCompact {
         for (uint32 j = 0; j < ShrincsTypes.COMPACT_FORS_TREE_HEIGHT;) {
             // Load the sibling for this level directly from calldata.
             bytes32 auth = calldataWord(sig, offset + 32 + uint256(j) * 32);
+
             // Use the current low bit to choose FIPS left/right child order.
             (bytes32 left, bytes32 right) = idx & 1 == 0 ? (node, auth) : (auth, node);
+
             // Move one level upward in this FORS tree.
             uint32 height = j + 1;
+
             // Collapse the selected node index to its parent.
             idx >>= 1;
-            // Keep y continuous across all FORS trees, as in FIPS Algorithms 14-17.
+
+            // Keep y continuous across all FORS trees, as in FIPS 205.
             treeIndex = (i << (ShrincsTypes.COMPACT_FORS_TREE_HEIGHT - height)) + idx;
-            // Hash this parent under ADRS(type=FORS_TREE, ci=q, x=height, y=treeIndex).
+
+            // Hash this parent under:
+            // ADRS(type=FORS_TREE, ci=q, x=height, y=treeIndex).
             addressWord = bytes32(adrsBaseValue | (uint256(height) << 32) | uint256(treeIndex));
             assembly {
                 // Buffer: pkSeed32 || ADRS32 || left32 || right32.
@@ -179,7 +224,13 @@ library ShrincsCompact {
     }
 
     // jardinRootFromAuthPath: Rebuild the JARDIN balanced Merkle root.
-    // Implements the Section 3.3 balanced Merkle path using type=JARDIN_MERKLE.
+    //
+    // Reference: JARDIN writeUp Section 3.3 balanced Merkle tree.
+    //
+    // 1. Start with the reconstructed FORS+C public key for q.
+    // 2. Read one sibling for each of the h=7 Merkle levels.
+    // 3. Use q's bits to choose left/right order.
+    // 4. Hash upward under ADRS(type=JARDIN_MERKLE).
     function jardinRootFromAuthPath(bytes calldata sig, bytes32 pkSeed, uint32 q, bytes32 forsPk)
         internal
         pure
@@ -187,20 +238,26 @@ library ShrincsCompact {
     {
         // Start at the compact FORS+C public key for lane q.
         node = forsPk;
-        // Precompute ADRS(type=JARDIN_MERKLE, kp=0, ci=0) once for all parents.
+
+        // Precompute ADRS(type=JARDIN_MERKLE, kp=0, ci=0).
         uint256 adrsBaseValue = uint256(ShrincsTypes.AddressTypeJardinMerkle) << 128;
 
         // Fold h=7 siblings from the compact lane to subPkRoot.
         for (uint32 j = 0; j < ShrincsTypes.COMPACT_MERKLE_HEIGHT;) {
             // Load this balanced-tree sibling from the raw signature tail.
             bytes32 auth = calldataWord(sig, uint256(CompactMerkleAuthOffset) + uint256(j) * 32);
+
             // Use q bit j to choose the left/right child order.
             (bytes32 left, bytes32 right) = q & (uint32(1) << j) == 0 ? (node, auth) : (auth, node);
-            // JARDIN labels levels from root downward in the compact Merkle ADRS x field.
+
+            // JARDIN labels levels from root downward in ADRS x.
             uint32 level = uint32(ShrincsTypes.COMPACT_MERKLE_HEIGHT) - 1 - j;
+
             // The compact Merkle ADRS y field is the parent node index.
             uint32 nodeIndex = q >> (j + 1);
-            // Hash this parent under ADRS(type=JARDIN_MERKLE, ci=0, x=level, y=nodeIndex).
+
+            // Hash this parent under:
+            // ADRS(type=JARDIN_MERKLE, ci=0, x=level, y=nodeIndex).
             bytes32 addressWord = bytes32(adrsBaseValue | (uint256(level) << 32) | uint256(nodeIndex));
             assembly {
                 // Buffer: pkSeed32 || ADRS32 || left32 || right32.
@@ -218,7 +275,14 @@ library ShrincsCompact {
     }
 
     // hMsg: Compute the JARDIN Type 2 compact digest stream.
-    // Implements H_msg(R, pkSeed, pkRoot, uint32_be(counter) || M*) with Keccak blocks.
+    //
+    // Reference: JARDIN writeUp Section 3.3 FORS+C. The signer grinds the
+    // counter until the final a-bit FORS index is zero.
+    //
+    // 1. Bind R, subPkSeed, subPkRoot, and counter.
+    // 2. Bind M* = TYPE2 || subPkSeed || subPkRoot || q || message.
+    // 3. Hash block 0 for the first 32 digest bytes.
+    // 4. Hash block 1 for the extra high byte needed by 52 * 5 bits.
     function hMsg(bytes32 pkSeed, bytes32 pkRoot, bytes32 message, bytes calldata sig)
         internal
         pure
@@ -263,19 +327,30 @@ library ShrincsCompact {
     }
 
     // base2b: Read one a-bit FORS index from the 33-byte H_msg digest.
+    //
+    // Reference: FIPS 205 base_2b, specialized to b=a=5.
+    //
+    // 1. Compute the starting bit for digit i.
+    // 2. Read from md0 for the first 51 complete 5-bit digits.
+    // 3. Stitch md0/md1 for the final crossing digit.
     // Implements FIPS 205 base_2b for this profile's b=a=5.
     function base2b(bytes32 md0, bytes32 md1, uint32 i) internal pure returns (uint32 idx) {
         // Compute the bit position of the i-th 5-bit digit.
         uint256 startBit = uint256(i) * ShrincsTypes.COMPACT_FORS_TREE_HEIGHT;
+
         // The first 51 digits are wholly inside the first digest word.
         if (startBit < 252) {
             return uint32((uint256(md0) >> (251 - startBit)) & 31);
         }
+
         // The final FORS+C digit crosses md0 bit 255 and md1's high nibble.
         return uint32(((uint256(md0) & 1) << 4) | (uint256(md1) >> 252));
     }
 
     // sigQ: Load q from the raw compact signature.
+    //
+    // q is a public one-byte field in Type 2 signatures. It domain-separates
+    // FORS+C addresses through ci=q and selects the compact Merkle leaf.
     function sigQ(bytes calldata sig) internal pure returns (uint32 q) {
         assembly {
             // Extract q as the first byte at CompactQOffset.
@@ -284,6 +359,9 @@ library ShrincsCompact {
     }
 
     // calldataWord: Load one aligned 32-byte compact signature word.
+    //
+    // verifyCompactRaw's fixed-length check ensures all offsets
+    // used by this helper are inside the raw compact signature.
     function calldataWord(bytes calldata sig, uint256 offset) internal pure returns (bytes32 word) {
         assembly {
             // Load one 32-byte field from the raw signature.
@@ -292,10 +370,19 @@ library ShrincsCompact {
     }
 
     // adrsBase: Pack the fixed ADRS prefix for type/kp=0/ci.
+    //
+    // Reference: JARDIN writeUp Section 3.3 address scheme:
+    // layer:4 || tree:8 || type:4 || kp:4 || ci:4 || x:4 || y:4.
+    //
+    // 1. Place addressType in the type field.
+    // 2. Leave layer, tree, and kp as zero.
+    // 3. Place ci in the JARDIN-specific compact-lane field.
+    //
     // ADRS = layer:4 || tree:8 || type:4 || kp:4 || ci:4 || x:4 || y:4.
     function adrsBase(uint32 addressType, uint32 ci) internal pure returns (uint256 value) {
         // Place type below the zero layer/tree prefix.
         value = uint256(addressType) << 128;
+
         // Place ci below zero kp.
         value |= uint256(ci) << 64;
     }
