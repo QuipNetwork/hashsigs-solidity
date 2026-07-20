@@ -17,46 +17,30 @@
 pragma solidity ^0.8.28;
 
 import {Script, console} from "../lib/forge-std/src/Script.sol";
-import {Create3Factory} from "./Create3.sol";
+import {Create3} from "./Create3.sol";
+import {ICreateX} from "./ICreateX.sol";
 
-/// @title Create3Deployer
+/// @title CreateXDeployer
 /// @notice Shared CREATE3 deploy logic for the SHRINCS verifiers and the
 /// WOTS+ library (maintainer decision Q5: CREATE3 for all deploys). Each
 /// concrete script pins its own salt and required build profile.
-/// @dev CREATE3 addresses depend only on (factory, salt), so a child's
-/// address is chain-invariant and independent of its init code (unlike
-/// CREATE2, where a recompile moved the address). The factory itself is
-/// a fixed-bytecode contract deployed once per chain at a deterministic
-/// address through the canonical CREATE2 proxy, so it is chain-invariant
-/// too. SHRINCS is testnet-only; see DEPLOYMENTS.md for the historical
-/// CREATE2 (verifier) and Hardhat-Ignition (WOTS+) mechanisms this
-/// replaces.
-abstract contract Create3Deployer is Script {
-    // Salt for the shared CREATE3 factory. Its address (and thus every
-    // child address) is a function of this salt and the factory
-    // creation-code hash; bump only for a deliberate factory
-    // replacement.
-    bytes32 internal constant FACTORY_SALT =
-        keccak256("QUIP:Create3Factory:V1.0");
-
-    // Pinned keccak256 of the Create3Factory creation code under a
-    // PRODUCTION profile. The factory address is
-    //   CREATE2(CREATE2_FACTORY, FACTORY_SALT, FACTORY_INITCODE_HASH)
-    //   = 0xcE8dAc13593a359d961F91c35F8694cb2A03D005
-    // and every deployable is a CREATE3 child of it. foundry.toml strips
-    // solc metadata (bytecode_hash="none", cbor_metadata=false), so this
-    // hash is identical across all three production profiles (256s /
-    // 128s-q18 / 128s-q20): ONE factory serves every suite. It is NOT
-    // the test-profile value — test profiles optimize for 200 runs, the
-    // production profiles for 1,000,000, so their factory creation code
-    // (and hash) differ. The production hash is what actually deploys and
-    // is therefore the canonical pinned value; the profile-gated pin
-    // tests (test/SHRINCSPinned*.t.sol) mirror it to derive the
-    // production factory address without a production build. Regenerate
-    // by running any deploy script under a production profile and reading
-    // the logged factory init-code hash.
-    bytes32 internal constant FACTORY_INITCODE_HASH =
-        0xbe6eb1cac061b12187ed962ba44e19142929386dd027feee67ed5ea587777f05;
+/// @dev All deploys go through the canonical CreateX singleton
+/// (0xba5Ed099633D3B313e4D5F7bdc1305d3c28ba5Ed, pre-deployed at the same
+/// address on every supported chain), so a child address is a function of
+/// (CREATEX, salt) ONLY — chain-invariant, independent of the child's
+/// init code, and independent of anything this repo compiles. Nothing in
+/// the address derivation depends on compiler settings; the pinned
+/// runtime codehashes still do (metadata stripping in foundry.toml keeps
+/// them chain-invariant). SHRINCS is testnet-only; see DEPLOYMENTS.md
+/// for the historical own-factory CREATE3, CREATE2 (verifier), and
+/// Hardhat-Ignition (WOTS+) mechanisms this replaces.
+abstract contract CreateXDeployer is Script {
+    // Canonical CreateX factory (github.com/pcaversaccio/createx). Same
+    // address on every chain (presigned deployment transactions; an
+    // OP-stack genesis preinstall). Unlike the historical own factory it
+    // is never compiled here, so no init-code pin exists or is needed.
+    address internal constant CREATEX =
+        0xba5Ed099633D3B313e4D5F7bdc1305d3c28ba5Ed;
 
     // HARD REQUIREMENT (F-17): the canonical deploy MUST run under the
     // expected build profile, or the wrong parameter set / bytecode is
@@ -69,38 +53,30 @@ abstract contract Create3Deployer is Script {
         );
     }
 
-    // Return the chain's CREATE3 factory, deploying it deterministically
-    // through the canonical CREATE2 proxy on first use.
-    function _factory() internal returns (Create3Factory factory) {
-        // The canonical deploy runs under a production profile, whose
-        // metadata-free factory creation code hashes to
-        // FACTORY_INITCODE_HASH. Log the computed hash (this is the value
-        // the pin-regeneration procedure above reads) BEFORE asserting it,
-        // so the hash is printed even when the drift check reverts. The
-        // assert makes a Create3.sol change (which would move the factory
-        // and every child address) fail the deploy instead of silently
-        // landing at a different address.
-        bytes32 initCodeHash = keccak256(type(Create3Factory).creationCode);
-        console.log("Create3Factory init-code hash:");
-        console.logBytes32(initCodeHash);
+    // CreateX cannot be bootstrapped by this tooling: it deploys only
+    // through its published presigned transactions (see DEPLOYMENTS.md),
+    // so its absence fails the run instead.
+    function _requireCreateX() internal view {
         require(
-            initCodeHash == FACTORY_INITCODE_HASH,
-            "deploy: factory init-code drift"
+            CREATEX.code.length != 0,
+            "deploy: CreateX not deployed on this chain"
         );
-        address predicted = vm.computeCreate2Address(
-            FACTORY_SALT, FACTORY_INITCODE_HASH, CREATE2_FACTORY
-        );
-        if (predicted.code.length == 0) {
-            vm.broadcast();
-            Create3Factory deployed =
-                new Create3Factory{salt: FACTORY_SALT}();
-            require(
-                address(deployed) == predicted,
-                "deploy: factory address mismatch"
-            );
-            return deployed;
-        }
-        return Create3Factory(predicted);
+    }
+
+    // CreateX's permissionless-mode salt guard: a salt whose first 20
+    // bytes are neither msg.sender nor zero (every QUIP:* salt) is
+    // guarded to keccak256(abi.encode(salt)) before the CREATE3 deploy.
+    function _guardedSalt(bytes32 salt) internal pure returns (bytes32) {
+        return keccak256(abi.encode(salt));
+    }
+
+    // Predict the CreateX CREATE3 child for a raw salt with local math
+    // (Create3.addressOf mirrors CreateX's derivation: same canonical
+    // CREATE3 proxy init code). Pure, so predictions and the pin tests
+    // need no RPC; _deploy cross-checks it against CreateX's own
+    // computeCreate3Address before broadcasting.
+    function _addressOf(bytes32 salt) internal pure returns (address) {
+        return Create3.addressOf(_guardedSalt(salt), CREATEX);
     }
 
     // A SHRINCS verifier delegates stateless verification to its pinned
@@ -110,8 +86,11 @@ abstract contract Create3Deployer is Script {
     // the verifier deploys: `siblingSalt` derives to exactly the pinned
     // constant (drift guard vs the deploy-script salt), and the sibling
     // already has code. Call from each SHRINCS script's run().
-    function _requireSibling(bytes32 siblingSalt, address pinned) internal {
-        address derived = _factory().addressOf(siblingSalt);
+    function _requireSibling(bytes32 siblingSalt, address pinned)
+        internal
+        view
+    {
+        address derived = _addressOf(siblingSalt);
         require(derived == pinned, "deploy: SPHINCSPlusC sibling drift");
         require(
             derived.code.length != 0,
@@ -119,22 +98,21 @@ abstract contract Create3Deployer is Script {
         );
     }
 
-    // Deploy `initCode` under `salt` via CREATE3, after asserting the
-    // build profile. Idempotent on our own prior deploy; fails closed on
-    // any other occupant.
+    // Deploy `initCode` under `salt` through CreateX's CREATE3, after
+    // asserting the build profile. Idempotent on our own prior deploy;
+    // fails closed on any other occupant.
     //
     // `expectedCodehash` is the pinned runtime codehash of the artifact
-    // (each concrete script pins it and regenerates it the way
-    // FACTORY_INITCODE_HASH above is regenerated; see DEPLOYMENTS.md).
-    // CREATE3 child addresses are a function of (factory, salt) ONLY — the
-    // factory is permissionless and ignores init code (Create3Factory
-    // NatSpec), so a third party can pre-deploy arbitrary code at a
-    // documented salt and permanently capture the advertised address. The
-    // occupied-address branch therefore cannot assume the code is ours: it
-    // logs the on-chain codehash, then reverts unless it equals the pin. A
+    // (each concrete script pins it; regenerate per DEPLOYMENTS.md).
+    // CREATE3 child addresses are a function of (CREATEX, salt) ONLY —
+    // CreateX's permissionless mode ignores init code and sender, so a
+    // third party can pre-deploy arbitrary code at a documented salt and
+    // permanently capture the advertised address. The occupied-address
+    // branch therefore cannot assume the code is ours: it logs the
+    // on-chain codehash, then reverts unless it equals the pin. A
     // squatted salt or a stale pin aborts the deploy instead of passing
-    // silently as "already deployed" (fail closed, F-17). A genuine re-run
-    // (our own prior deploy) matches the pin and skips.
+    // silently as "already deployed" (fail closed, F-17). A genuine
+    // re-run (our own prior deploy) matches the pin and skips.
     function _deploy(
         string memory label,
         string memory expectedProfile,
@@ -143,10 +121,20 @@ abstract contract Create3Deployer is Script {
         bytes memory initCode
     ) internal {
         _requireProfile(expectedProfile);
-        Create3Factory factory = _factory();
-        address expected = factory.addressOf(salt);
+        _requireCreateX();
 
-        console.log("CREATE3 factory:  ", address(factory));
+        // Local prediction, cross-checked against CreateX's own view
+        // (computeCreate3Address takes the GUARDED salt). A mismatch
+        // means the guard or derivation assumptions broke — fail before
+        // broadcasting anything.
+        address expected = _addressOf(salt);
+        require(
+            ICreateX(CREATEX).computeCreate3Address(_guardedSalt(salt))
+                == expected,
+            "deploy: CreateX address derivation drift"
+        );
+
+        console.log("CreateX factory:  ", CREATEX);
         console.log(label);
         console.log("  expected addr:  ", expected);
 
@@ -167,16 +155,15 @@ abstract contract Create3Deployer is Script {
         }
 
         vm.broadcast();
-        address deployed = factory.deploy(salt, initCode);
+        address deployed = ICreateX(CREATEX).deployCreate3(salt, initCode);
         require(deployed == expected, "deploy: address mismatch");
 
         console.log("  deployed at:    ", deployed);
         // The registry value; consumers pin (address, codehash) from
         // DEPLOYMENTS.md, never from a local rebuild. Log it BEFORE the pin
         // assert so a first deploy still prints the value to record even
-        // when the pin is a placeholder (same log-before-assert flow as
-        // FACTORY_INITCODE_HASH), then fail closed if the freshly deployed
-        // code drifts from the pin.
+        // when the pin is a placeholder, then fail closed if the freshly
+        // deployed code drifts from the pin.
         console.log("  runtime codehash (record in DEPLOYMENTS.md):");
         console.logBytes32(deployed.codehash);
         require(

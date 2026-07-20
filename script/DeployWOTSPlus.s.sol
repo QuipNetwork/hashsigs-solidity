@@ -16,7 +16,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 pragma solidity ^0.8.28;
 
-import {Create3Deployer} from "./DeployBase.s.sol";
+import {CreateXDeployer} from "./DeployBase.s.sol";
 import {WOTSPlus} from "../contracts/WOTSPlus.sol";
 
 /// @title DeployWOTSPlus
@@ -29,7 +29,7 @@ import {WOTSPlus} from "../contracts/WOTSPlus.sol";
 ///   FOUNDRY_PROFILE=production forge script \
 ///       script/DeployWOTSPlus.s.sol \
 ///       --rpc-url $RPC --private-key $DEPLOYER_PK --broadcast --verify
-contract DeployWOTSPlus is Create3Deployer {
+contract DeployWOTSPlus is CreateXDeployer {
     // CREATE3 salt for the WOTS+ library deployment.
     bytes32 internal constant SALT = keccak256("QUIP:WOTSPlus:V1.0");
 

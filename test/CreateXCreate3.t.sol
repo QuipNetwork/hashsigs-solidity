@@ -17,36 +17,48 @@
 pragma solidity ^0.8.28;
 
 import {Test} from "../lib/forge-std/src/Test.sol";
-import {Create3Factory} from "../script/Create3.sol";
+import {Create3} from "../script/Create3.sol";
 
-/// @notice Fails CI the moment Create3.sol changes the factory creation
-/// code. The factory address (and every CREATE3 child address) is a
-/// function of keccak256(factory creation code); without this guard a
-/// Create3.sol edit passes every test on every profile and first fails at
-/// deploy time, leaving the pinned constants and DEPLOYMENTS.md silently
-/// stale on main. This file is in no `skip` list, so it compiles and runs
-/// under all three ci-matrix profiles (ci / 128s-q18 / 128s-q20). The
-/// factory is self-contained in script/Create3.sol (no `shrincs-profile`
-/// remapping) and solc metadata is stripped, so its test-profile creation
-/// code is identical across those profiles and this one pin covers them.
-contract Create3FactoryDriftTest is Test {
-    // Test-profile (200-run) keccak256 of the Create3Factory creation
-    // code. This is NOT the production pin FACTORY_INITCODE_HASH in
-    // DeployBase.s.sol: the production profiles optimize for 1,000,000
-    // runs, so their factory creation code (and hash) differ. This value
-    // exists only so a Create3.sol change fails CI immediately; on a
-    // deliberate factory replacement, regenerate BOTH pins together.
-    bytes32 internal constant TEST_FACTORY_INITCODE_HASH =
-        0x44e83d27e2004604259869b72a26900cb9de06f43382efa570261a4889198764;
+/// @notice Anchors the local CREATE3 math (Create3.addressOf) to CreateX's
+/// actual on-chain behavior with a known-answer test: quip's Deployer
+/// contract was deployed through the canonical CreateX singleton in
+/// permissionless mode (salt keccak256("QUIP:Deployer:V1"), guarded by
+/// CreateX to keccak256(abi.encode(salt))) and landed at the address
+/// asserted below. Every predicted address in this repo (DeployBase
+/// _addressOf, the SHRINCSPinned* tests, DEPLOYMENTS.md) rides on this
+/// equivalence, and _deploy re-checks it on-chain against CreateX's
+/// computeCreate3Address before broadcasting. This file is in no `skip`
+/// list, so it runs under all ci-matrix profiles.
+contract CreateXDerivationTest is Test {
+    // Canonical CreateX singleton; mirrors DeployBase.s.sol CREATEX.
+    address internal constant CREATEX =
+        0xba5Ed099633D3B313e4D5F7bdc1305d3c28ba5Ed;
 
-    function testFactoryCreationCodeUnchanged() public pure {
+    function testLocalMathMatchesOnChainCreateXDeployment() public pure {
+        bytes32 salt = keccak256("QUIP:Deployer:V1");
         assertEq(
-            keccak256(type(Create3Factory).creationCode),
-            TEST_FACTORY_INITCODE_HASH,
-            "Create3Factory creation code changed; if deliberate, "
-            "regenerate this test pin AND the production "
-            "FACTORY_INITCODE_HASH in DeployBase.s.sol together"
+            Create3.addressOf(keccak256(abi.encode(salt)), CREATEX),
+            0xA1A3990Ea898123e4B107D0A2f614232bE428Ef1,
+            "Create3.addressOf must reproduce CreateX's on-chain "
+            "CREATE3 derivation (quip Deployer known answer)"
         );
+    }
+}
+
+/// @dev In-test stand-in for CreateX's permissionless CREATE3 path (no
+/// salt guard — guarding only remaps raw salts to effective ones and is
+/// irrelevant to the hazard being locked). Deploys and predicts through
+/// library Create3 exactly as CreateX's inner deployCreate3 does.
+contract SquatFactoryHarness {
+    function deploy(bytes32 salt, bytes calldata initCode)
+        external
+        returns (address)
+    {
+        return Create3.deploy(salt, initCode);
+    }
+
+    function addressOf(bytes32 salt) external view returns (address) {
+        return Create3.addressOf(salt, address(this));
     }
 }
 
@@ -69,13 +81,16 @@ contract LegitCode {
 /// @notice Locks the squatting hazard behind finding P2 (CREATE3 factory
 /// salts): a permissionless factory whose child address depends only on
 /// (factory, salt) lets a third party pre-deploy arbitrary code at a
-/// documented salt. These tests prove the address is captured regardless
-/// of init code and that the captured codehash differs from the intended
-/// artifact's (the mismatch DeployBase._deploy fails closed on), and that
-/// bumping the salt version recovers a fresh, unoccupied address.
-contract Create3FactorySquatTest is Test {
+/// documented salt. CreateX's permissionless mode (the mode every QUIP:*
+/// salt uses) has exactly this property — the guarded salt is public
+/// math, so anyone can trigger it first. These tests prove the address is
+/// captured regardless of init code and that the captured codehash
+/// differs from the intended artifact's (the mismatch DeployBase._deploy
+/// fails closed on), and that bumping the salt version recovers a fresh,
+/// unoccupied address.
+contract Create3SquatTest is Test {
     function testSquatterCapturesAdvertisedAddress() public {
-        Create3Factory factory = new Create3Factory();
+        SquatFactoryHarness factory = new SquatFactoryHarness();
         bytes32 salt = keccak256("QUIP:test:squat");
 
         // The advertised address is a function of (factory, salt) ONLY.
@@ -101,7 +116,7 @@ contract Create3FactorySquatTest is Test {
     }
 
     function testOccupiedSaltCannotBeRedeployed() public {
-        Create3Factory factory = new Create3Factory();
+        SquatFactoryHarness factory = new SquatFactoryHarness();
         bytes32 salt = keccak256("QUIP:test:burned");
         factory.deploy(salt, type(SquatCode).creationCode);
 
@@ -113,7 +128,7 @@ contract Create3FactorySquatTest is Test {
     }
 
     function testBumpedSaltYieldsFreshUnoccupiedAddress() public {
-        Create3Factory factory = new Create3Factory();
+        SquatFactoryHarness factory = new SquatFactoryHarness();
         bytes32 saltV1 = keccak256("QUIP:test:recover:V1.0");
         bytes32 saltV2 = keccak256("QUIP:test:recover:V2.0");
         factory.deploy(saltV1, type(SquatCode).creationCode);

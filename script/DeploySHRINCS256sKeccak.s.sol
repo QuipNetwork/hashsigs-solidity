@@ -16,7 +16,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 pragma solidity ^0.8.28;
 
-import {Create3Deployer} from "./DeployBase.s.sol";
+import {CreateXDeployer} from "./DeployBase.s.sol";
 import {SHRINCS256sKeccak} from "../contracts/SHRINCS256sKeccak.sol";
 
 /// @title DeploySHRINCS256sKeccak
@@ -30,7 +30,7 @@ import {SHRINCS256sKeccak} from "../contracts/SHRINCS256sKeccak.sol";
 ///       script/DeploySHRINCS256sKeccak.s.sol \
 ///       --rpc-url $RPC --private-key $DEPLOYER_PK --broadcast --verify
 /// Record (profile, salt, address, codehash, chain) in DEPLOYMENTS.md.
-contract DeploySHRINCS256sKeccak is Create3Deployer {
+contract DeploySHRINCS256sKeccak is CreateXDeployer {
     // Per-profile CREATE3 salt. A new verifier version is a NEW salt →
     // new address; deployed artifacts are never upgraded in place.
     bytes32 internal constant SALT =
@@ -43,7 +43,7 @@ contract DeploySHRINCS256sKeccak is Create3Deployer {
     bytes32 internal constant SPHINCS_PLUS_C_SALT =
         keccak256("QUIP:SPHINCSPlusC256sKeccak:V1.0");
     address internal constant SPHINCS_PLUS_C =
-        0xf1Bd3aE9d3907bA59FB22A77eAcCbd278b51f88A;
+        0x9b62Fd54D8a1EDF39EF07A13A20b2E453cB1D732;
 
     // Pinned runtime codehash of this artifact (production profile).
     // _deploy fails closed if the CREATE3 address is occupied by code whose
@@ -52,13 +52,11 @@ contract DeploySHRINCS256sKeccak is Create3Deployer {
     // hash is chain-invariant and is the value published in DEPLOYMENTS.md;
     // regenerate per DEPLOYMENTS.md.
     bytes32 internal constant RUNTIME_CODEHASH =
-        0x22b7d973eb8481f2d0ae78f05a80499e1d318cf78c8bc5e4ece87b44f2f42113;
+        0x82e5e0727823ed856db249d3d64484f6b4c53efe4b64bcbd7e104f537d79ec90;
 
     function run() external {
-        // Assert the build profile FIRST: _requireSibling reaches
-        // _factory() (and its init-code-drift check), so a wrong-profile
-        // run must fail with "wrong FOUNDRY_PROFILE", not "factory
-        // init-code drift".
+        // Assert the build profile FIRST so a wrong-profile run fails
+        // with "wrong FOUNDRY_PROFILE", not a sibling-presence error.
         _requireProfile("production");
         _requireSibling(SPHINCS_PLUS_C_SALT, SPHINCS_PLUS_C);
         _deploy(

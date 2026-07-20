@@ -36,20 +36,16 @@ contract SHRINCS256sKeccak is SHRINCSVerifier {
 
     // Pinned CREATE3 address of the 256s SPHINCSPlusC sibling
     // (SPHINCSPlusC256sKeccak) this verifier delegates stateless
-    // verification to. Derivation (script/Create3.sol + DeployBase.s.sol):
-    //   factory = CREATE2(
-    //     0x4e59b44847b379578588920cA78FbF26c0B4956C,
-    //     keccak256("QUIP:Create3Factory:V1.0"),
-    //     FACTORY_INITCODE_HASH)
-    //   address = CREATE3 child of (
-    //     factory, keccak256("QUIP:SPHINCSPlusC256sKeccak:V1.0"))
-    // FACTORY_INITCODE_HASH is the production factory creation-code hash
-    // (solc metadata stripped in foundry.toml); factory =
-    // 0xcE8dAc13593a359d961F91c35F8694cb2A03D005. Pinned by
-    // test/SHRINCSPinned256s.t.sol (profile-gated) so C8's deploy scripts
-    // cannot drift from this constant.
+    // verification to. Derivation (script/DeployBase.s.sol):
+    //   CREATEX = 0xba5Ed099633D3B313e4D5F7bdc1305d3c28ba5Ed (canonical
+    //     CreateX singleton, pre-deployed at that address on every chain)
+    //   salt = keccak256("QUIP:SPHINCSPlusC256sKeccak:V1.0"), guarded by
+    //     CreateX to keccak256(abi.encode(salt))
+    //   address = CREATE3 child of (CREATEX, guarded salt)
+    // Pinned by test/SHRINCSPinned256s.t.sol (profile-gated) so C8's
+    // deploy scripts cannot drift from this constant.
     address internal constant SPHINCS_PLUS_C_VERIFIER =
-        0xf1Bd3aE9d3907bA59FB22A77eAcCbd278b51f88A;
+        0x9b62Fd54D8a1EDF39EF07A13A20b2E453cB1D732;
 
     function _pinnedSphincsPlusC() internal pure override returns (address) {
         return SPHINCS_PLUS_C_VERIFIER;

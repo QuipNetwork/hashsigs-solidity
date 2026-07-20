@@ -16,7 +16,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 pragma solidity ^0.8.28;
 
-import {Create3Deployer} from "./DeployBase.s.sol";
+import {CreateXDeployer} from "./DeployBase.s.sol";
 import {
     SPHINCSPlusC256sKeccak
 } from "../contracts/SPHINCSPlusC256sKeccak.sol";
@@ -31,7 +31,7 @@ import {
 ///       script/DeploySPHINCSPlusC256sKeccak.s.sol \
 ///       --rpc-url $RPC --private-key $DEPLOYER_PK --broadcast --verify
 /// Record (profile, salt, address, codehash, chain) in DEPLOYMENTS.md.
-contract DeploySPHINCSPlusC256sKeccak is Create3Deployer {
+contract DeploySPHINCSPlusC256sKeccak is CreateXDeployer {
     // Per-profile CREATE3 salt. Byte-identical to the salt pinned into
     // SHRINCS256sKeccak.SPHINCS_PLUS_C_VERIFIER; a new verifier version is
     // a NEW salt → new address, never an in-place upgrade.

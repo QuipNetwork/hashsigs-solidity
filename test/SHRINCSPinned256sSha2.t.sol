@@ -48,26 +48,22 @@ contract DeploySHRINCS256sSha2Probe is DeploySHRINCS256sSha2 {
 
 /// @notice Pins the 256s-sha2 SHRINCS verifier's SPHINCSPlusC sibling address
 /// to its CREATE3 derivation so the deploy scripts cannot drift from the
-/// pinned constant. The CREATE3 factory is suite-independent (the
-/// metadata-stripped factory creation code is identical across suites), so
-/// the same FACTORY_INITCODE_HASH derives the sha2 child address.
-/// Profile-gated (256s-sha2) like the deployable itself.
+/// pinned constant. The derivation goes through the pre-deployed CreateX
+/// singleton, so it is suite-independent pure math — no compiled factory
+/// artifact is involved. Profile-gated (256s-sha2) like the deployable
+/// itself.
 contract SHRINCSPinned256sSha2Test is Test {
-    bytes32 internal constant FACTORY_SALT =
-        keccak256("QUIP:Create3Factory:V1.0");
+    // Canonical CreateX singleton; mirrors DeployBase.s.sol CREATEX.
+    address internal constant CREATEX =
+        0xba5Ed099633D3B313e4D5F7bdc1305d3c28ba5Ed;
     bytes32 internal constant CHILD_SALT =
         keccak256("QUIP:SPHINCSPlusC256sSha2:V1.0");
-    // Production Create3Factory creation-code hash (solc metadata stripped
-    // in foundry.toml), identical across suites. Mirrors
-    // DeployBase.s.sol FACTORY_INITCODE_HASH.
-    bytes32 internal constant FACTORY_INITCODE_HASH =
-        0xbe6eb1cac061b12187ed962ba44e19142929386dd027feee67ed5ea587777f05;
 
     function testPinnedAddressMatchesCreate3Derivation() public {
-        address factory = vm.computeCreate2Address(
-            FACTORY_SALT, FACTORY_INITCODE_HASH, CREATE2_FACTORY
-        );
-        address expected = Create3.addressOf(CHILD_SALT, factory);
+        // CreateX guards a plain (non-sender-prefixed) salt to
+        // keccak256(abi.encode(salt)) before its CREATE3 deploy.
+        address expected =
+            Create3.addressOf(keccak256(abi.encode(CHILD_SALT)), CREATEX);
 
         SHRINCS256sSha2PinHarness harness = new SHRINCS256sSha2PinHarness();
         assertEq(

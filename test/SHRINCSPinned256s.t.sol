@@ -53,23 +53,20 @@ contract DeploySHRINCS256sProbe is DeploySHRINCS256sKeccak {
 /// its CREATE3 derivation so the deploy scripts cannot drift from the pinned
 /// constant. Profile-gated (256s) like the deployable itself.
 contract SHRINCSPinned256sTest is Test {
-    bytes32 internal constant FACTORY_SALT =
-        keccak256("QUIP:Create3Factory:V1.0");
+    // Canonical CreateX singleton; mirrors DeployBase.s.sol CREATEX. The
+    // derivation needs no compiled artifact: CreateX is pre-deployed, so
+    // the child address is pure math over (CREATEX, guarded salt) and is
+    // identical under every build profile.
+    address internal constant CREATEX =
+        0xba5Ed099633D3B313e4D5F7bdc1305d3c28ba5Ed;
     bytes32 internal constant CHILD_SALT =
         keccak256("QUIP:SPHINCSPlusC256sKeccak:V1.0");
-    // Production Create3Factory creation-code hash (solc metadata stripped
-    // in foundry.toml). This test runs under a 200-run test profile whose
-    // factory creation code differs from the 1,000,000-run production one,
-    // so it derives the deployed factory from this pinned hash rather than
-    // recompiling it. Mirrors DeployBase.s.sol FACTORY_INITCODE_HASH.
-    bytes32 internal constant FACTORY_INITCODE_HASH =
-        0xbe6eb1cac061b12187ed962ba44e19142929386dd027feee67ed5ea587777f05;
 
     function testPinnedAddressMatchesCreate3Derivation() public {
-        address factory = vm.computeCreate2Address(
-            FACTORY_SALT, FACTORY_INITCODE_HASH, CREATE2_FACTORY
-        );
-        address expected = Create3.addressOf(CHILD_SALT, factory);
+        // CreateX guards a plain (non-sender-prefixed) salt to
+        // keccak256(abi.encode(salt)) before its CREATE3 deploy.
+        address expected =
+            Create3.addressOf(keccak256(abi.encode(CHILD_SALT)), CREATEX);
 
         SHRINCS256sPinHarness harness = new SHRINCS256sPinHarness();
         assertEq(

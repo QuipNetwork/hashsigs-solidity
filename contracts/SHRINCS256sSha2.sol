@@ -38,15 +38,16 @@ contract SHRINCS256sSha2 is SHRINCSVerifier {
 
     // Pinned CREATE3 address of the 256s-sha2 SPHINCSPlusC sibling
     // (SPHINCSPlusC256sSha2) this verifier delegates stateless verification
-    // to. Derivation (script/Create3.sol + DeployBase.s.sol):
-    //   factory = 0xcE8dAc13593a359d961F91c35F8694cb2A03D005 (shared across
-    //     suites — the metadata-stripped factory creation code matches)
-    //   address = CREATE3 child of (
-    //     factory, keccak256("QUIP:SPHINCSPlusC256sSha2:V1.0"))
+    // to. Derivation (script/DeployBase.s.sol):
+    //   CREATEX = 0xba5Ed099633D3B313e4D5F7bdc1305d3c28ba5Ed (canonical
+    //     CreateX singleton, pre-deployed at that address on every chain)
+    //   salt = keccak256("QUIP:SPHINCSPlusC256sSha2:V1.0"), guarded by
+    //     CreateX to keccak256(abi.encode(salt))
+    //   address = CREATE3 child of (CREATEX, guarded salt)
     // Pinned by test/SHRINCSPinned256sSha2.t.sol (profile-gated) so the
     // deploy scripts cannot drift from this constant.
     address internal constant SPHINCS_PLUS_C_VERIFIER =
-        0x4634950D028606e7E0db97FC3CEd91511DAdE6cb;
+        0xa4eB2dEF6eE29C5cf337E9ff5712E95F400A6650;
 
     function _pinnedSphincsPlusC() internal pure override returns (address) {
         return SPHINCS_PLUS_C_VERIFIER;

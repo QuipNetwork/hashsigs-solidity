@@ -7,20 +7,15 @@ optimizer = true
 optimizer_runs = 200
 gas_limit = "18446744073709551615" # u64::MAX
 # Strip solc metadata from every artifact (inherited by all profiles).
-# The CREATE3 Create3Factory address is CREATE2(canonical proxy,
-# FACTORY_SALT, keccak256(factory creation code)); with metadata the
-# creation code embeds each profile's remappings, so the factory —
-# and every CREATE3 child — moved per profile (DEPLOYMENTS.md, "CREATE3
-# factory address"). Dropping metadata makes the factory creation code
-# identical across the three production profiles, so ONE factory (and
-# one child address per salt) serves every suite. Consequence: runtime
-# codehashes lose their metadata tail and change from any earlier
-# record; SHRINCS is testnet-only and nothing is deployed, so nothing
-# is burned, and Etherscan source verification does not need the
-# metadata hash. Optimizer runs still differ between test (200) and
-# production (1,000,000), so the test-profile factory creation code is
-# NOT the production one; the pin tests derive through the pinned
-# production factory init-code hash (see DeployBase.s.sol FACTORY_SALT).
+# Deploys go through the pre-deployed CreateX singleton (see
+# DeployBase.s.sol), so no compiled artifact is address-load-bearing —
+# a CREATE3 child address is f(CREATEX, salt) only, independent of any
+# build setting. Metadata stripping remains so each artifact's RUNTIME
+# codehash (the (address, codehash) pair consumers pin from
+# DEPLOYMENTS.md) is chain- and source-path-invariant; it still depends
+# on the solc version and optimizer settings, which the production
+# profiles pin. Etherscan source verification does not need the
+# metadata hash.
 bytecode_hash = "none"
 cbor_metadata = false
 # Suppress solc warning 2018 ("state mutability can be restricted to pure")
@@ -104,9 +99,10 @@ fs_permissions = [
 [profile.production]
 # solc is PINNED so the 256s verifier's RUNTIME CODEHASH is chain-
 # invariant (consumers pin the codehash from DEPLOYMENTS.md). Deploys
-# now use CREATE3, so the deployed ADDRESS depends only on (factory,
-# salt) and is independent of the init code — but the pin still fixes
-# the codehash across chains. Inherits the [profile.default] remapping
+# use CREATE3 through CreateX, so the deployed ADDRESS depends only on
+# (CREATEX, salt) and is independent of the init code — but the pin
+# still fixes the codehash across chains. Inherits the
+# [profile.default] remapping
 # (256s) and skip (128s verifiers/deploys). Bump deliberately.
 solc = "0.8.35"
 via_ir = true
