@@ -123,8 +123,10 @@ contract SHRINCSRustAccountVectors128sTest is Test {
         // budget baked into the FORS-C/hypertree shapes; pick the file by
         // that budget, mirroring SHRINCSSphincs128sVectorsTest.
         if (SHRINCSParams.STATELESS_SIGNATURE_LIMIT == 262_144) {
+            // line-length: allow — vector path is one unbreakable token
             return "test/test_vectors/shrincs_account_wrapper_vectors_128s_q18_keccak.json";
         }
+        // line-length: allow — vector path is one unbreakable token
         return "test/test_vectors/shrincs_account_wrapper_vectors_128s_q20_keccak.json";
     }
 
@@ -312,6 +314,7 @@ contract SHRINCSRustAccountVectors128sTest is Test {
         bytes memory blob =
             vm.parseJsonBytes(
                 vectors,
+                // line-length: allow — JSON path is one unbreakable token
                 ".testExportStatefulOnlyRotationBundle.stateful_rotation_vector_abi"
             );
         vector_ = abi.decode(

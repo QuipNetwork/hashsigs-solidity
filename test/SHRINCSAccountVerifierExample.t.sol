@@ -1782,6 +1782,7 @@ contract SHRINCSAccountVerifierExampleTest is Test {
     // stateless material and only replaces the stateful side, and proves
     // the usage counter carries forward (consuming exactly the one recovery
     // signature) instead of resetting.
+    // line-length: allow — test name is one unbreakable token
     function testExampleRotateFullKeyPreservesStatelessUsageWhenStatelessMaterialUnchanged()
         public
     {
@@ -1791,6 +1792,7 @@ contract SHRINCSAccountVerifierExampleTest is Test {
             bool currentOk
         ) = SHRINCSAccountSigningFacade.keygen(
             bytes(
+                // line-length: allow — seed is one unbreakable token
                 "account-example unchanged-stateless full rotation current key"
             ),
             4
@@ -1867,6 +1869,7 @@ contract SHRINCSAccountVerifierExampleTest is Test {
     // DOES replace the stateless material, the budget must still reset to
     // zero (this is the safe case the Solidity source of truth always
     // took; the fix only makes the reset conditional, not disabled).
+    // line-length: allow — test name is one unbreakable token
     function testExampleRotateFullKeyResetsStatelessUsageWhenStatelessMaterialChanges()
         public
     {
