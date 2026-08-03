@@ -18,6 +18,8 @@ pragma solidity ^0.8.28;
 
 import {Test} from "../lib/forge-std/src/Test.sol";
 import {Create3} from "../script/Create3.sol";
+import {CreateXSalt} from "../script/CreateXSalt.sol";
+import {ICreateX} from "../script/ICreateX.sol";
 
 /// @notice Anchors the local CREATE3 math (Create3.addressOf) to CreateX's
 /// actual on-chain behavior with a known-answer test: quip's Deployer
@@ -29,6 +31,13 @@ import {Create3} from "../script/Create3.sol";
 /// equivalence, and _deploy re-checks it on-chain against CreateX's
 /// computeCreate3Address before broadcasting. This file is in no `skip`
 /// list, so it runs under all ci-matrix profiles.
+/// @dev The known answer below was produced under CreateX's PERMISSIONLESS
+/// guard, which the canonical deploys no longer use. It is kept, and stays
+/// exactly as valid, because Create3.addressOf applies NO guard: it is
+/// pure CREATE2-proxy + nonce-1 math over an already-guarded salt, so this
+/// anchor is guard-independent. What it does not cover is the guard
+/// formula itself; CreateXPermissionedGuardForkTest below covers that
+/// against the real deployed CreateX.
 contract CreateXDerivationTest is Test {
     // Canonical CreateX singleton; mirrors DeployBase.s.sol CREATEX.
     address internal constant CREATEX =
@@ -41,6 +50,71 @@ contract CreateXDerivationTest is Test {
             0xA1A3990Ea898123e4B107D0A2f614232bE428Ef1,
             "Create3.addressOf must reproduce CreateX's on-chain "
             "CREATE3 derivation (quip Deployer known answer)"
+        );
+    }
+
+    function testCreateXAddressMatchesDeployLibrary() public pure {
+        assertEq(
+            CREATEX,
+            CreateXSalt.CREATEX,
+            "this file's CREATEX must match the deploy library"
+        );
+    }
+}
+
+/// @dev Probe artifact for the fork test; any non-empty runtime works.
+contract ForkProbe {
+    function tag() external pure returns (uint256) {
+        return 0xf0;
+    }
+}
+
+/// @notice Anchors the PERMISSIONED guard formula to the real deployed
+/// CreateX. This is the ground truth for every address the repo now
+/// advertises: it executes CreateX's own bytecode on a fork and checks
+/// both halves of the property the scheme depends on — the canonical
+/// deployer reaches our address, and nobody else does.
+/// @dev Opt-in: CI has no RPC credentials, so the test skips unless
+/// CREATEX_FORK_RPC_URL is set. Run it before any canonical deploy:
+///   CREATEX_FORK_RPC_URL=$RPC forge test --match-contract \
+///       CreateXPermissionedGuardFork
+contract CreateXPermissionedGuardForkTest is Test {
+    function testForkedCreateXHonorsPermissionedGuard() public {
+        string memory rpc = vm.envOr("CREATEX_FORK_RPC_URL", string(""));
+        vm.skip(bytes(rpc).length == 0);
+        vm.createSelectFork(rpc);
+        assertTrue(
+            CreateXSalt.CREATEX.code.length != 0, "no CreateX on this fork"
+        );
+
+        // A salt that is well-formed but not one we ever deploy, so the
+        // fork's real state cannot already occupy either address.
+        bytes32 raw = CreateXSalt.rawSalt(keccak256("QUIP:test:fork-probe"));
+        bytes memory initCode = type(ForkProbe).creationCode;
+
+        // Positive half: the canonical deployer lands where we predict.
+        vm.prank(CreateXSalt.DEPLOYER);
+        address ours =
+            ICreateX(CreateXSalt.CREATEX).deployCreate3(raw, initCode);
+        assertEq(
+            ours,
+            CreateXSalt.addressOf(raw),
+            "CreateX's permissioned guard must match CreateXSalt"
+        );
+
+        // Negative half: anyone else using the SAME published raw salt
+        // takes CreateX's permissionless branch and lands elsewhere.
+        // This is the squatting surface being closed, proven on-chain.
+        vm.prank(address(0xBAD));
+        address theirs =
+            ICreateX(CreateXSalt.CREATEX).deployCreate3(raw, initCode);
+        assertTrue(theirs != ours, "a squatter must not reach our address");
+        assertEq(
+            theirs,
+            Create3.addressOf(
+                keccak256(abi.encode(raw)), CreateXSalt.CREATEX
+            ),
+            "a non-deployer must take the permissionless branch"
         );
     }
 }
@@ -81,13 +155,18 @@ contract LegitCode {
 /// @notice Locks the squatting hazard behind finding P2 (CREATE3 factory
 /// salts): a permissionless factory whose child address depends only on
 /// (factory, salt) lets a third party pre-deploy arbitrary code at a
-/// documented salt. CreateX's permissionless mode (the mode every QUIP:*
-/// salt uses) has exactly this property — the guarded salt is public
-/// math, so anyone can trigger it first. These tests prove the address is
-/// captured regardless of init code and that the captured codehash
-/// differs from the intended artifact's (the mismatch DeployBase._deploy
-/// fails closed on), and that bumping the salt version recovers a fresh,
-/// unoccupied address.
+/// documented salt. These tests prove the address is captured regardless
+/// of init code, that the captured codehash differs from the intended
+/// artifact's (the mismatch DeployBase._deploy fails closed on), and that
+/// bumping the salt version recovers a fresh, unoccupied address.
+/// @dev This documents the mode the canonical deploys NO LONGER use.
+/// Every QUIP:* salt is now sender-scoped (CreateXSalt), so the capture
+/// modelled here is not reachable against our addresses — see
+/// CreateXSaltInvariantsTest.testSquatSurfaceIsClosed for the local proof
+/// and CreateXPermissionedGuardForkTest for the on-chain one. It is kept
+/// because it is what makes the reason for the scheme legible, and
+/// because the codehash pin it exercises is still live as defense in
+/// depth against a stale pin or a drifted artifact.
 contract Create3SquatTest is Test {
     function testSquatterCapturesAdvertisedAddress() public {
         SquatFactoryHarness factory = new SquatFactoryHarness();

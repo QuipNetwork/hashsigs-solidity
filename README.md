@@ -1457,10 +1457,13 @@ vector work. They are not a production signer interface.
 
 The canonical SHRINCS verifiers, their SPHINCSPlusC stateless delegates,
 and the WOTS+ library deploy through CREATE3 Foundry scripts. A CREATE3
-address depends only on the factory and salt, not on the init code, so
-each verifier profile gets a distinct, chain-invariant address.
-[DEPLOYMENTS.md](./DEPLOYMENTS.md) is the registry: it holds the salts,
-profile tags, predicted addresses, the deploy procedure, and the
+address depends only on the factory and the guarded salt, not on the init
+code, so each verifier profile gets a distinct, chain-invariant address.
+Salts are sender-scoped (CreateX's permissioned mode), so only the
+canonical deployer can deploy at an advertised address — see
+`script/CreateXSalt.sol`. [DEPLOYMENTS.md](./DEPLOYMENTS.md) is the
+registry: it holds the salts, profile tags, predicted addresses, the
+deploy procedure, the superseded permissionless-salt deployments, and the
 historical CREATE2 (verifier) and Hardhat-Ignition (WOTS+) mechanisms
 these scripts replace.
 

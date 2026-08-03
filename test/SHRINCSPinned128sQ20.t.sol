@@ -17,7 +17,7 @@
 pragma solidity ^0.8.28;
 
 import {Test} from "../lib/forge-std/src/Test.sol";
-import {Create3} from "../script/Create3.sol";
+import {CreateXSalt} from "../script/CreateXSalt.sol";
 import {SHRINCSParams} from "shrincs-profile/SHRINCSParams.sol";
 import {SHRINCS128sQ20Keccak} from "../contracts/SHRINCS128sQ20Keccak.sol";
 import {
@@ -26,6 +26,9 @@ import {
 import {
     DeploySHRINCS128sQ20Keccak
 } from "../script/DeploySHRINCS128sQ20Keccak.s.sol";
+import {
+    DeploySPHINCSPlusC128sQ20Keccak
+} from "../script/DeploySPHINCSPlusC128sQ20Keccak.s.sol";
 
 /// @dev Exposes the internal pinned SPHINCSPlusC address of the concrete
 /// 128s-q20 deployable so the pin test can compare it to the CREATE3
@@ -50,6 +53,17 @@ contract DeploySHRINCS128sQ20Probe is DeploySHRINCS128sQ20Keccak {
     }
 }
 
+/// @dev Exposes the SPHINCSPlusC deploy script's internal SALT so
+/// the pin test can assert that script's inline salt composition
+/// matches the library derivation. The scripts must duplicate the
+/// composition (Solidity forbids a function call in a `constant`
+/// initializer), so this is what keeps the duplicate honest.
+contract DeploySPHINCSPlusC128sQ20Probe is DeploySPHINCSPlusC128sQ20Keccak {
+    function salt() external pure returns (bytes32) {
+        return SALT;
+    }
+}
+
 /// @notice Pins the 128s-q20 SHRINCS verifier's SPHINCSPlusC sibling address
 /// to its CREATE3 derivation so the deploy scripts cannot drift from the
 /// pinned constant. Profile-gated (128s-q20) like the deployable itself.
@@ -60,14 +74,21 @@ contract SHRINCSPinned128sQ20Test is Test {
     // identical under every build profile.
     address internal constant CREATEX =
         0xba5Ed099633D3B313e4D5F7bdc1305d3c28ba5Ed;
-    bytes32 internal constant CHILD_SALT =
+    bytes32 internal constant CHILD_LABEL =
         keccak256("QUIP:SPHINCSPlusC128sQ20Keccak:V1.0");
 
     function testPinnedAddressMatchesCreate3Derivation() public {
-        // CreateX guards a plain (non-sender-prefixed) salt to
-        // keccak256(abi.encode(salt)) before its CREATE3 deploy.
-        address expected =
-            Create3.addressOf(keccak256(abi.encode(CHILD_SALT)), CREATEX);
+        // CreateX guards our sender-prefixed salt to
+        // keccak256(abi.encode(DEPLOYER, salt)) before its CREATE3
+        // deploy, so only the canonical deployer can reach this
+        // address. CREATEX is asserted against the library below.
+        assertEq(
+            CREATEX,
+            CreateXSalt.CREATEX,
+            "pin test CREATEX must match the deploy library"
+        );
+        bytes32 childSalt = CreateXSalt.rawSalt(CHILD_LABEL);
+        address expected = CreateXSalt.addressOf(childSalt);
 
         SHRINCS128sQ20PinHarness harness = new SHRINCS128sQ20PinHarness();
         assertEq(
@@ -81,13 +102,21 @@ contract SHRINCSPinned128sQ20Test is Test {
         DeploySHRINCS128sQ20Probe probe = new DeploySHRINCS128sQ20Probe();
         assertEq(
             probe.siblingSalt(),
-            CHILD_SALT,
+            childSalt,
             "deploy script SPHINCS_PLUS_C_SALT must match pin test"
         );
         assertEq(
             probe.siblingAddr(),
             expected,
             "deploy script SPHINCS_PLUS_C must match CREATE3 derivation"
+        );
+
+        DeploySPHINCSPlusC128sQ20Probe childProbe =
+            new DeploySPHINCSPlusC128sQ20Probe();
+        assertEq(
+            childProbe.salt(),
+            childSalt,
+            "SPHINCSPlusC deploy script SALT must match derivation"
         );
     }
 

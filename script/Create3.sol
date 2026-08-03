@@ -33,6 +33,11 @@ pragma solidity ^0.8.28;
 /// the GUARDED salt); CreateXCreate3.t.sol anchors that equivalence to a
 /// real on-chain CreateX deployment. `deploy` remains as the test-harness
 /// primitive for exercising CREATE3 semantics locally.
+///
+/// This library applies NO salt guard, deliberately: it takes an
+/// already-guarded salt and does pure proxy math. That is what keeps its
+/// known-answer test valid across a change of guard mode, and why the
+/// guard policy lives separately in script/CreateXSalt.sol.
 library Create3 {
     // Fixed CREATE3 proxy init code (deploys the 8-byte runtime
     // `363d3d37363d34f0` = copy calldata, then CREATE with it). This is

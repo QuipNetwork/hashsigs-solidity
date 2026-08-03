@@ -17,7 +17,7 @@
 pragma solidity ^0.8.28;
 
 import {Script, console} from "../lib/forge-std/src/Script.sol";
-import {Create3} from "./Create3.sol";
+import {CreateXSalt} from "./CreateXSalt.sol";
 import {ICreateX} from "./ICreateX.sol";
 
 /// @title CreateXDeployer
@@ -26,21 +26,31 @@ import {ICreateX} from "./ICreateX.sol";
 /// concrete script pins its own salt and required build profile.
 /// @dev All deploys go through the canonical CreateX singleton
 /// (0xba5Ed099633D3B313e4D5F7bdc1305d3c28ba5Ed, pre-deployed at the same
-/// address on every supported chain), so a child address is a function of
-/// (CREATEX, salt) ONLY — chain-invariant, independent of the child's
-/// init code, and independent of anything this repo compiles. Nothing in
-/// the address derivation depends on compiler settings; the pinned
-/// runtime codehashes still do (metadata stripping in foundry.toml keeps
-/// them chain-invariant). SHRINCS is testnet-only; see DEPLOYMENTS.md
-/// for the historical own-factory CREATE3, CREATE2 (verifier), and
+/// address on every supported chain) in CreateX's PERMISSIONED mode, so a
+/// child address is a function of (CREATEX, DEPLOYER, salt) — still
+/// chain-invariant and still independent of the child's init code and of
+/// anything this repo compiles, but now reachable only by the canonical
+/// deployer (see CreateXSalt). Nothing in the address derivation depends
+/// on compiler settings; the pinned runtime codehashes still do (metadata
+/// stripping in foundry.toml keeps them chain-invariant). See
+/// DEPLOYMENTS.md for the superseded permissionless-salt deploys and for
+/// the historical own-factory CREATE3, CREATE2 (verifier), and
 /// Hardhat-Ignition (WOTS+) mechanisms this replaces.
 abstract contract CreateXDeployer is Script {
     // Canonical CreateX factory (github.com/pcaversaccio/createx). Same
     // address on every chain (presigned deployment transactions; an
     // OP-stack genesis preinstall). Unlike the historical own factory it
     // is never compiled here, so no init-code pin exists or is needed.
-    address internal constant CREATEX =
-        0xba5Ed099633D3B313e4D5F7bdc1305d3c28ba5Ed;
+    address internal constant CREATEX = CreateXSalt.CREATEX;
+
+    // The one account that can deploy at any advertised address.
+    address internal constant DEPLOYER = CreateXSalt.DEPLOYER;
+
+    // Byte 20 of every raw salt. Re-exported so each concrete script can
+    // spell its salt out inline (Solidity forbids function calls in a
+    // `constant` initializer, so CreateXSalt.rawSalt cannot be used
+    // there); the pin tests assert the inline form matches the library.
+    bytes1 internal constant SALT_FLAG = CreateXSalt.FLAG_NO_CHAIN_SCOPE;
 
     // HARD REQUIREMENT (F-17): the canonical deploy MUST run under the
     // expected build profile, or the wrong parameter set / bytecode is
@@ -63,11 +73,13 @@ abstract contract CreateXDeployer is Script {
         );
     }
 
-    // CreateX's permissionless-mode salt guard: a salt whose first 20
-    // bytes are neither msg.sender nor zero (every QUIP:* salt) is
-    // guarded to keccak256(abi.encode(salt)) before the CREATE3 deploy.
+    // CreateX's permissioned-mode salt guard. Every QUIP:* salt embeds
+    // DEPLOYER in its leading 20 bytes with a 0x00 flag byte, so CreateX
+    // guards it to keccak256(abi.encode(DEPLOYER, salt)) and no other
+    // account can reach the resulting address. See CreateXSalt for why
+    // the deployer is hardcoded rather than read from the live caller.
     function _guardedSalt(bytes32 salt) internal pure returns (bytes32) {
-        return keccak256(abi.encode(salt));
+        return CreateXSalt.guardedSalt(salt);
     }
 
     // Predict the CreateX CREATE3 child for a raw salt with local math
@@ -76,7 +88,20 @@ abstract contract CreateXDeployer is Script {
     // need no RPC; _deploy cross-checks it against CreateX's own
     // computeCreate3Address before broadcasting.
     function _addressOf(bytes32 salt) internal pure returns (address) {
-        return Create3.addressOf(_guardedSalt(salt), CREATEX);
+        return CreateXSalt.addressOf(salt);
+    }
+
+    // HARD REQUIREMENT: the canonical deploy MUST be broadcast by
+    // DEPLOYER. CreateX's guard keys on msg.sender, and a mismatch does
+    // NOT revert there — it silently falls through to the permissionless
+    // branch and deploys at a DIFFERENT (squattable) address. Forge
+    // resolves one sender for the run and pranks it into both the call
+    // caller and tx.origin for the broadcast, so this fires during
+    // simulation, before anything is signed. Always pass an explicit
+    // --sender alongside --private-key, and never --resume or
+    // --skip-simulation: both bypass this check.
+    function _requireBroadcaster() internal view {
+        require(tx.origin == DEPLOYER, "deploy: wrong broadcaster");
     }
 
     // A SHRINCS verifier delegates stateless verification to its pinned
@@ -104,15 +129,15 @@ abstract contract CreateXDeployer is Script {
     //
     // `expectedCodehash` is the pinned runtime codehash of the artifact
     // (each concrete script pins it; regenerate per DEPLOYMENTS.md).
-    // CREATE3 child addresses are a function of (CREATEX, salt) ONLY —
-    // CreateX's permissionless mode ignores init code and sender, so a
-    // third party can pre-deploy arbitrary code at a documented salt and
-    // permanently capture the advertised address. The occupied-address
-    // branch therefore cannot assume the code is ours: it logs the
-    // on-chain codehash, then reverts unless it equals the pin. A
-    // squatted salt or a stale pin aborts the deploy instead of passing
-    // silently as "already deployed" (fail closed, F-17). A genuine
-    // re-run (our own prior deploy) matches the pin and skips.
+    // Under permissioned salts only DEPLOYER can reach the advertised
+    // address, so squatting is prevented rather than merely detected and
+    // the codehash pin is now defense in depth rather than the primary
+    // guard. It still earns its keep: it catches a stale pin, a drifted
+    // artifact, and the residual case of code we did not put there. The
+    // occupied-address branch logs the on-chain codehash, then reverts
+    // unless it equals the pin, instead of passing silently as "already
+    // deployed" (fail closed, F-17). A genuine re-run (our own prior
+    // deploy) matches the pin and skips.
     function _deploy(
         string memory label,
         string memory expectedProfile,
@@ -121,6 +146,11 @@ abstract contract CreateXDeployer is Script {
         bytes memory initCode
     ) internal {
         _requireProfile(expectedProfile);
+        _requireBroadcaster();
+        // Structural check on the salt itself: catches a stale or
+        // mistyped sender field and a chain-scoping flag byte, neither of
+        // which the broadcaster check above can see.
+        CreateXSalt.requireWellFormed(salt);
         _requireCreateX();
 
         // Local prediction, cross-checked against CreateX's own view
@@ -135,20 +165,22 @@ abstract contract CreateXDeployer is Script {
         );
 
         console.log("CreateX factory:  ", CREATEX);
+        console.log("broadcaster:      ", tx.origin);
         console.log(label);
         console.log("  expected addr:  ", expected);
 
         if (expected.code.length != 0) {
             // Log the on-chain codehash BEFORE asserting (pin regeneration
             // reads this value), then fail closed unless it matches the
-            // pinned artifact hash. A mismatch is a squatted salt or a
-            // stale pin, never a safe skip.
+            // pinned artifact hash. With permissioned salts the likely
+            // cause is a stale pin or a drifted artifact rather than a
+            // squatter, but either way it is never a safe skip.
             console.log("  already occupied; runtime codehash:");
             console.logBytes32(expected.codehash);
             require(
                 expected.codehash == expectedCodehash,
                 "deploy: address occupied by unexpected code: "
-                "squatted or stale pin"
+                "stale pin or drifted artifact"
             );
             console.log("  matches pinned codehash. Skipping.");
             return;
@@ -156,6 +188,10 @@ abstract contract CreateXDeployer is Script {
 
         vm.broadcast();
         address deployed = ICreateX(CREATEX).deployCreate3(salt, initCode);
+        // Backstop for the permissioned guard: if CreateX took any branch
+        // other than the sender-scoped one we mirror, the child lands
+        // elsewhere and this aborts the run. _requireBroadcaster above
+        // should already have caught the usual cause.
         require(deployed == expected, "deploy: address mismatch");
 
         console.log("  deployed at:    ", deployed);

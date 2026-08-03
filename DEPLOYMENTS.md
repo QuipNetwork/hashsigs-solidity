@@ -1,53 +1,101 @@
 # Deployment registry
 
 This repo owns the canonical deployments of the SHRINCS verifiers, their
-SPHINCSPlusC stateless delegates, and the WOTS+ library. SHRINCS is
-testnet-only. Consumers pin the published `(address, runtime codehash)`
-pairs below; they never deploy their own copy and never derive these
-values from a local rebuild.
+SPHINCSPlusC stateless delegates, and the WOTS+ library. Consumers pin
+the published `(address, runtime codehash)` pairs below; they never
+deploy their own copy and never derive these values from a local
+rebuild.
 
 All deploys use CREATE3 through the canonical CreateX singleton
 (`0xba5Ed099633D3B313e4D5F7bdc1305d3c28ba5Ed`,
 github.com/pcaversaccio/createx; maintainer decisions: CREATE3
-2026-07-10, CreateX as the deployer 2026-07-21). A CREATE3 child address
-depends only on `(CreateX, salt)`, not on the child's init code, so a
-recompile or a profile change doesn't move the address — and because
-CreateX is pre-deployed at the same address on every supported chain,
-nothing this repo compiles is address-load-bearing at all.
+2026-07-10, CreateX as the deployer 2026-07-21, permissioned
+sender-scoped salts 2026-08-03). A CREATE3 child address depends only on
+`(CreateX, guarded salt)`, not on the child's init code, so a recompile
+or a profile change doesn't move the address — and because CreateX is
+pre-deployed at the same address on every supported chain, nothing this
+repo compiles is address-load-bearing.
 
-Salts: the deploy scripts pass their raw `keccak256("QUIP:...")` salts
-to `deployCreate3`. CreateX guards a salt whose first 20 bytes are
-neither the caller nor zero (every QUIP salt) to
-`guardedSalt = keccak256(abi.encode(salt))` — its permissionless mode:
-any funded account produces the same child address. All address
-predictions (`DeployBase._addressOf`, the pin tests, the tables below)
-apply the same guard, `_deploy` cross-checks the local derivation
-against CreateX's `computeCreate3Address` before broadcasting, and
-`test/CreateXCreate3.t.sol` anchors the math to a real on-chain CreateX
-deployment.
+## Salts: permissioned, sender-scoped
+
+Every canonical salt is laid out the way CreateX's **permissioned** mode
+requires:
+
+```
+[20 bytes DEPLOYER][1 byte 0x00 flag][11 bytes entropy]
+ └ 0xc68B6477…6A26  └ no chain scoping └ leading 11 bytes of
+                                          keccak256("QUIP:<label>")
+```
+
+Because the leading 20 bytes equal the caller, CreateX guards the salt to
+`guardedSalt = keccak256(abi.encode(DEPLOYER, rawSalt))`. Two
+consequences, and both are the point:
+
+- **Only `DEPLOYER` can reach these addresses.** Anyone else calling
+  `deployCreate3` with a published raw salt fails the sender match, so
+  CreateX applies its *permissionless* guard instead and lands them at an
+  unrelated address. Squatting is prevented, not merely detected.
+- **The addresses are still identical on every chain.** The `0x00` flag
+  byte keeps `block.chainid` out of the guard. (`0x01` would scope them
+  per chain; `script/CreateXSalt.sol` rejects it.)
+
+The canonical deployer is
+**`0xc68B64770Da7914DEb0EF238b048a0Bf3B5f6A26`**. This is
+address-load-bearing and permanent: every address below is a function of
+it, and losing its key makes those addresses permanently unreachable on
+any chain not already deployed to.
+
+`script/CreateXSalt.sol` is the single implementation of the layout, the
+guard, and the derivation. All address predictions (`DeployBase`, the pin
+tests, the tables below) go through it. Three things keep it honest:
+
+- `_deploy` cross-checks the local derivation against CreateX's own
+  `computeCreate3Address` before broadcasting;
+- `test/CreateXCreate3.t.sol` anchors the guard-independent CREATE3
+  proxy math to a real on-chain CreateX deployment, and — with
+  `CREATEX_FORK_RPC_URL` set — anchors the **permissioned guard itself**
+  against live CreateX bytecode, asserting both that `DEPLOYER` reaches
+  the predicted address and that a non-deployer does not;
+- `test/CreateXSaltInvariants.t.sol` pins the salt layout, the nine
+  advertised addresses, and the squat closure, under every CI profile.
 
 Solc metadata is disabled for every build (`bytecode_hash = "none"`,
 `cbor_metadata = false` in `foundry.toml`) so each artifact's runtime
-codehash is chain- and source-path-invariant. No chain has a deployment
-yet, so nothing is burned.
+codehash is chain- and source-path-invariant.
 
-CreateX's permissionless mode is exactly that — permissionless: anyone
-can call `deployCreate3` first with a documented salt and deploy
-arbitrary code at the advertised address, permanently capturing it on a
-chain (the CREATE3 proxy at the guarded salt is then occupied and cannot
-be redeployed). This is a griefing vector, not a wrong-accept one, and
-the tooling fails closed against it. Each deploy script pins its
-artifact's expected runtime codehash (`RUNTIME_CODEHASH`);
-`DeployBase._deploy` reverts if the target address is already occupied by
-code whose hash differs from the pin — a squatted salt or a stale pin —
-instead of skipping it as "already deployed", and it also asserts a fresh
-deploy's codehash matches the pin. Consumers verify the published runtime
-codehash below against the on-chain code and never trust a squatted
-address.
+### Why the codehash pin still exists
 
-Recovering a squatted (or otherwise burned) salt: bump the salt version
-constant in the deploy script. A new salt is a new, unoccupied address,
-exactly as a new artifact version already is; the old salt is abandoned.
+Each deploy script pins its artifact's expected runtime codehash
+(`RUNTIME_CODEHASH`), and `DeployBase._deploy` reverts if the target
+address is already occupied by code whose hash differs, instead of
+skipping it as "already deployed". Under permissioned salts this is
+defense in depth rather than the primary squat guard: it now catches a
+stale pin, a drifted artifact, or a genuine re-run, and `_deploy` also
+asserts a fresh deploy's codehash matches. Consumers still verify the
+published codehash against the on-chain code.
+
+### Deploy-time guards
+
+`_deploy` fails closed on three things before it broadcasts:
+
+| Check | Catches |
+|---|---|
+| `_requireProfile` | wrong `FOUNDRY_PROFILE` → wrong parameter set |
+| `_requireBroadcaster` | wrong signer → CreateX would silently take its permissionless branch and deploy at a different, squattable address |
+| `CreateXSalt.requireWellFormed` | stale/mistyped sender field, or a `0x01` flag byte that would silently break chain-invariance |
+
+None of these revert inside CreateX itself, which is why they are
+asserted locally. **Always pass an explicit `--sender` alongside
+`--private-key`, and never use `--resume` or `--skip-simulation`** —
+both bypass the script body and therefore these guards.
+
+### Recovering a burned salt
+
+Bump the salt version in the label (`:V1.0` → `:V1.1`). That changes the
+11-byte entropy, hence the salt, hence the address. A new salt is a new,
+unoccupied address, exactly as a new artifact version already is; the old
+salt is abandoned. Squatting can no longer burn a salt, so this now
+covers only our own mistakes (e.g. deploying a wrong artifact).
 
 ## How a deploy is produced
 
@@ -66,34 +114,56 @@ exactly as a new artifact version already is; the old salt is abandoned.
    reverts on empty code, and each SHRINCS deploy script asserts its
    sibling is already deployed at the pinned address.
 
+   The broadcaster MUST be the canonical deployer; pass it explicitly
+   so the simulation pins the sender rather than inferring it:
+
+   ```bash
+   export DEPLOYER=0xc68B64770Da7914DEb0EF238b048a0Bf3B5f6A26
+   ```
+
+   Confirm the permissioned guard against live CreateX first (no gas,
+   no key needed) — this is the gate, not a formality:
+
+   ```bash
+   CREATEX_FORK_RPC_URL=$RPC forge test \
+       --match-contract CreateXPermissionedGuardFork
+   ```
+
    ```bash
    FOUNDRY_PROFILE=production forge script \
        script/DeploySPHINCSPlusC256sKeccak.s.sol \
-       --rpc-url $RPC --private-key $DEPLOYER_PK --broadcast --verify
+       --rpc-url $RPC --private-key $DEPLOYER_PK \
+       --sender $DEPLOYER --broadcast --verify
 
    FOUNDRY_PROFILE=production forge script \
        script/DeploySHRINCS256sKeccak.s.sol \
-       --rpc-url $RPC --private-key $DEPLOYER_PK --broadcast --verify
+       --rpc-url $RPC --private-key $DEPLOYER_PK \
+       --sender $DEPLOYER --broadcast --verify
 
    FOUNDRY_PROFILE=production-128s-q18 forge script \
        script/DeploySPHINCSPlusC128sQ18Keccak.s.sol \
-       --rpc-url $RPC --private-key $DEPLOYER_PK --broadcast --verify
+       --rpc-url $RPC --private-key $DEPLOYER_PK \
+       --sender $DEPLOYER --broadcast --verify
 
    FOUNDRY_PROFILE=production-128s-q18 forge script \
        script/DeploySHRINCS128sQ18Keccak.s.sol \
-       --rpc-url $RPC --private-key $DEPLOYER_PK --broadcast --verify
+       --rpc-url $RPC --private-key $DEPLOYER_PK \
+       --sender $DEPLOYER --broadcast --verify
 
    FOUNDRY_PROFILE=production-128s-q20 forge script \
        script/DeploySPHINCSPlusC128sQ20Keccak.s.sol \
-       --rpc-url $RPC --private-key $DEPLOYER_PK --broadcast --verify
+       --rpc-url $RPC --private-key $DEPLOYER_PK \
+       --sender $DEPLOYER --broadcast --verify
 
    FOUNDRY_PROFILE=production-128s-q20 forge script \
        script/DeploySHRINCS128sQ20Keccak.s.sol \
-       --rpc-url $RPC --private-key $DEPLOYER_PK --broadcast --verify
+       --rpc-url $RPC --private-key $DEPLOYER_PK \
+       --sender $DEPLOYER --broadcast --verify
 
    FOUNDRY_PROFILE=production forge script \
        script/DeployWOTSPlus.s.sol \
-       --rpc-url $RPC --private-key $DEPLOYER_PK --broadcast --verify
+       --rpc-url $RPC --private-key $DEPLOYER_PK \
+       --sender $DEPLOYER --broadcast --verify
    ```
 
 3. Capture the codehash from the on-chain deployment with
@@ -110,7 +180,8 @@ Deployed artifacts are immutable; nothing is upgraded in place.
 ### Regenerating a script's `RUNTIME_CODEHASH` pin
 
 Each deploy script pins the expected runtime codehash of its artifact so
-`_deploy` can fail closed on a squatted or drifted address (see above). The
+`_deploy` can fail closed on a stale pin or a drifted artifact (see
+above). The
 deployables carry no immutables, so the pin equals `keccak256` of the
 compiled runtime bytecode and is knowable before any deploy. Regenerate it
 after any change to the artifact's source or its build settings, two ways:
@@ -140,32 +211,51 @@ matching registry row below.
 The `production` solc pin fixes each verifier's runtime codehash across
 chains. The addresses below derive from the pinned salts through the
 canonical CreateX singleton; they are chain-invariant and independent of
-anything this repo compiles. No chain has a deployment yet. The runtime
-codehashes below are the pinned `RUNTIME_CODEHASH` values from the deploy
-scripts (keccak256 of each artifact's compiled runtime bytecode at this
-commit); confirm each with `cast codehash <address>` on first deploy.
+anything this repo compiles. The runtime codehashes below are the pinned
+`RUNTIME_CODEHASH` values from the deploy scripts (keccak256 of each
+artifact's compiled runtime bytecode at this commit); confirm each with
+`cast codehash <address>` on first deploy.
 
 CREATE3 deployer (all rows): CreateX at
-`0xba5Ed099633D3B313e4D5F7bdc1305d3c28ba5Ed`. Each address is the
-CREATE3 child of `(CreateX, guardedSalt)` where
-`rawSalt = keccak256(saltString)` and
-`guardedSalt = keccak256(abi.encode(rawSalt))` (CreateX's permissionless
-salt guard). Both forms are recorded below so nobody re-derives them
-wrongly: predict with the GUARDED salt
+`0xba5Ed099633D3B313e4D5F7bdc1305d3c28ba5Ed`, called by
+`0xc68B64770Da7914DEb0EF238b048a0Bf3B5f6A26`. Each address is the CREATE3
+child of `(CreateX, guardedSalt)` where the raw salt is
+`[20B DEPLOYER][0x00][11B of keccak256(label)]` and
+`guardedSalt = keccak256(abi.encode(DEPLOYER, rawSalt))` (CreateX's
+permissioned salt guard). Rows are keyed on the **raw salt**, which is
+the unambiguous identity — the label is an input to it, and the same
+label produced different addresses under the superseded permissionless
+scheme (see below). Predict with the GUARDED salt
 (`computeCreate3Address(guardedSalt)`), deploy with the RAW salt
 (`deployCreate3(rawSalt, initCode)`).
 
-| Salt string | Guarded salt | Address |
+| Label | Raw salt | Guarded salt |
 |---|---|---|
-| `QUIP:SPHINCSPlusC256sKeccak:V1.0` | `0xf8c807b1f4f2bfa3549b25264873c7f7a79fcbebddc4b38a2a2f2df406e6a913` | `0x9b62Fd54D8a1EDF39EF07A13A20b2E453cB1D732` |
-| `QUIP:SPHINCSPlusC128sQ18Keccak:V1.0` | `0xeb1249ea424db6d70e4857297db8a440e2942b295c6769bcb5581763e2bc5545` | `0xbA920B0e1ba05E9F909c43d1f0d6818F5ED2aEf6` |
-| `QUIP:SPHINCSPlusC128sQ20Keccak:V1.0` | `0x58bdd8aa5e2e3b18a2bd5f5b790f43adff9bbd2943ef60692b7321d09e2a2dcb` | `0xfB8722b28d27F0272578e4FdaBf9619B9970c083` |
-| `QUIP:SPHINCSPlusC256sSha2:V1.0` | `0x2a05ebda9cbb0a51ff6fc692600b6cd0c8dc59b1974c5ca5c6d23526074c86f8` | `0xa4eB2dEF6eE29C5cf337E9ff5712E95F400A6650` |
-| `QUIP:SHRINCS256sKeccak:V1.0` | `0x0939717cfb5c4a8733d30f03f927530fa07b9533c20d62e376c0b078e135be9a` | `0x9154dA0BA19600C543a8c5ed1B1c44af415B5688` |
-| `QUIP:SHRINCS128sQ18Keccak:V1.0` | `0x40adfebc3fe1c2e40e07808830fa746f0e66daff4074855a62846b382aac88ef` | `0x26a7D084e543F01Fe9233B152e942477D8c96E2a` |
-| `QUIP:SHRINCS128sQ20Keccak:V1.0` | `0xab47405d20c88e450a97af5655e8de529be3477bdba3984a1352eaf59bc37640` | `0x8E7B1C5b206054Dd307Ad5Bdb0669e8Cc2dC2077` |
-| `QUIP:SHRINCS256sSha2:V1.0` | `0x52611b3c711230e673773141103c1d1ba27397eaf76456d6a43582b6332c3d4a` | `0x94E02751D093c77687874f1F075B8151ef4721C8` |
-| `QUIP:WOTSPlus:V1.0` | `0x93be132d2fb970301e56504dd46373fdf30bc28b21d5fcc5ee92e2a215ae2763` | `0xe8A4C40A2Ca198e1b787431382D025097864A5c6` |
+| `QUIP:SPHINCSPlusC256sKeccak:V1.0` | `0xc68b64770da7914deb0ef238b048a0bf3b5f6a2600646ccb7479803c0f6dcd6b` | `0x970d41c1b7c30a8a3e9eff3ff6bbe4dd33b56b6775a6461ebea0d92da624235e` |
+| `QUIP:SPHINCSPlusC128sQ18Keccak:V1.0` | `0xc68b64770da7914deb0ef238b048a0bf3b5f6a2600c103b4836148f7cfd0915f` | `0x0f6f40632cf5d8667a0e713fc30e8052040e9829a9d89f93c2f6d3c6b42a2a19` |
+| `QUIP:SPHINCSPlusC128sQ20Keccak:V1.0` | `0xc68b64770da7914deb0ef238b048a0bf3b5f6a2600b2f54c4aed263fa5a0a4e2` | `0x845bc567f0b8ecc250aa34032ba7550733f09133332dc0c0325bcc9272c0ce8b` |
+| `QUIP:SPHINCSPlusC256sSha2:V1.0` | `0xc68b64770da7914deb0ef238b048a0bf3b5f6a2600f8cf84956b2af62074d56b` | `0x93147de612c33a3a0aec9c904a9a2a68d3c7a15e5d4b4de94718303d12108b75` |
+| `QUIP:SHRINCS256sKeccak:V1.0` | `0xc68b64770da7914deb0ef238b048a0bf3b5f6a26004289c748f2bf48bb1ee562` | `0x3ddfd11b1a8c90adffb425027e36250fed0e33c6e1487355b34eb3a650de6639` |
+| `QUIP:SHRINCS128sQ18Keccak:V1.0` | `0xc68b64770da7914deb0ef238b048a0bf3b5f6a26008d1935d25a649a1fb9a23a` | `0x246f7f27a5c3e6ed6a5737b0c47d830d2a7c1e43a39e554a70fcf5f82378b568` |
+| `QUIP:SHRINCS128sQ20Keccak:V1.0` | `0xc68b64770da7914deb0ef238b048a0bf3b5f6a26005ecf2cbb0748f5a7c9b715` | `0xf54e1e7db76ab79776d17794ea406147bde1899ca999c55e44b706e4ac7bf23b` |
+| `QUIP:SHRINCS256sSha2:V1.0` | `0xc68b64770da7914deb0ef238b048a0bf3b5f6a260036f59a74cc43a5f8773947` | `0x24c2bd4f32652b992eb8749fb320954670fd1fe4c64a3bc0d51a934e85766bb5` |
+| `QUIP:WOTSPlus:V1.0` | `0xc68b64770da7914deb0ef238b048a0bf3b5f6a26006a0bc5ee9251a176011a94` | `0x6dec99ce43a5bbb090010ff191badca24996ac21dd07edd7a25770a1cda2a0a6` |
+
+| Label | Address |
+|---|---|
+| `QUIP:SPHINCSPlusC256sKeccak:V1.0` | `0x97B3726F44e3B7521199CE4e0fC160A32A597d31` |
+| `QUIP:SPHINCSPlusC128sQ18Keccak:V1.0` | `0xF4f47272350af70D9735FDBf42d398D17470c2f0` |
+| `QUIP:SPHINCSPlusC128sQ20Keccak:V1.0` | `0x0A218Bf4A264B00c89883b2A780478627a0C7E08` |
+| `QUIP:SPHINCSPlusC256sSha2:V1.0` | `0x8F477848aC34523095F68f60C5d5eFa21a491fCA` |
+| `QUIP:SHRINCS256sKeccak:V1.0` | `0xE6F2970bA30d59e8288b7007bA755828372457c3` |
+| `QUIP:SHRINCS128sQ18Keccak:V1.0` | `0xDA52530D9027bea659d8458e1128a566B43C8c69` |
+| `QUIP:SHRINCS128sQ20Keccak:V1.0` | `0x4f78F04b9C496749972afcb0ad5C114326De5086` |
+| `QUIP:SHRINCS256sSha2:V1.0` | `0x31F7262Db25b5F16ddfA4A995FfB298386BB57D8` |
+| `QUIP:WOTSPlus:V1.0` | `0xef0CbdEC1ed6Db29F44030Bc22e4BD1D19898208` |
+
+These nine addresses are pinned in
+`test/CreateXSaltInvariants.t.sol::testAdvertisedAddressesMatchRegistry`,
+so a drift between this table and the code fails CI.
 
 ### SHRINCS verifiers
 
@@ -173,12 +263,12 @@ wrongly: predict with the GUARDED salt
 |---|---|---|---|
 | Contract | `SHRINCS256sKeccak` | `SHRINCS128sQ18Keccak` | `SHRINCS128sQ20Keccak` |
 | Build profile | `production` | `production-128s-q18` | `production-128s-q20` |
-| CREATE3 salt string | `QUIP:SHRINCS256sKeccak:V1.0` | `QUIP:SHRINCS128sQ18Keccak:V1.0` | `QUIP:SHRINCS128sQ20Keccak:V1.0` |
+| CREATE3 salt label | `QUIP:SHRINCS256sKeccak:V1.0` | `QUIP:SHRINCS128sQ18Keccak:V1.0` | `QUIP:SHRINCS128sQ20Keccak:V1.0` |
 | `PROFILE_TAG()` | `keccak256("shrincs-256s-keccak")` | `keccak256("shrincs-128s-q18-keccak")` | `keccak256("shrincs-128s-q20-keccak")` |
 | `VERSION_TAG()` | `keccak256("quip.shrincs-verifier.v1")` | same | same |
-| Predicted address | `0x9154dA0BA19600C543a8c5ed1B1c44af415B5688` | `0x26a7D084e543F01Fe9233B152e942477D8c96E2a` | `0x8E7B1C5b206054Dd307Ad5Bdb0669e8Cc2dC2077` |
+| Predicted address | `0xE6F2970bA30d59e8288b7007bA755828372457c3` | `0xDA52530D9027bea659d8458e1128a566B43C8c69` | `0x4f78F04b9C496749972afcb0ad5C114326De5086` |
 | Stateless delegate | `SPHINCSPlusC256sKeccak` (below) | `SPHINCSPlusC128sQ18Keccak` (below) | `SPHINCSPlusC128sQ20Keccak` (below) |
-| Runtime codehash | `0x82e5e0727823ed856db249d3d64484f6b4c53efe4b64bcbd7e104f537d79ec90` | `0x41de0f0626072b44e34db37bc4266c9e42705ce065ca6bb89eb9c16d44e4a606` | `0x5ab4bda8779521f2b4784e324d49a18602ade71bc0ba0b05a6e0d50d34496087` |
+| Runtime codehash | `0xc104068546743a66b687cf2f8d23cca22e14d793158993efa525dac7fc15f646` | `0xd9be437b3616cc77aeb66caf4edc44954ec4b2fae85df2e5c346bdc82060812d` | `0xc1af8915b7fadf95ad558e2992c40ae6ae2a87c1991a552ae5d2a79377da4e0d` |
 | Chains deployed | *(none yet)* | *(none yet)* | *(none yet)* |
 
 Each SHRINCS verifier's `verifyStateless` delegates to the pinned
@@ -204,10 +294,10 @@ envelope is `abi.encode(StatelessSignature)`, with no commitment logic.
 |---|---|---|---|
 | Contract | `SPHINCSPlusC256sKeccak` | `SPHINCSPlusC128sQ18Keccak` | `SPHINCSPlusC128sQ20Keccak` |
 | Build profile | `production` | `production-128s-q18` | `production-128s-q20` |
-| CREATE3 salt string | `QUIP:SPHINCSPlusC256sKeccak:V1.0` | `QUIP:SPHINCSPlusC128sQ18Keccak:V1.0` | `QUIP:SPHINCSPlusC128sQ20Keccak:V1.0` |
+| CREATE3 salt label | `QUIP:SPHINCSPlusC256sKeccak:V1.0` | `QUIP:SPHINCSPlusC128sQ18Keccak:V1.0` | `QUIP:SPHINCSPlusC128sQ20Keccak:V1.0` |
 | `PROFILE_TAG()` | `keccak256("shrincs-256s-keccak")` | `keccak256("shrincs-128s-q18-keccak")` | `keccak256("shrincs-128s-q20-keccak")` |
 | `VERSION_TAG()` | `keccak256("quip.sphincsplusc-verifier.v1")` | same | same |
-| Predicted address | `0x9b62Fd54D8a1EDF39EF07A13A20b2E453cB1D732` | `0xbA920B0e1ba05E9F909c43d1f0d6818F5ED2aEf6` | `0xfB8722b28d27F0272578e4FdaBf9619B9970c083` |
+| Predicted address | `0x97B3726F44e3B7521199CE4e0fC160A32A597d31` | `0xF4f47272350af70D9735FDBf42d398D17470c2f0` | `0x0A218Bf4A264B00c89883b2A780478627a0C7E08` |
 | Key format | `abi.encode(pkSeed, hypertreeRoot)` | same | same |
 | Signature envelope | `abi.encode(StatelessSignature)` | same | same |
 | Runtime codehash | `0x998bb84a9cf85aeca5dfaffd88edbe1d62aa5b7fac9d9229b0a437f5c9a91e70` | `0xf6ad5f990d817ed947a152e54135324a90aa1b3bd1104bcdc99a4ddb4cd866a3` | `0xb9dc1b3ddc6fe633051b27a67322c4a72536d1cd668c4332ec4f104a1518f2e4` |
@@ -226,19 +316,19 @@ verifier (`SHRINCSSphincs256sSha2Vectors`); per-helper coverage is the
 hashes through the hash-suite seam, so the sha2 leg also self-signs: the
 keygen goldens are anchored to the Rust sha2 signer, and the stateful and
 stateless produce-then-verify suites run under this profile. No bytes are
-deployed yet — SHRINCS is testnet-only — so the runtime codehashes below
-are the pinned `RUNTIME_CODEHASH` predictions at this commit, confirmed on
-first deploy.
+deployed at these addresses yet, so the runtime codehashes below are the
+pinned `RUNTIME_CODEHASH` predictions at this commit, confirmed on first
+deploy.
 
 | Field | SHRINCS256sSha2 | SPHINCSPlusC256sSha2 |
 |---|---|---|
 | Build profile | `production-256s-sha2` | `production-256s-sha2` |
-| CREATE3 salt string | `QUIP:SHRINCS256sSha2:V1.0` | `QUIP:SPHINCSPlusC256sSha2:V1.0` |
+| CREATE3 salt label | `QUIP:SHRINCS256sSha2:V1.0` | `QUIP:SPHINCSPlusC256sSha2:V1.0` |
 | `PROFILE_TAG()` | `keccak256("shrincs-256s-sha2")` | `keccak256("shrincs-256s-sha2")` |
 | `VERSION_TAG()` | `keccak256("quip.shrincs-verifier.v1")` | `keccak256("quip.sphincsplusc-verifier.v1")` |
-| Predicted address | `0x94E02751D093c77687874f1F075B8151ef4721C8` | `0xa4eB2dEF6eE29C5cf337E9ff5712E95F400A6650` |
+| Predicted address | `0x31F7262Db25b5F16ddfA4A995FfB298386BB57D8` | `0x8F477848aC34523095F68f60C5d5eFa21a491fCA` |
 | Stateless delegate | `SPHINCSPlusC256sSha2` (right) | — |
-| Runtime codehash | `0x7ef9a4bd76dbe9a23a139abef8169c41dd898da60629cb61a421f511a45831ab` | `0x6f609f9d426a1d54c6f578ecb8518185c2623574829a3abeb4998352ed2ca9bd` |
+| Runtime codehash | `0x75a544f812cd75691e2ef8f132c6bf80ef5504e43750cb55cd05191e6c1cdbcd` | `0x6f609f9d426a1d54c6f578ecb8518185c2623574829a3abeb4998352ed2ca9bd` |
 | Chains deployed | *(none yet)* | *(none yet)* |
 
 ### WOTS+ library
@@ -247,17 +337,50 @@ first deploy.
 |---|---|
 | Contract | `WOTSPlus` (library) |
 | Build profile | `production` |
-| CREATE3 salt string | `QUIP:WOTSPlus:V1.0` |
-| Predicted address | `0xe8A4C40A2Ca198e1b787431382D025097864A5c6` |
+| CREATE3 salt label | `QUIP:WOTSPlus:V1.0` |
+| Predicted address | `0xef0CbdEC1ed6Db29F44030Bc22e4BD1D19898208` |
 | Runtime codehash | `0x0efb1b18e06862b6b16d6b9fdb0563c5ceaf435af928034cbdb94af18ae2e683` |
 | Chains deployed | *(none yet)* |
 
 WOTS+ is profile-independent (its parameters are its own constants, not
 `SHRINCSParams`), so its bytecode and CREATE3 address are the same under
-any build profile. Its salt and deploy script are unchanged; the
-predicted address moved only because the CREATE3 deployer changed to
-CreateX (see the top of this file), and every CREATE3 child address is a
-function of its deployer.
+any build profile. Its salt label and deploy script are unchanged; the
+predicted address has moved twice for reasons outside its own source —
+first when the CREATE3 deployer became CreateX, then when the salts
+became sender-scoped (see the top of this file). Every CREATE3 child
+address is a function of its deployer and its guarded salt.
+
+## Superseded: permissionless-salt deployments
+
+These are real, live deployments made under the previous permissionless
+salt scheme (raw salt `keccak256("QUIP:<label>")`, guarded to
+`keccak256(abi.encode(salt))`). The permissioned scheme moves every
+address, so **these are abandoned**: they are recorded here so the same
+label string cannot be mistaken for the same address, and so nobody reads
+their on-chain presence as a current endorsement. They are not upgraded,
+not referenced by the tables above, and receive no further deploys. The
+bytecode at them is genuine (deployed by
+`0xc68B64770Da7914DEb0EF238b048a0Bf3B5f6A26`), it is simply superseded.
+
+| Artifact | Address | Chains | Runtime codehash |
+|---|---|---|---|
+| `SPHINCSPlusC256sKeccak` | `0x9b62Fd54D8a1EDF39EF07A13A20b2E453cB1D732` | Base Sepolia (84532), OP Sepolia (11155420) | `0x998bb84a9cf85aeca5dfaffd88edbe1d62aa5b7fac9d9229b0a437f5c9a91e70` |
+| `SHRINCS256sKeccak` | `0x9154dA0BA19600C543a8c5ed1B1c44af415B5688` | Base Sepolia (84532), OP Sepolia (11155420) | `0x82e5e0727823ed856db249d3d64484f6b4c53efe4b64bcbd7e104f537d79ec90` |
+
+Deploy transactions:
+
+| Chain | Artifact | Tx |
+|---|---|---|
+| Base Sepolia | `SPHINCSPlusC256sKeccak` | `0xe902f4ebaf147a674bef4e84eb28dcc78ad4454366e5f37813da21fec0382bf5` |
+| Base Sepolia | `SHRINCS256sKeccak` | `0x15d9225e53a8b8a6b0c5fdbe65465db3595f9268398d15832460913a996bbf43` |
+| OP Sepolia | `SPHINCSPlusC256sKeccak` | `0x5f562f0e4bff16431b8055917a7a7d6ef87a7e02926d034363d3bc3a1a7dc85c` |
+| OP Sepolia | `SHRINCS256sKeccak` | `0x26a265eb03c4554876af9bc1f1a7cc2a328083528822b2b0ad8f216d8eb684b2` |
+
+Note the codehashes above are the pre-change values: `SHRINCS256sKeccak`'s
+runtime bytecode embeds its sibling's address, so moving the sibling moved
+that artifact's codehash too. The `SPHINCSPlusC256sKeccak` codehash is
+unchanged by the salt scheme (it embeds no address) and appears in both
+this table and the current registry.
 
 ## Historical mechanisms (recorded, replaced)
 

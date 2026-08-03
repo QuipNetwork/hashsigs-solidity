@@ -31,11 +31,18 @@ import {WOTSPlus} from "../contracts/WOTSPlus.sol";
 ///       --rpc-url $RPC --private-key $DEPLOYER_PK --broadcast --verify
 contract DeployWOTSPlus is CreateXDeployer {
     // CREATE3 salt for the WOTS+ library deployment.
-    bytes32 internal constant SALT = keccak256("QUIP:WOTSPlus:V1.0");
+    bytes32 internal constant SALT = bytes32(
+        abi.encodePacked(
+            bytes20(DEPLOYER),
+            SALT_FLAG,
+            bytes11(keccak256("QUIP:WOTSPlus:V1.0"))
+        )
+    );
 
     // Pinned runtime codehash of this artifact (production profile).
     // _deploy fails closed if the CREATE3 address is occupied by code whose
-    // hash differs from this pin (squatted salt or stale pin) and asserts a
+    // hash differs from this pin (stale pin or drifted artifact) and
+    // asserts a
     // fresh deploy matches it. Metadata is stripped (foundry.toml), so the
     // hash is chain-invariant and is the value published in DEPLOYMENTS.md;
     // regenerate per DEPLOYMENTS.md.

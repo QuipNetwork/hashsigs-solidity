@@ -33,26 +33,37 @@ import {SHRINCS128sQ18Keccak} from "../contracts/SHRINCS128sQ18Keccak.sol";
 contract DeploySHRINCS128sQ18Keccak is CreateXDeployer {
     // Per-profile CREATE3 salt. A new verifier version is a NEW salt →
     // new address; deployed artifacts are never upgraded in place.
-    bytes32 internal constant SALT =
-        keccak256("QUIP:SHRINCS128sQ18Keccak:V1.0");
+    bytes32 internal constant SALT = bytes32(
+        abi.encodePacked(
+            bytes20(DEPLOYER),
+            SALT_FLAG,
+            bytes11(keccak256("QUIP:SHRINCS128sQ18Keccak:V1.0"))
+        )
+    );
 
     // Stateless delegate. SPHINCS_PLUS_C_SALT is the sibling's CREATE3
     // salt; SPHINCS_PLUS_C is its address and MUST equal the pinned
     // SPHINCS_PLUS_C_VERIFIER constant in SHRINCS128sQ18Keccak.
     // _requireSibling asserts the salt derives to this address.
-    bytes32 internal constant SPHINCS_PLUS_C_SALT =
-        keccak256("QUIP:SPHINCSPlusC128sQ18Keccak:V1.0");
+    bytes32 internal constant SPHINCS_PLUS_C_SALT = bytes32(
+        abi.encodePacked(
+            bytes20(DEPLOYER),
+            SALT_FLAG,
+            bytes11(keccak256("QUIP:SPHINCSPlusC128sQ18Keccak:V1.0"))
+        )
+    );
     address internal constant SPHINCS_PLUS_C =
-        0xbA920B0e1ba05E9F909c43d1f0d6818F5ED2aEf6;
+        0xF4f47272350af70D9735FDBf42d398D17470c2f0;
 
     // Pinned runtime codehash of this artifact (production profile).
     // _deploy fails closed if the CREATE3 address is occupied by code whose
-    // hash differs from this pin (squatted salt or stale pin) and asserts a
+    // hash differs from this pin (stale pin or drifted artifact) and
+    // asserts a
     // fresh deploy matches it. Metadata is stripped (foundry.toml), so the
     // hash is chain-invariant and is the value published in DEPLOYMENTS.md;
     // regenerate per DEPLOYMENTS.md.
     bytes32 internal constant RUNTIME_CODEHASH =
-        0x41de0f0626072b44e34db37bc4266c9e42705ce065ca6bb89eb9c16d44e4a606;
+        0xd9be437b3616cc77aeb66caf4edc44954ec4b2fae85df2e5c346bdc82060812d;
 
     function run() external {
         // Assert the build profile FIRST so a wrong-profile run fails

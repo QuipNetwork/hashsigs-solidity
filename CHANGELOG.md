@@ -2,6 +2,27 @@
 
 ## Unreleased
 
+### Changed
+- CREATE3 deploys now use CreateX's **permissioned** (sender-scoped) salt
+  mode. Each raw salt is `[20B DEPLOYER][0x00][11B of
+  keccak256("QUIP:<label>")]`, which CreateX guards to
+  `keccak256(abi.encode(DEPLOYER, salt))`, so only
+  `0xc68B64770Da7914DEb0EF238b048a0Bf3B5f6A26` can deploy at an
+  advertised address. This closes the squatting surface the previous
+  permissionless salts could only detect after the fact; the `0x00` flag
+  byte keeps addresses chain-invariant. New `script/CreateXSalt.sol` is
+  the single implementation of the layout, guard, and derivation.
+  `DeployBase._deploy` additionally asserts the broadcaster is the
+  canonical deployer and that the salt is well-formed — CreateX itself
+  does not revert on either, it silently deploys elsewhere.
+  **All nine advertised addresses move**, and the four SHRINCS runtime
+  codehashes move with them (each embeds its sibling's address); the four
+  SPHINCSPlusC codehashes and the WOTS+ codehash are unchanged. The salt
+  labels are unchanged, so `DEPLOYMENTS.md` now keys its registry on the
+  raw salt and records the superseded Base Sepolia / OP Sepolia
+  deployments made under the old scheme. Deploys now require an explicit
+  `--sender` and must not use `--resume` or `--skip-simulation`.
+
 ### Added
 - Transient attestation registry on the SHRINCS ERC-7913 verifier
   (`IERC7913TransientAttestation`): `verifyAndAttest` runs the exact

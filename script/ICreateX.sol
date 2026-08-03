@@ -22,10 +22,15 @@ pragma solidity ^0.8.28;
 /// 0xba5Ed099633D3B313e4D5F7bdc1305d3c28ba5Ed on every supported chain.
 /// Only the two functions the deploy tooling uses are declared.
 /// @dev Salt semantics: `deployCreate3` GUARDS the caller-supplied salt
-/// before use. For a salt whose first 20 bytes are neither the caller nor
-/// zero — every `QUIP:*` salt in this repo — the guard is
-/// `guardedSalt = keccak256(abi.encode(salt))`, and deployment is
-/// permissionless (any funded account produces the same child address).
+/// before use, branching on the salt's own leading bytes. Every `QUIP:*`
+/// salt in this repo takes the PERMISSIONED branch — leading 20 bytes ==
+/// `msg.sender`, byte 20 == 0x00 — for which the guard is
+/// `guardedSalt = keccak256(abi.encode(msg.sender, salt))`. Only that
+/// sender reaches the resulting address; any other caller fails the match
+/// and silently falls through to the permissionless branch
+/// (`keccak256(abi.encode(salt))`), landing elsewhere WITHOUT reverting.
+/// See script/CreateXSalt.sol for the mirror and DeployBase for the
+/// broadcaster and salt-shape checks that make that fallback loud.
 /// `computeCreate3Address` applies NO guard: pass it the GUARDED salt.
 interface ICreateX {
     /// @notice Deploy `initCode` via CREATE3 under the guarded `salt`.

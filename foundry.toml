@@ -9,8 +9,8 @@ gas_limit = "18446744073709551615" # u64::MAX
 # Strip solc metadata from every artifact (inherited by all profiles).
 # Deploys go through the pre-deployed CreateX singleton (see
 # DeployBase.s.sol), so no compiled artifact is address-load-bearing —
-# a CREATE3 child address is f(CREATEX, salt) only, independent of any
-# build setting. Metadata stripping remains so each artifact's RUNTIME
+# a CREATE3 child address is f(CREATEX, guarded salt) only, independent
+# of any build setting. Metadata stripping remains so each artifact's RUNTIME
 # codehash (the (address, codehash) pair consumers pin from
 # DEPLOYMENTS.md) is chain- and source-path-invariant; it still depends
 # on the solc version and optimizer settings, which the production
