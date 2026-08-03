@@ -214,7 +214,9 @@ canonical CreateX singleton; they are chain-invariant and independent of
 anything this repo compiles. The runtime codehashes below are the pinned
 `RUNTIME_CODEHASH` values from the deploy scripts (keccak256 of each
 artifact's compiled runtime bytecode at this commit); confirm each with
-`cast codehash <address>` on first deploy.
+`cast codehash <address>` on first deploy. The 256s keccak pair is live on
+Base mainnet and confirmed against its pins (see Deployed transactions);
+the other seven are not deployed anywhere yet.
 
 CREATE3 deployer (all rows): CreateX at
 `0xba5Ed099633D3B313e4D5F7bdc1305d3c28ba5Ed`, called by
@@ -257,6 +259,27 @@ These nine addresses are pinned in
 `test/CreateXSaltInvariants.t.sol::testAdvertisedAddressesMatchRegistry`,
 so a drift between this table and the code fails CI.
 
+An address here is determined by its salt whether or not code exists at it
+yet — that is what CREATE3 buys. The per-artifact tables below therefore
+list the address unconditionally, and the `Chains deployed` row is what
+says where bytes actually are.
+
+### Deployed transactions
+
+Confirmed on-chain, `cast codehash` matching the pinned `RUNTIME_CODEHASH`
+in each deploy script. Deployed by
+`0xc68B64770Da7914DEb0EF238b048a0Bf3B5f6A26` through CreateX's permissioned
+mode, so these addresses were reachable by no other account.
+
+| Chain | Artifact | Address | Tx | Block | Gas |
+|---|---|---|---|---|---|
+| Base mainnet (8453) | `SPHINCSPlusC256sKeccak` | `0x97B3726F44e3B7521199CE4e0fC160A32A597d31` | `0xb92149af0104c0858659297878c090c2b13bd6510a5c1ffe3049d6c294b7e0e3` | 49480565 | 937,092 |
+| Base mainnet (8453) | `SHRINCS256sKeccak` | `0xE6F2970bA30d59e8288b7007bA755828372457c3` | `0x2bceb96406945f000688be44f95a75ef8f740bce8aeec9e060aa852bdd2c4b28` | 49480603 | 980,942 |
+
+The delegate was deployed first, as required: `SHRINCS256sKeccak` forwards
+stateless verification to it and reverts on empty code, and its deploy
+script asserts the sibling is present before broadcasting.
+
 ### SHRINCS verifiers
 
 | Field | 256s | 128s-q18 | 128s-q20 |
@@ -266,10 +289,10 @@ so a drift between this table and the code fails CI.
 | CREATE3 salt label | `QUIP:SHRINCS256sKeccak:V1.0` | `QUIP:SHRINCS128sQ18Keccak:V1.0` | `QUIP:SHRINCS128sQ20Keccak:V1.0` |
 | `PROFILE_TAG()` | `keccak256("shrincs-256s-keccak")` | `keccak256("shrincs-128s-q18-keccak")` | `keccak256("shrincs-128s-q20-keccak")` |
 | `VERSION_TAG()` | `keccak256("quip.shrincs-verifier.v1")` | same | same |
-| Predicted address | `0xE6F2970bA30d59e8288b7007bA755828372457c3` | `0xDA52530D9027bea659d8458e1128a566B43C8c69` | `0x4f78F04b9C496749972afcb0ad5C114326De5086` |
+| Address | `0xE6F2970bA30d59e8288b7007bA755828372457c3` | `0xDA52530D9027bea659d8458e1128a566B43C8c69` | `0x4f78F04b9C496749972afcb0ad5C114326De5086` |
 | Stateless delegate | `SPHINCSPlusC256sKeccak` (below) | `SPHINCSPlusC128sQ18Keccak` (below) | `SPHINCSPlusC128sQ20Keccak` (below) |
 | Runtime codehash | `0xc104068546743a66b687cf2f8d23cca22e14d793158993efa525dac7fc15f646` | `0xd9be437b3616cc77aeb66caf4edc44954ec4b2fae85df2e5c346bdc82060812d` | `0xc1af8915b7fadf95ad558e2992c40ae6ae2a87c1991a552ae5d2a79377da4e0d` |
-| Chains deployed | *(none yet)* | *(none yet)* | *(none yet)* |
+| Chains deployed | Base mainnet (8453) | *(none yet)* | *(none yet)* |
 
 Each SHRINCS verifier's `verifyStateless` delegates to the pinned
 SPHINCSPlusC sibling in the next table; deploy the sibling first (step 2).
@@ -297,11 +320,11 @@ envelope is `abi.encode(StatelessSignature)`, with no commitment logic.
 | CREATE3 salt label | `QUIP:SPHINCSPlusC256sKeccak:V1.0` | `QUIP:SPHINCSPlusC128sQ18Keccak:V1.0` | `QUIP:SPHINCSPlusC128sQ20Keccak:V1.0` |
 | `PROFILE_TAG()` | `keccak256("shrincs-256s-keccak")` | `keccak256("shrincs-128s-q18-keccak")` | `keccak256("shrincs-128s-q20-keccak")` |
 | `VERSION_TAG()` | `keccak256("quip.sphincsplusc-verifier.v1")` | same | same |
-| Predicted address | `0x97B3726F44e3B7521199CE4e0fC160A32A597d31` | `0xF4f47272350af70D9735FDBf42d398D17470c2f0` | `0x0A218Bf4A264B00c89883b2A780478627a0C7E08` |
+| Address | `0x97B3726F44e3B7521199CE4e0fC160A32A597d31` | `0xF4f47272350af70D9735FDBf42d398D17470c2f0` | `0x0A218Bf4A264B00c89883b2A780478627a0C7E08` |
 | Key format | `abi.encode(pkSeed, hypertreeRoot)` | same | same |
 | Signature envelope | `abi.encode(StatelessSignature)` | same | same |
 | Runtime codehash | `0x998bb84a9cf85aeca5dfaffd88edbe1d62aa5b7fac9d9229b0a437f5c9a91e70` | `0xf6ad5f990d817ed947a152e54135324a90aa1b3bd1104bcdc99a4ddb4cd866a3` | `0xb9dc1b3ddc6fe633051b27a67322c4a72536d1cd668c4332ec4f104a1518f2e4` |
-| Chains deployed | *(none yet)* | *(none yet)* | *(none yet)* |
+| Chains deployed | Base mainnet (8453) | *(none yet)* | *(none yet)* |
 
 ### SHA-256 suite (256s-sha2)
 
@@ -326,7 +349,7 @@ deploy.
 | CREATE3 salt label | `QUIP:SHRINCS256sSha2:V1.0` | `QUIP:SPHINCSPlusC256sSha2:V1.0` |
 | `PROFILE_TAG()` | `keccak256("shrincs-256s-sha2")` | `keccak256("shrincs-256s-sha2")` |
 | `VERSION_TAG()` | `keccak256("quip.shrincs-verifier.v1")` | `keccak256("quip.sphincsplusc-verifier.v1")` |
-| Predicted address | `0x31F7262Db25b5F16ddfA4A995FfB298386BB57D8` | `0x8F477848aC34523095F68f60C5d5eFa21a491fCA` |
+| Address | `0x31F7262Db25b5F16ddfA4A995FfB298386BB57D8` | `0x8F477848aC34523095F68f60C5d5eFa21a491fCA` |
 | Stateless delegate | `SPHINCSPlusC256sSha2` (right) | — |
 | Runtime codehash | `0x75a544f812cd75691e2ef8f132c6bf80ef5504e43750cb55cd05191e6c1cdbcd` | `0x6f609f9d426a1d54c6f578ecb8518185c2623574829a3abeb4998352ed2ca9bd` |
 | Chains deployed | *(none yet)* | *(none yet)* |
@@ -338,7 +361,7 @@ deploy.
 | Contract | `WOTSPlus` (library) |
 | Build profile | `production` |
 | CREATE3 salt label | `QUIP:WOTSPlus:V1.0` |
-| Predicted address | `0xef0CbdEC1ed6Db29F44030Bc22e4BD1D19898208` |
+| Address | `0xef0CbdEC1ed6Db29F44030Bc22e4BD1D19898208` |
 | Runtime codehash | `0x0efb1b18e06862b6b16d6b9fdb0563c5ceaf435af928034cbdb94af18ae2e683` |
 | Chains deployed | *(none yet)* |
 
