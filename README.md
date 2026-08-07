@@ -4,19 +4,14 @@ A Solidity implementation of the Winternitz One-Time Signature Plus (WOTS+) sche
 
 ## Development
 
-This project uses both Hardhat and Foundry for development and testing.
+This project uses Foundry for development and testing.
 
 ### Prerequisites
 
-1. Install Foundry:
+Install Foundry:
 ```bash
 curl -L https://foundry.paradigm.xyz | bash
 foundryup
-```
-
-2. Install Node.js dependencies:
-```bash
-npm install
 ```
 
 ### Testing
