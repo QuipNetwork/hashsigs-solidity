@@ -22,7 +22,14 @@ build-and-test:
     entrypoint: [""]
   before_script:
     - git config --global --add safe.directory "$CI_PROJECT_DIR"
+    # testVectors() reads test/test_vectors/wotsplus_keccak256.json through
+    # vm.ffi and jq, which the foundry image does not ship. Install it, or
+    # that test fails on a missing binary rather than on a bad vector.
+    # Accept either package manager so an image base change does not break
+    # the job silently.
+    - apk add --no-cache jq || (apt-get update && apt-get install -y jq)
     - forge --version
+    - jq --version
   script:
     - forge build
     - forge test -vv
