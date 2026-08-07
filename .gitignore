@@ -1,19 +1,12 @@
 node_modules
 .env
 
-# Hardhat files
+# Foundry build cache and output
 /cache
-/artifacts
+/out
 
-# TypeChain files
-/typechain
-/typechain-types
-
-# solidity-coverage files
+# Coverage output
 /coverage
 /coverage.json
-
-# Hardhat Ignition default folder for deployments against a local node
-ignition/deployments/chain-31337
 
 test/test_vectors/tmp.json
