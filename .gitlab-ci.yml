@@ -1,0 +1,28 @@
+# GitLab CI for the main branch: build the contracts and run the Foundry
+# test suite on every merge request and on main itself.
+#
+# The project sets only_allow_merge_if_pipeline_succeeds, so a branch with
+# no pipeline can never be merged. This file gives main a pipeline. The
+# active development branch, shrincs-main, carries a much larger config
+# covering format, lint, per-profile builds, Slither and nightly fuzzing;
+# keep this one minimal, matching the smaller surface on main.
+#
+# Pin the image version deliberately, together with local toolchains.
+
+stages:
+  - verify
+
+variables:
+  GIT_SUBMODULE_STRATEGY: recursive
+
+build-and-test:
+  stage: verify
+  image:
+    name: ghcr.io/foundry-rs/foundry:v1.7.1
+    entrypoint: [""]
+  before_script:
+    - git config --global --add safe.directory "$CI_PROJECT_DIR"
+    - forge --version
+  script:
+    - forge build
+    - forge test -vv
