@@ -7,7 +7,15 @@
 # covering format, lint, per-profile builds, Slither and nightly fuzzing;
 # keep this one minimal, matching the smaller surface on main.
 #
-# Pin the image version deliberately, together with local toolchains.
+# This job does not use the ghcr.io/foundry-rs/foundry image. That image
+# runs as a non-root user, and testVectors() reads
+# test/test_vectors/wotsplus_keccak256.json through vm.ffi and jq, which
+# the image does not ship and an unprivileged job cannot install. Use the
+# same base-image-plus-foundryup pattern the slither job on shrincs-main
+# uses instead. python:3.12-slim is multi-arch, so foundryup fetches the
+# matching foundry binary and no runner arch tag is needed.
+#
+# Pin the foundry version deliberately, together with local toolchains.
 
 stages:
   - verify
@@ -17,19 +25,17 @@ variables:
 
 build-and-test:
   stage: verify
-  image:
-    name: ghcr.io/foundry-rs/foundry:v1.7.1
-    entrypoint: [""]
+  image: python:3.12-slim
   before_script:
+    - apt-get update && apt-get install -y --no-install-recommends
+      curl git ca-certificates jq
+    - curl -L https://foundry.paradigm.xyz | bash
+    - export PATH="$HOME/.foundry/bin:$PATH"
+    - foundryup --install v1.7.1
     - git config --global --add safe.directory "$CI_PROJECT_DIR"
-    # testVectors() reads test/test_vectors/wotsplus_keccak256.json through
-    # vm.ffi and jq, which the foundry image does not ship. Install it, or
-    # that test fails on a missing binary rather than on a bad vector.
-    # Accept either package manager so an image base change does not break
-    # the job silently.
-    - apk add --no-cache jq || (apt-get update && apt-get install -y jq)
     - forge --version
     - jq --version
   script:
+    - export PATH="$HOME/.foundry/bin:$PATH"
     - forge build
     - forge test -vv
