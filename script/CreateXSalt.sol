@@ -62,7 +62,7 @@ library CreateXSalt {
     /// deploy scripts spell the same expression out inline. The pin tests
     /// assert the two agree, which keeps that duplication honest.
     /// @param labelHash keccak256 of the salt label, e.g.
-    /// keccak256("QUIP:SHRINCS256sKeccak:V1.0").
+    /// keccak256("QUIP:SHRINCS256sKeccak:V2.0").
     /// @return The raw (unguarded) salt to hand to deployCreate3.
     function rawSalt(bytes32 labelHash) internal pure returns (bytes32) {
         // casting to 'bytes11' is safe because truncating to the leading

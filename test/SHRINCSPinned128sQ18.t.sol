@@ -75,7 +75,7 @@ contract SHRINCSPinned128sQ18Test is Test {
     address internal constant CREATEX =
         0xba5Ed099633D3B313e4D5F7bdc1305d3c28ba5Ed;
     bytes32 internal constant CHILD_LABEL =
-        keccak256("QUIP:SPHINCSPlusC128sQ18Keccak:V1.0");
+        keccak256("QUIP:SPHINCSPlusC128sQ18Keccak:V2.0");
 
     function testPinnedAddressMatchesCreate3Derivation() public {
         // CreateX guards our sender-prefixed salt to

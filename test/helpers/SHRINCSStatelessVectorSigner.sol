@@ -685,6 +685,7 @@ contract SHRINCSStatelessVectorSigner {
     ) internal view returns (bytes memory out) {
         bytes memory base = abi.encodePacked(
             "fors-digest",
+            SHRINCSParams.PROFILE_ID,
             pkSeed,
             hypertreeRoot,
             randomizer,
@@ -695,8 +696,9 @@ contract SHRINCSStatelessVectorSigner {
         // production finalizer HashSuite.hashForsDigestBlock32 (the helper
         // FORSMinusC.forsDigestBytes emits; it returns the RAW block, no
         // masking, because a bit stream is read out of it). The
-        // [tag | pkSeed | root | randomizer | counter | message] buffer (plus
-        // an optional 4-byte block counter) is suite-independent, built here.
+        // [tag | PROFILE_ID | pkSeed | root | randomizer | counter |
+        // message] buffer (plus an optional 4-byte block counter) is
+        // suite-independent, built here.
         if (digestBytes <= 32) {
             out = new bytes(digestBytes);
             uint256 basePtr;

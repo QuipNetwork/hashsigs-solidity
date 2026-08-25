@@ -82,6 +82,9 @@ skip = [
 
 ffi = true
 fs_permissions = [
+    { access = "read", path = "./contracts/" },
+    { access = "read", path = "./script/" },
+    { access = "read", path = "./docs/" },
     { access = "read-write", path = "./test/test_vectors/" },
     # Read access to every profile's build artifacts: SHRINCSMeasurements
     # (task 1vn) selects its profile-gated harness contracts (e.g.

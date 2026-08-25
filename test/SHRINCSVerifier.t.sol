@@ -138,7 +138,7 @@ contract SHRINCSVerifierTest is Test {
     function testVersionTag() public view {
         assertEq(
             verifier.VERSION_TAG(),
-            keccak256("quip.shrincs-verifier.v1"),
+            keccak256("quip.shrincs-verifier.v2"),
             "version tag"
         );
     }

@@ -44,14 +44,14 @@ contract CreateXSaltInvariantsTest is Test {
     // Every canonical salt label. Order is the DEPLOYMENTS.md table order.
     function _labels() internal pure returns (string[9] memory) {
         return [
-            "QUIP:SPHINCSPlusC256sKeccak:V1.0",
-            "QUIP:SPHINCSPlusC128sQ18Keccak:V1.0",
-            "QUIP:SPHINCSPlusC128sQ20Keccak:V1.0",
-            "QUIP:SPHINCSPlusC256sSha2:V1.0",
-            "QUIP:SHRINCS256sKeccak:V1.0",
-            "QUIP:SHRINCS128sQ18Keccak:V1.0",
-            "QUIP:SHRINCS128sQ20Keccak:V1.0",
-            "QUIP:SHRINCS256sSha2:V1.0",
+            "QUIP:SPHINCSPlusC256sKeccak:V2.0",
+            "QUIP:SPHINCSPlusC128sQ18Keccak:V2.0",
+            "QUIP:SPHINCSPlusC128sQ20Keccak:V2.0",
+            "QUIP:SPHINCSPlusC256sSha2:V2.0",
+            "QUIP:SHRINCS256sKeccak:V2.0",
+            "QUIP:SHRINCS128sQ18Keccak:V2.0",
+            "QUIP:SHRINCS128sQ20Keccak:V2.0",
+            "QUIP:SHRINCS256sSha2:V2.0",
             "QUIP:WOTSPlus:V1.0"
         ];
     }
@@ -61,14 +61,14 @@ contract CreateXSaltInvariantsTest is Test {
     // edits a label, the deployer, the flag byte, or the entropy width.
     function _addresses() internal pure returns (address[9] memory) {
         return [
-            0x97B3726F44e3B7521199CE4e0fC160A32A597d31,
-            0xF4f47272350af70D9735FDBf42d398D17470c2f0,
-            0x0A218Bf4A264B00c89883b2A780478627a0C7E08,
-            0x8F477848aC34523095F68f60C5d5eFa21a491fCA,
-            0xE6F2970bA30d59e8288b7007bA755828372457c3,
-            0xDA52530D9027bea659d8458e1128a566B43C8c69,
-            0x4f78F04b9C496749972afcb0ad5C114326De5086,
-            0x31F7262Db25b5F16ddfA4A995FfB298386BB57D8,
+            0x9aA24A7FFA5476765a3eea18E7d42dB637c67715,
+            0x55DE18D3dab9eaCdd75Dc4ce53E1EbBd1c4331B8,
+            0xa78ECdac7BA78E99a6865eE61c808497bdc7Ae3b,
+            0xAa504387af27bEF16544Cc7e465271D5f8C8c8ee,
+            0x2274a20acD927b24FC130e5673F010c2846F90cb,
+            0xCfDbbe2eA27ab6A37E442fe7027e3D4eD8686260,
+            0xdC836F601A4efB46b8B50874C065dEFfc8a7149B,
+            0x7eB0CB2c257715DCe91c750f308a398d17511cd5,
             0xef0CbdEC1ed6Db29F44030Bc22e4BD1D19898208
         ];
     }

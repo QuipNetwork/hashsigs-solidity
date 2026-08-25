@@ -37,7 +37,7 @@ contract DeploySPHINCSPlusC256sSha2 is CreateXDeployer {
         abi.encodePacked(
             bytes20(DEPLOYER),
             SALT_FLAG,
-            bytes11(keccak256("QUIP:SPHINCSPlusC256sSha2:V1.0"))
+            bytes11(keccak256("QUIP:SPHINCSPlusC256sSha2:V2.0"))
         )
     );
 
@@ -49,7 +49,7 @@ contract DeploySPHINCSPlusC256sSha2 is CreateXDeployer {
     // hash is chain-invariant and is the value published in DEPLOYMENTS.md;
     // regenerate per DEPLOYMENTS.md.
     bytes32 internal constant RUNTIME_CODEHASH =
-        0x6f609f9d426a1d54c6f578ecb8518185c2623574829a3abeb4998352ed2ca9bd;
+        0x87881798ea6620c6cdfbbf732a815369272f76ea6cfdd7b44d1b9ccecf8e68a8;
 
     function run() external {
         _deploy(

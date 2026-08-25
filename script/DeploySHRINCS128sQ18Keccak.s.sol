@@ -37,7 +37,7 @@ contract DeploySHRINCS128sQ18Keccak is CreateXDeployer {
         abi.encodePacked(
             bytes20(DEPLOYER),
             SALT_FLAG,
-            bytes11(keccak256("QUIP:SHRINCS128sQ18Keccak:V1.0"))
+            bytes11(keccak256("QUIP:SHRINCS128sQ18Keccak:V2.0"))
         )
     );
 
@@ -49,11 +49,11 @@ contract DeploySHRINCS128sQ18Keccak is CreateXDeployer {
         abi.encodePacked(
             bytes20(DEPLOYER),
             SALT_FLAG,
-            bytes11(keccak256("QUIP:SPHINCSPlusC128sQ18Keccak:V1.0"))
+            bytes11(keccak256("QUIP:SPHINCSPlusC128sQ18Keccak:V2.0"))
         )
     );
     address internal constant SPHINCS_PLUS_C =
-        0xF4f47272350af70D9735FDBf42d398D17470c2f0;
+        0x55DE18D3dab9eaCdd75Dc4ce53E1EbBd1c4331B8;
 
     // Pinned runtime codehash of this artifact (production profile).
     // _deploy fails closed if the CREATE3 address is occupied by code whose
@@ -63,7 +63,7 @@ contract DeploySHRINCS128sQ18Keccak is CreateXDeployer {
     // hash is chain-invariant and is the value published in DEPLOYMENTS.md;
     // regenerate per DEPLOYMENTS.md.
     bytes32 internal constant RUNTIME_CODEHASH =
-        0xd9be437b3616cc77aeb66caf4edc44954ec4b2fae85df2e5c346bdc82060812d;
+        0xdfaf792792620176cf24518a87839339022508faccde515ef2345d46ef574ee5;
 
     function run() external {
         // Assert the build profile FIRST so a wrong-profile run fails

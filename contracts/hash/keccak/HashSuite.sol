@@ -334,9 +334,9 @@ library HashSuite {
     }
 
     // hashForsDigestBlock32: Finalizer over the caller-built "fors-digest"
-    // buffer. FORSMinusC.forsDigestBytes fills [tag | pkSeed | hypertreeRoot
-    // | randomizer | counter | message] (plus an optional 4-byte block
-    // counter) and passes its (ptr, len); this returns the RAW digest block
+    // buffer. FORSMinusC.forsDigestBytes includes the tag, PROFILE_ID,
+    // public values, randomness, counters, and message. It passes (ptr, len)
+    // here; this returns the RAW digest block
     // with NO masking, because the caller reads a bit stream out of it via
     // Hash.readBits*, so the low bytes must survive.
     function hashForsDigestBlock32(uint256 ptr, uint256 len)

@@ -387,9 +387,11 @@ library FORSMinusC {
         // spare word guarantees that slack is allocated, readable memory.
         out = new bytes(digestBytes + 32);
         uint256 messageLen = message.length;
-        // "fors-digest" || pkSeed || hypertreeRoot || randomizer || counter
-        // || message
-        uint256 baseLen = 111 + messageLen;
+        bytes32 profileId = SHRINCSParams.PROFILE_ID;
+        // "fors-digest" || PROFILE_ID || pkSeed || hypertreeRoot ||
+        // randomizer || counter || message. PROFILE_ID separates otherwise
+        // identical verification parameter sets such as 128s-q18 and q20.
+        uint256 baseLen = 143 + messageLen;
         // Reserve scratch covering roundup32(baseLen) plus one extra
         // word, so the whole-word message copy below (which rounds the
         // message length up to a 32-byte boundary) and the multi-block
@@ -401,12 +403,13 @@ library FORSMinusC {
         // 4-byte block counter is appended at [baseLen..baseLen+4) in the
         // multi-block path below):
         //   [0..11)      "fors-digest"
-        //   [11..43)     pkSeed
-        //   [43..75)     hypertreeRoot
-        //   [75..107)    randomizer
-        //   [107..111)   grind counter (big-endian uint32)
-        //   [111..111+m) message (m = messageLen)
-        // baseLen = 111 + messageLen; scratchLen bytes are reserved above.
+        //   [11..43)     PROFILE_ID
+        //   [43..75)     pkSeed
+        //   [75..107)    hypertreeRoot
+        //   [107..139)   randomizer
+        //   [139..143)   grind counter (big-endian uint32)
+        //   [143..143+m) message (m = messageLen)
+        // baseLen = 143 + messageLen; scratchLen bytes are reserved above.
         // Memory-safe: the whole scratch region is allocated by advancing
         // the free-memory pointer before any write, so the whole-word
         // message copy and the multi-block counter suffix stay at or below
@@ -420,16 +423,18 @@ library FORSMinusC {
             mstore(0x40, add(ptr, scratchLen))
             // Write the digest domain tag prefix.
             mstore(ptr, "fors-digest")
-            // Copy the 32-byte public seed after the 11-byte tag.
-            calldatacopy(add(ptr, 11), pkSeed.offset, 32)
+            // Bind the compiled profile immediately after the domain tag.
+            mstore(add(ptr, 11), profileId)
+            // Copy the 32-byte public seed after the profile identifier.
+            calldatacopy(add(ptr, 43), pkSeed.offset, 32)
             // Copy the 32-byte hypertree root after the seed.
-            calldatacopy(add(ptr, 43), hypertreeRoot.offset, 32)
+            calldatacopy(add(ptr, 75), hypertreeRoot.offset, 32)
             // Copy the 32-byte per-signature randomizer after the root.
-            calldatacopy(add(ptr, 75), randomizer.offset, 32)
+            calldatacopy(add(ptr, 107), randomizer.offset, 32)
             // Write the 4-byte grind counter after the randomizer.
-            mstore(add(ptr, 107), shl(224, counter))
+            mstore(add(ptr, 139), shl(224, counter))
             let src := add(message, 32)
-            let dst := add(ptr, 111)
+            let dst := add(ptr, 143)
             let end := add(src, messageLen)
             // Copy the variable-length message body into the digest preimage.
             for {} lt(src, end) {} {
