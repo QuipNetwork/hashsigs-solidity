@@ -19,6 +19,7 @@ pragma solidity ^0.8.28;
 import {Test} from "../lib/forge-std/src/Test.sol";
 import {SHRINCS} from "../contracts/SHRINCS.sol";
 import {SHRINCSParams} from "shrincs-profile/SHRINCSParams.sol";
+import {HashSuite} from "shrincs-hash/HashSuite.sol";
 import {SPHINCSPlusC} from "../contracts/SPHINCSPlusC.sol";
 import {FORSMinusC} from "../contracts/FORSMinusC.sol";
 import {Hypertree} from "../contracts/Hypertree.sol";
@@ -94,12 +95,21 @@ contract SHRINCSSphincs128sVectorsTest is Test {
     }
 
     function vectorPath() internal pure returns (string memory) {
-        // q18 and q20 share every stateless field except the commitment tag;
-        // pick the file by the stateless-signature budget.
+        // Two axes select the file, and BOTH are load-bearing. q18 and q20
+        // share every stateless field except the commitment tag, so the
+        // stateless-signature budget picks the params. The scheme hash suite
+        // picks the twin: a sha2 profile verifies SHA-256 scheme hashes, so
+        // the keccak vectors would fail on it, and selecting on the budget
+        // alone would silently hand a sha2 build its keccak twin's file.
+        bool isSha2 = HashSuite.HASH_SUITE_ID == 2;
         if (SHRINCSParams.STATELESS_SIGNATURE_LIMIT == 262_144) {
-            return "test/test_vectors/shrincs_sphincs_128s_q18_keccak.json";
+            return isSha2
+                ? "test/test_vectors/shrincs_sphincs_128s_q18_sha2.json"
+                : "test/test_vectors/shrincs_sphincs_128s_q18_keccak.json";
         }
-        return "test/test_vectors/shrincs_sphincs_128s_q20_keccak.json";
+        return isSha2
+            ? "test/test_vectors/shrincs_sphincs_128s_q20_sha2.json"
+            : "test/test_vectors/shrincs_sphincs_128s_q20_keccak.json";
     }
 
     function testStateless128sValidVectorVerifies() public {
