@@ -39,6 +39,9 @@ Citation keys follow [CODINGSTANDARDS.md §1](./CODINGSTANDARDS.md).
     path is verified against them by `SHRINCSSphincs128sVectors`.
   - `128s-q20` — as `128s-q18` with a 2^20 stateless budget; shares the
     128s vectors except the profile-bound commitment.
+  - `256s-sha2`, `128s-q18-sha2`, `128s-q20-sha2` — SHA-256 twins of the
+    three profiles above. Identical constants, a `-sha2` PROFILE_NAME
+    suffix, and the SHA-256 hash suite.
 - **SPHINCS+C** ([contracts/SPHINCSPlusC.sol](./contracts/SPHINCSPlusC.sol))
   — the stateless SPHINCS+C construction `[SPHINCSPLUSC]` (M. Kudinov,
   A. Hülsing, E. Ronen, E. Yogev, *SPHINCS+C: Compressing SPHINCS+ With
@@ -775,9 +778,11 @@ numeric tuples, even ones that are superficially shape-compatible.
 
 ## Profiles
 
-Three compile-time profiles exist, selected by the `shrincs-profile/`
-Foundry remapping in `foundry.toml` (each build profile also gets its own
-`out` directory):
+Six compile-time profiles exist, on two independent axes: the parameter
+set, selected by the `shrincs-profile/` Foundry remapping, and the hash
+suite, selected by the `shrincs-hash/` remapping. Both are set per build
+profile in `foundry.toml`, and each build profile also gets its own `out`
+directory.
 
 - **`256s` (default).** The SPHINCS+-256s-style parameter set listed
   above. The split into `SHRINCSParams` kept the 256s production build
@@ -792,6 +797,19 @@ Foundry remapping in `foundry.toml` (each build profile also gets its own
   by `SHRINCSSphincs128sVectors`. Deployment stays testnet-only; the
   `128s-q20` `2^20` budget wants profile security-analysis backing before
   production use.
+- **`256s-sha2`, `128s-q18-sha2`, and `128s-q20-sha2`.** The SHA-256
+  twins of the three keccak profiles. Each pairs a duplicated params
+  directory with the SHA-256 `shrincs-hash/` suite. Every crypto constant
+  equals the keccak twin's; only `PROFILE_NAME` differs, taking the
+  `-sha2` suffix in place of `-keccak`, so `PROFILE_ID` and the public-key
+  commitment are domain-separated from the twin. The duplication is
+  guarded: `SHRINCSProfileInvariants` pins every non-identity constant to
+  the twin's documented values under each sha2 profile, and CI runs all
+  six profiles. `256s-sha2` is the only SHA-256 profile with a deployable
+  verifier; the two 128s sha2 profiles build and run their structural,
+  KAT, and stateful signing coverage, and their vector-, pin-, and
+  Rust-golden-bound suites stay skipped until the Rust signer emits
+  SHA-256 128s vectors.
 
 Build a non-default profile with `FOUNDRY_PROFILE`:
 
@@ -803,7 +821,7 @@ FOUNDRY_PROFILE=128s-q18 forge test
 `test/SHRINCSProfileInvariants.t.sol` checks the active profile's
 structural invariants and carries a profile-identity guard: a build whose
 `shrincs-profile/` remapping was shadowed (say, by a top-level
-`remappings.txt`) fails closed. CI builds, lints, and tests all three
+`remappings.txt`) fails closed. CI builds, lints, and tests all six
 profiles and rejects a top-level `remappings.txt`.
 
 ## On-Chain Integration State

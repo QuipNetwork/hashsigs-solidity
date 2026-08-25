@@ -63,13 +63,21 @@ format-and-checks:
 # (SHRINCSSphincs256sSha2Vectors, Rust sha2 vector through the production
 # verifier), and the non-signing structural/profile suites; in-Solidity
 # signing suites stay skipped (the test signers are keccak-hardcoded).
+# The `128s-q18-sha2` and `128s-q20-sha2` legs build the SHA-256 twins of
+# the two keccak 128s profiles and run their coverage — compile, the sha2
+# KATs, the seam-routed stateful signing suites, and the non-signing
+# structural/profile suites, including the params drift guard that pins
+# every non-identity constant to the keccak twin's values. No deployable
+# exists on that suite/params pair yet, so the vector-, pin-, and
+# Rust-golden-bound suites stay skipped (foundry.toml).
 build-lint-test:
   extends: .foundry
   rules:
     - if: $CI_PIPELINE_SOURCE != "schedule"
   parallel:
     matrix:
-      - FOUNDRY_PROFILE: ["ci", "128s-q18", "128s-q20", "256s-sha2"]
+      - FOUNDRY_PROFILE: ["ci", "128s-q18", "128s-q20", "256s-sha2",
+          "128s-q18-sha2", "128s-q20-sha2"]
   script:
     - forge build
     - forge lint --deny warnings contracts/ test/ script/
@@ -104,7 +112,8 @@ slither:
     - if: $CI_PIPELINE_SOURCE != "schedule"
   parallel:
     matrix:
-      - FOUNDRY_PROFILE: ["ci", "128s-q18", "128s-q20", "256s-sha2"]
+      - FOUNDRY_PROFILE: ["ci", "128s-q18", "128s-q20", "256s-sha2",
+          "128s-q18-sha2", "128s-q20-sha2"]
   before_script:
     - apt-get update && apt-get install -y --no-install-recommends
       curl git ca-certificates
