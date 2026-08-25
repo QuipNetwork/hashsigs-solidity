@@ -957,9 +957,12 @@ contract SHRINCSCalldataRetagTest is Test {
     }
 
     /// @dev Overlay-mutation trichotomy for the stateless ACTION envelope,
-    /// driven through the wrapper's mode-2 isValidSignature path. Same
-    /// trichotomy contract as the stateful action, over the deeply nested
-    /// SPHINCSPlusC.Signature.
+    /// driven through the wrapper's mode-2 isValidSignature path.
+    ///
+    /// A SPHINCS+ signature contains profile-masked values, so changing
+    /// ignored high bits can preserve its cryptographic meaning while
+    /// changing its byte encoding. Acceptance therefore proves decoder
+    /// agreement, not byte equality with the original signature.
     function testFuzzStatelessActionTrichotomy(
         uint16 position,
         bytes calldata overlay
@@ -982,9 +985,9 @@ contract SHRINCSCalldataRetagTest is Test {
                     bytes32 abiD
                 ) {
                     assertEq(
+                        digest.retagStatelessAction(mutant),
                         abiD,
-                        digest.abiStatelessAction(statelessActionPayload),
-                        "magic only on a decode-equivalent action envelope"
+                        "re-tag must match abi.decode on accepted framing"
                     );
                 } catch {}
             } else {
