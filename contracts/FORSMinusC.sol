@@ -92,6 +92,14 @@ library FORSMinusC {
         // revealed entries and rejects any digest whose omitted final tree
         // would require a nonzero leaf.
         uint256 signedTrees = uint256(SHRINCSParams.NUM_FORS_TREES) - 1;
+        // Reject malformed dynamic fields before fixed-count iteration or
+        // fixed-width calldata reads. This prevents short arrays from
+        // panicking and prevents trailing entries or randomizer bytes from
+        // becoming ignored encoding malleability.
+        if (
+            signature.entries.length != signedTrees
+                || signature.randomizer.length != 32
+        ) return (bytes32(0), 0, 0, false);
 
         // Recompute the FORS digest and the hypertree coordinates that the
         // signer committed to. These digest-derived coordinates are the sole

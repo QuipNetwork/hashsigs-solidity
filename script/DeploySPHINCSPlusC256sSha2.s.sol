@@ -49,7 +49,7 @@ contract DeploySPHINCSPlusC256sSha2 is CreateXDeployer {
     // hash is chain-invariant and is the value published in DEPLOYMENTS.md;
     // regenerate per DEPLOYMENTS.md.
     bytes32 internal constant RUNTIME_CODEHASH =
-        0x2c9c1442eae92daa79f0d0128c88a6c0ae1ddcdc9bfb80ccd6a4a7c340ae815b;
+        0xe0c51e6011b22501fa26ce9a326ad688eba3e5f46a26e4d4542beaddc3e0b52d;
 
     function run() external {
         _deploy(

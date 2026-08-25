@@ -857,12 +857,14 @@ contract SHRINCSSphincs256sVectorsTest is Test {
             SPHINCSPlusC.Signature memory signature
         ) = decodeStatelessVector(".stateless.cases.valid.calldata");
         signature.fors.entries = dropLastForsEntries(signature.fors.entries);
-        // Post guard-pruning a short FORS entries array reverts (Panic) at
-        // the fixed k-1 loop read instead of returning false; both are
-        // fail-closed.
-        vm.expectRevert();
-        stateless.verifyUnsafeRaw(
-            compositePublicKeyWord(publicKey), publicKey, message, signature
+        assertFalse(
+            stateless.verifyUnsafeRaw(
+                compositePublicKeyWord(publicKey),
+                publicKey,
+                message,
+                signature
+            ),
+            "short FORS entries must return false"
         );
     }
 

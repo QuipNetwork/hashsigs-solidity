@@ -346,7 +346,7 @@ envelope is `abi.encode(StatelessSignature)`, with no commitment logic.
 | Address | `0x9aA24A7FFA5476765a3eea18E7d42dB637c67715` | `0x55DE18D3dab9eaCdd75Dc4ce53E1EbBd1c4331B8` | `0xa78ECdac7BA78E99a6865eE61c808497bdc7Ae3b` |
 | Key format | `abi.encode(pkSeed, hypertreeRoot)` | same | same |
 | Signature envelope | `abi.encode(StatelessSignature)` | same | same |
-| Runtime codehash | `0xc450d58be6f9ee7b5c066807415a8dee161126007d3f25e638004df5dcbfe584` | `0x621c73ed1929ebd205cd56ef2a44070b5a26e8dc2e60296ad1b1667c6b6caf51` | `0x817f8df07c5d80d265522ce9338e14c1d3a195bd4699b1ede6a926915f08c87d` |
+| Runtime codehash | `0x19bef5459a4a8696b23a0c00449f5dbb5a4d65458a7c3474937507775b2ceca6` | `0xf1bb001ed74ecf528028cd290a82f8b7e816b8b875805f4f5168ef3802dfcacf` | `0x2c36eeed143cdb2175f293609e82623b1f2eb894b98f69101bb9a453ab11167b` |
 | Chains deployed | *(none yet)* | *(none yet)* | *(none yet)* |
 
 ### SHA-256 suite (256s-sha2)
@@ -374,7 +374,7 @@ deploy.
 | `VERSION_TAG()` | `keccak256("quip.shrincs-verifier.v2")` | `keccak256("quip.sphincsplusc-verifier.v2")` |
 | Address | `0x7eB0CB2c257715DCe91c750f308a398d17511cd5` | `0xAa504387af27bEF16544Cc7e465271D5f8C8c8ee` |
 | Stateless delegate | `SPHINCSPlusC256sSha2` (right) | — |
-| Runtime codehash | `0xf61704722a1ec87f04429e87f52dedf73eb2b64ca3c2ddd65124577e2df145ed` | `0x2c9c1442eae92daa79f0d0128c88a6c0ae1ddcdc9bfb80ccd6a4a7c340ae815b` |
+| Runtime codehash | `0xf61704722a1ec87f04429e87f52dedf73eb2b64ca3c2ddd65124577e2df145ed` | `0xe0c51e6011b22501fa26ce9a326ad688eba3e5f46a26e4d4542beaddc3e0b52d` |
 | Chains deployed | *(none yet)* | *(none yet)* |
 
 ### WOTS+ library
