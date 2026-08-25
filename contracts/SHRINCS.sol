@@ -23,11 +23,12 @@ import {SPHINCSPlusC} from "./SPHINCSPlusC.sol";
 
 /// @title SHRINCS
 /// @notice Storage-free verification core for the hybrid SHRINCS scheme:
-/// builds the canonical action and rotation hashes and runs the stateful/stateless
-/// verify-and-decode logic the ERC-7913 SHRINCSVerifier calls into.
-/// @dev Caller obligations. The shared verification stack is `view`: it also
-/// compiles with the SHA-256 hash suite, whose hashing helpers use `staticcall`
-/// to the 0x02 precompile. No function reads or writes persistent storage. On a
+/// builds canonical action and rotation hashes and runs the stateful and
+/// stateless verify-and-decode logic used by the ERC-7913 verifier.
+/// @dev Caller obligations. The shared verification stack is `view`: it
+/// compiles with the SHA-256 hash suite, whose hashing helpers use
+/// `staticcall` to precompile 0x02. No function reads or writes persistent
+/// storage. On a
 /// well-formed but invalid signature the verify and hash-building functions
 /// return a fail-closed boolean (never a wrong-accept), and the ERC-7913
 /// revert-vs-0xffffffff policy belongs to the calling contract. On a

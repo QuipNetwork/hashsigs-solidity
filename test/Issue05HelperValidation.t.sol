@@ -64,6 +64,7 @@ contract Issue05HelperValidationTest is Test {
         assertEq(decoded.maxSignatures, maxSignatures);
     }
 
+    // line-length: allow — forge fmt keeps the descriptive name
     function testFuzzDecodeStatefulPublicKeyRejectsEveryWrongLength(bytes calldata encoded)
         public
         view
