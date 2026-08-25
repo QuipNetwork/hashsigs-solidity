@@ -51,7 +51,7 @@ contract DeploySPHINCSPlusC256sKeccak is CreateXDeployer {
     // hash is chain-invariant and is the value published in DEPLOYMENTS.md;
     // regenerate per DEPLOYMENTS.md.
     bytes32 internal constant RUNTIME_CODEHASH =
-        0xa6385cad25fa2f5e90efce06ef87f0a03bd381b3786f7307b1f2fb5c2aa9a68d;
+        0xc450d58be6f9ee7b5c066807415a8dee161126007d3f25e638004df5dcbfe584;
 
     function run() external {
         _deploy(

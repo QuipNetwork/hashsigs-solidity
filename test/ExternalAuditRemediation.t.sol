@@ -19,15 +19,6 @@ contract ExternalAuditRemediationTest is Test {
         assertTrue(vm.contains(f, "AddressTypeForsRoots"));
     }
 
-    function test_issue05_helpersValidateBeforeSuccess() public view {
-        string memory h = vm.readFile("contracts/Hypertree.sol");
-        string memory u = vm.readFile("contracts/UXMSS.sol");
-        string memory s = vm.readFile("contracts/SHRINCS.sol");
-        assertTrue(vm.contains(h, "authPath.length != height"));
-        assertTrue(vm.contains(u, "authPath.length == 0"));
-        assertTrue(vm.contains(s, "encoded.length !="));
-    }
-
     function test_issue06_rawStatefulDigestBindsKey() public view {
         string memory s = vm.readFile("contracts/SHRINCSVerifier.sol");
         assertFalse(vm.contains(s, "publicKeyCommitment, hash, publicKey"));

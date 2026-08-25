@@ -326,8 +326,9 @@ library Hypertree {
     // 3. Rebuild each parent node with the correct left/right ordering and
     // address.
     // 4. Return the reconstructed subtree root and success flag.
-    /// @dev Precondition: pkSeed is exactly 32 bytes, validPublicKey-checked
-    /// or a 32-byte key slice, as the fixed calldata read below assumes.
+    /// @dev Rejects an authentication path whose length differs from height.
+    /// Precondition: pkSeed is exactly 32 bytes, validPublicKey-checked or a
+    /// 32-byte key slice, as the fixed calldata read below assumes.
     function hypertreeRootFromPath32(
         uint32 height,
         bytes calldata pkSeed,
@@ -337,6 +338,8 @@ library Hypertree {
         bytes32 leaf,
         bytes[] calldata authPath
     ) internal view returns (bytes32 node, bool ok) {
+        if (authPath.length != height) return (bytes32(0), false);
+
         bytes32 pkSeedWord;
         // Memory-safe: reads one calldata word into a stack variable; no
         // memory is written.

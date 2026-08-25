@@ -65,7 +65,7 @@ contract DeploySHRINCS128sQ20Keccak is CreateXDeployer {
     // hash is chain-invariant and is the value published in DEPLOYMENTS.md;
     // regenerate per DEPLOYMENTS.md.
     bytes32 internal constant RUNTIME_CODEHASH =
-        0x4495f00a3e87d262789a7d6027e401a357aaa857a7db2b624c6c5f8fbb0f0b8b;
+        0x33a97f8f20e7bf6697c4f51800e70e8e3175daf62b9be0c09e56b588e584b63e;
 
     function run() external {
         // Assert the build profile FIRST so a wrong-profile run fails

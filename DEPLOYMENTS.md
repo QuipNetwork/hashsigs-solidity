@@ -314,7 +314,7 @@ script asserts the sibling is present before broadcasting.
 | `VERSION_TAG()` | `keccak256("quip.shrincs-verifier.v2")` | same | same |
 | Address | `0x2274a20acD927b24FC130e5673F010c2846F90cb` | `0xCfDbbe2eA27ab6A37E442fe7027e3D4eD8686260` | `0xdC836F601A4efB46b8B50874C065dEFfc8a7149B` |
 | Stateless delegate | `SPHINCSPlusC256sKeccak` (below) | `SPHINCSPlusC128sQ18Keccak` (below) | `SPHINCSPlusC128sQ20Keccak` (below) |
-| Runtime codehash | `0xcfe7f3248acbf149ffd02232a46ff47ff07231b978c8b7906ef2e9163af64dde` | `0xdfaf792792620176cf24518a87839339022508faccde515ef2345d46ef574ee5` | `0x4495f00a3e87d262789a7d6027e401a357aaa857a7db2b624c6c5f8fbb0f0b8b` |
+| Runtime codehash | `0x709e7335fc1f30ffffd22887603aaa5736bf9a3f2dcc70bcca5302102c14cc01` | `0xfa1caf88f51c2ea6e0b7ed451d06e83509619424931cce400ff7507dfa4e962d` | `0x33a97f8f20e7bf6697c4f51800e70e8e3175daf62b9be0c09e56b588e584b63e` |
 | Chains deployed | *(none yet)* | *(none yet)* | *(none yet)* |
 
 Each SHRINCS verifier's `verifyStateless` delegates to the pinned
@@ -346,7 +346,7 @@ envelope is `abi.encode(StatelessSignature)`, with no commitment logic.
 | Address | `0x9aA24A7FFA5476765a3eea18E7d42dB637c67715` | `0x55DE18D3dab9eaCdd75Dc4ce53E1EbBd1c4331B8` | `0xa78ECdac7BA78E99a6865eE61c808497bdc7Ae3b` |
 | Key format | `abi.encode(pkSeed, hypertreeRoot)` | same | same |
 | Signature envelope | `abi.encode(StatelessSignature)` | same | same |
-| Runtime codehash | `0xa6385cad25fa2f5e90efce06ef87f0a03bd381b3786f7307b1f2fb5c2aa9a68d` | `0x92c8f064191d492aa1d4970c6f2639bff35f6ea6f0aa0764a909da33e3b3ac83` | `0x1adb08bab808fd22420939821755a1b64d8369aafe1dacb294f7bea508d84ef7` |
+| Runtime codehash | `0xc450d58be6f9ee7b5c066807415a8dee161126007d3f25e638004df5dcbfe584` | `0x621c73ed1929ebd205cd56ef2a44070b5a26e8dc2e60296ad1b1667c6b6caf51` | `0x817f8df07c5d80d265522ce9338e14c1d3a195bd4699b1ede6a926915f08c87d` |
 | Chains deployed | *(none yet)* | *(none yet)* | *(none yet)* |
 
 ### SHA-256 suite (256s-sha2)
@@ -374,7 +374,7 @@ deploy.
 | `VERSION_TAG()` | `keccak256("quip.shrincs-verifier.v2")` | `keccak256("quip.sphincsplusc-verifier.v2")` |
 | Address | `0x7eB0CB2c257715DCe91c750f308a398d17511cd5` | `0xAa504387af27bEF16544Cc7e465271D5f8C8c8ee` |
 | Stateless delegate | `SPHINCSPlusC256sSha2` (right) | — |
-| Runtime codehash | `0xd9487f237b8570a11734d9f31e1714afb20d68fff4d9b009ca31bd71a7b773bb` | `0x87881798ea6620c6cdfbbf732a815369272f76ea6cfdd7b44d1b9ccecf8e68a8` |
+| Runtime codehash | `0xf61704722a1ec87f04429e87f52dedf73eb2b64ca3c2ddd65124577e2df145ed` | `0x2c9c1442eae92daa79f0d0128c88a6c0ae1ddcdc9bfb80ccd6a4a7c340ae815b` |
 | Chains deployed | *(none yet)* | *(none yet)* |
 
 ### WOTS+ library
@@ -410,7 +410,7 @@ bytecode at them is genuine (deployed by
 
 | Artifact | Address | Chains | Runtime codehash |
 |---|---|---|---|
-| `SPHINCSPlusC256sKeccak` | `0x9b62Fd54D8a1EDF39EF07A13A20b2E453cB1D732` | Base Sepolia (84532), OP Sepolia (11155420) | `0xa6385cad25fa2f5e90efce06ef87f0a03bd381b3786f7307b1f2fb5c2aa9a68d` |
+| `SPHINCSPlusC256sKeccak` | `0x9b62Fd54D8a1EDF39EF07A13A20b2E453cB1D732` | Base Sepolia (84532), OP Sepolia (11155420) | `0x998bb84a9cf85aeca5dfaffd88edbe1d62aa5b7fac9d9229b0a437f5c9a91e70` |
 | `SHRINCS256sKeccak` | `0x9154dA0BA19600C543a8c5ed1B1c44af415B5688` | Base Sepolia (84532), OP Sepolia (11155420) | `0x82e5e0727823ed856db249d3d64484f6b4c53efe4b64bcbd7e104f537d79ec90` |
 
 Deploy transactions:
@@ -422,11 +422,10 @@ Deploy transactions:
 | OP Sepolia | `SPHINCSPlusC256sKeccak` | `0x5f562f0e4bff16431b8055917a7a7d6ef87a7e02926d034363d3bc3a1a7dc85c` |
 | OP Sepolia | `SHRINCS256sKeccak` | `0x26a265eb03c4554876af9bc1f1a7cc2a328083528822b2b0ad8f216d8eb684b2` |
 
-Note the codehashes above are the pre-change values: `SHRINCS256sKeccak`'s
-runtime bytecode embeds its sibling's address, so moving the sibling moved
-that artifact's codehash too. The `SPHINCSPlusC256sKeccak` codehash is
-unchanged by the salt scheme (it embeds no address) and appears in both
-this table and the current registry.
+The codehashes above are the bytes actually deployed under the historical V1
+semantics. They are intentionally different from the current V2 registry:
+the profile-bound digest changed SPHINCSPlusC runtime bytecode, while the
+SHRINCS runtime also changed and pins a different sibling address.
 
 ## Historical mechanisms (recorded, replaced)
 

@@ -208,13 +208,16 @@ library UXMSS {
     // parent.
     // 2. Walk upward through the remaining auth path nodes in the tree's
     // unbalanced order.
-    // 3. Return the reconstructed root and success flag.
+    // 3. Return false for an empty path; otherwise return the reconstructed
+    // root and success.
     function rootFromUnbalancedPath(
         bytes32 pkSeed,
         uint32 leafIndex,
         bytes32 leaf,
         bytes32[] calldata authPath
     ) internal view returns (bytes32 root, bool ok) {
+        if (authPath.length == 0) return (bytes32(0), false);
+
         // The first parent hashes the leaf with the first auth-path node on
         // its right.
         root = HashSuite.statefulParentHash32(

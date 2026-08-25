@@ -980,13 +980,22 @@ library SHRINCS {
     // 1. Allocate the decoded struct in memory.
     // 2. Copy the public seed, root, and max-signatures fields from calldata.
     // 3. Return the decoded struct together with a success flag.
-    /// @dev Precondition: callers must supply the validPublicKey-checked
-    /// 68-byte encoding; the fixed-offset assembly reads below assume it.
+    /// @dev Rejects every length other than the fixed 68-byte encoding before
+    /// the fixed-offset assembly reads, returning a zero struct and false.
     function decodeStatefulPublicKey(bytes calldata encoded)
         internal
         pure
         returns (UXMSS.StatefulPublicKey memory publicKey, bool ok)
     {
+        if (encoded.length != SHRINCSParams.STATEFUL_PUBLIC_KEY_BYTES) {
+            return (
+                UXMSS.StatefulPublicKey({
+                    pkSeed: bytes32(0), root: bytes32(0), maxSignatures: 0
+                }),
+                false
+            );
+        }
+
         // Decoded StatefulPublicKey layout (0x60 bytes) written at the
         // free-memory pointer:
         //   [0x00..0x20) pkSeed
