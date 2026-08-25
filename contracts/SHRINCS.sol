@@ -320,10 +320,9 @@ library SHRINCS {
         if (!validRotationContext(context)) return bytes32(0);
         // Stateful subkey rotation carries only a replacement stateful public
         // key payload.
-        if (
-            nextStatefulKey.statefulPublicKey.length
-                != SHRINCSParams.STATEFUL_PUBLIC_KEY_BYTES
-        ) return bytes32(0);
+        if (!SHRINCS.validStatefulPublicKeyEncoding(
+                nextStatefulKey.statefulPublicKey
+            )) return bytes32(0);
         {
             // Decode the fixed-width stateful key to check operational limits
             // such as maxSignatures.
@@ -423,12 +422,11 @@ library SHRINCS {
         }
         // Rotation messages must still carry a nonzero domain binding.
         if (!validRotationContext(context)) return bytes32(0);
-        // The replacement bundle must contain fixed-width stateful,
-        // commitment, seed, and root fields.
-        if (
-            nextKey.statefulPublicKey.length
-                != SHRINCSParams.STATEFUL_PUBLIC_KEY_BYTES
-        ) return bytes32(0);
+        // The replacement bundle must have a canonical stateful key plus
+        // fixed-width commitment, seed, and stateless-root fields.
+        if (!SHRINCS.validStatefulPublicKeyEncoding(
+                nextKey.statefulPublicKey
+            )) return bytes32(0);
         if (nextKey.publicKeyCommitment.length != 32) return bytes32(0);
         if (nextKey.pkSeed.length != 32) return bytes32(0);
         if (nextKey.hypertreeRoot.length != 32) return bytes32(0);
@@ -944,24 +942,39 @@ library SHRINCS {
         return publicKeyCommitment(publicKey) == expectedPublicKeyCommitment;
     }
 
-    // validPublicKey: Validate public-key byte lengths and confirm its
-    // embedded commitment is correct.
-    // 1. Check the encoded stateful public-key length.
+    // validStatefulPublicKeyEncoding: Pin the packed stateful-key width and
+    // require its root to be canonical under the active profile hash mask.
+    // The 128-bit profiles use only the high HASH_LEN bytes, so nonzero low
+    // bytes can never equal a root reconstructed by verification.
+    function validStatefulPublicKeyEncoding(bytes calldata encoded)
+        internal
+        pure
+        returns (bool)
+    {
+        if (encoded.length != SHRINCSParams.STATEFUL_PUBLIC_KEY_BYTES) {
+            return false;
+        }
+        bytes32 root;
+        assembly ("memory-safe") {
+            root := calldataload(add(encoded.offset, 32))
+        }
+        return (root & SHRINCSParams.HASH_MASK) == root;
+    }
+
+    // validPublicKey: Validate public-key shape and embedded commitment.
+    // 1. Check the encoded stateful key width and canonical root.
     // 2. Check the commitment, public-seed, and hypertree-root lengths.
-    // 3. Load the embedded commitment from calldata.
-    // 4. Recompute the bundle commitment and require it to match the embedded
-    // field.
+    // 3. Recompute the bundle commitment and require it to match.
     function validPublicKey(SHRINCS.PublicKey calldata publicKey)
         internal
         pure
         returns (bool)
     {
-        // The stateful public key has a fixed packed byte width.
-        if (
-            publicKey.statefulPublicKey.length
-                != SHRINCSParams.STATEFUL_PUBLIC_KEY_BYTES
-        ) return false;
-        // The embedded commitment field is always one hash output wide.
+        // Reject a wrong-width key or a stateful root with noncanonical
+        // low bytes under a truncated profile.
+        if (!SHRINCS.validStatefulPublicKeyEncoding(
+                publicKey.statefulPublicKey
+            )) return false;
         if (publicKey.publicKeyCommitment.length != 32) return false;
         // The stateless public seed is always one hash output wide.
         if (publicKey.pkSeed.length != 32) return false;
