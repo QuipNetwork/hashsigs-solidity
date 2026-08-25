@@ -93,7 +93,9 @@ fs_permissions = [
     { access = "read", path = "./out" },
     { access = "read", path = "./out-128s-q18" },
     { access = "read", path = "./out-128s-q20" },
-    { access = "read", path = "./out-256s-sha2" }
+    { access = "read", path = "./out-256s-sha2" },
+    { access = "read", path = "./out-128s-q18-sha2" },
+    { access = "read", path = "./out-128s-q20-sha2" }
 ]
 
 [profile.production]
@@ -353,6 +355,134 @@ skip = [
     "script/DeploySPHINCSPlusC256sKeccak.s.sol",
     "script/DeploySPHINCSPlusC128sQ18Keccak.s.sol",
     "script/DeploySPHINCSPlusC128sQ20Keccak.s.sol",
+]
+
+# 128s SHA-256 suite profiles ([DESIGN §3.3/§3.4]). Each is the SHA-256
+# twin of the same-named keccak 128s profile: identical params tuple, a
+# suite-qualified PROFILE_NAME, and the sha2 `shrincs-hash/` remapping.
+# Both axes are listed explicitly because Foundry REPLACES the remapping
+# array per profile — `shrincs-profile/` selects the duplicated 128s
+# params directory, `shrincs-hash/` selects the sha2 HashSuite.
+#
+# No deployable exists on this suite/params pair yet (256s-sha2 is still
+# the only SHA-256 deployable), so the skip list excludes EVERY concrete
+# verifier and deploy script, keccak and sha2 alike. Coverage here is:
+# compile; the per-helper sha2 KATs (HashSuiteKat); the seam-routed
+# self-signing stateful suites (incl. AccountInvariants and MutationFuzz,
+# which stay stateful-only at 128s and so are affordable here even though
+# [profile.256s-sha2] skips them); and the non-signing structural/profile
+# suites, including the params drift guard in SHRINCSProfileInvariants
+# (which pins every non-identity constant to the documented 128s values).
+#
+# The test skips fall in three groups, none of them params-related:
+#  - keccak-vector-bound: Sphincs128sVectors, RustAccountVectors128s, and
+#    GuardPinning read shrincs_*_128s_q{18,20}_keccak.json; no Rust-anchored
+#    sha2 128s vector file exists yet;
+#  - keccak-artifact-bound: every Pinned* pins a keccak runtime codehash;
+#    Measurements and StatelessDelegation resolve a per-profile
+#    SHRINCS/SPHINCSPlusC artifact pair by PROFILE_ID and have no entry for
+#    these profiles; HashSuiteStatelessGuard imports the concrete
+#    SHRINCS256sKeccak verifier and HashSuiteStatelessGuardSha2 imports
+#    SHRINCS256sSha2;
+#  - Rust-golden-bound: SignerKeygen asserts keygen goldens that exist only
+#    for 256s-keccak, 128s-keccak, and 256s-sha2. Its sha2 branch would
+#    otherwise assert the 256s-sha2 goldens against 128s params. Coverage
+#    returns when the Rust signer emits sha2 128s goldens and vectors.
+# The 256s-bound skips carried over from [profile.128s-q18] keep their
+# original reasons (256s vectors, or the in-Solidity stateless signer that
+# is infeasible at 128s where a = 24, d = 1).
+[profile.128s-q18-sha2]
+out = "out-128s-q18-sha2"
+remappings = [
+    "shrincs-profile/=contracts/profiles/128s-q18-sha2/",
+    "shrincs-hash/=contracts/hash/sha2/",
+]
+skip = [
+    "contracts/SHRINCS256sKeccak.sol",
+    "contracts/SHRINCS128sQ18Keccak.sol",
+    "contracts/SHRINCS128sQ20Keccak.sol",
+    "contracts/SPHINCSPlusC256sKeccak.sol",
+    "contracts/SPHINCSPlusC128sQ18Keccak.sol",
+    "contracts/SPHINCSPlusC128sQ20Keccak.sol",
+    "contracts/SHRINCS256sSha2.sol",
+    "contracts/SPHINCSPlusC256sSha2.sol",
+    "script/DeploySHRINCS256sKeccak.s.sol",
+    "script/DeploySHRINCS128sQ18Keccak.s.sol",
+    "script/DeploySHRINCS128sQ20Keccak.s.sol",
+    "script/DeploySPHINCSPlusC256sKeccak.s.sol",
+    "script/DeploySPHINCSPlusC128sQ18Keccak.s.sol",
+    "script/DeploySPHINCSPlusC128sQ20Keccak.s.sol",
+    "script/DeploySHRINCS256sSha2.s.sol",
+    "script/DeploySPHINCSPlusC256sSha2.s.sol",
+    "test/SHRINCSSphincs256sVectors.t.sol",
+    "test/SHRINCSSphincs256sSha2Vectors.t.sol",
+    "test/SHRINCSSphincs128sVectors.t.sol",
+    "test/SHRINCSRustAccountVectors128s.t.sol",
+    "test/SHRINCSGuardPinning.t.sol",
+    "test/SHRINCSMeasurements.t.sol",
+    "test/SHRINCSStatelessDelegation.t.sol",
+    "test/SHRINCSSignerKeygen.t.sol",
+    "test/SHRINCSStatelessVectorSigner.t.sol",
+    "test/SHRINCSAccountSigningFacade.t.sol",
+    "test/SHRINCSAccountVectorExport.t.sol",
+    "test/SHRINCSAccountVerifierExample.t.sol",
+    "test/SHRINCSEnvelope.t.sol",
+    "test/SHRINCSStatefulPolicyExamples.t.sol",
+    "test/SHRINCSStatelessSliceCopy.t.sol",
+    "test/SHRINCSCalldataRetag.t.sol",
+    "test/SHRINCSPinned256s.t.sol",
+    "test/SHRINCSPinned256sSha2.t.sol",
+    "test/SHRINCSPinned128sQ18.t.sol",
+    "test/SHRINCSPinned128sQ20.t.sol",
+    "test/HashSuiteStatelessGuard.t.sol",
+    "test/HashSuiteStatelessGuardSha2.t.sol",
+]
+
+[profile.128s-q20-sha2]
+out = "out-128s-q20-sha2"
+remappings = [
+    "shrincs-profile/=contracts/profiles/128s-q20-sha2/",
+    "shrincs-hash/=contracts/hash/sha2/",
+]
+skip = [
+    "contracts/SHRINCS256sKeccak.sol",
+    "contracts/SHRINCS128sQ18Keccak.sol",
+    "contracts/SHRINCS128sQ20Keccak.sol",
+    "contracts/SPHINCSPlusC256sKeccak.sol",
+    "contracts/SPHINCSPlusC128sQ18Keccak.sol",
+    "contracts/SPHINCSPlusC128sQ20Keccak.sol",
+    "contracts/SHRINCS256sSha2.sol",
+    "contracts/SPHINCSPlusC256sSha2.sol",
+    "script/DeploySHRINCS256sKeccak.s.sol",
+    "script/DeploySHRINCS128sQ18Keccak.s.sol",
+    "script/DeploySHRINCS128sQ20Keccak.s.sol",
+    "script/DeploySPHINCSPlusC256sKeccak.s.sol",
+    "script/DeploySPHINCSPlusC128sQ18Keccak.s.sol",
+    "script/DeploySPHINCSPlusC128sQ20Keccak.s.sol",
+    "script/DeploySHRINCS256sSha2.s.sol",
+    "script/DeploySPHINCSPlusC256sSha2.s.sol",
+    "test/SHRINCSSphincs256sVectors.t.sol",
+    "test/SHRINCSSphincs256sSha2Vectors.t.sol",
+    "test/SHRINCSSphincs128sVectors.t.sol",
+    "test/SHRINCSRustAccountVectors128s.t.sol",
+    "test/SHRINCSGuardPinning.t.sol",
+    "test/SHRINCSMeasurements.t.sol",
+    "test/SHRINCSStatelessDelegation.t.sol",
+    "test/SHRINCSSignerKeygen.t.sol",
+    "test/SHRINCSStatelessVectorSigner.t.sol",
+    "test/SHRINCSAccountSigningFacade.t.sol",
+    "test/SHRINCSAccountVectorExport.t.sol",
+    "test/SHRINCSAccountVerifierExample.t.sol",
+    "test/SHRINCSEnvelope.t.sol",
+    "test/SHRINCSStatefulPolicyExamples.t.sol",
+    "test/SHRINCSStatelessSliceCopy.t.sol",
+    "test/SHRINCSCalldataRetag.t.sol",
+    "test/SHRINCSPinned256s.t.sol",
+    "test/SHRINCSPinned256sSha2.t.sol",
+    "test/SHRINCSPinned128sQ18.t.sol",
+    "test/SHRINCSPinned128sQ20.t.sol",
+    "test/HashSuiteStatelessGuard.t.sol",
+    "test/HashSuiteStatelessGuardSha2.t.sol",
 ]
 
 # Per-MR security gate: the 256s (default) profile plus bounded,

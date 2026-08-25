@@ -148,6 +148,49 @@ contract SHRINCSProfileInvariantsTest is Test {
                 statefulPublicKeyBytes: 68
             });
         }
+        // 128s-q18-sha2 / 128s-q20-sha2: the SHA-256 twins of the two
+        // keccak 128s profiles. Their params directories are deliberate
+        // duplicates ([DESIGN §5.2 option (b)]), so every crypto constant
+        // MUST equal the keccak twin's values above; only the suite-
+        // qualified profile id differs. These branches are the drift
+        // guards: run under each sha2 profile they fail closed if the
+        // duplicated params diverge on any constant. No production-*
+        // twin is listed because no deployable exists on this suite/params
+        // pair yet (foundry.toml).
+        if (nameHash == keccak256("128s-q18-sha2")) {
+            return ProfileExpectation({
+                profileId: keccak256("shrincs-128s-q18-sha2"),
+                hashLen: 16,
+                hypertreeHeight: 18,
+                numHypertreeLayers: 1,
+                forsTreeHeight: 24,
+                numForsTrees: 6,
+                numWotsChains: 32,
+                wotsChainLen: 16,
+                statelessLimit: 1 << 18,
+                wotsChainsStateful: 32,
+                wotsTargetSumStateful: 240,
+                wotsTargetSumStateless: 240,
+                statefulPublicKeyBytes: 68
+            });
+        }
+        if (nameHash == keccak256("128s-q20-sha2")) {
+            return ProfileExpectation({
+                profileId: keccak256("shrincs-128s-q20-sha2"),
+                hashLen: 16,
+                hypertreeHeight: 18,
+                numHypertreeLayers: 1,
+                forsTreeHeight: 24,
+                numForsTrees: 6,
+                numWotsChains: 32,
+                wotsChainLen: 16,
+                statelessLimit: 1 << 20,
+                wotsChainsStateful: 32,
+                wotsTargetSumStateful: 240,
+                wotsTargetSumStateless: 240,
+                statefulPublicKeyBytes: 68
+            });
+        }
         revert("unknown FOUNDRY_PROFILE for profile identity test");
     }
 
