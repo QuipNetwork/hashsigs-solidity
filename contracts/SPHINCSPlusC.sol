@@ -29,6 +29,10 @@ import {Hypertree} from "./Hypertree.sol";
 /// @dev Knows only the stateless primitives (public seed, public root,
 /// FORS-C, hypertree). Commitments, contexts, and the stateful side belong
 /// to the hybrid SHRINCS library above it.
+/// Verification functions are `view` because this shared source also compiles
+/// with the SHA-256 hash suite, whose hashing helpers use `staticcall` to the
+/// 0x02 precompile. The library does not read or write persistent storage;
+/// encoding and decoding helpers that do not hash remain `pure`.
 library SPHINCSPlusC {
     /// @notice The stateless SPHINCS+C signature.
     /// @dev A SHRINCS stateless signature is a SPHINCSPlusC.Signature:

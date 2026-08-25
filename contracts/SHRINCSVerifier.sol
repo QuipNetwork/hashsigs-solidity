@@ -60,8 +60,10 @@ import {SHRINCS} from "./SHRINCS.sol";
 /// surrounds it, so an out-of-gas there propagates as a revert instead of
 /// being misreported as an invalid signature.
 ///
-/// Caller obligations. Every SHRINCS library is `pure` and both adapters
-/// are storage-free: no entrypoint touches persistent storage, and the
+/// Caller obligations. The shared SHRINCS verification stack is `view`
+/// because it also compiles with the SHA-256 hash suite, whose hashing helpers
+/// use `staticcall` to the 0x02 precompile. Both adapters are storage-free: no
+/// entrypoint touches persistent storage, and the
 /// only non-`view` entrypoint, `verifyAndAttest`, writes exclusively
 /// EIP-1153 transient storage (cleared when the transaction ends); they
 /// verify a signature and nothing more. All statefulness is the WRAPPER

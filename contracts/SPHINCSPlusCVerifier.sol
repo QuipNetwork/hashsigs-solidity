@@ -50,10 +50,11 @@ import {SPHINCSPlusC} from "./SPHINCSPlusC.sol";
 /// calldata-typed SPHINCSPlusC library, verifying the re-tagged envelope in
 /// place with no external call.
 ///
-/// Caller obligations. Every SPHINCSPlusC library is `pure` and this
-/// adapter's `verify` is likewise storage-free and `pure` (removing the
-/// self-call hop left no external call); it verifies a signature and nothing
-/// more. All statefulness — stateless-budget accounting, nonce/keyVersion
+/// Caller obligations. The shared SPHINCSPlusC verification stack is `view`
+/// because it also compiles with the SHA-256 hash suite, whose hashing helpers
+/// use `staticcall` to the 0x02 precompile. This adapter's `verify` is
+/// storage-free and touches no persistent state; it verifies a signature and
+/// nothing more. All statefulness — stateless-budget accounting, nonce/keyVersion
 /// replay scoping, installing a rotated key — is the WRAPPER contract's
 /// job. SHRINCSAccountVerifierExample is the reference wrapper. Any future
 /// storage-needing helper belongs in a separate wrapper/base contract at the
