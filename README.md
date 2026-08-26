@@ -154,8 +154,7 @@ Deployment and tooling:
   [script/DeploySHRINCS128sQ20Keccak.s.sol](./script/DeploySHRINCS128sQ20Keccak.s.sol),
   [script/DeploySPHINCSPlusC256sKeccak.s.sol](./script/DeploySPHINCSPlusC256sKeccak.s.sol),
   [script/DeploySPHINCSPlusC128sQ18Keccak.s.sol](./script/DeploySPHINCSPlusC128sQ18Keccak.s.sol),
-  [script/DeploySPHINCSPlusC128sQ20Keccak.s.sol](./script/DeploySPHINCSPlusC128sQ20Keccak.s.sol),
-  [script/DeployWOTSPlus.s.sol](./script/DeployWOTSPlus.s.sol)
+  [script/DeploySPHINCSPlusC128sQ20Keccak.s.sol](./script/DeploySPHINCSPlusC128sQ20Keccak.s.sol)
   - per-profile CREATE3 deploy scripts (see [Deployment](#deployment))
 - [scripts/check-line-length.sh](./scripts/check-line-length.sh)
   - 78-char line gate from [CODINGSTANDARDS.md](./CODINGSTANDARDS.md)
@@ -1455,10 +1454,10 @@ vector work. They are not a production signer interface.
 
 ## Deployment
 
-The canonical SHRINCS verifiers, their SPHINCSPlusC stateless delegates,
-and the WOTS+ library deploy through CREATE3 Foundry scripts. A CREATE3
-address depends only on the factory and the guarded salt, not on the init
-code, so each verifier profile gets a distinct, chain-invariant address.
+The canonical SHRINCS verifiers and their SPHINCSPlusC stateless delegates
+deploy through CREATE3 Foundry scripts. A CREATE3 address depends only on
+the factory and the guarded salt, not on the init code, so each verifier
+profile gets a distinct, chain-invariant address.
 Salts are sender-scoped (CreateX's permissioned mode), so only the
 canonical deployer can deploy at an advertised address — see
 `script/CreateXSalt.sol`. [DEPLOYMENTS.md](./DEPLOYMENTS.md) is the
@@ -1484,8 +1483,6 @@ is already deployed at the pinned address.
   (profile `production-128s-q20`)
 - `script/DeploySHRINCS128sQ20Keccak.s.sol` — 128s-q20 verifier
   (profile `production-128s-q20`)
-- `script/DeployWOTSPlus.s.sol` — WOTS+ library (profile `production`)
-
 Each script asserts its `FOUNDRY_PROFILE` and refuses to run under the
 wrong one. Example:
 

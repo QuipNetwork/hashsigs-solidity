@@ -19,19 +19,6 @@ pragma solidity ^0.8.28;
 import {Test} from "../lib/forge-std/src/Test.sol";
 import {Create3} from "../script/Create3.sol";
 import {CreateXSalt} from "../script/CreateXSalt.sol";
-import {DeployWOTSPlus} from "../script/DeployWOTSPlus.s.sol";
-
-/// @dev Exposes the WOTS+ deploy script's internal SALT so the inline
-/// composition the scripts must write (CreateXSalt.rawSalt is a function
-/// call, which Solidity forbids in a `constant` initializer) can be
-/// asserted against the library. WOTS+ is the only deploy script no
-/// profile skips, so this probe compiles everywhere; the four pin tests
-/// cover the profile-gated scripts the same way.
-contract DeployWOTSPlusProbe is DeployWOTSPlus {
-    function salt() external pure returns (bytes32) {
-        return SALT;
-    }
-}
 
 /// @notice Pins the permissioned CreateX salt scheme: every canonical salt
 /// is laid out the way CreateX's sender-scoped branch requires, every
@@ -42,7 +29,7 @@ contract DeployWOTSPlusProbe is DeployWOTSPlus {
 /// list. It therefore runs under all four ci-matrix profiles.
 contract CreateXSaltInvariantsTest is Test {
     // Every canonical salt label. Order is the DEPLOYMENTS.md table order.
-    function _labels() internal pure returns (string[9] memory) {
+    function _labels() internal pure returns (string[8] memory) {
         return [
             "QUIP:SPHINCSPlusC256sKeccak:V2.0",
             "QUIP:SPHINCSPlusC128sQ18Keccak:V2.0",
@@ -51,15 +38,14 @@ contract CreateXSaltInvariantsTest is Test {
             "QUIP:SHRINCS256sKeccak:V2.0",
             "QUIP:SHRINCS128sQ18Keccak:V2.0",
             "QUIP:SHRINCS128sQ20Keccak:V2.0",
-            "QUIP:SHRINCS256sSha2:V2.0",
-            "QUIP:WOTSPlus:V1.0"
+            "QUIP:SHRINCS256sSha2:V2.0"
         ];
     }
 
     // The published addresses, in the same order. This is the
     // DEPLOYMENTS.md <-> code regression lock: it fails loudly if anyone
     // edits a label, the deployer, the flag byte, or the entropy width.
-    function _addresses() internal pure returns (address[9] memory) {
+    function _addresses() internal pure returns (address[8] memory) {
         return [
             0x9aA24A7FFA5476765a3eea18E7d42dB637c67715,
             0x55DE18D3dab9eaCdd75Dc4ce53E1EbBd1c4331B8,
@@ -68,8 +54,7 @@ contract CreateXSaltInvariantsTest is Test {
             0x2274a20acD927b24FC130e5673F010c2846F90cb,
             0xCfDbbe2eA27ab6A37E442fe7027e3D4eD8686260,
             0xdC836F601A4efB46b8B50874C065dEFfc8a7149B,
-            0x7eB0CB2c257715DCe91c750f308a398d17511cd5,
-            0xef0CbdEC1ed6Db29F44030Bc22e4BD1D19898208
+            0x7eB0CB2c257715DCe91c750f308a398d17511cd5
         ];
     }
 
@@ -105,7 +90,7 @@ contract CreateXSaltInvariantsTest is Test {
     /// address per chain. Neither reverts inside CreateX, so this is the
     /// check that catches them.
     function testEverySaltIsWellFormed() public pure {
-        string[9] memory labels = _labels();
+        string[8] memory labels = _labels();
         for (uint256 i = 0; i < labels.length; i++) {
             bytes32 labelHash = keccak256(bytes(labels[i]));
             bytes32 raw = CreateXSalt.rawSalt(labelHash);
@@ -160,7 +145,7 @@ contract CreateXSaltInvariantsTest is Test {
     /// those two were the same address, which is exactly the hazard
     /// test/CreateXCreate3.t.sol's Create3SquatTest still documents.
     function testSquatSurfaceIsClosed() public pure {
-        string[9] memory labels = _labels();
+        string[8] memory labels = _labels();
         for (uint256 i = 0; i < labels.length; i++) {
             bytes32 raw = CreateXSalt.rawSalt(keccak256(bytes(labels[i])));
 
@@ -178,8 +163,8 @@ contract CreateXSaltInvariantsTest is Test {
 
     /// @notice The nine advertised addresses match DEPLOYMENTS.md.
     function testAdvertisedAddressesMatchRegistry() public pure {
-        string[9] memory labels = _labels();
-        address[9] memory expected = _addresses();
+        string[8] memory labels = _labels();
+        address[8] memory expected = _addresses();
         for (uint256 i = 0; i < labels.length; i++) {
             bytes32 raw = CreateXSalt.rawSalt(keccak256(bytes(labels[i])));
             assertEq(
@@ -192,25 +177,11 @@ contract CreateXSaltInvariantsTest is Test {
 
     /// @notice No two artifacts share an address.
     function testAdvertisedAddressesAreDistinct() public pure {
-        address[9] memory addrs = _addresses();
+        address[8] memory addrs = _addresses();
         for (uint256 i = 0; i < addrs.length; i++) {
             for (uint256 j = i + 1; j < addrs.length; j++) {
                 assertTrue(addrs[i] != addrs[j], "addresses must differ");
             }
         }
-    }
-
-    /// @notice The WOTS+ script's inline salt matches the library.
-    /// @dev The scripts cannot call CreateXSalt.rawSalt in a `constant`
-    /// initializer, so they duplicate the composition. This asserts the
-    /// duplicate is faithful — the four pin tests do the same for the
-    /// profile-gated scripts.
-    function testDeployScriptSaltMatchesLibrary() public {
-        DeployWOTSPlusProbe probe = new DeployWOTSPlusProbe();
-        assertEq(
-            probe.salt(),
-            CreateXSalt.rawSalt(keccak256("QUIP:WOTSPlus:V1.0")),
-            "DeployWOTSPlus SALT must match CreateXSalt.rawSalt"
-        );
     }
 }

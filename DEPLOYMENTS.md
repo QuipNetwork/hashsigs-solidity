@@ -1,10 +1,9 @@
 # Deployment registry
 
-This repo owns the canonical deployments of the SHRINCS verifiers, their
-SPHINCSPlusC stateless delegates, and the WOTS+ library. Consumers pin
-the published `(address, runtime codehash)` pairs below; they never
-deploy their own copy and never derive these values from a local
-rebuild.
+This repo owns the canonical deployments of the SHRINCS verifiers and their
+SPHINCSPlusC stateless delegates. Consumers pin the published
+`(address, runtime codehash)` pairs below; they never deploy their own copy
+and never derive these values from a local rebuild.
 
 All deploys use CREATE3 through the canonical CreateX singleton
 (`0xba5Ed099633D3B313e4D5F7bdc1305d3c28ba5Ed`,
@@ -160,10 +159,6 @@ covers only our own mistakes (e.g. deploying a wrong artifact).
        --rpc-url $RPC --private-key $DEPLOYER_PK \
        --sender $DEPLOYER --broadcast --verify
 
-   FOUNDRY_PROFILE=production forge script \
-       script/DeployWOTSPlus.s.sol \
-       --rpc-url $RPC --private-key $DEPLOYER_PK \
-       --sender $DEPLOYER --broadcast --verify
    ```
 
 3. Capture the codehash from the on-chain deployment with
@@ -264,7 +259,6 @@ scheme (see below). Predict with the GUARDED salt
 | `QUIP:SHRINCS128sQ18Keccak:V2.0` | `0xc68b64770da7914deb0ef238b048a0bf3b5f6a260024538a70f3120fe15c56ef` | `0x8411a603b3b36acf7c9be2fe61851dd9856cb2618a0bcbd4ee38dc3228200bf0` |
 | `QUIP:SHRINCS128sQ20Keccak:V2.0` | `0xc68b64770da7914deb0ef238b048a0bf3b5f6a2600eba9a74c56498197b7bf55` | `0xe33e5dbac44637fb67d99a719ffa5c2303d3596c2fcd57944612722b89283829` |
 | `QUIP:SHRINCS256sSha2:V2.0` | `0xc68b64770da7914deb0ef238b048a0bf3b5f6a260022739ec9ea90a95c66ee69` | `0xdf9118b99bc05a38f1acb9ad46a83c1c7fdc309d726fdc543a17e288f17fe404` |
-| `QUIP:WOTSPlus:V1.0` | `0xc68b64770da7914deb0ef238b048a0bf3b5f6a26006a0bc5ee9251a176011a94` | `0x6dec99ce43a5bbb090010ff191badca24996ac21dd07edd7a25770a1cda2a0a6` |
 
 | Label | Address |
 |---|---|
@@ -276,9 +270,8 @@ scheme (see below). Predict with the GUARDED salt
 | `QUIP:SHRINCS128sQ18Keccak:V2.0` | `0xCfDbbe2eA27ab6A37E442fe7027e3D4eD8686260` |
 | `QUIP:SHRINCS128sQ20Keccak:V2.0` | `0xdC836F601A4efB46b8B50874C065dEFfc8a7149B` |
 | `QUIP:SHRINCS256sSha2:V2.0` | `0x7eB0CB2c257715DCe91c750f308a398d17511cd5` |
-| `QUIP:WOTSPlus:V1.0` | `0xef0CbdEC1ed6Db29F44030Bc22e4BD1D19898208` |
 
-These nine addresses are pinned in
+These eight addresses are pinned in
 `test/CreateXSaltInvariants.t.sol::testAdvertisedAddressesMatchRegistry`,
 so a drift between this table and the code fails CI.
 
@@ -377,25 +370,6 @@ deploy.
 | Runtime codehash | `0x64b5b22ae1cc4d8c3d901b70289f3093d14607269e9c5d5b9e97d3679763ec52` | `0xe0c51e6011b22501fa26ce9a326ad688eba3e5f46a26e4d4542beaddc3e0b52d` |
 | Chains deployed | *(none yet)* | *(none yet)* |
 
-### WOTS+ library
-
-| Field | Value |
-|---|---|
-| Contract | `WOTSPlus` (library) |
-| Build profile | `production` |
-| CREATE3 salt label | `QUIP:WOTSPlus:V1.0` |
-| Address | `0xef0CbdEC1ed6Db29F44030Bc22e4BD1D19898208` |
-| Runtime codehash | `0x0efb1b18e06862b6b16d6b9fdb0563c5ceaf435af928034cbdb94af18ae2e683` |
-| Chains deployed | *(none yet)* |
-
-WOTS+ is profile-independent (its parameters are its own constants, not
-`SHRINCSParams`), so its bytecode and CREATE3 address are the same under
-any build profile. Its salt label and deploy script are unchanged; the
-predicted address has moved twice for reasons outside its own source —
-first when the CREATE3 deployer became CreateX, then when the salts
-became sender-scoped (see the top of this file). Every CREATE3 child
-address is a function of its deployer and its guarded salt.
-
 ## Superseded: permissionless-salt deployments
 
 These are real, live deployments made under the previous permissionless
@@ -488,5 +462,7 @@ WOTS+ deployed through Hardhat Ignition (`ignition/modules/WOTSPlus.ts`,
 `WOTSPlusModule`) with Ignition's default CREATE strategy: a plain
 nonce-based deploy from the deployer account, with no CREATE2 salt and no
 fixed factory. It produced no deterministic, chain-invariant address, and
-no address was recorded. The Hardhat path is removed; WOTS+ now deploys
-through the CREATE3 script above.
+no address was recorded. The Hardhat path and the later CREATE3 deploy script
+are removed. The production library no longer contains the secret-bearing
+`sign` or `generateKeyPair` helpers, and no standard deployment flow publishes
+the standalone WOTSPlus artifact.
