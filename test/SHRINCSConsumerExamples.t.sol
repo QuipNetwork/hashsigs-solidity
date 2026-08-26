@@ -254,10 +254,11 @@ contract SHRINCSConsumerExamplesTest is Test {
         assertTrue(keygenOk, "in-test keygen must succeed");
 
         signedHash = keccak256("shrincs consumer stateful vector");
-        bytes memory message = abi.encodePacked(signedHash);
 
-        (SHRINCS.Signature memory signature, bool signOk) =
-            SHRINCSTestSigner.signStatefulRawAtLeaf(signingKey, 1, message);
+        // line-length: allow — fmt canonical tuple head exceeds cap
+        (SHRINCS.Signature memory signature, bool signOk) = SHRINCSTestSigner.signStatefulAdapterAtLeaf(
+            signingKey, publicKey, 1, signedHash
+        );
         assertTrue(signOk, "stateful signing must succeed");
 
         bytes memory key = publicKey.publicKeyCommitment;
@@ -287,7 +288,16 @@ contract SHRINCSConsumerExamplesTest is Test {
 
         signedHash = keccak256("shrincs consumer stateless vector");
         (bytes32 sessionId, bool beginOk) = signer.beginSession(
-            signingKey, publicKey, abi.encodePacked(signedHash)
+            signingKey,
+            publicKey,
+            abi.encodePacked(
+                SHRINCS.statelessRawMessageHash(
+                    SHRINCSAccountSigningFacade.publicKeyCommitmentWord(
+                        publicKey
+                    ),
+                    signedHash
+                )
+            )
         );
         assertTrue(beginOk, "stateless begin must succeed");
 

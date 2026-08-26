@@ -249,7 +249,7 @@ scheme (see below). Predict with the GUARDED salt
 (`computeCreate3Address(guardedSalt)`), deploy with the RAW salt
 (`deployCreate3(rawSalt, initCode)`).
 
-### V3 canonical salts and addresses
+### V3 SPHINCSPlusC / V4 SHRINCS canonical salts and addresses
 
 V3 adds the FIPS 205 `WOTS_PK` and `FORS_ROOTS` address tweaks to stateless
 public-key compression. V2 signatures are intentionally incompatible.
@@ -260,10 +260,10 @@ public-key compression. V2 signatures are intentionally incompatible.
 | `QUIP:SPHINCSPlusC128sQ18Keccak:V3.0` | `0xc68b64770da7914deb0ef238b048a0bf3b5f6a2600a487f366d8875eb0ed70f6` | `0x334d6bb17c88f25d81102f14dfae57ab8e6ab3bb4c0b1b6565226e05bba8d397` |
 | `QUIP:SPHINCSPlusC128sQ20Keccak:V3.0` | `0xc68b64770da7914deb0ef238b048a0bf3b5f6a2600fbafb8fd9ea7dbfce99e24` | `0x8369afab8d3263c979089aa54313ff0599d529d23013e01ee847719ed1ed5415` |
 | `QUIP:SPHINCSPlusC256sSha2:V3.0` | `0xc68b64770da7914deb0ef238b048a0bf3b5f6a2600ea2d113752c6eb0d54dd85` | `0x5e941a408a6eb96fdf8db91c2f891217574da7b7fb54d48ecaf0e89fab2c9c96` |
-| `QUIP:SHRINCS256sKeccak:V3.0` | `0xc68b64770da7914deb0ef238b048a0bf3b5f6a2600ae81fe16e87b16cd993cb7` | `0x317737a03f78240172a7712965a21e9d4add98e31e501791a2079d9f4d1a1ecc` |
-| `QUIP:SHRINCS128sQ18Keccak:V3.0` | `0xc68b64770da7914deb0ef238b048a0bf3b5f6a260066a8646fd775545979489d` | `0x75d359abe9aad8afe477fb24639bc3e9b52a78d45c22de35212e8401849fcd1c` |
-| `QUIP:SHRINCS128sQ20Keccak:V3.0` | `0xc68b64770da7914deb0ef238b048a0bf3b5f6a26003fbfdde33d94d30a511a1a` | `0xa35ef3cd0a3543fc6e06f1fded9163e012bc4a01f5b5953e0b882f6c5b84d5b4` |
-| `QUIP:SHRINCS256sSha2:V3.0` | `0xc68b64770da7914deb0ef238b048a0bf3b5f6a2600144c9c12bba5d5947cb675` | `0x10d56036bfde67104aaaf5280acc649ea347a84ec8fc61ee729819334b2f7e18` |
+| `QUIP:SHRINCS256sKeccak:V4.0` | `0xc68b64770da7914deb0ef238b048a0bf3b5f6a26003f7dd8e8760c5bee575d41` | `0xd12475c13ac874d99caa4e4635f4bfed0589d77311f16dae69e6e50910e1fe93` |
+| `QUIP:SHRINCS128sQ18Keccak:V4.0` | `0xc68b64770da7914deb0ef238b048a0bf3b5f6a2600403433a7869bcfdf9ff933` | `0x7ad2a7cc8e9c874b8a6f5209c31902d7f801587294785f1548a0017af6ae186b` |
+| `QUIP:SHRINCS128sQ20Keccak:V4.0` | `0xc68b64770da7914deb0ef238b048a0bf3b5f6a260089c21b4978f331ec81de9f` | `0x8110b83c8a6384b3670d1b4fd656f6bc69ca735b4a781765dc5014c338e12ca4` |
+| `QUIP:SHRINCS256sSha2:V4.0` | `0xc68b64770da7914deb0ef238b048a0bf3b5f6a2600e954dd09c4d7694f04120b` | `0x30c5947889b04fdbd37aa804ce200711b71f5abd2b05a59f0208a51528023129` |
 
 | Label | Address |
 |---|---|
@@ -271,10 +271,10 @@ public-key compression. V2 signatures are intentionally incompatible.
 | `QUIP:SPHINCSPlusC128sQ18Keccak:V3.0` | `0x23cc6a3b31A3f6734530FCddB19eabE31F9a3037` |
 | `QUIP:SPHINCSPlusC128sQ20Keccak:V3.0` | `0xf6e309c6795447584110404FbaE112E4236d40AD` |
 | `QUIP:SPHINCSPlusC256sSha2:V3.0` | `0x55346bdc46Cf36C844c0f708041C916c0B65718f` |
-| `QUIP:SHRINCS256sKeccak:V3.0` | `0x590E88eA4D2E3E6Cd1B30062F20B51c97fEBC4f2` |
-| `QUIP:SHRINCS128sQ18Keccak:V3.0` | `0xC6030E5DDf2d6124886633d056b78b77fCf380E3` |
-| `QUIP:SHRINCS128sQ20Keccak:V3.0` | `0x8077857f6067e2c9838ffd449179679d602314F9` |
-| `QUIP:SHRINCS256sSha2:V3.0` | `0x2740A266d8e993547f085f16E076802B8e8B82d1` |
+| `QUIP:SHRINCS256sKeccak:V4.0` | `0xF2f9E6D692da41b089c3c261c41509669eEc5567` |
+| `QUIP:SHRINCS128sQ18Keccak:V4.0` | `0x695BA9d92FB431B4d446EEcb40b9874c9E43cc91` |
+| `QUIP:SHRINCS128sQ20Keccak:V4.0` | `0xa301C72c150d735ED741F3Fd980691d1a77F7c52` |
+| `QUIP:SHRINCS256sSha2:V4.0` | `0x10eE478959bD9cd9E99573cf208D217d704C2FF5` |
 
 ### Historical V2 salts and addresses
 
@@ -331,12 +331,12 @@ script asserts the sibling is present before broadcasting.
 |---|---|---|---|
 | Contract | `SHRINCS256sKeccak` | `SHRINCS128sQ18Keccak` | `SHRINCS128sQ20Keccak` |
 | Build profile | `production` | `production-128s-q18` | `production-128s-q20` |
-| CREATE3 salt label | `QUIP:SHRINCS256sKeccak:V3.0` | `QUIP:SHRINCS128sQ18Keccak:V3.0` | `QUIP:SHRINCS128sQ20Keccak:V3.0` |
+| CREATE3 salt label | `QUIP:SHRINCS256sKeccak:V4.0` | `QUIP:SHRINCS128sQ18Keccak:V4.0` | `QUIP:SHRINCS128sQ20Keccak:V4.0` |
 | `PROFILE_TAG()` | `keccak256("shrincs-256s-keccak")` | `keccak256("shrincs-128s-q18-keccak")` | `keccak256("shrincs-128s-q20-keccak")` |
-| `VERSION_TAG()` | `keccak256("quip.shrincs-verifier.v3")` | same | same |
-| Address | `0x590E88eA4D2E3E6Cd1B30062F20B51c97fEBC4f2` | `0xC6030E5DDf2d6124886633d056b78b77fCf380E3` | `0x8077857f6067e2c9838ffd449179679d602314F9` |
+| `VERSION_TAG()` | `keccak256("quip.shrincs-verifier.v4")` | same | same |
+| Address | `0xF2f9E6D692da41b089c3c261c41509669eEc5567` | `0x695BA9d92FB431B4d446EEcb40b9874c9E43cc91` | `0xa301C72c150d735ED741F3Fd980691d1a77F7c52` |
 | Stateless delegate | `SPHINCSPlusC256sKeccak` (below) | `SPHINCSPlusC128sQ18Keccak` (below) | `SPHINCSPlusC128sQ20Keccak` (below) |
-| Runtime codehash | `0x8a81338254777098c2fc81fcc8c32068fc1f1b2e1f244bab36b699cfefeb2033` | `0x64467153ef561dcec0a76e4a99314e66113a49f7fb14ba9c7007a6033c62b944` | `0x66878a0773818ffafb3355f32add7bd329ebeec8b653109ec823921dbc9ac477` |
+| Runtime codehash | `0xe9319929e0ec163221e849962606feead3e41865677b63a96662b2ecdad78426` | `0xc07f64ea03d16d6e24f7c8a3511dc6fd98aa7f7c5af7d11eb4f74284927685ca` | `0x8d9fd9a6aea2615dcb96c60ca90727b9dbb17d73186ae33217bd105f278edfe9` |
 | Chains deployed | *(none yet)* | *(none yet)* | *(none yet)* |
 
 Each SHRINCS verifier's `verifyStateless` delegates to the pinned
@@ -391,12 +391,12 @@ deploy.
 | Field | SHRINCS256sSha2 | SPHINCSPlusC256sSha2 |
 |---|---|---|
 | Build profile | `production-256s-sha2` | `production-256s-sha2` |
-| CREATE3 salt label | `QUIP:SHRINCS256sSha2:V3.0` | `QUIP:SPHINCSPlusC256sSha2:V3.0` |
+| CREATE3 salt label | `QUIP:SHRINCS256sSha2:V4.0` | `QUIP:SPHINCSPlusC256sSha2:V3.0` |
 | `PROFILE_TAG()` | `keccak256("shrincs-256s-sha2")` | `keccak256("shrincs-256s-sha2")` |
-| `VERSION_TAG()` | `keccak256("quip.shrincs-verifier.v3")` | `keccak256("quip.sphincsplusc-verifier.v3")` |
-| Address | `0x2740A266d8e993547f085f16E076802B8e8B82d1` | `0x55346bdc46Cf36C844c0f708041C916c0B65718f` |
+| `VERSION_TAG()` | `keccak256("quip.shrincs-verifier.v4")` | `keccak256("quip.sphincsplusc-verifier.v3")` |
+| Address | `0x10eE478959bD9cd9E99573cf208D217d704C2FF5` | `0x55346bdc46Cf36C844c0f708041C916c0B65718f` |
 | Stateless delegate | `SPHINCSPlusC256sSha2` (right) | — |
-| Runtime codehash | `0x481dbd63893163201459dfba36f092d0a1d40589770c71f8597c7afa772daff9` | `0x0b8695da83eb5afcfe6a63b48a5001cb6b4813082c23434146324d8f16253e6a` |
+| Runtime codehash | `0x6b72096a091dbe8bb23b698f034a77f031d6b6a65cc5fb962255885eb3ad9560` | `0x0b8695da83eb5afcfe6a63b48a5001cb6b4813082c23434146324d8f16253e6a` |
 | Chains deployed | *(none yet)* | *(none yet)* |
 
 ## Superseded: permissionless-salt deployments

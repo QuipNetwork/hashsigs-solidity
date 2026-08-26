@@ -194,10 +194,11 @@ contract SHRINCSEnvelopeERC7913IntegrationTest is Test {
         assertTrue(keygenOk, "in-test keygen must succeed");
 
         signedHash = keccak256("shrincs erc7913 stateful verifier vector");
-        bytes memory message = abi.encodePacked(signedHash);
 
-        (SHRINCS.Signature memory signature, bool signOk) =
-            SHRINCSTestSigner.signStatefulRawAtLeaf(signingKey, 1, message);
+        // line-length: allow — fmt canonical tuple head exceeds cap
+        (SHRINCS.Signature memory signature, bool signOk) = SHRINCSTestSigner.signStatefulAdapterAtLeaf(
+            signingKey, publicKey, 1, signedHash
+        );
         assertTrue(signOk, "leaf-1 signing must succeed");
 
         bytes memory commitmentBytes = publicKey.publicKeyCommitment;
@@ -213,11 +214,10 @@ contract SHRINCSEnvelopeERC7913IntegrationTest is Test {
             new EnvelopeMockERC1271Signer(signedHash, validEnvelope);
     }
 
-    // Checks that a stateful signature made by the Rust code works through
-    // ERC-7913.
-    function testVerifyRustGeneratedStatefulVectorReturnsMagicValue()
-        public
-    {
+    // The committed crypto-level vector signs its message directly and is a
+    // V3 raw-adapter fixture. V4 must reject it because it does not bind the
+    // complete commitment in the signed digest.
+    function testRejectsLegacyRustGeneratedStatefulVector() public {
         (
             SHRINCS.PublicKey memory publicKey,
             bytes32 hash,
@@ -228,9 +228,8 @@ contract SHRINCSEnvelopeERC7913IntegrationTest is Test {
 
         assertEq(
             verifier.verify(publicKey.publicKeyCommitment, hash, envelope),
-            IERC7913SignatureVerifier.verify.selector,
-            // line-length: allow — one unbreakable string literal token
-            "Rust-generated stateful vector must verify through the ERC-7913 envelope"
+            INVALID_SIGNATURE,
+            "V3 raw-hash vector must not verify through the V4 adapter"
         );
     }
 

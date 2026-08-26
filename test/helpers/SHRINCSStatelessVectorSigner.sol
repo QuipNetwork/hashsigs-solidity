@@ -229,7 +229,8 @@ contract SHRINCSStatelessVectorSigner {
         // finalizer HashSuite.hashForsPk32 (the same helper
         // FORSMinusC.verify hashes the per-tree roots with; masking applied
         // internally, no-op at 256s). The
-        // [tag | pkSeed | FORS_ROOTS ADRS | roots] buffer is suite-independent.
+        // [tag | pkSeed | FORS_ROOTS ADRS | roots] buffer is
+        // suite-independent.
         bytes32 addressWord = bytes32(
             (uint256(session.bottomTreeIndex) << 128) | (uint256(4) << 96)
                 | (uint256(session.bottomLeafIndex) << 64)

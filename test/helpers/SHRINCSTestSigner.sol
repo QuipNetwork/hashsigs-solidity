@@ -204,6 +204,29 @@ library SHRINCSTestSigner {
         return (signature, true);
     }
 
+    function signStatefulAdapterAtLeaf(
+        SHRINCS.SigningKey memory signingKey,
+        SHRINCS.PublicKey memory publicKey,
+        uint32 leafIndex,
+        bytes32 hash
+    ) internal view returns (SHRINCS.Signature memory signature, bool ok) {
+        if (publicKey.publicKeyCommitment.length != 32) {
+            return (signature, false);
+        }
+        bytes32 commitment;
+        bytes memory commitmentBytes = publicKey.publicKeyCommitment;
+        assembly ("memory-safe") {
+            commitment := mload(add(commitmentBytes, 0x20))
+        }
+        return signStatefulRawAtLeaf(
+            signingKey,
+            leafIndex,
+            abi.encodePacked(
+                SHRINCS.statefulRawMessageHash(commitment, hash)
+            )
+        );
+    }
+
     function encodeStatefulPublicKey(
         bytes32 pkSeed,
         bytes32 root,

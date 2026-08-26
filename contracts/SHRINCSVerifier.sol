@@ -93,7 +93,7 @@ abstract contract SHRINCSVerifier is
     // each subclass's PROFILE_TAG. Unchanged by the adapter restructure:
     // the key/envelope format family it names is unchanged.
     bytes32 public constant VERSION_TAG =
-        keccak256("quip.shrincs-verifier.v3");
+        keccak256("quip.shrincs-verifier.v4");
     // Any non-magic value denotes signature failure.
     bytes4 private constant INVALID_SIGNATURE = 0xffffffff;
     // Transient attestation slot value for a successful verification
@@ -208,8 +208,10 @@ abstract contract SHRINCSVerifier is
         );
         if (!okDelegation) return INVALID_SIGNATURE;
 
+        bytes32 message =
+            SHRINCS.statelessRawMessageHash(publicKeyCommitment, hash);
         return IERC7913SignatureVerifier(_pinnedSphincsPlusC())
-            .verify(delegateKey, hash, delegateSignature);
+            .verify(delegateKey, message, delegateSignature);
     }
 
     /// @notice Whether `verifyAndAttest` succeeded for the exact triple
@@ -266,8 +268,10 @@ abstract contract SHRINCSVerifier is
             SHRINCS.Signature calldata statefulSignature
         ) = SHRINCS.statefulEnvelope(signature);
 
+        bytes32 message =
+            SHRINCS.statefulRawMessageHash(publicKeyCommitment, hash);
         if (SHRINCS.verify(
-                publicKeyCommitment, hash, publicKey, statefulSignature
+                publicKeyCommitment, message, publicKey, statefulSignature
             )) {
             return IERC7913SignatureVerifier.verify.selector;
         }

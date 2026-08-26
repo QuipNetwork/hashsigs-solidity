@@ -1106,6 +1106,40 @@ library SHRINCS {
         );
     }
 
+    // statefulRawMessageHash: Bind an ERC-7913 caller-supplied hash to the
+    // stateful operation family, active hash suite, and complete installed
+    // SHRINCS public-key commitment.
+    function statefulRawMessageHash(
+        bytes32 expectedPublicKeyCommitment,
+        bytes32 hash
+    ) internal pure returns (bytes32) {
+        return keccak256(
+            abi.encodePacked(
+                SHRINCS.OP_VERIFY_STATEFUL,
+                HashSuite.HASH_SUITE_ID,
+                expectedPublicKeyCommitment,
+                hash
+            )
+        );
+    }
+
+    // statelessRawMessageHash: Stateless counterpart of
+    // statefulRawMessageHash. The distinct operation tag prevents signatures
+    // from crossing between the two raw adapter paths.
+    function statelessRawMessageHash(
+        bytes32 expectedPublicKeyCommitment,
+        bytes32 hash
+    ) internal pure returns (bytes32) {
+        return keccak256(
+            abi.encodePacked(
+                SHRINCS.OP_VERIFY_STATELESS,
+                HashSuite.HASH_SUITE_ID,
+                expectedPublicKeyCommitment,
+                hash
+            )
+        );
+    }
+
     // statefulRotationMessageHash: Build the canonical message hash
     // authorizing a stateless-to-stateful rotation.
     // 1. Bind the stateful-rotation operation tag.

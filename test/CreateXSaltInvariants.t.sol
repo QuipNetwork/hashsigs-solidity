@@ -35,10 +35,10 @@ contract CreateXSaltInvariantsTest is Test {
             "QUIP:SPHINCSPlusC128sQ18Keccak:V3.0",
             "QUIP:SPHINCSPlusC128sQ20Keccak:V3.0",
             "QUIP:SPHINCSPlusC256sSha2:V3.0",
-            "QUIP:SHRINCS256sKeccak:V3.0",
-            "QUIP:SHRINCS128sQ18Keccak:V3.0",
-            "QUIP:SHRINCS128sQ20Keccak:V3.0",
-            "QUIP:SHRINCS256sSha2:V3.0"
+            "QUIP:SHRINCS256sKeccak:V4.0",
+            "QUIP:SHRINCS128sQ18Keccak:V4.0",
+            "QUIP:SHRINCS128sQ20Keccak:V4.0",
+            "QUIP:SHRINCS256sSha2:V4.0"
         ];
     }
 
@@ -51,10 +51,10 @@ contract CreateXSaltInvariantsTest is Test {
             0x23cc6a3b31A3f6734530FCddB19eabE31F9a3037,
             0xf6e309c6795447584110404FbaE112E4236d40AD,
             0x55346bdc46Cf36C844c0f708041C916c0B65718f,
-            0x590E88eA4D2E3E6Cd1B30062F20B51c97fEBC4f2,
-            0xC6030E5DDf2d6124886633d056b78b77fCf380E3,
-            0x8077857f6067e2c9838ffd449179679d602314F9,
-            0x2740A266d8e993547f085f16E076802B8e8B82d1
+            0xF2f9E6D692da41b089c3c261c41509669eEc5567,
+            0x695BA9d92FB431B4d446EEcb40b9874c9E43cc91,
+            0xa301C72c150d735ED741F3Fd980691d1a77F7c52,
+            0x10eE478959bD9cd9E99573cf208D217d704C2FF5
         ];
     }
 

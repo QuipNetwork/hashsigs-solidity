@@ -198,8 +198,8 @@ contract SHRINCSMutationFuzzTest is Test {
         rawHash = keccak256("shrincs mutation raw vector");
         SHRINCS.Signature memory signature;
         bool ok;
-        (signature, ok) = SHRINCSTestSigner.signStatefulRawAtLeaf(
-            signingKey, 1, abi.encodePacked(rawHash)
+        (signature, ok) = SHRINCSTestSigner.signStatefulAdapterAtLeaf(
+            signingKey, publicKey, 1, rawHash
         );
         assertTrue(ok, "raw sign");
         rawKey = abi.encodePacked(commitment);

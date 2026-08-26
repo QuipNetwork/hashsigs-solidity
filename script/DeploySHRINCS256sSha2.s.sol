@@ -37,7 +37,7 @@ contract DeploySHRINCS256sSha2 is CreateXDeployer {
         abi.encodePacked(
             bytes20(DEPLOYER),
             SALT_FLAG,
-            bytes11(keccak256("QUIP:SHRINCS256sSha2:V3.0"))
+            bytes11(keccak256("QUIP:SHRINCS256sSha2:V4.0"))
         )
     );
 
@@ -63,7 +63,7 @@ contract DeploySHRINCS256sSha2 is CreateXDeployer {
     // hash is chain-invariant and is the value published in DEPLOYMENTS.md;
     // regenerate per DEPLOYMENTS.md.
     bytes32 internal constant RUNTIME_CODEHASH =
-        0x481dbd63893163201459dfba36f092d0a1d40589770c71f8597c7afa772daff9;
+        0x6b72096a091dbe8bb23b698f034a77f031d6b6a65cc5fb962255885eb3ad9560;
 
     function run() external {
         // Assert the build profile FIRST so a wrong-profile run fails

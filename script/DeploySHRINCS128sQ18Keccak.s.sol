@@ -37,7 +37,7 @@ contract DeploySHRINCS128sQ18Keccak is CreateXDeployer {
         abi.encodePacked(
             bytes20(DEPLOYER),
             SALT_FLAG,
-            bytes11(keccak256("QUIP:SHRINCS128sQ18Keccak:V3.0"))
+            bytes11(keccak256("QUIP:SHRINCS128sQ18Keccak:V4.0"))
         )
     );
 
@@ -63,7 +63,7 @@ contract DeploySHRINCS128sQ18Keccak is CreateXDeployer {
     // hash is chain-invariant and is the value published in DEPLOYMENTS.md;
     // regenerate per DEPLOYMENTS.md.
     bytes32 internal constant RUNTIME_CODEHASH =
-        0x64467153ef561dcec0a76e4a99314e66113a49f7fb14ba9c7007a6033c62b944;
+        0xc07f64ea03d16d6e24f7c8a3511dc6fd98aa7f7c5af7d11eb4f74284927685ca;
 
     function run() external {
         // Assert the build profile FIRST so a wrong-profile run fails

@@ -308,6 +308,7 @@ contract SHRINCSCalldataRetagTest is Test {
     bytes internal signatureKey;
     bytes internal signatureEnvelope;
     bytes32 internal statelessHash;
+    bytes32 internal signatureHash;
 
     // Account-action fixtures (four-word head: two inline action words
     // between two struct offsets), driven through the wrapper's mode-1 /
@@ -335,7 +336,8 @@ contract SHRINCSCalldataRetagTest is Test {
             statelessEnvelope,
             statelessHash,
             signatureKey,
-            signatureEnvelope
+            signatureEnvelope,
+            signatureHash
         ) = this.buildStatelessFixtures();
 
         verifier = new SHRINCS256sRetagHarness();
@@ -454,8 +456,8 @@ contract SHRINCSCalldataRetagTest is Test {
         statefulHash = keccak256("shrincs z3 retag stateful message");
         SHRINCS.Signature memory signature;
         bool signed;
-        (signature, signed) = SHRINCSTestSigner.signStatefulRawAtLeaf(
-            signingKey, 1, abi.encodePacked(statefulHash)
+        (signature, signed) = SHRINCSTestSigner.signStatefulAdapterAtLeaf(
+            signingKey, publicKey, 1, statefulHash
         );
         require(signed, "stateful sign");
 
@@ -476,7 +478,8 @@ contract SHRINCSCalldataRetagTest is Test {
             bytes memory sEnvelope,
             bytes32 hash,
             bytes memory sigKey,
-            bytes memory sigEnvelope
+            bytes memory sigEnvelope,
+            bytes32 sigHash
         )
     {
         (
@@ -489,8 +492,12 @@ contract SHRINCSCalldataRetagTest is Test {
         require(ok, "stateless keygen");
 
         hash = keccak256("shrincs z3 retag stateless message");
+        sigHash = SHRINCS.statelessRawMessageHash(
+            SHRINCSAccountSigningFacade.publicKeyCommitmentWord(publicKey),
+            hash
+        );
         (bytes32 sessionId, bool beginOk) = signer.beginSession(
-            signingKey, publicKey, abi.encodePacked(hash)
+            signingKey, publicKey, abi.encodePacked(sigHash)
         );
         require(beginOk, "begin");
         SPHINCSPlusC.Signature memory signature;
@@ -817,7 +824,7 @@ contract SHRINCSCalldataRetagTest is Test {
 
     function testSignatureEnvelopeVerifies() public view {
         assertEq(
-            sphincs.verify(signatureKey, statelessHash, signatureEnvelope),
+            sphincs.verify(signatureKey, signatureHash, signatureEnvelope),
             SELECTOR,
             "valid signature envelope must verify (positive control)"
         );
@@ -861,7 +868,7 @@ contract SHRINCSCalldataRetagTest is Test {
         for (uint256 i = 0; i < lengths.length; i++) {
             assertEq(
                 sphincs.verify(
-                    new bytes(lengths[i]), statelessHash, signatureEnvelope
+                    new bytes(lengths[i]), signatureHash, signatureEnvelope
                 ),
                 INVALID_SIGNATURE,
                 "wrong-length key must fail closed without reverting"
@@ -878,7 +885,7 @@ contract SHRINCSCalldataRetagTest is Test {
         );
         assertEq(wrongKey.length, 64, "wrong-value key must be 64 bytes");
         assertEq(
-            sphincs.verify(wrongKey, statelessHash, signatureEnvelope),
+            sphincs.verify(wrongKey, signatureHash, signatureEnvelope),
             INVALID_SIGNATURE,
             "right-length wrong-value key must fail closed"
         );
@@ -1063,7 +1070,7 @@ contract SHRINCSCalldataRetagTest is Test {
     {
         vm.assume(flip != 0);
         bytes memory mutant = _flipByte(signatureEnvelope, position, flip);
-        try sphincs.verify(signatureKey, statelessHash, mutant) returns (
+        try sphincs.verify(signatureKey, signatureHash, mutant) returns (
             bytes4 result
         ) {
             if (result == SELECTOR) {
@@ -1139,7 +1146,7 @@ contract SHRINCSCalldataRetagTest is Test {
         bytes memory envelope,
         string memory label
     ) internal view {
-        try sphincs.verify(signatureKey, statelessHash, envelope) returns (
+        try sphincs.verify(signatureKey, signatureHash, envelope) returns (
             bytes4 result
         ) {
             assertTrue(result != SELECTOR, label);

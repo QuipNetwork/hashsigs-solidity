@@ -71,7 +71,16 @@ contract HashSuiteStatelessGuardTest is Test {
         bytes32 hash = keccak256("hashsuite stateless guard message");
         bytes32 sessionId;
         (sessionId, ok) = accountSigner.beginSession(
-            signingKey, publicKey, abi.encodePacked(hash)
+            signingKey,
+            publicKey,
+            abi.encodePacked(
+                SHRINCS.statelessRawMessageHash(
+                    SHRINCSAccountSigningFacade.publicKeyCommitmentWord(
+                        publicKey
+                    ),
+                    hash
+                )
+            )
         );
         assertTrue(ok, "guard session must begin");
         // line-length: allow — fmt canonical tuple head exceeds cap

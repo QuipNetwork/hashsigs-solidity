@@ -369,7 +369,16 @@ contract SHRINCSStatelessDelegationTest is Test {
 
         hash = keccak256("stateless delegation message");
         (bytes32 sessionId, bool beginOk) = signer.beginSession(
-            signingKey, publicKey, abi.encodePacked(hash)
+            signingKey,
+            publicKey,
+            abi.encodePacked(
+                SHRINCS.statelessRawMessageHash(
+                    SHRINCSAccountSigningFacade.publicKeyCommitmentWord(
+                        publicKey
+                    ),
+                    hash
+                )
+            )
         );
         require(beginOk, "begin");
         bool completeOk;
@@ -472,6 +481,7 @@ contract SHRINCSStatelessDelegationTest is Test {
         (legacyPublicKey, message, legacySignature) = abi.decode(
             args, (LegacyPublicKey, bytes, LegacyStatelessSignature)
         );
+        message = vm.parseJsonBytes(vectors, ".stateless.callerHash");
 
         publicKey = SHRINCS.PublicKey({
             statefulPublicKey: legacyPublicKey.statefulPublicKey,
