@@ -93,7 +93,7 @@ abstract contract SHRINCSVerifier is
     // each subclass's PROFILE_TAG. Unchanged by the adapter restructure:
     // the key/envelope format family it names is unchanged.
     bytes32 public constant VERSION_TAG =
-        keccak256("quip.shrincs-verifier.v2");
+        keccak256("quip.shrincs-verifier.v3");
     // Any non-magic value denotes signature failure.
     bytes4 private constant INVALID_SIGNATURE = 0xffffffff;
     // Transient attestation slot value for a successful verification

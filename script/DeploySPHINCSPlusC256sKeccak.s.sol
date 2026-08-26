@@ -39,7 +39,7 @@ contract DeploySPHINCSPlusC256sKeccak is CreateXDeployer {
         abi.encodePacked(
             bytes20(DEPLOYER),
             SALT_FLAG,
-            bytes11(keccak256("QUIP:SPHINCSPlusC256sKeccak:V2.0"))
+            bytes11(keccak256("QUIP:SPHINCSPlusC256sKeccak:V3.0"))
         )
     );
 
@@ -51,7 +51,7 @@ contract DeploySPHINCSPlusC256sKeccak is CreateXDeployer {
     // hash is chain-invariant and is the value published in DEPLOYMENTS.md;
     // regenerate per DEPLOYMENTS.md.
     bytes32 internal constant RUNTIME_CODEHASH =
-        0x19bef5459a4a8696b23a0c00449f5dbb5a4d65458a7c3474937507775b2ceca6;
+        0xe8d1cd0765874bac8238d6c8790c9916d0b2a332e5abe7fd50d8ecec48a71954;
 
     function run() external {
         _deploy(

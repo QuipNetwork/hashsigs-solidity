@@ -228,10 +228,15 @@ contract SHRINCSStatelessVectorSigner {
         // Verifier-shape FORS public value: route through the production
         // finalizer HashSuite.hashForsPk32 (the same helper
         // FORSMinusC.verify hashes the per-tree roots with; masking applied
-        // internally, no-op at 256s). The [tag | pkSeed | roots] buffer is
-        // suite-independent, so build it here and pass (ptr, len).
-        bytes memory forsPkInput =
-            abi.encodePacked("fors-pk", session.signingKey.pkSeed, roots);
+        // internally, no-op at 256s). The
+        // [tag | pkSeed | FORS_ROOTS ADRS | roots] buffer is suite-independent.
+        bytes32 addressWord = bytes32(
+            (uint256(session.bottomTreeIndex) << 128) | (uint256(4) << 96)
+                | (uint256(session.bottomLeafIndex) << 64)
+        );
+        bytes memory forsPkInput = abi.encodePacked(
+            "fors-pk", session.signingKey.pkSeed, addressWord, roots
+        );
         uint256 forsPkPtr;
         // Memory-safe: reads forsPkInput's data pointer (length word + 32)
         // without writing memory; the finalizer only hashes the buffer.
@@ -1042,9 +1047,14 @@ contract SHRINCSStatelessVectorSigner {
         }
         // Verifier-shape WOTS-C public-key hash: production finalizer
         // HashSuite.hashWotsCPk32 (masking applied internally, no-op at
-        // 256s). The [tag | pkSeed | endpoints] buffer is suite-independent.
+        // 256s). The [tag | pkSeed | WOTS_PK ADRS | endpoints] buffer is
+        // suite-independent.
+        bytes32 addressWord = bytes32(
+            (uint256(layer) << 224) | (uint256(tree) << 128)
+                | (uint256(1) << 96) | (uint256(keypair) << 64)
+        );
         bytes memory pkInput =
-            abi.encodePacked("wots-c-pk", pkSeed, endpoints);
+            abi.encodePacked("wots-c-pk", pkSeed, addressWord, endpoints);
         uint256 pkInputPtr;
         // Memory-safe: reads pkInput's data pointer (length word + 32); the
         // finalizer only hashes the buffer.

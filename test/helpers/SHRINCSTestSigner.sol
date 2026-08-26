@@ -543,10 +543,14 @@ library SHRINCSTestSigner {
         // Verifier-shape WOTS-C public-key hash: route through the production
         // finalizer HashSuite.hashWotsCPk32 (the same helper Hypertree.verify
         // hashes the chain endpoints with; masking applied internally, no-op
-        // at 256s). The [tag | pkSeed | endpoints] buffer is
+        // at 256s). The [tag | pkSeed | WOTS_PK ADRS | endpoints] buffer is
         // suite-independent, so build it here and pass (ptr, len).
+        bytes32 addressWord = bytes32(
+            (uint256(layer) << 224) | (uint256(tree) << 128)
+                | (uint256(1) << 96) | (uint256(keypair) << 64)
+        );
         bytes memory pkInput =
-            abi.encodePacked("wots-c-pk", pkSeed, endpoints);
+            abi.encodePacked("wots-c-pk", pkSeed, addressWord, endpoints);
         uint256 pkInputPtr;
         // Memory-safe: reads pkInput's data pointer (len word + 32) without
         // writing memory; the finalizer only hashes the buffer.

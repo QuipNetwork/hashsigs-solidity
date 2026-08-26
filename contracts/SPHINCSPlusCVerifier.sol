@@ -72,7 +72,7 @@ abstract contract SPHINCSPlusCVerifier is IERC7913SignatureVerifier {
     // the stateless SPHINCSPlusC scheme, not the parameter set. The
     // per-profile parameter identity lives in each subclass's PROFILE_TAG.
     bytes32 public constant VERSION_TAG =
-        keccak256("quip.sphincsplusc-verifier.v2");
+        keccak256("quip.sphincsplusc-verifier.v3");
     // Any non-magic value denotes signature failure.
     bytes4 private constant INVALID_SIGNATURE = 0xffffffff;
 

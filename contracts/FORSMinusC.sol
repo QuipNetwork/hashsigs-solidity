@@ -21,6 +21,9 @@ import {Hash} from "./Hash.sol";
 import {HashSuite} from "shrincs-hash/HashSuite.sol";
 
 library FORSMinusC {
+    // AddressTypeForsRoots: the FORS roots compression ADRS type constant
+    // [FIPS205 §4.2] (value 4).
+    uint32 internal constant AddressTypeForsRoots = 4;
     // AddressTypeForsTree: the FORS-tree ADRS type constant
     // [FIPS205 §4.2] (value 3) for the SPHINCS-style keyed hash inputs.
     uint32 internal constant AddressTypeForsTree = 3;
@@ -129,14 +132,15 @@ library FORSMinusC {
             return (bytes32(0), 0, 0, false);
         }
 
-        // "fors-pk" || pkSeed || root_0 || ... || root_{k-2}
-        uint256 forsPkInputLen = 39 + signedTrees * 32;
+        // "fors-pk" || pkSeed || FORS_ROOTS ADRS || root_0 || ...
+        uint256 forsPkInputLen = 71 + signedTrees * 32;
         uint256 forsPkInput;
         // keccak256 input ("fors-pk" tag [§1 tags], forsPkInputLen bytes):
         //   [0..7)         "fors-pk"
         //   [7..39)        pkSeed
-        //   [39..39+32*t)  reconstructed per-tree roots (t = signedTrees)
-        // forsPkInputLen = 39 + signedTrees * 32.
+        //   [39..71)       FORS_ROOTS address (type 4)
+        //   [71..71+32*t) reconstructed per-tree roots (t = signedTrees)
+        // forsPkInputLen = 71 + signedTrees * 32.
         // Memory-safe: allocates roundup32(forsPkInputLen) bytes at the
         // free-memory pointer and advances the pointer past them; the loop
         // below fills the per-tree roots and the final hash reads exactly
@@ -148,6 +152,15 @@ library FORSMinusC {
             mstore(forsPkInput, "fors-pk")
             // Copy the 32-byte public seed immediately after the 7-byte tag.
             calldatacopy(add(forsPkInput, 7), pkSeed.offset, 32)
+            // FORS is below hypertree layer zero. Bind the compression to
+            // its digest-derived tree and keypair coordinates.
+            mstore(
+                add(forsPkInput, 39),
+                or(
+                    shl(128, treeIndex),
+                    or(shl(96, AddressTypeForsRoots), shl(64, leafIndex))
+                )
+            )
             // Bump the free-memory pointer to the next 32-byte aligned slot
             // after this buffer.
             mstore(
@@ -187,11 +200,11 @@ library FORSMinusC {
             // Append each reconstructed root into the final FORS public-key
             // hash input.
             // Memory-safe: writes one 32-byte root into the forsPkInput
-            // buffer allocated above (slot 39 + tree*32).
+            // buffer allocated above (slot 71 + tree*32).
             assembly ("memory-safe") {
                 // Write this 32-byte root at slot `tree` after the fixed
                 // tag-and-seed prefix.
-                mstore(add(add(forsPkInput, 39), mul(tree, 32)), root)
+                mstore(add(add(forsPkInput, 71), mul(tree, 32)), root)
             }
             unchecked {
                 ++tree;
