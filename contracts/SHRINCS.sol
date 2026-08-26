@@ -55,6 +55,10 @@ import {SPHINCSPlusC} from "./SPHINCSPlusC.sol";
 /// The rotation/context helpers (rotateStatefulViaStateless, statelessRotate,
 /// and their message-hash builders) are likewise `calldata`-typed.
 library SHRINCS {
+    /// @dev A re-tagged stateless signature resolved its final byte before
+    /// its own start or beyond the enclosing call's calldata.
+    error InvalidStatelessSignatureSlice();
+
     // Sentinel for an unsupported hash suite. Kept as a named constant so
     // fail-closed suite checks and negative tests have a stable identifier
     // that never collides with a real suite id (keccak = 1, sha2 = 2). The
@@ -690,6 +694,19 @@ library SHRINCS {
         uint256 lastPath = signature.hypertree[lastLayer].authPath.length - 1;
         bytes calldata tail =
             signature.hypertree[lastLayer].authPath[lastPath];
+        uint256 signatureStart;
+        uint256 bodyEnd;
+        assembly ("memory-safe") {
+            signatureStart := signature
+            bodyEnd := add(tail.offset, and(add(tail.length, 31), not(31)))
+        }
+        // solc validates nested calldata tails against calldatasize(), but
+        // does not prove that independently resolved pointers are ordered.
+        // Reject before subtracting so a wrapped/reordered tail cannot turn
+        // into a near-2^256 calldatacopy and consume all forwarded gas.
+        if (bodyEnd < signatureStart || bodyEnd > msg.data.length) {
+            revert InvalidStatelessSignatureSlice();
+        }
         // Memory-safe: allocates the envelope at the free-memory pointer,
         // writes its length and the single 0x20 head offset word, bulk-copies
         // the signature's canonical body from calldata, and bumps the
@@ -699,13 +716,11 @@ library SHRINCS {
             // signature's calldata start; for canonical (and solc-checked)
             // framings both bounds are word-aligned, so body is a whole
             // number of 32-byte words.
-            let bodyEnd :=
-                add(tail.offset, and(add(tail.length, 31), not(31)))
-            let body := sub(bodyEnd, signature)
+            let body := sub(bodyEnd, signatureStart)
             envelope := mload(0x40)
             mstore(envelope, add(0x20, body))
             mstore(add(envelope, 0x20), 0x20)
-            calldatacopy(add(envelope, 0x40), signature, body)
+            calldatacopy(add(envelope, 0x40), signatureStart, body)
             mstore(0x40, add(add(envelope, 0x20), add(0x20, body)))
         }
     }
