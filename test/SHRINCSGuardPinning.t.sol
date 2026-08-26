@@ -23,6 +23,7 @@ import {SPHINCSPlusC} from "../contracts/SPHINCSPlusC.sol";
 import {FORSMinusC} from "../contracts/FORSMinusC.sol";
 import {Hypertree} from "../contracts/Hypertree.sol";
 import {WOTSPlusC} from "../contracts/WOTSPlusC.sol";
+import {HashSuite} from "shrincs-hash/HashSuite.sol";
 
 // GUARD-PINNING SAFETY ENVELOPE (epic Z1).
 //
@@ -239,27 +240,61 @@ contract SHRINCSGuardPinningTest is Test {
     // ---------------------------------------------------------------------
 
     // Class: stateful leaf-0 signature (empty authPath). Review rows
-    // 18/21/22. leafIndex := authPath.length, so an empty path claims the
-    // reserved leaf 0. Pre-drop UXMSS.sol:79 returns false; post-drop it
-    // Panics on authPath[0] or fails the crypto compare (the
-    // rootFromUnbalancedPath length check it once hit was itself dropped in
-    // Z1).
-    function testStatefulLeafZeroEmptyAuthPathRejected() public {
+    // 18/21/22. Grind the public digest inputs until the WOTS-C target sum
+    // passes, so rejection cannot come from that earlier cryptographic gate.
+    // The explicit leaf-zero guard must return false without a Panic.
+    function testStatefulGroundLeafZeroReturnsFalse() public {
         (
             SHRINCS.PublicKey memory publicKey,
             bytes memory message,
             SHRINCS.Signature memory signature
         ) = decodeStatefulVector(".stateful.cases.valid.calldata");
         signature.authPath = new bytes32[](0);
-        assertTrue(
-            statefulRejected(
+        signature.randomizer = keccak256("guard-pinning leaf zero");
+        signature.counter = _groundLeafZeroCounter(
+            _statefulPkSeed(publicKey.statefulPublicKey),
+            message,
+            signature.randomizer
+        );
+        assertFalse(
+            stateful.verifyUnsafeRaw(
                 compositePublicKeyWord(publicKey),
                 publicKey,
                 message,
                 signature
             ),
-            "stateful leaf-0 empty authPath must not wrong-accept"
+            "ground stateful leaf-0 claim must return false"
         );
+    }
+
+    function _groundLeafZeroCounter(
+        bytes32 pkSeed,
+        bytes memory message,
+        bytes32 randomizer
+    ) internal view returns (uint32 counter) {
+        for (uint32 candidate = 0; candidate < (1 << 24); ++candidate) {
+            bytes32 digest = HashSuite.uxmssWotsDigits32(
+                pkSeed, 0, randomizer, candidate, message
+            );
+            uint32 sum;
+            for (uint256 i = 0; i < SHRINCSParams.WOTS_CHAINS_STATEFUL; ++i) {
+                sum += WOTSPlusC.baseW16Digit32(digest, i);
+            }
+            if (sum == SHRINCSParams.WOTS_TARGET_SUM_STATEFUL) {
+                return candidate;
+            }
+        }
+        revert("leaf-zero grind exhausted");
+    }
+
+    function _statefulPkSeed(bytes memory encoded)
+        internal
+        pure
+        returns (bytes32 pkSeed)
+    {
+        assembly ("memory-safe") {
+            pkSeed := mload(add(encoded, 32))
+        }
     }
 
     // Class: wrong stateful chains count (SHORT). Review row 20.

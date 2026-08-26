@@ -182,11 +182,11 @@ not input guards.
 | 15 | publicKeyCommitment.length == 32 (validPublicKey) | SHRINCSCodec.sol:335 | M | Field is not part of the packed preimage; only its first 32 bytes are compared → longer field = second encoding | **KEEP** (as the surviving instance after #11 drops) |
 | 16 | decodeStatefulPublicKey encoded.length != 68 | SHRINCSCodec.sol:363 | R (+memory-safety) | validPublicKey:330 always precedes on verify paths; but this check is the precondition making its own fixed-offset assembly reads in-buffer, and the function is a public library API | **KEEP** |
 | 17 | validActionContext: nonzero domainSeparator/actionType/payloadHash | SHRINCS.sol:723-734 (used :273,:299; wrapper :634,:686) | R (policy) | None for forgery: all three are bound into the signed action hash, so a signature only verifies for exactly the values the signer signed. Pure signing-hygiene policy | **DROP-IF**(policy delegated to integrators); otherwise keep as policy, not as a security guard |
-| 18 | UXMSS leafIndex == 0 | UXMSS.sol:79 | R (+early exit) | rootFromUnbalancedPath:226 rejects the same input after ~64 chain walks of wasted work | **KEEP** (as the early-exit half of the redundant pair with #21) |
+| 18 | UXMSS leafIndex == 0 | UXMSS.sol:92 | R (+typed fail-fast) | Explicitly returns false before WOTS work; jointly reviewed with #22, whose helper-level empty-path check remains defense in depth | **KEEP** (maintainer selected typed fail-fast; ground leaf-zero regression pinned) |
 | 19 | UXMSS leafIndex > maxSignatures | UXMSS.sol:82 | R-crypto + work-bound | Forgery-wise redundant (position is hash-bound everywhere, §2); but authPath.length is an attacker-chosen loop bound in rootFromUnbalancedPath — this trusted (commitment-bound) cap is the only limit on attacker-forced hashing before rejection | **KEEP** |
 | 20 | UXMSS chains.length != WOTS_CHAINS_STATEFUL | UXMSS.sol:84 | A+M | Short array → Panic(0x32) at :176 (revert, fail-closed); long array → extras never read → second encoding verifies | **DROP-IF**(revert model + malleability accepted) |
 | 21 | rootFromUnbalancedPath authPath.length != leafIndex | UXMSS.sol:224 | R (tautological) | On the verify path leafIndex := authPath.length (:77), so this compares a value to itself | **DROP** (retain only if the function is kept as a public API with independent callers) |
-| 22 | rootFromUnbalancedPath authPath.length == 0 | UXMSS.sol:226 | R (dup of #18) | Redundant with :79 on the verify path; without both, authPath[0] at :229 Panics (fail-closed revert) | **DROP** (duplicate; #18 kept) |
+| 22 | rootFromUnbalancedPath authPath.length == 0 | UXMSS.sol:222 | R (dup of #18 on verify path) | #18 now returns false before WOTS work; retained here as defense in depth for direct internal helper callers and to prevent authPath[0] Panic | **KEEP** (joint failure-policy pair with #18) |
 | 23 | SPHINCSPlusC pkSeed/hypertreeRoot length != 32 | SPHINCSPlusC.sol:99,101 | R in-repo (S-twin at boundary) | Every in-repo caller supplies exactly 32 (facade widens bytes32; SHRINCS paths are validPublicKey-checked). At the open library boundary they are the twins of #13/#14 and the precondition of the mload-32 reads below | **DROP-IF**(library documented internal-only; otherwise keep as the boundary instance) |
 | 24 | signature.hypertree.length == 0 | SPHINCSPlusC.sol:103 | A (R for rejection) | `hypertree[0]` at :112 Panics; Hypertree.sol:61 would reject the count anyway | **DROP-IF**(revert model) |
 | 25 | FORS randomizer.length != 32 | FORSMinusC.sol:80 | M | fors-digest mloads exactly 32 bytes (:501); a 33+-byte randomizer with the same 32-byte prefix passes the walk (framing-canonical) and verifies identically → second encoding. Shorter reads adjacent heap (no capability) | **DROP-IF**(malleability accepted) — else KEEP |
@@ -209,7 +209,7 @@ not input guards.
 | 42 | hypertreeRootFromPath32 authPath.length != height | Hypertree.sol:417 | A+M | Short → Panic at :440; long → ignored | **KEEP** (as the surviving instance of the #36 pair; then DROP-IF like its class) |
 | 43 | Hypertree expectedTreeIndex != 0 (post-loop) | Hypertree.sol:180 | R (provable) | Always false for the balanced layout (uint64 shifted by d·(h/d)=64 bits); own comment says so | **DROP** |
 
-**Counts: KEEP 14 · DROP 9 · DROP-IF 20** (rows with pair-verdicts
+**Counts: KEEP 15 · DROP 8 · DROP-IF 20** (rows with pair-verdicts
 counted once per row as listed).
 
 ---
@@ -428,19 +428,18 @@ Gas ~15, once.
 **Row 9 — unknown mode byte → invalid (wrapper:194)**: the dispatch
 default branch, not a removable guard. Gas ~0. **KEEP (mechanism).**
 
-**Row 18 — UXMSS leafIndex == 0 (UXMSS:79)**
+**Row 18 — UXMSS leafIndex == 0 (UXMSS:92)**
 1. Gas: ~15, once.
-2. Outer check: **covered (different failure mode).**
-   rootFromUnbalancedPath:226 (`authPath.length == 0 → false`) rejects
-   the same leaf-0 input — but only AFTER ~64 WOTS chain reconstructions
-   of wasted work (:79 is the early exit before that work).
-3. Damage if dropped: none for soundness (still false). A leaf-0
-   signature costs ~one full WOTS reconstruction before rejection; only
-   an attacker sends it and they pay the gas.
-4. Drop+pin? **MAINTAINER-CHOICE (fail-fast).** Covered by :226; pin the
-   coverage with a test that a leaf-0 stateful signature returns false.
-   Worth ~one WOTS reconstruction (~10^4-10^5 gas) of avoided work on a
-   malformed input.
+2. Outer check: **covered, but later.** rootFromUnbalancedPath rejects the
+   same empty path only after WOTS reconstruction. Rows 18 and 22 are a
+   joint failure-policy pair; neither row relies on the other being absent.
+3. Damage if dropped: the helper check still prevents a Panic, but a ground
+   leaf-zero signature forces one full WOTS reconstruction before rejection
+   and makes the public path depend on a lower-level implementation detail.
+4. Drop+pin? **KEEP (typed fail-fast; maintainer ruling for issue 14).** The
+   public verify core returns false before chain work. A regression grinds the
+   leaf-zero digest to the fixed target sum and requires a clean false return,
+   so an earlier target-sum failure cannot make the test vacuous.
 
 **Row 30 — FORS zero-root sentinel propagation (FORSMinusC:177)**
 1. Gas: ~15 × signedTrees(=21) ≈ ~300, per call.
@@ -519,13 +518,13 @@ default branch, not a removable guard. Gas ~0. **KEEP (mechanism).**
 | layer coord==expected | Hypertree:94 | ~300 (×8) | KEEP (mechanism) |
 | unknown-mode dispatch | wrapper:194 | ~0 | KEEP (mechanism) |
 | FORS zero-root sentinel | FORS:177 | ~300 (×21) | KEEP (plumbing, tied to FORS:242) |
-| UXMSS leafIndex==0 | UXMSS:79 | ~15 | MAINTAINER-CHOICE (fail-fast; ~1 WOTS recon) |
+| UXMSS leafIndex==0 | UXMSS:92 | ~15 | KEEP (typed fail-fast; ground regression pinned) |
 | UXMSS leafIndex>maxSignatures | UXMSS:82 | ~15 | KEEP (gas-cap; ~O(authPath) parent-hashes) |
 | Hypertree layers.length==d | Hypertree:61 | ~15 | KEEP (gas-cap; ~10^5 gas/attacker-layer) |
 | hypertreeRootFromPath authPath==height | Hypertree:417 | ~120 (×8) | MAINTAINER-CHOICE (fail-fast+malleability; ~120 gas) |
 
-**Net: KEEP-mechanism 10 · KEEP-gas-cap 2 · DROP+PIN 1 · MAINTAINER-
-CHOICE 2.** No KEEP row hides a wrong-accept; the two S-class rows
+**Net: KEEP-mechanism 10 · KEEP-gas-cap 2 · KEEP-failure-policy 1 ·
+DROP+PIN 1 · MAINTAINER-CHOICE 1.** No KEEP row hides a wrong-accept; the two S-class rows
 (commitment split-pins, key-window) are genuine construction mechanisms,
 not fuzz-pinnable.
 

@@ -86,9 +86,11 @@ library UXMSS {
         // In this unbalanced stateful tree, the leaf index is encoded by
         // auth-path length.
         uint32 leafIndex = uint32(signature.authPath.length);
-        // Reject signatures that claim a leaf beyond the configured stateful
-        // budget.
-        if (leafIndex > maxSignatures) return false;
+        // Leaf zero is reserved and has no authentication path. Reject it
+        // explicitly before WOTS reconstruction so invalid signatures return
+        // false rather than relying on a downstream empty-array failure.
+        // Also reject leaves beyond the configured stateful budget.
+        if (leafIndex == 0 || leafIndex > maxSignatures) return false;
 
         // Reconstruct the compact WOTS-C public-key hash from the signature
         // and message.
