@@ -712,16 +712,18 @@ library SHRINCS {
         // the signature's canonical body from calldata, and bumps the
         // free-memory pointer past the (word-aligned) allocation.
         assembly ("memory-safe") {
-            // Canonical body = last authPath element's padded end - the
-            // signature's calldata start; for canonical (and solc-checked)
-            // framings both bounds are word-aligned, so body is a whole
-            // number of 32-byte words.
+            // Body = last authPath element's padded end - the signature's
+            // calldata start. Accepted non-canonical framings can make this
+            // length non-word-aligned, so reserve its rounded allocation.
             let body := sub(bodyEnd, signatureStart)
             envelope := mload(0x40)
             mstore(envelope, add(0x20, body))
             mstore(add(envelope, 0x20), 0x20)
             calldatacopy(add(envelope, 0x40), signatureStart, body)
-            mstore(0x40, add(add(envelope, 0x20), add(0x20, body)))
+            mstore(
+                0x40,
+                add(envelope, and(add(add(0x40, body), 31), not(31)))
+            )
         }
     }
 
