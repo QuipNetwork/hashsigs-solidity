@@ -16,6 +16,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 pragma solidity ^0.8.28;
 
+import {SHRINCSTestCodec} from "./helpers/SHRINCSTestCodec.sol";
+
 import {Test} from "../lib/forge-std/src/Test.sol";
 import {
     IERC7913SignatureVerifier
@@ -461,7 +463,7 @@ contract SHRINCSCalldataRetagTest is Test {
             SHRINCSAccountSigningFacade.publicKeyCommitmentWord(publicKey)
         );
         statefulEnvelope =
-            SHRINCS.encodeStatefulEnvelope(publicKey, signature);
+            SHRINCSTestCodec.encodeStatefulEnvelope(publicKey, signature);
     }
 
     /// @dev External so the heavy stateless signing runs in its own memory
@@ -502,7 +504,8 @@ contract SHRINCSCalldataRetagTest is Test {
         sKey = abi.encodePacked(
             SHRINCSAccountSigningFacade.publicKeyCommitmentWord(publicKey)
         );
-        sEnvelope = SHRINCS.encodeStatelessEnvelope(publicKey, signature);
+        sEnvelope =
+            SHRINCSTestCodec.encodeStatelessEnvelope(publicKey, signature);
         sigKey = SHRINCS.encodeStatelessKey(
             signingKey.pkSeed, signingKey.hypertreeRoot
         );
@@ -581,7 +584,7 @@ contract SHRINCSCalldataRetagTest is Test {
             authPath: authPath
         });
         bytes memory envelope =
-            SHRINCS.encodeStatefulEnvelope(publicKey, signature);
+            SHRINCSTestCodec.encodeStatefulEnvelope(publicKey, signature);
         assertEq(
             digest.retagStateful(envelope),
             digest.abiStateful(envelope),

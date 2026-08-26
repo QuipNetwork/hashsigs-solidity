@@ -16,6 +16,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 pragma solidity ^0.8.28;
 
+import {SHRINCSTestCodec} from "./SHRINCSTestCodec.sol";
+
 import {SHRINCSTestSigner} from "./SHRINCSTestSigner.sol";
 import {SHRINCS} from "../../contracts/SHRINCS.sol";
 import {SPHINCSPlusC} from "../../contracts/SPHINCSPlusC.sol";
@@ -1098,7 +1100,7 @@ contract SHRINCSStatelessVectorSigner {
     ) internal view returns (bytes32 out) {
         out = value;
         for (uint32 step = start; step < start + steps;) {
-            bytes32 addressWord = Hash.addressWord32(
+            bytes32 addressWord = SHRINCSTestCodec.addressWord32(
                 layer, tree, UXMSS.AddressTypeWotsHash, keypair, chain, step
             );
             // Verifier-shape chain step: production

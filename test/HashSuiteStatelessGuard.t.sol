@@ -16,6 +16,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 pragma solidity ^0.8.28;
 
+import {SHRINCSTestCodec} from "./helpers/SHRINCSTestCodec.sol";
+
 import {Test} from "../lib/forge-std/src/Test.sol";
 import {
     IERC7913SignatureVerifier
@@ -87,7 +89,7 @@ contract HashSuiteStatelessGuardTest is Test {
         bytes memory key =
             abi.encodePacked(publicKeyCommitmentWord(publicKey));
         bytes memory envelope =
-            SHRINCS.encodeStatelessEnvelope(publicKey, signature);
+            SHRINCSTestCodec.encodeStatelessEnvelope(publicKey, signature);
 
         vm.record();
         bytes4 magic = verifier.verifyStateless(key, hash, envelope);

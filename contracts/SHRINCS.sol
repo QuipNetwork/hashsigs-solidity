@@ -620,33 +620,6 @@ library SHRINCS {
         return (publicKey, signature, true);
     }
 
-    /// @notice Inverse of decodeStatefulEnvelope.
-    /// @dev Encodes the bundle and stateful signature with the exact layout
-    /// the decoder expects, so tests and off-chain encoders share one format
-    /// definition with the verifier.
-    /// @param publicKey The SHRINCS public-key bundle.
-    /// @param signature The stateful signature.
-    /// @return envelope The abi-encoded stateful envelope bytes.
-    function encodeStatefulEnvelope(
-        SHRINCS.PublicKey memory publicKey,
-        SHRINCS.Signature memory signature
-    ) internal pure returns (bytes memory envelope) {
-        return abi.encode(publicKey, signature);
-    }
-
-    /// @notice Inverse of the stateless envelope re-tag (statelessEnvelope).
-    /// @dev Shares one format definition with the decoder so the verifier,
-    /// tests, and off-chain encoders cannot drift.
-    /// @param publicKey The SHRINCS public-key bundle.
-    /// @param signature The stateless signature.
-    /// @return envelope The abi-encoded stateless envelope bytes.
-    function encodeStatelessEnvelope(
-        SHRINCS.PublicKey memory publicKey,
-        SPHINCSPlusC.Signature memory signature
-    ) internal pure returns (bytes memory envelope) {
-        return abi.encode(publicKey, signature);
-    }
-
     /// @notice Inverse of decodeStatelessKey.
     /// @dev Builds the SPHINCSPlusCVerifier key the sub-call verify expects.
     /// @param pkSeed The stateless SPHINCS-style public seed.

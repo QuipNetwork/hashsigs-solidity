@@ -16,6 +16,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 pragma solidity ^0.8.28;
 
+import {SHRINCSTestCodec} from "./helpers/SHRINCSTestCodec.sol";
+
 import {Test} from "../lib/forge-std/src/Test.sol";
 import {
     IERC7913SignatureVerifier
@@ -205,7 +207,8 @@ contract SHRINCSEnvelopeERC7913IntegrationTest is Test {
         }
 
         validKey = abi.encodePacked(commitmentWord);
-        validEnvelope = SHRINCS.encodeStatefulEnvelope(publicKey, signature);
+        validEnvelope =
+            SHRINCSTestCodec.encodeStatefulEnvelope(publicKey, signature);
         erc1271Signer =
             new EnvelopeMockERC1271Signer(signedHash, validEnvelope);
     }
@@ -221,7 +224,7 @@ contract SHRINCSEnvelopeERC7913IntegrationTest is Test {
             SHRINCS.Signature memory signature
         ) = decodeRustStatefulVector();
         bytes memory envelope =
-            SHRINCS.encodeStatefulEnvelope(publicKey, signature);
+            SHRINCSTestCodec.encodeStatefulEnvelope(publicKey, signature);
 
         assertEq(
             verifier.verify(publicKey.publicKeyCommitment, hash, envelope),

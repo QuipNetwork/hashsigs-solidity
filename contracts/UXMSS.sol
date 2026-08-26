@@ -150,7 +150,7 @@ library UXMSS {
         // 64..95; layer and tree are 0 for the stateful subtree. The
         // per-step chain index and step are folded in by the shared walk
         // (WOTSPlusC.wotsChainNoMaskBase), reproducing the address word this
-        // path previously built via Hash.addressWord32.
+        // path previously built via the now-test-only address-word oracle.
         uint256 addressBase = (uint256(AddressTypeWotsHash) << 96)
             | (uint256(leafIndex) << 64);
         // Hoist the calldata array reference so the loop reads element data

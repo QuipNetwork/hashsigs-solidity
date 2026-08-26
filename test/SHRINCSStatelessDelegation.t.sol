@@ -16,6 +16,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 pragma solidity ^0.8.28;
 
+import {SHRINCSTestCodec} from "./helpers/SHRINCSTestCodec.sol";
+
 import {Test} from "../lib/forge-std/src/Test.sol";
 import {
     IERC7913SignatureVerifier
@@ -302,7 +304,8 @@ contract SHRINCSStatelessDelegationTest is Test {
             bytes32 messageHash
         ) = obtainValidCase();
         key = abi.encodePacked(commitment);
-        envelope = SHRINCS.encodeStatelessEnvelope(publicKey, signature);
+        envelope =
+            SHRINCSTestCodec.encodeStatelessEnvelope(publicKey, signature);
         hash = messageHash;
     }
 
@@ -324,13 +327,14 @@ contract SHRINCSStatelessDelegationTest is Test {
         // read Panics; the bundle is untouched so it reaches the slice build.
         uint256 last = signature.hypertree.length - 1;
         signature.hypertree[last].authPath = new bytes[](0);
-        emptyAuthPath = SHRINCS.encodeStatelessEnvelope(publicKey, signature);
+        emptyAuthPath =
+            SHRINCSTestCodec.encodeStatelessEnvelope(publicKey, signature);
 
         // Empty the whole hypertree: slice-build's hypertree[last] index read
         // Panics.
         signature.hypertree = new Hypertree.HypertreeLayerSignature[](0);
         emptyHypertree =
-            SHRINCS.encodeStatelessEnvelope(publicKey, signature);
+            SHRINCSTestCodec.encodeStatelessEnvelope(publicKey, signature);
     }
 
     /// @dev The valid stateless case for the active profile: in-Solidity

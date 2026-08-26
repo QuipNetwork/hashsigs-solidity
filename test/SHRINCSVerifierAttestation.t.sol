@@ -16,6 +16,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 pragma solidity ^0.8.28;
 
+import {SHRINCSTestCodec} from "./helpers/SHRINCSTestCodec.sol";
+
 import {Test} from "../lib/forge-std/src/Test.sol";
 import {
     IERC7913SignatureVerifier
@@ -80,8 +82,9 @@ contract SHRINCSVerifierAttestationTest is Test {
         }
         validKey = abi.encodePacked(commitmentWord);
         validKeyHash = keccak256(validKey);
-        validEnvelope =
-            SHRINCS.encodeStatefulEnvelope(publicKey, leafOneSignature);
+        validEnvelope = SHRINCSTestCodec.encodeStatefulEnvelope(
+            publicKey, leafOneSignature
+        );
 
         // Attest here so testAttestationClearedInNextTransaction can
         // assert the transient slot is gone: Foundry runs setUp and each

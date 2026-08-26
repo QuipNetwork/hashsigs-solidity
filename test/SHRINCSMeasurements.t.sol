@@ -16,6 +16,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 pragma solidity ^0.8.28;
 
+import {SHRINCSTestCodec} from "./helpers/SHRINCSTestCodec.sol";
+
 import {Test} from "../lib/forge-std/src/Test.sol";
 import {Vm} from "../lib/forge-std/src/Vm.sol";
 import {
@@ -493,7 +495,7 @@ contract SHRINCSMeasurementsTest is Test {
             ) = loadStatelessVectorCase();
             hash = messageToHash(vectorMessage);
             key = abi.encodePacked(vectorCommitment);
-            envelope = SHRINCS.encodeStatelessEnvelope(
+            envelope = SHRINCSTestCodec.encodeStatelessEnvelope(
                 vectorPublicKey, vectorSignature
             );
             return (verifier, key, envelope, hash);
@@ -519,7 +521,8 @@ contract SHRINCSMeasurementsTest is Test {
         assertTrue(completeOk, "delegation signing must complete");
 
         key = abi.encodePacked(publicKeyCommitmentWord(publicKey));
-        envelope = SHRINCS.encodeStatelessEnvelope(publicKey, signature);
+        envelope =
+            SHRINCSTestCodec.encodeStatelessEnvelope(publicKey, signature);
     }
 
     // pinHarnessArtifact / siblingArtifact: select the active profile's

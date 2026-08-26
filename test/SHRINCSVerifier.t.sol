@@ -16,6 +16,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 pragma solidity ^0.8.28;
 
+import {SHRINCSTestCodec} from "./helpers/SHRINCSTestCodec.sol";
+
 import {Test} from "../lib/forge-std/src/Test.sol";
 import {
     IERC7913SignatureVerifier
@@ -87,10 +89,12 @@ contract SHRINCSVerifierTest is Test {
 
         // Encode through the codec so the tests pin the same format
         // definition the verifier decodes.
-        validEnvelope =
-            SHRINCS.encodeStatefulEnvelope(publicKey, leafOneSignature);
-        secondLeafEnvelope =
-            SHRINCS.encodeStatefulEnvelope(publicKey, leafTwoSignature);
+        validEnvelope = SHRINCSTestCodec.encodeStatefulEnvelope(
+            publicKey, leafOneSignature
+        );
+        secondLeafEnvelope = SHRINCSTestCodec.encodeStatefulEnvelope(
+            publicKey, leafTwoSignature
+        );
     }
 
     // decodeStoredEnvelope: Reload the shared valid envelope as mutable
@@ -184,7 +188,7 @@ contract SHRINCSVerifierTest is Test {
         ) = decodeStoredEnvelope();
         signature.chains[0] = bytes32(uint256(signature.chains[0]) ^ 1);
         bytes memory envelope =
-            SHRINCS.encodeStatefulEnvelope(publicKey, signature);
+            SHRINCSTestCodec.encodeStatefulEnvelope(publicKey, signature);
         assertEq(
             verifier.verify(validKey, signedHash, envelope),
             INVALID_SIGNATURE,
@@ -199,7 +203,7 @@ contract SHRINCSVerifierTest is Test {
         ) = decodeStoredEnvelope();
         signature.authPath[0] = bytes32(uint256(signature.authPath[0]) ^ 1);
         bytes memory envelope =
-            SHRINCS.encodeStatefulEnvelope(publicKey, signature);
+            SHRINCSTestCodec.encodeStatefulEnvelope(publicKey, signature);
         assertEq(
             verifier.verify(validKey, signedHash, envelope),
             INVALID_SIGNATURE,
@@ -294,7 +298,7 @@ contract SHRINCSVerifierTest is Test {
         bytes32 fakeCommitment = keccak256("mismatched bundle commitment");
         publicKey.publicKeyCommitment = abi.encodePacked(fakeCommitment);
         bytes memory envelope =
-            SHRINCS.encodeStatefulEnvelope(publicKey, signature);
+            SHRINCSTestCodec.encodeStatefulEnvelope(publicKey, signature);
         assertEq(
             verifier.verify(
                 abi.encodePacked(fakeCommitment), signedHash, envelope
