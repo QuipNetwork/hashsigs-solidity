@@ -7,8 +7,9 @@ out-*/
 node_modules
 .env
 
-# Foundry build cache
+# Foundry build cache and output
 /cache
+/out
 
 # Coverage output
 /coverage
