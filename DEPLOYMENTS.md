@@ -314,7 +314,7 @@ script asserts the sibling is present before broadcasting.
 | `VERSION_TAG()` | `keccak256("quip.shrincs-verifier.v2")` | same | same |
 | Address | `0x2274a20acD927b24FC130e5673F010c2846F90cb` | `0xCfDbbe2eA27ab6A37E442fe7027e3D4eD8686260` | `0xdC836F601A4efB46b8B50874C065dEFfc8a7149B` |
 | Stateless delegate | `SPHINCSPlusC256sKeccak` (below) | `SPHINCSPlusC128sQ18Keccak` (below) | `SPHINCSPlusC128sQ20Keccak` (below) |
-| Runtime codehash | `0x7cf65cd72815deb21a5601047b7578f63366ca8087331e6cfdf4de014faab089` | `0xb5a93d4e8c2c198138022507c1967ac1657ae14ceb4bb18f55308c81da6ca0a9` | `0xb1ac645f62424942efadbc598e0579c4e029f90e77c51ab95f92927e2e0a30df` |
+| Runtime codehash | `0xac33f93bd7606f37d1c0c79007dbbe7149009ef97d0f1f6f44fd98bd7c27f124` | `0x59282dd82a09743efce8a7cacd8baef091080585de19d52ad27cfb752f201060` | `0xd4ac7cda0313ab11a602c8010ac5c7472afb4173004c058cc5c1577d5bcacf44` |
 | Chains deployed | *(none yet)* | *(none yet)* | *(none yet)* |
 
 Each SHRINCS verifier's `verifyStateless` delegates to the pinned
@@ -374,7 +374,7 @@ deploy.
 | `VERSION_TAG()` | `keccak256("quip.shrincs-verifier.v2")` | `keccak256("quip.sphincsplusc-verifier.v2")` |
 | Address | `0x7eB0CB2c257715DCe91c750f308a398d17511cd5` | `0xAa504387af27bEF16544Cc7e465271D5f8C8c8ee` |
 | Stateless delegate | `SPHINCSPlusC256sSha2` (right) | — |
-| Runtime codehash | `0x64b5b22ae1cc4d8c3d901b70289f3093d14607269e9c5d5b9e97d3679763ec52` | `0xe0c51e6011b22501fa26ce9a326ad688eba3e5f46a26e4d4542beaddc3e0b52d` |
+| Runtime codehash | `0x547f7d5918e1e558ed6bb5c140b5024e701d9fb641a0bbfb5a411a962cea68ee` | `0xe0c51e6011b22501fa26ce9a326ad688eba3e5f46a26e4d4542beaddc3e0b52d` |
 | Chains deployed | *(none yet)* | *(none yet)* |
 
 ### WOTS+ library
