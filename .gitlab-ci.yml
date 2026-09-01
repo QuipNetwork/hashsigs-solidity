@@ -49,11 +49,6 @@ format-and-checks:
 # per profile because each concrete verifier and its deploy script only
 # compile under their own profile (the others are skipped); lint emits a
 # cosmetic "AST source not found" note for the skipped files but exits 0.
-# ExternalAuditRemediation contains intentionally red acceptance specifications
-# for findings not addressed by the current audit branch. Keep compiling and
-# linting that file, but do not execute those expected failures as part of the
-# ordinary green test gate; each issue branch runs its resolved regression
-# tests directly.
 # The 256s-specific vector/stateless tests are skipped under the 128s
 # profiles via foundry.toml until the T6 vector regeneration
 # ([DESIGN §3.6]). The 256s leg runs under the `ci` profile: 256s
@@ -78,7 +73,7 @@ build-lint-test:
   script:
     - forge build
     - forge lint --deny warnings contracts/ test/ script/
-    - forge test --no-match-path test/ExternalAuditRemediation.t.sol
+    - forge test
   cache:
     key: "fuzz-failures-$FOUNDRY_PROFILE"
     when: always

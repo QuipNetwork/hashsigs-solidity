@@ -7,6 +7,7 @@ import {SPHINCSPlusC} from "../contracts/SPHINCSPlusC.sol";
 import {FORSMinusC} from "../contracts/FORSMinusC.sol";
 import {Hypertree} from "../contracts/Hypertree.sol";
 import {WOTSPlusC} from "../contracts/WOTSPlusC.sol";
+import {SHRINCSTestCodec} from "./helpers/SHRINCSTestCodec.sol";
 
 contract Issue11SliceAlignmentHarness {
     function sliceThenAllocate(bytes calldata envelope)
@@ -97,7 +98,7 @@ contract Issue11SliceAlignmentTest is Test {
         });
         SHRINCS.PublicKey memory publicKey;
         bytes memory canonical =
-            SHRINCS.encodeStatelessEnvelope(publicKey, signature);
+            SHRINCSTestCodec.encodeStatelessEnvelope(publicKey, signature);
 
         shifted = new bytes(canonical.length + 1);
         for (uint256 i = 0; i < canonical.length; ++i) {
