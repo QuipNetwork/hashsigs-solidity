@@ -13,27 +13,28 @@ contract Issue11SliceAlignmentHarness {
         external
         pure
         returns (
-            bytes memory slice,
-            uint256 freePointerRemainder,
-            bytes32 paddingAfterAllocation
+            bytes memory sliced,
+            uint256 freeAfterSlice,
+            uint256 nextAllocation,
+            bytes32 paddingBefore,
+            bytes32 paddingAfter
         )
     {
         (, SPHINCSPlusC.Signature calldata signature) =
             SHRINCS.statelessEnvelope(envelope);
-        slice = SHRINCS.sliceStatelessSignatureEnvelope(signature);
+        sliced = SHRINCS.sliceStatelessSignatureEnvelope(signature);
 
         uint256 logicalEnd;
         assembly ("memory-safe") {
-            logicalEnd := add(add(slice, 0x20), mload(slice))
-            freePointerRemainder := mod(mload(0x40), 0x20)
+            freeAfterSlice := mload(0x40)
+            logicalEnd := add(add(sliced, 0x20), mload(sliced))
+            paddingBefore := mload(logicalEnd)
         }
 
-        // The old allocator started this bytes object at logicalEnd. Its
-        // length word therefore changed the slice's first padding word to 32.
-        bytes memory nextAllocation = new bytes(32);
-        nextAllocation[0] = 0xa5;
+        bytes memory next = new bytes(32);
         assembly ("memory-safe") {
-            paddingAfterAllocation := mload(logicalEnd)
+            nextAllocation := next
+            paddingAfter := mload(logicalEnd)
         }
     }
 }
@@ -45,35 +46,35 @@ contract Issue11SliceAlignmentTest is Test {
         harness = new Issue11SliceAlignmentHarness();
     }
 
-    function testNonWordAlignedFramingKeepsNextAllocationSeparate()
-        public
-        view
-    {
-        bytes memory envelope = _nonWordAlignedEnvelope();
+    function testNonAlignedTailPreservesAllocatorAndPadding() public view {
+        bytes memory envelope = _nonAlignedTailEnvelope();
         (
-            bytes memory slice,
-            uint256 freePointerRemainder,
-            bytes32 paddingAfterAllocation
+            bytes memory sliced,
+            uint256 freeAfterSlice,
+            uint256 nextAllocation,
+            bytes32 paddingBefore,
+            bytes32 paddingAfter
         ) = harness.sliceThenAllocate(envelope);
 
-        // The shifted final tail makes the copied signature body 1 mod 32.
-        assertEq(slice.length % 32, 1, "fixture must exercise odd body size");
+        assertEq(sliced.length % 32, 1, "fixture must be non-word-aligned");
+        assertEq(freeAfterSlice % 32, 0, "free-memory pointer must align");
         assertEq(
-            freePointerRemainder,
-            0,
-            "free-memory pointer must remain word-aligned"
+            nextAllocation,
+            freeAfterSlice,
+            "next allocation must start after rounded slice storage"
         );
+        assertEq(paddingBefore, bytes32(0), "slice padding must start zero");
         assertEq(
-            paddingAfterAllocation,
+            paddingAfter,
             bytes32(0),
-            "next allocation must not overwrite envelope padding"
+            "next allocation must not overwrite slice padding"
         );
     }
 
-    function _nonWordAlignedEnvelope()
+    function _nonAlignedTailEnvelope()
         internal
         pure
-        returns (bytes memory envelope)
+        returns (bytes memory shifted)
     {
         bytes[] memory authPath = new bytes[](1);
         authPath[0] = hex"01";
@@ -88,59 +89,45 @@ contract Issue11SliceAlignmentTest is Test {
         });
         SPHINCSPlusC.Signature memory signature = SPHINCSPlusC.Signature({
             fors: FORSMinusC.ForsSignature({
-                randomizer: hex"04",
+                randomizer: new bytes(0),
                 counter: 0,
                 entries: new FORSMinusC.ForsEntry[](0)
             }),
             hypertree: hypertree
         });
-        SHRINCS.PublicKey memory publicKey = SHRINCS.PublicKey({
-            statefulPublicKey: hex"05",
-            publicKeyCommitment: hex"06",
-            pkSeed: hex"07",
-            hypertreeRoot: hex"08"
-        });
+        SHRINCS.PublicKey memory publicKey;
+        bytes memory canonical =
+            SHRINCS.encodeStatelessEnvelope(publicKey, signature);
 
-        bytes memory canonical = abi.encode(publicKey, signature);
-        envelope = new bytes(canonical.length + 1);
+        shifted = new bytes(canonical.length + 1);
         for (uint256 i = 0; i < canonical.length; ++i) {
-            envelope[i] = canonical[i];
+            shifted[i] = canonical[i];
         }
-
-        uint256 signatureStart = _word(envelope, 0x20);
-        uint256 hypertreeStart =
-            signatureStart + _word(envelope, signatureStart + 0x20);
-        uint256 arrayHead = hypertreeStart + 0x20;
-        uint256 layerStart = arrayHead + _word(envelope, arrayHead);
-        uint256 authPathStart =
-            layerStart + _word(envelope, layerStart + 0x40);
-        uint256 authPathHead = authPathStart + 0x20;
-        uint256 tailStart = authPathHead + _word(envelope, authPathHead);
-
-        // Shift the final bytes value (length plus padded data) right by
-        // one byte and point the nested array element at the shifted value.
-        for (uint256 i = 0x40; i > 0; --i) {
-            envelope[tailStart + i] = envelope[tailStart + i - 1];
-        }
-        _storeWord(envelope, authPathHead, _word(envelope, authPathHead) + 1);
+        _shiftFinalAuthPathTail(shifted);
     }
 
-    function _word(bytes memory data, uint256 offset)
-        internal
-        pure
-        returns (uint256 value)
-    {
+    function _shiftFinalAuthPathTail(bytes memory envelope) internal pure {
         assembly ("memory-safe") {
-            value := mload(add(add(data, 0x20), offset))
-        }
-    }
+            let base := add(envelope, 0x20)
+            let signature := add(base, mload(add(base, 0x20)))
+            let hypertree := add(signature, mload(add(signature, 0x20)))
+            let layerHead := add(hypertree, 0x20)
+            let layer := add(layerHead, mload(layerHead))
+            let authPath := add(layer, mload(add(layer, 0x40)))
+            let pathHead := add(authPath, 0x20)
+            let tailOffsetWord := pathHead
+            let tailLength := add(pathHead, mload(tailOffsetWord))
 
-    function _storeWord(bytes memory data, uint256 offset, uint256 value)
-        internal
-        pure
-    {
-        assembly ("memory-safe") {
-            mstore(add(add(data, 0x20), offset), value)
+            // Move the final bytes tail one byte to the right and adjust its
+            // relative offset. Its data pointer and padded end become 1 mod
+            // 32 while remaining entirely inside the enclosing calldata.
+            for { let i := 0x40 } gt(i, 0) { i := sub(i, 1) } {
+                mstore8(
+                    add(tailLength, i),
+                    byte(0, mload(add(tailLength, sub(i, 1))))
+                )
+            }
+            mstore(tailOffsetWord, add(mload(tailOffsetWord), 1))
         }
     }
 }
