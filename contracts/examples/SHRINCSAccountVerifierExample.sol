@@ -404,8 +404,13 @@ contract SHRINCSAccountVerifierExample {
     /// @dev Requires recovery-rotation policy with recovery mode armed,
     /// enforces the stateless usage budget, builds the canonical rotation
     /// context, verifies the stateless recovery signature to derive the next
-    /// commitment, then installs the new full key bundle and resets wrapper
-    /// state for the new stateless epoch.
+    /// commitment, then installs the new key bundle. The stateless usage
+    /// budget is reset only when the rotation target's stateless material
+    /// (pkSeed/hypertreeRoot) actually differs from the currently installed
+    /// key: resetting unconditionally would mint a fresh budget for the SAME
+    /// few-time stateless key whenever a "full" rotation only replaces the
+    /// stateful side, permitting over-use of that stateless key beyond its
+    /// intended signature limit.
     /// @param currentPublicKey The currently installed public-key bundle.
     /// @param recoverySignature The stateless recovery signature.
     /// @param nextKey The full-key rotation target.
@@ -446,11 +451,21 @@ contract SHRINCSAccountVerifierExample {
         if (nextCompositePublicKey == bytes32(0)) return false;
 
         // Count and announce the consumed recovery signature as the final
-        // stateless use under the old key.
+        // stateless use under the old key. fullRotation is always true here,
+        // matching the Rust port: this is the dedicated full-rotation path
+        // regardless of whether the stateless material actually changes.
         consumeStatelessRotationUse(nextCompositePublicKey, true);
-        // Install the next full key bundle and reset wrapper state for the
-        // new stateless epoch.
-        installFreshFullKey(nextCompositePublicKey);
+        // Only a genuine change of stateless material (pkSeed/hypertreeRoot)
+        // justifies resetting the stateless usage budget; reusing the
+        // current stateless key must carry its usage forward like a
+        // stateful-only rotation would.
+        bool statelessKeyChanged = keccak256(currentPublicKey.pkSeed)
+                != keccak256(nextKey.pkSeed)
+            || keccak256(currentPublicKey.hypertreeRoot)
+                != keccak256(nextKey.hypertreeRoot);
+        // Install the next key bundle, resetting stateless usage only when
+        // the stateless material changed.
+        installRotatedKey(nextCompositePublicKey, statelessKeyChanged);
         return true;
     }
 
@@ -499,14 +514,21 @@ contract SHRINCSAccountVerifierExample {
     }
 
     /// @notice Switch to recovery-only stateless rotation mode. Owner only.
-    /// @dev Rejects changes after any stateful leaf use this epoch, keeps
-    /// the stateful cursor initialized for later normal operation, and
-    /// requires an explicit enterRecoveryMode() call before stateless
-    /// recovery is accepted. Emits the policy update.
+    /// @dev Deliberately omits the freeze check the other two setters keep.
+    /// commitStatefulLeafUse freezes policy changes after the first stateful
+    /// leaf use in an epoch, and only installRotatedKey (reachable only
+    /// through a completed rotation) clears that freeze. Rotation itself
+    /// requires the RecoveryRotation policy, which only this setter can
+    /// install. If this setter also required !statefulPolicyFrozen, a used
+    /// monotonic/bitmap account could never reach RecoveryRotation and could
+    /// therefore never rotate again — a permanent lockout. Exempting this
+    /// setter cannot enable stateful leaf reuse: precheckStatefulLeafUse
+    /// returns false unconditionally under RecoveryRotation, so the stateful
+    /// path stays disabled regardless of the freeze flag. Keeps the stateful
+    /// cursor initialized for later normal operation and requires an
+    /// explicit enterRecoveryMode() call before stateless recovery is
+    /// accepted. Emits the policy update.
     function setStatefulPolicyRecoveryRotation() external onlyOwner {
-        // Freeze the stateful tracking model once any stateful leaf has been
-        // consumed in this epoch.
-        require(!statefulPolicyFrozen, "stateful policy frozen");
         // Switch into the policy where stateless signatures serve as recovery
         // authority.
         statefulPolicy = StatefulPolicy.RecoveryRotation;

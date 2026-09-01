@@ -30,6 +30,9 @@ import {
 import {
     SHRINCSAccountSigningFacade
 } from "./helpers/SHRINCSAccountSigningFacade.sol";
+import {
+    SHRINCSStatelessVectorSigner
+} from "./helpers/SHRINCSStatelessVectorSigner.sol";
 
 contract ExampleStatefulHarness {
     function verify(
@@ -1766,6 +1769,178 @@ contract SHRINCSAccountVerifierExampleTest is Test {
             124, 0, 0, nextCompositePublicKey, true
         );
         account.applySuccessfulFullRotationForTest(nextCompositePublicKey);
+    }
+
+    // Regression for the over-reset fix: before the fix, rotateFullKey
+    // always reset statelessSignaturesUsed to zero
+    // (installFreshFullKey -> installRotatedKey(next, true)), even when the
+    // rotation target reused the currently installed pkSeed/hypertreeRoot.
+    // Resetting while the rotation target reuses the current stateless
+    // material mints a fresh budget for the SAME few-time stateless key,
+    // permitting over-use beyond its intended signature limit. This test
+    // drives a real rotateFullKey call whose target keeps the current
+    // stateless material and only replaces the stateful side, and proves
+    // the usage counter carries forward (consuming exactly the one recovery
+    // signature) instead of resetting.
+    // line-length: allow — test name is one unbreakable token
+    function testExampleRotateFullKeyPreservesStatelessUsageWhenStatelessMaterialUnchanged()
+        public
+    {
+        (
+            SHRINCS.SigningKey memory currentSigningKey,
+            SHRINCS.PublicKey memory currentPublicKey,
+            bool currentOk
+        ) = SHRINCSAccountSigningFacade.keygen(
+            bytes(
+                // line-length: allow — seed is one unbreakable token
+                "account-example unchanged-stateless full rotation current key"
+            ),
+            4
+        );
+        assertTrue(currentOk, "current keygen must succeed");
+
+        // forgefmt: disable-next-line
+        SHRINCSAccountVerifierExampleHarness account =
+            new SHRINCSAccountVerifierExampleHarness(
+                SHRINCSAccountSigningFacade.publicKeyCommitmentWord(
+                    currentPublicKey
+                )
+            );
+        account.setStatefulPolicyRecoveryRotation();
+        account.enterRecoveryMode();
+        account.setStatelessSignaturesUsed(9);
+
+        // line-length: allow — fmt canonical tuple head exceeds cap
+        (, SHRINCS.PublicKey memory nextPublicKey, bool nextOk) = SHRINCSAccountSigningFacade.keygen(
+            bytes(
+                "account-example unchanged-stateless full rotation next key"
+            ),
+            4
+        );
+        assertTrue(nextOk, "next keygen must succeed");
+
+        // Replace only the stateful side; reuse the CURRENT stateless
+        // material (pkSeed/hypertreeRoot) so this remains the SAME few-time
+        // stateless key across the rotation.
+        bytes32 nextCommitment = SHRINCS.publicKeyCommitmentFromParts(
+            nextPublicKey.statefulPublicKey,
+            currentPublicKey.pkSeed,
+            currentPublicKey.hypertreeRoot
+        );
+        SHRINCS.RotationTarget memory nextKey = SHRINCS.RotationTarget({
+            statefulPublicKey: nextPublicKey.statefulPublicKey,
+            publicKeyCommitment: abi.encodePacked(nextCommitment),
+            pkSeed: currentPublicKey.pkSeed,
+            hypertreeRoot: currentPublicKey.hypertreeRoot
+        });
+
+        SHRINCSStatelessVectorSigner signer =
+            new SHRINCSStatelessVectorSigner();
+        // line-length: allow — fmt canonical tuple head exceeds cap
+        (, bytes32 sessionId, bool signOk) = SHRINCSAccountSigningFacade.beginFullRotationSessionNow(
+            signer, account, currentSigningKey, currentPublicKey, nextKey
+        );
+        assertTrue(signOk, "full rotation must start");
+
+        // line-length: allow — fmt canonical tuple head exceeds cap
+        (SPHINCSPlusC.Signature memory recoverySignature, bool completeOk) = SHRINCSAccountSigningFacade.completeStatelessSession(
+            signer, sessionId
+        );
+        assertTrue(completeOk, "full rotation must complete");
+
+        bool rotateOk = account.rotateFullKey(
+            currentPublicKey, recoverySignature, nextKey
+        );
+
+        assertTrue(
+            rotateOk,
+            "full rotation with unchanged stateless material must succeed"
+        );
+        assertEq(account.currentSHRINCSPublicKey(), nextCommitment);
+        assertEq(
+            account.statelessSignaturesUsed(),
+            10,
+            // line-length: allow — one unbreakable string literal token
+            "reusing the current stateless key must preserve usage plus the consumed recovery signature"
+        );
+    }
+
+    // Companion to the preservation test above: when the rotation target
+    // DOES replace the stateless material, the budget must still reset to
+    // zero (this is the safe case the Solidity source of truth always
+    // took; the fix only makes the reset conditional, not disabled).
+    // line-length: allow — test name is one unbreakable token
+    function testExampleRotateFullKeyResetsStatelessUsageWhenStatelessMaterialChanges()
+        public
+    {
+        (
+            SHRINCS.SigningKey memory currentSigningKey,
+            SHRINCS.PublicKey memory currentPublicKey,
+            bool currentOk
+        ) = SHRINCSAccountSigningFacade.keygen(
+            bytes(
+                "account-example changed-stateless full rotation current key"
+            ),
+            4
+        );
+        assertTrue(currentOk, "current keygen must succeed");
+
+        // forgefmt: disable-next-line
+        SHRINCSAccountVerifierExampleHarness account =
+            new SHRINCSAccountVerifierExampleHarness(
+                SHRINCSAccountSigningFacade.publicKeyCommitmentWord(
+                    currentPublicKey
+                )
+            );
+        account.setStatefulPolicyRecoveryRotation();
+        account.enterRecoveryMode();
+        account.setStatelessSignaturesUsed(9);
+
+        // line-length: allow — fmt canonical tuple head exceeds cap
+        (, SHRINCS.PublicKey memory nextPublicKey, bool nextOk) = SHRINCSAccountSigningFacade.keygen(
+            bytes(
+                "account-example changed-stateless full rotation next key"
+            ),
+            4
+        );
+        assertTrue(nextOk, "next keygen must succeed");
+
+        SHRINCS.RotationTarget memory nextKey =
+            SHRINCSAccountSigningFacade.fullRotationTarget(nextPublicKey);
+
+        SHRINCSStatelessVectorSigner signer =
+            new SHRINCSStatelessVectorSigner();
+        // line-length: allow — fmt canonical tuple head exceeds cap
+        (, bytes32 sessionId, bool signOk) = SHRINCSAccountSigningFacade.beginFullRotationSessionNow(
+            signer, account, currentSigningKey, currentPublicKey, nextKey
+        );
+        assertTrue(signOk, "full rotation must start");
+
+        // line-length: allow — fmt canonical tuple head exceeds cap
+        (SPHINCSPlusC.Signature memory recoverySignature, bool completeOk) = SHRINCSAccountSigningFacade.completeStatelessSession(
+            signer, sessionId
+        );
+        assertTrue(completeOk, "full rotation must complete");
+
+        bool rotateOk = account.rotateFullKey(
+            currentPublicKey, recoverySignature, nextKey
+        );
+
+        assertTrue(
+            rotateOk,
+            "full rotation with changed stateless material must succeed"
+        );
+        assertEq(
+            account.currentSHRINCSPublicKey(),
+            SHRINCSAccountSigningFacade.publicKeyCommitmentWord(
+                nextPublicKey
+            )
+        );
+        assertEq(
+            account.statelessSignaturesUsed(),
+            0,
+            "genuinely new stateless material must reset usage to zero"
+        );
     }
 
     function actionContext(
