@@ -47,6 +47,14 @@ cp -rf source dest          # NOT: cp -r source dest
 - `apt-get` - use `-y` flag
 - `brew` - use `HOMEBREW_NO_AUTO_UPDATE=1` env var
 
+## Solidity Coding Standards
+
+`CODINGSTANDARDS.md` defines the rules for every `.sol` file in this
+repository. Read it before you write or review Solidity. The `solidity-standards` skill at
+`.agents/skills/solidity-standards/SKILL.md` is the checklist and the
+verification commands for that document. Load it if your tool supports
+Agent Skills. Otherwise, read the file directly.
+
 <!-- BEGIN BEADS INTEGRATION v:1 profile:minimal hash:970c3bf2 -->
 ## Beads Issue Tracker
 

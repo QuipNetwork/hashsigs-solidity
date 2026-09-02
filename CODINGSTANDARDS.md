@@ -5,7 +5,8 @@ This is production cryptographic code: the primary audience is auditors
 and reviewers checking the code against the source documents.
 Optimize for spec-to-code traceability, not brevity.
 
-Enforcement commands are in [§8](#8-enforcement).
+Enforcement commands are in [§8](#8-enforcement). The repo-local agent
+skill `.agents/skills/solidity-standards/` walks this document.
 
 ## 1. Source documents and citations
 

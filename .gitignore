@@ -30,8 +30,9 @@ test/test_vectors/tmp.json
 *~
 
 # Agent tooling and local task tracking: not part of the library.
-# AGENTS.md is the only agent-facing file that is tracked.
-.agents/
+# Tracked agent-facing files: AGENTS.md and the tool-neutral skills
+# under .agents/skills/. Everything below is local state.
+.agents/skills/beads/
 .claude/
 CLAUDE.md
 .codex/

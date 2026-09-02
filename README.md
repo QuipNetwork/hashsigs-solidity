@@ -1260,11 +1260,31 @@ tests, static analysis, and fuzz/invariant properties) are defined in
 
 ### Agent tooling
 
-[AGENTS.md](./AGENTS.md) is the only file for LLM coding agents that this
-repository tracks. Every other agent file is local state and is ignored by
-`.gitignore`: `.agents/`, `.claude/`, `CLAUDE.md`, `.codex/`, `.beads/`,
-and `.serena/`. Put project instructions for agents in `AGENTS.md`. Do not
-commit tool-specific configuration, skills, or task-tracking databases.
+The repository tracks two kinds of files for LLM coding agents:
+
+- [AGENTS.md](./AGENTS.md): project instructions that every agent reads.
+- `.agents/skills/`: tool-neutral skills in the
+  [Agent Skills](https://agentskills.io) format (`<name>/SKILL.md`). The
+  `solidity-standards` skill walks
+  [CODINGSTANDARDS.md](./CODINGSTANDARDS.md) for any agent that writes or
+  reviews Solidity here.
+
+Every other agent file is local state and is ignored by `.gitignore`:
+`.claude/`, `CLAUDE.md`, `.codex/`, `.beads/`, `.serena/`, and the
+`bd`-generated `.agents/skills/beads/`. Put project instructions in
+`AGENTS.md`. Put reusable agent workflows in `.agents/skills/`, never in
+a tool-specific directory. Do not commit tool configuration or
+task-tracking databases.
+
+Codex, Cursor, Gemini CLI, Copilot, and most other agents read
+`.agents/skills/` directly. Claude Code reads only `.claude/skills/`, so
+link the shared skill into it once. The link stays local because
+`.claude/` is ignored:
+
+```bash
+mkdir -p .claude/skills
+ln -s ../../.agents/skills/solidity-standards .claude/skills/
+```
 
 ### Prerequisites
 
