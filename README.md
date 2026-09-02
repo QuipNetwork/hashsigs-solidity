@@ -1258,6 +1258,14 @@ citation conventions, and the enforcement gates (format, lint, line cap,
 tests, static analysis, and fuzz/invariant properties) are defined in
 [CODINGSTANDARDS.md](./CODINGSTANDARDS.md) §8; GitLab CI runs them all.
 
+### Agent tooling
+
+[AGENTS.md](./AGENTS.md) is the only file for LLM coding agents that this
+repository tracks. Every other agent file is local state and is ignored by
+`.gitignore`: `.agents/`, `.claude/`, `CLAUDE.md`, `.codex/`, `.beads/`,
+and `.serena/`. Put project instructions for agents in `AGENTS.md`. Do not
+commit tool-specific configuration, skills, or task-tracking databases.
+
 ### Prerequisites
 
 Install Foundry:
