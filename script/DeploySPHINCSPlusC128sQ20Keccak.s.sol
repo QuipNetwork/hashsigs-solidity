@@ -45,10 +45,9 @@ contract DeploySPHINCSPlusC128sQ20Keccak is CreateXDeployer {
         )
     );
 
-    // Pinned runtime codehash of this artifact (production profile).
-    // _deploy fails closed if the CREATE3 address is occupied by code whose
-    // hash differs from this pin (stale pin or drifted artifact) and
-    // asserts a
+    // Pinned runtime codehash of this artifact (production profile). _deploy
+    // fails closed if the CREATE3 address is occupied by code whose hash
+    // differs from this pin (stale pin or drifted artifact) and asserts a
     // fresh deploy matches it. Metadata is stripped (foundry.toml), so the
     // hash is chain-invariant and is the value published in DEPLOYMENTS.md;
     // regenerate per DEPLOYMENTS.md.

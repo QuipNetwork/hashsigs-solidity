@@ -72,6 +72,27 @@ contract SHRINCSStatelessVectorSigner {
     uint256 internal nextSessionNonce;
     mapping(bytes32 sessionId => Session session) internal sessions;
 
+    // TEST-ONLY mutation switches for the address-tweak binding. When a
+    // switch is set the signer omits the ADRS word from the matching
+    // compression preimage while the verifier still binds it, so the
+    // resulting signature must be rejected. Both default to false, so
+    // every other user of this signer is unaffected.
+    bool internal omitWotsPkAddressWord;
+    bool internal omitForsRootsAddressWord;
+
+    /// @notice TEST-ONLY: choose which compression preimages this signer
+    /// builds with an omitted (all-zero) ADRS word.
+    /// @param omitWotsPk Omit the WOTS_PK ADRS from the "wots-c-pk"
+    /// preimage [FIPS205 §4.2].
+    /// @param omitForsRoots Omit the FORS_ROOTS ADRS from the "fors-pk"
+    /// preimage [FIPS205 §4.2].
+    function setAddressWordOmission(bool omitWotsPk, bool omitForsRoots)
+        external
+    {
+        omitWotsPkAddressWord = omitWotsPk;
+        omitForsRootsAddressWord = omitForsRoots;
+    }
+
     function beginSessionFromSeed(
         bytes memory seedMaterial,
         uint32 maxStatefulSignatures,
@@ -231,10 +252,15 @@ contract SHRINCSStatelessVectorSigner {
         // internally, no-op at 256s). The
         // [tag | pkSeed | FORS_ROOTS ADRS | roots] buffer is
         // suite-independent.
-        bytes32 addressWord = bytes32(
-            (uint256(session.bottomTreeIndex) << 128) | (uint256(4) << 96)
-                | (uint256(session.bottomLeafIndex) << 64)
-        );
+        // TEST-ONLY omission: see setAddressWordOmission. An honest
+        // signing run always takes the false branch.
+        bytes32 addressWord = omitForsRootsAddressWord
+            ? bytes32(0)
+            : bytes32(
+                (uint256(session.bottomTreeIndex) << 128)
+                    | (uint256(FORSMinusC.AddressTypeForsRoots) << 96)
+                    | (uint256(session.bottomLeafIndex) << 64)
+            );
         bytes memory forsPkInput = abi.encodePacked(
             "fors-pk", session.signingKey.pkSeed, addressWord, roots
         );
@@ -1050,10 +1076,15 @@ contract SHRINCSStatelessVectorSigner {
         // HashSuite.hashWotsCPk32 (masking applied internally, no-op at
         // 256s). The [tag | pkSeed | WOTS_PK ADRS | endpoints] buffer is
         // suite-independent.
-        bytes32 addressWord = bytes32(
-            (uint256(layer) << 224) | (uint256(tree) << 128)
-                | (uint256(1) << 96) | (uint256(keypair) << 64)
-        );
+        // TEST-ONLY omission: see setAddressWordOmission. An honest
+        // signing run always takes the false branch.
+        bytes32 addressWord = omitWotsPkAddressWord
+            ? bytes32(0)
+            : bytes32(
+                (uint256(layer) << 224) | (uint256(tree) << 128)
+                    | (uint256(Hypertree.AddressTypeWotsPk) << 96)
+                    | (uint256(keypair) << 64)
+            );
         bytes memory pkInput =
             abi.encodePacked("wots-c-pk", pkSeed, addressWord, endpoints);
         uint256 pkInputPtr;

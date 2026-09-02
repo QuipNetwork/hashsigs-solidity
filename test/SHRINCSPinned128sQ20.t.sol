@@ -51,16 +51,27 @@ contract DeploySHRINCS128sQ20Probe is DeploySHRINCS128sQ20Keccak {
     function siblingAddr() external pure returns (address) {
         return SPHINCS_PLUS_C;
     }
+
+    function siblingCodehash() external pure returns (bytes32) {
+        return SPHINCS_PLUS_C_CODEHASH;
+    }
 }
 
-/// @dev Exposes the SPHINCSPlusC deploy script's internal SALT so
-/// the pin test can assert that script's inline salt composition
-/// matches the library derivation. The scripts must duplicate the
-/// composition (Solidity forbids a function call in a `constant`
-/// initializer), so this is what keeps the duplicate honest.
+/// @dev Exposes the SPHINCSPlusC deploy script's internal SALT and
+/// RUNTIME_CODEHASH so the pin test can assert that script's inline
+/// salt composition matches the library derivation, and that the
+/// sibling codehash the SHRINCS script duplicates has not drifted.
+/// The scripts must duplicate both (Solidity forbids a function call
+/// in a `constant` initializer, and internal constants are not
+/// cross-contract accessible), so this is what keeps the duplicates
+/// honest.
 contract DeploySPHINCSPlusC128sQ20Probe is DeploySPHINCSPlusC128sQ20Keccak {
     function salt() external pure returns (bytes32) {
         return SALT;
+    }
+
+    function runtimeCodehash() external pure returns (bytes32) {
+        return RUNTIME_CODEHASH;
     }
 }
 
@@ -117,6 +128,12 @@ contract SHRINCSPinned128sQ20Test is Test {
             childProbe.salt(),
             childSalt,
             "SPHINCSPlusC deploy script SALT must match derivation"
+        );
+        assertEq(
+            probe.siblingCodehash(),
+            childProbe.runtimeCodehash(),
+            "SHRINCS script's sibling codehash pin must match the "
+            "SPHINCSPlusC script's own RUNTIME_CODEHASH"
         );
     }
 

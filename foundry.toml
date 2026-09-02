@@ -82,6 +82,10 @@ skip = [
 
 ffi = true
 fs_permissions = [
+    # The next three read grants (contracts/, script/, docs/) have no
+    # current test cheatcode consumer (rg vm.readFile / vm.readLine /
+    # vm.exists). Originally consumed by the deleted
+    # test/ExternalAuditRemediation.t.sol; left in place.
     { access = "read", path = "./contracts/" },
     { access = "read", path = "./script/" },
     { access = "read", path = "./docs/" },
@@ -149,6 +153,7 @@ skip = [
     "test/SHRINCSSphincs256sVectors.t.sol",
     "test/SHRINCSSphincs256sSha2Vectors.t.sol",
     "test/SHRINCSStatelessVectorSigner.t.sol",
+    "test/SHRINCSAddressTweakMutation.t.sol",
     "test/SHRINCSAccountSigningFacade.t.sol",
     "test/SHRINCSAccountVectorExport.t.sol",
     "test/HashSuiteStatelessGuard.t.sol",
@@ -185,6 +190,7 @@ skip = [
     "test/SHRINCSSphincs256sVectors.t.sol",
     "test/SHRINCSSphincs256sSha2Vectors.t.sol",
     "test/SHRINCSStatelessVectorSigner.t.sol",
+    "test/SHRINCSAddressTweakMutation.t.sol",
     "test/SHRINCSAccountSigningFacade.t.sol",
     "test/SHRINCSAccountVectorExport.t.sol",
     "test/HashSuiteStatelessGuard.t.sol",
@@ -312,10 +318,16 @@ skip = [
     #    verifier (they select artifacts by SHRINCSParams.PROFILE_ID via
     #    deployCode) and run here instead;
     #  - AccountVectorExport, AccountInvariants, and MutationFuzz drive
-    #    stateless in-Solidity signing under randomized/export loops; under the
-    #    sha2 precompile path that is prohibitively slow, and their sha2
-    #    correctness is already covered deterministically by the lifted
-    #    SHRINCSStatelessVectorSigner / SHRINCSSignerKeygen suites.
+    #    stateless in-Solidity signing under randomized/export/mutation
+    #    loops; under the sha2 precompile path that is prohibitively
+    #    slow, and their sha2 correctness is already covered
+    #    deterministically by the lifted SHRINCSStatelessVectorSigner /
+    #    SHRINCSSignerKeygen suites.
+    #  - AddressTweakMutation signs stateless in-Solidity (two full
+    #    signings per test, deterministic, gated by a test-only
+    #    ADRS-word omission switch), which is prohibitively slow under
+    #    the sha2 precompile path; its sha2 correctness is covered the
+    #    same way.
     "test/SHRINCSSphincs256sVectors.t.sol",
     "test/SHRINCSSphincs128sVectors.t.sol",
     "test/SHRINCSPinned256s.t.sol",
@@ -326,6 +338,7 @@ skip = [
     "test/SHRINCSAccountVectorExport.t.sol",
     "test/SHRINCSAccountInvariants.t.sol",
     "test/SHRINCSMutationFuzz.t.sol",
+    "test/SHRINCSAddressTweakMutation.t.sol",
     "test/SHRINCSEnvelope.t.sol",
     "test/SHRINCSCalldataRetag.t.sol",
     "test/SHRINCSConsumerExamples.t.sol",

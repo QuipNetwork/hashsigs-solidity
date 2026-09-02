@@ -149,8 +149,9 @@ library UXMSS {
         // hash address type (0) in bits 96..127 and the leaf index in bits
         // 64..95; layer and tree are 0 for the stateful subtree. The
         // per-step chain index and step are folded in by the shared walk
-        // (WOTSPlusC.wotsChainNoMaskBase), reproducing the address word this
-        // path previously built via the now-test-only address-word oracle.
+        // (WOTSPlusC.wotsChainNoMaskBase).
+        // ADRS bit layout [FIPS205 §4.2]: layer<<224 | tree<<128 |
+        // type<<96 | keypair<<64 | chain<<32 | step
         uint256 addressBase = (uint256(AddressTypeWotsHash) << 96)
             | (uint256(leafIndex) << 64);
         // Hoist the calldata array reference so the loop reads element data

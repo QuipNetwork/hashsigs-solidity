@@ -29,7 +29,7 @@ import {SHRINCSTestSigner} from "./helpers/SHRINCSTestSigner.sol";
 /// helpers the invariant handler drives directly. Stateful actions run
 /// through the raw unchecked-message path so a signature signed once (in
 /// setUp) replays across the whole campaign; the rotation helpers apply the
-/// same internal installFreshStatefulKey/installFreshFullKey the canonical
+/// same internal installFreshStatefulKey/installRotatedKey the canonical
 /// rotate paths call after a valid recovery signature, so the budget-reset
 /// and key-epoch transitions are exercised without an in-loop stateless sign
 /// (infeasible at 256s).
@@ -55,9 +55,16 @@ contract InvariantAccountHarness is SHRINCSAccountVerifierExample {
         installFreshStatefulKey(nextKey);
     }
 
-    function applyFullRotationForTest(bytes32 nextKey) external {
+    // Mirrors rotateFullKey's tail: the recovery signature is always
+    // announced as a full rotation, but the budget resets only when the
+    // rotation target's stateless material actually differs from the
+    // installed key. statelessChanged is the fuzzed stand-in for that
+    // pkSeed/hypertreeRoot comparison.
+    function applyFullRotationForTest(bytes32 nextKey, bool statelessChanged)
+        external
+    {
         consumeStatelessRotationUse(nextKey, true);
-        installFreshFullKey(nextKey);
+        installRotatedKey(nextKey, statelessChanged);
     }
 }
 
@@ -98,8 +105,10 @@ contract SHRINCSAccountHandler is Test {
     // tracked independently of the wrapper's own freeze flag so removing that
     // flag is caught.
     bool public ghostLeafConsumedThisEpoch;
-    // I3: a full rotation must zero the stateless budget; a stateful-only
-    // rotation must preserve it.
+    // I3: a rotation that changes the stateless material must zero the
+    // budget; every rotation that reuses it (stateful-only, or a full
+    // rotation onto the same stateless key) must carry the budget forward
+    // plus the one consumed recovery signature.
     bool public ghostResetViolated;
     // I4: bitmap leaves observed used under the current key epoch.
     uint256 public ghostBitmapKeyVersion;
@@ -270,7 +279,10 @@ contract SHRINCSAccountHandler is Test {
     }
 
     // actArmRecovery: switch to recovery policy and arm recovery mode (owner
-    // path; reverts once frozen). Exercises the recovery gating that
+    // path). setStatefulPolicyRecoveryRotation is deliberately exempt from
+    // the policy freeze (freezing it would lock a used account out of
+    // rotation forever), so this call succeeds even after a stateful leaf
+    // has been consumed this epoch. Exercises the recovery gating that
     // actUnarmedRotateFull probes.
     function actArmRecovery() external {
         try account.setStatefulPolicyRecoveryRotation() {
@@ -313,16 +325,27 @@ contract SHRINCSAccountHandler is Test {
 
     // actSimulateFullRotation: apply a completed full rotation. Mirrors the
     // real path's budget precheck (skip when already at the limit). The
-    // consumed recovery signature and the whole budget are then reset to
-    // zero, and the key epoch advances (I2, I3).
-    function actSimulateFullRotation(uint256 targetSelector) external {
+    // recovery signature is always consumed (budget += 1) and announced as a
+    // full rotation; the budget then resets to zero ONLY when the rotation
+    // target's stateless material changed. When the target reuses the
+    // installed pkSeed/hypertreeRoot the carried usage must survive exactly
+    // as a stateful-only rotation's does. The key epoch advances either way
+    // (I2, I3).
+    function actSimulateFullRotation(
+        uint256 targetSelector,
+        bool statelessChanged
+    ) external {
         uint64 limit = SHRINCSParams.STATELESS_SIGNATURE_LIMIT;
-        if (account.statelessSignaturesUsed() >= limit) return;
+        uint64 budgetBefore = account.statelessSignaturesUsed();
+        if (budgetBefore >= limit) return;
         uint256 targetIndex = bound(targetSelector, 0, KEY_COUNT - 1);
         uint256 nonceBefore = account.nonce();
         uint256 keyVersionBefore = account.keyVersion();
-        account.applyFullRotationForTest(commitmentOf[targetIndex]);
-        if (account.statelessSignaturesUsed() != 0) {
+        account.applyFullRotationForTest(
+            commitmentOf[targetIndex], statelessChanged
+        );
+        uint64 expected = statelessChanged ? 0 : budgetBefore + 1;
+        if (account.statelessSignaturesUsed() != expected) {
             ghostResetViolated = true;
         }
         _checkRotationAdvanced(nonceBefore, keyVersionBefore);
@@ -535,8 +558,12 @@ contract SHRINCSAccountInvariantsTest is Test {
         );
     }
 
-    // I3: the stateless budget stays within its limit, resets to zero on a
-    // full rotation, and is preserved across a stateful-only rotation.
+    // I3: the stateless budget stays within its limit and follows the
+    // conditional reset rule: it drops to zero exactly when a rotation
+    // installs different stateless material (pkSeed/hypertreeRoot), and
+    // otherwise advances by the single consumed recovery signature. A full
+    // rotation that reuses the installed stateless key is NOT a reset --
+    // resetting there would mint a fresh budget for the same few-time key.
     function invariant_I3_budgetConserved() public view {
         assertLe(
             handler.account().statelessSignaturesUsed(),

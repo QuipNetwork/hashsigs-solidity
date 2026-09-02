@@ -27,6 +27,7 @@ import {SPHINCSPlusC} from "../contracts/SPHINCSPlusC.sol";
 import {FORSMinusC} from "../contracts/FORSMinusC.sol";
 import {Hypertree} from "../contracts/Hypertree.sol";
 import {WOTSPlusC} from "../contracts/WOTSPlusC.sol";
+import {SHRINCSParams} from "shrincs-profile/SHRINCSParams.sol";
 import {SHRINCS256sKeccak} from "../contracts/SHRINCS256sKeccak.sol";
 import {
     SHRINCSAccountVerifierExample
@@ -253,6 +254,44 @@ contract RetagDigestHarness {
         );
     }
 
+    // consumedStatelessAction: Digest over exactly the values the
+    // stateless-action verify path consumes, so two envelopes with the same
+    // digest authorize the same signature. The public-key fields enter
+    // whole because validPublicKey width-pins all four and the installed
+    // commitment binds them; every signature `bytes` field enters as the
+    // single 32-byte word the verifier reads, and every dynamic array is
+    // walked over the fixed element count the verifier iterates. Trailing
+    // bytes and trailing elements past those are the accepted length
+    // malleability ([docs/guard-applicability-review.md] rows 25-41), so
+    // they must not move this digest.
+    function consumedStatelessAction(bytes calldata payload)
+        external
+        pure
+        returns (bytes32 consumed)
+    {
+        (
+            SHRINCS.PublicKey calldata publicKey,
+            bytes32 actionType,
+            bytes32 payloadHash,
+            SPHINCSPlusC.Signature calldata signature
+        ) = SHRINCS.statelessActionEnvelope(payload);
+        consumed = keccak256(
+            abi.encode(
+                publicKey.statefulPublicKey,
+                publicKey.publicKeyCommitment,
+                publicKey.pkSeed,
+                publicKey.hypertreeRoot,
+                actionType,
+                payloadHash,
+                // FORSMinusC.sol:104 pins this randomizer to 32 bytes.
+                signature.fors.randomizer,
+                signature.fors.counter
+            )
+        );
+        consumed = _consumedFors(consumed, signature.fors);
+        consumed = _consumedHypertree(consumed, signature.hypertree);
+    }
+
     // signature-only -----------------------------------------------------
     function retagSignature(bytes calldata payload)
         external
@@ -272,6 +311,82 @@ contract RetagDigestHarness {
         SPHINCSPlusC.Signature memory signature =
             abi.decode(payload, (SPHINCSPlusC.Signature));
         return keccak256(abi.encode(signature));
+    }
+
+    // _consumedFors: Fold in the FORS-C values the verifier reads. It walks
+    // exactly NUM_FORS_TREES - 1 entries and FORS_TREE_HEIGHT auth nodes per
+    // entry, each read as one calldata word (FORSMinusC.sol:170,235-275).
+    function _consumedFors(
+        bytes32 running,
+        FORSMinusC.ForsSignature calldata forsSignature
+    ) private pure returns (bytes32) {
+        uint256 signedTrees = uint256(SHRINCSParams.NUM_FORS_TREES) - 1;
+        uint256 forsHeight = uint256(SHRINCSParams.FORS_TREE_HEIGHT);
+        for (uint256 i = 0; i < signedTrees; ++i) {
+            FORSMinusC.ForsEntry calldata entry = forsSignature.entries[i];
+            running =
+                keccak256(abi.encode(running, _firstWord(entry.secretLeaf)));
+            for (uint256 j = 0; j < forsHeight; ++j) {
+                running = keccak256(
+                    abi.encode(running, _firstWord(entry.authPath[j]))
+                );
+            }
+        }
+        return running;
+    }
+
+    // _consumedHypertree: Fold in the per-layer WOTS-C and subtree values
+    // the verifier reads. It walks exactly NUM_HYPERTREE_LAYERS layers,
+    // NUM_WOTS_CHAINS chain values, and HYPERTREE_HEIGHT /
+    // NUM_HYPERTREE_LAYERS auth nodes per layer (Hypertree.sol:84-130,
+    // 265-275).
+    function _consumedHypertree(
+        bytes32 running,
+        Hypertree.HypertreeLayerSignature[] calldata layers
+    ) private pure returns (bytes32) {
+        uint256 layerCount = uint256(SHRINCSParams.NUM_HYPERTREE_LAYERS);
+        uint256 chainCount = uint256(SHRINCSParams.NUM_WOTS_CHAINS);
+        uint256 subtreeHeight =
+            uint256(SHRINCSParams.HYPERTREE_HEIGHT) / layerCount;
+        for (uint256 i = 0; i < layerCount; ++i) {
+            Hypertree.HypertreeLayerSignature calldata layerSig = layers[i];
+            WOTSPlusC.WotsCSignature calldata wotsC = layerSig.wotsCSignature;
+            running = keccak256(
+                abi.encode(
+                    running,
+                    _firstWord(layerSig.wotsCPkHash),
+                    _firstWord(wotsC.randomizer),
+                    wotsC.counter
+                )
+            );
+            for (uint256 j = 0; j < chainCount; ++j) {
+                running = keccak256(
+                    abi.encode(running, _firstWord(wotsC.chains[j]))
+                );
+            }
+            for (uint256 j = 0; j < subtreeHeight; ++j) {
+                running = keccak256(
+                    abi.encode(running, _firstWord(layerSig.authPath[j]))
+                );
+            }
+        }
+        return running;
+    }
+
+    // _firstWord: The one 32-byte calldata word every verifier read of a
+    // hash-width `bytes` field takes. Bytes past this word are never read,
+    // which is exactly the accepted length malleability.
+    function _firstWord(bytes calldata field)
+        private
+        pure
+        returns (bytes32 word)
+    {
+        // Memory-safe: reads one calldata word into a stack variable; no
+        // memory is written.
+        assembly ("memory-safe") {
+            // Load the leading 32 bytes of the field from calldata.
+            word := calldataload(field.offset)
+        }
     }
 }
 
@@ -322,6 +437,9 @@ contract SHRINCSCalldataRetagTest is Test {
     SHRINCSAccountVerifierExample internal statelessAccount;
     bytes internal statelessActionPayload;
     bytes32 internal statelessActionHash;
+    // Value-level digest of the valid stateless action payload, cached so
+    // the trichotomy fuzz does not recompute it on every run.
+    bytes32 internal statelessActionConsumed;
 
     function setUp() public {
         digest = new RetagDigestHarness();
@@ -359,6 +477,8 @@ contract SHRINCSCalldataRetagTest is Test {
         (account, statelessActionPayload, statelessActionHash) =
             this.buildStatelessActionFixtures();
         statelessAccount = SHRINCSAccountVerifierExample(account);
+        statelessActionConsumed =
+            digest.consumedStatelessAction(statelessActionPayload);
     }
 
     /// @dev Cheap in-Solidity stateful action fixture: keygen, install into a
@@ -969,10 +1089,17 @@ contract SHRINCSCalldataRetagTest is Test {
     /// @dev Overlay-mutation trichotomy for the stateless ACTION envelope,
     /// driven through the wrapper's mode-2 isValidSignature path.
     ///
-    /// A SPHINCS+ signature contains profile-masked values, so changing
-    /// ignored high bits can preserve its cryptographic meaning while
-    /// changing its byte encoding. Acceptance therefore proves decoder
-    /// agreement, not byte equality with the original signature.
+    /// Acceptance is pinned at the value level, not the byte level. The
+    /// stateless verify path reads each hash-width `bytes` field as a
+    /// single 32-byte calldata word and walks each dynamic array over a
+    /// fixed element count, so a mutant may carry a longer field with the
+    /// same 32-byte prefix (a 33-byte wotsCPkHash, say) or trailing array
+    /// elements and still verify. That is the length malleability accepted
+    /// in docs/guard-applicability-review.md rows 25-41, and it is why the
+    /// stateful twin's byte-level decode-equivalence assertion does not
+    /// carry over here. What must still hold is that an accepted mutant
+    /// reproduces every value the verifier consumed from the valid
+    /// payload.
     function testFuzzStatelessActionTrichotomy(
         uint16 position,
         bytes calldata overlay
@@ -988,6 +1115,21 @@ contract SHRINCSCalldataRetagTest is Test {
             bytes4 result
         ) {
             if (result == MAGIC_VALUE) {
+                // Wrong-accept pin: the values the verifier consumed must
+                // be the valid payload's. The re-tag reads are bounds-
+                // checked against calldatasize rather than the envelope
+                // slice, so a framing accepted inside the wrapper call can
+                // still revert when replayed as this harness call's own
+                // argument; that is a framing pathology, not a wrong-accept.
+                try digest.consumedStatelessAction(mutant) returns (
+                    bytes32 consumed
+                ) {
+                    assertEq(
+                        consumed,
+                        statelessActionConsumed,
+                        "magic only on a value-equivalent action envelope"
+                    );
+                } catch {}
                 // A materializing digest can itself revert on a
                 // pathological-but-accepted framing; only compare when
                 // abi.decode succeeds (as in the signature byte-flip).

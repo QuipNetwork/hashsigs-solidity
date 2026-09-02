@@ -1,4 +1,18 @@
 // Copyright (C) 2026 quip.network
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Affero General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with this program.  If not, see <https://www.gnu.org/licenses/>.
+//
 // SPDX-License-Identifier: AGPL-3.0-or-later
 pragma solidity ^0.8.28;
 
@@ -7,10 +21,22 @@ import {WOTSPlus} from "../../contracts/WOTSPlus.sol";
 /// @dev Test-only legacy WOTS+ key generation and signing. Secret-bearing
 /// helpers must not be included in deployable production artifacts.
 library WOTSPlusTestSigner {
+    // NUM_SIGNATURE_CHUNKS: aliases WOTSPlus.NumSignatureChunks
+    // [WOTSPLUS §3]: len_1 + len_2
+    // -> NumMessageChunks + NumChecksumChunks = 64 + 3 = 67
+    // Python: 64 + 3
+    // solc 5462: a foreign library constant is not a valid fixed-array
+    // length, so this file keeps a local literal of the same value.
+    uint8 private constant NUM_SIGNATURE_CHUNKS = 67;
+
     function sign(
         bytes32 privateKey,
         WOTSPlus.WinternitzMessage memory message
-    ) internal pure returns (bytes32[67] memory signature) {
+    )
+        internal
+        pure
+        returns (bytes32[NUM_SIGNATURE_CHUNKS] memory signature)
+    {
         bytes32 publicSeed = _prf(privateKey, 0);
         WOTSPlus.WinternitzElements memory randomizationElements =
             WOTSPlus.generateRandomizationElements(publicSeed);

@@ -57,10 +57,18 @@ contract DeploySHRINCS128sQ20Keccak is CreateXDeployer {
     address internal constant SPHINCS_PLUS_C =
         0xf6e309c6795447584110404FbaE112E4236d40AD;
 
-    // Pinned runtime codehash of this artifact (production profile).
-    // _deploy fails closed if the CREATE3 address is occupied by code whose
-    // hash differs from this pin (stale pin or drifted artifact) and
-    // asserts a
+    // Pinned runtime codehash of the SPHINCSPlusC sibling artifact
+    // (production profile). Duplicated from
+    // DeploySPHINCSPlusC128sQ20Keccak.RUNTIME_CODEHASH: internal
+    // constants are not cross-contract accessible, so _requireSibling
+    // takes it as an argument; SHRINCSPinned128sQ20.t.sol asserts the
+    // two stay equal.
+    bytes32 internal constant SPHINCS_PLUS_C_CODEHASH =
+        0xfd42ac0214f5663e2eccb233de22892b7ea9adbdff0ebdf7d0e8a3336d3ac0c9;
+
+    // Pinned runtime codehash of this artifact (production profile). _deploy
+    // fails closed if the CREATE3 address is occupied by code whose hash
+    // differs from this pin (stale pin or drifted artifact) and asserts a
     // fresh deploy matches it. Metadata is stripped (foundry.toml), so the
     // hash is chain-invariant and is the value published in DEPLOYMENTS.md;
     // regenerate per DEPLOYMENTS.md.
@@ -71,7 +79,9 @@ contract DeploySHRINCS128sQ20Keccak is CreateXDeployer {
         // Assert the build profile FIRST so a wrong-profile run fails
         // with "wrong FOUNDRY_PROFILE", not a sibling-presence error.
         _requireProfile("production-128s-q20");
-        _requireSibling(SPHINCS_PLUS_C_SALT, SPHINCS_PLUS_C);
+        _requireSibling(
+            SPHINCS_PLUS_C_SALT, SPHINCS_PLUS_C, SPHINCS_PLUS_C_CODEHASH
+        );
         _deploy(
             "SHRINCS128sQ20Keccak:",
             "production-128s-q20",

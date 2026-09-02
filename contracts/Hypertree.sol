@@ -238,6 +238,8 @@ library Hypertree {
             mstore(add(pkInput, 9), pkSeed)
             // Bind the compression to this WOTS key's position. Chain and
             // step fields remain zero for the WOTS_PK address type.
+            // ADRS bit layout [FIPS205 §4.2]: layer<<224 | tree<<128 |
+            // type<<96 | keypair<<64 | chain<<32 | step
             mstore(
                 add(pkInput, 41),
                 or(

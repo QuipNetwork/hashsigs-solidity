@@ -82,6 +82,12 @@ contract CreateXSaltInvariantsTest is Test {
         return bytes11(h);
     }
 
+    // External wrapper so vm.expectRevert can intercept the library's
+    // inlined `require` (internal library calls are not a CALL).
+    function requireWellFormedExternal(bytes32 raw) external pure {
+        CreateXSalt.requireWellFormed(raw);
+    }
+
     /// @notice Every salt is laid out as CreateX's sender-scoped branch
     /// requires: [20B DEPLOYER][0x00][11B of the label hash].
     /// @dev A wrong sender field silently routes CreateX to its
@@ -121,6 +127,39 @@ contract CreateXSaltInvariantsTest is Test {
         CreateXSalt.requireWellFormed(raw);
     }
 
+    /// @notice requireWellFormed reverts when the sender field is not
+    /// the canonical deployer. CreateX would otherwise take its
+    /// permissionless branch and land at a squattable address.
+    function testRequireWellFormedRevertsOnWrongSender() public {
+        bytes32 labelHash = keccak256("QUIP:test:bad-sender");
+        bytes32 bad = bytes32(
+            abi.encodePacked(
+                bytes20(address(0xBAD)),
+                CreateXSalt.FLAG_NO_CHAIN_SCOPE,
+                _labelPrefix(labelHash)
+            )
+        );
+        vm.expectRevert(bytes("CreateXSalt: sender field != DEPLOYER"));
+        this.requireWellFormedExternal(bad);
+    }
+
+    /// @notice requireWellFormed reverts on CreateX's 0x01 chain-scope
+    /// flag. That flag would silently destroy chain-invariance.
+    function testRequireWellFormedRevertsOnChainScopedFlag() public {
+        bytes32 labelHash = keccak256("QUIP:test:bad-flag");
+        // 0x01 is CreateX's chain-scope flag (byte 20); the library
+        // mirrors only the 0x00 / no-chain-scope branch.
+        bytes32 bad = bytes32(
+            abi.encodePacked(
+                bytes20(CreateXSalt.DEPLOYER),
+                bytes1(0x01),
+                _labelPrefix(labelHash)
+            )
+        );
+        vm.expectRevert(bytes("CreateXSalt: flag byte != 0x00"));
+        this.requireWellFormedExternal(bad);
+    }
+
     /// @notice Distinct labels give distinct salts and addresses.
     function testFuzzDistinctLabelsGiveDistinctSalts(
         bytes32 labelA,
@@ -133,6 +172,33 @@ contract CreateXSaltInvariantsTest is Test {
         assertTrue(
             CreateXSalt.addressOf(rawA) != CreateXSalt.addressOf(rawB),
             "distinct salt -> distinct address"
+        );
+    }
+
+    /// @notice Truncating the label hash to 11 entropy bytes is an
+    /// explicit reviewed property: two hashes that share a prefix
+    /// produce the same salt (and therefore the same address).
+    function testSharedPrefixGivesEqualSalts() public pure {
+        bytes32 labelA = keccak256("QUIP:test:truncation-a");
+        // Flip the last bit, which sits outside the leading 11 bytes
+        // (88 bits), so the prefix is unchanged and the full hashes
+        // differ.
+        bytes32 labelB = labelA ^ bytes32(uint256(1));
+        assertTrue(labelA != labelB, "full hashes differ");
+        assertEq(
+            _labelPrefix(labelA),
+            _labelPrefix(labelB),
+            "leading 11 bytes match"
+        );
+        assertEq(
+            CreateXSalt.rawSalt(labelA),
+            CreateXSalt.rawSalt(labelB),
+            "shared prefix -> equal salt"
+        );
+        assertEq(
+            CreateXSalt.addressOf(CreateXSalt.rawSalt(labelA)),
+            CreateXSalt.addressOf(CreateXSalt.rawSalt(labelB)),
+            "shared prefix -> equal address"
         );
     }
 

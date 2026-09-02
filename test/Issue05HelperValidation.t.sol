@@ -1,3 +1,18 @@
+// Copyright (C) 2026 quip.network
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Affero General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with this program.  If not, see <https://www.gnu.org/licenses/>.
+//
 // SPDX-License-Identifier: AGPL-3.0-or-later
 pragma solidity ^0.8.28;
 
@@ -128,6 +143,39 @@ contract Issue05HelperValidationTest is Test {
             authPath
         );
         assertTrue(ok);
+    }
+
+    // Height 0 empty path is a legal single-leaf subtree; 1-node fails.
+    function testHypertreeRootAcceptsHeightZeroEmptyPathAsLeaf()
+        public
+        view
+    {
+        bytes[] memory authPath = new bytes[](0);
+        (bytes32 root, bool ok) = harness.hypertreeRootFromPath32(
+            0,
+            abi.encodePacked(bytes32(uint256(1))),
+            0,
+            0,
+            0,
+            bytes32(uint256(2)),
+            authPath
+        );
+        assertTrue(ok);
+        assertEq(root, bytes32(uint256(2)));
+
+        authPath = new bytes[](1);
+        authPath[0] = abi.encodePacked(bytes32(uint256(3)));
+        (root, ok) = harness.hypertreeRootFromPath32(
+            0,
+            abi.encodePacked(bytes32(uint256(1))),
+            0,
+            0,
+            0,
+            bytes32(uint256(2)),
+            authPath
+        );
+        assertFalse(ok);
+        assertEq(root, bytes32(0));
     }
 
     function testUnbalancedRootRejectsEmptyPathWithoutReverting()

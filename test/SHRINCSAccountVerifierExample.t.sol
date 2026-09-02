@@ -113,22 +113,18 @@ contract SHRINCSAccountVerifierExampleHarness is
         statelessSignaturesUsed = value;
     }
 
+    // Install a fresh bundle whose stateless material changed, so the
+    // stateless usage budget resets (installRotatedKey's reset branch).
     function installFreshKeyForTest(bytes32 nextCompositePublicKey)
         external
     {
-        installFreshFullKey(nextCompositePublicKey);
+        installRotatedKey(nextCompositePublicKey, true);
     }
 
     function installFreshStatefulKeyForTest(bytes32 nextCompositePublicKey)
         external
     {
         installFreshStatefulKey(nextCompositePublicKey);
-    }
-
-    function installFreshFullKeyForTest(bytes32 nextCompositePublicKey)
-        external
-    {
-        installFreshFullKey(nextCompositePublicKey);
     }
 
     // line-length: allow — fmt canonical header exceeds cap
@@ -144,7 +140,9 @@ contract SHRINCSAccountVerifierExampleHarness is
         external
     {
         consumeStatelessRotationUse(nextCompositePublicKey, true);
-        installFreshFullKey(nextCompositePublicKey);
+        // Changed-stateless-material arm of rotateFullKey's tail: the
+        // budget resets.
+        installRotatedKey(nextCompositePublicKey, true);
     }
 }
 
@@ -1773,7 +1771,7 @@ contract SHRINCSAccountVerifierExampleTest is Test {
 
     // Regression for the over-reset fix: before the fix, rotateFullKey
     // always reset statelessSignaturesUsed to zero
-    // (installFreshFullKey -> installRotatedKey(next, true)), even when the
+    // (installRotatedKey(next, true) unconditionally), even when the
     // rotation target reused the currently installed pkSeed/hypertreeRoot.
     // Resetting while the rotation target reuses the current stateless
     // material mints a fresh budget for the SAME few-time stateless key,
@@ -1848,6 +1846,14 @@ contract SHRINCSAccountVerifierExampleTest is Test {
         );
         assertTrue(completeOk, "full rotation must complete");
 
+        // The consumed recovery signature is still announced with
+        // fullRotation=true even though the stateless material does not
+        // change: the flag labels the code path taken, not whether the
+        // stateless key moved (see the rotateFullKey @dev note). usedCount
+        // is 10 because consumeStatelessRotationUse increments the 9 set
+        // above before installRotatedKey decides not to reset it.
+        vm.expectEmit(true, true, true, true, address(account));
+        emit StatelessRotationConsumed(10, 0, 0, nextCommitment, true);
         bool rotateOk = account.rotateFullKey(
             currentPublicKey, recoverySignature, nextKey
         );
@@ -1940,6 +1946,120 @@ contract SHRINCSAccountVerifierExampleTest is Test {
             account.statelessSignaturesUsed(),
             0,
             "genuinely new stateless material must reset usage to zero"
+        );
+    }
+
+    // Deterministic single-field driver shared by the two tests below. Runs
+    // a real rotateFullKey whose target takes pkSeed from the next key when
+    // takeNextPkSeed is set and hypertreeRoot from the next key when
+    // takeNextRoot is set, keeping the other field from the currently
+    // installed key. Returns the stateless usage counter after the rotation.
+    function runMixedStatelessFullRotation(
+        bytes memory currentSeedMaterial,
+        bytes memory nextSeedMaterial,
+        bool takeNextPkSeed,
+        bool takeNextRoot
+    ) internal returns (uint64) {
+        (
+            SHRINCS.SigningKey memory currentSigningKey,
+            SHRINCS.PublicKey memory currentPublicKey,
+            bool currentOk
+        ) = SHRINCSAccountSigningFacade.keygen(currentSeedMaterial, 4);
+        assertTrue(currentOk, "current keygen must succeed");
+
+        // forgefmt: disable-next-line
+        SHRINCSAccountVerifierExampleHarness account =
+            new SHRINCSAccountVerifierExampleHarness(
+                SHRINCSAccountSigningFacade.publicKeyCommitmentWord(
+                    currentPublicKey
+                )
+            );
+        account.setStatefulPolicyRecoveryRotation();
+        account.enterRecoveryMode();
+        account.setStatelessSignaturesUsed(9);
+
+        (, SHRINCS.PublicKey memory nextPublicKey, bool nextOk) =
+            SHRINCSAccountSigningFacade.keygen(nextSeedMaterial, 4);
+        assertTrue(nextOk, "next keygen must succeed");
+
+        // Mix exactly one stateless field from the next key with the other
+        // one carried over from the installed key.
+        bytes memory targetPkSeed =
+            takeNextPkSeed ? nextPublicKey.pkSeed : currentPublicKey.pkSeed;
+        bytes memory targetRoot = takeNextRoot
+            ? nextPublicKey.hypertreeRoot
+            : currentPublicKey.hypertreeRoot;
+        bytes32 nextCommitment = SHRINCS.publicKeyCommitmentFromParts(
+            nextPublicKey.statefulPublicKey, targetPkSeed, targetRoot
+        );
+        SHRINCS.RotationTarget memory nextKey = SHRINCS.RotationTarget({
+            statefulPublicKey: nextPublicKey.statefulPublicKey,
+            publicKeyCommitment: abi.encodePacked(nextCommitment),
+            pkSeed: targetPkSeed,
+            hypertreeRoot: targetRoot
+        });
+
+        SHRINCSStatelessVectorSigner signer =
+            new SHRINCSStatelessVectorSigner();
+        // line-length: allow — fmt canonical tuple head exceeds cap
+        (, bytes32 sessionId, bool signOk) = SHRINCSAccountSigningFacade.beginFullRotationSessionNow(
+            signer, account, currentSigningKey, currentPublicKey, nextKey
+        );
+        assertTrue(signOk, "full rotation must start");
+
+        // line-length: allow — fmt canonical tuple head exceeds cap
+        (SPHINCSPlusC.Signature memory recoverySignature, bool completeOk) = SHRINCSAccountSigningFacade.completeStatelessSession(
+            signer, sessionId
+        );
+        assertTrue(completeOk, "full rotation must complete");
+
+        assertTrue(
+            account.rotateFullKey(
+                currentPublicKey, recoverySignature, nextKey
+            ),
+            "single-field stateless rotation must succeed"
+        );
+        assertEq(account.currentSHRINCSPublicKey(), nextCommitment);
+        return account.statelessSignaturesUsed();
+    }
+
+    // Deterministic regression on the disjunction in rotateFullKey's
+    // statelessKeyChanged: a changed hypertreeRoot alone is already a
+    // different few-time stateless key, so the budget must reset even though
+    // pkSeed is reused. Replacing the || with && leaves the usage at 10 and
+    // fails this assertion.
+    // line-length: allow — test name is one unbreakable token
+    function testExampleRotateFullKeyResetsUsageWhenOnlyHypertreeRootChanges()
+        public
+    {
+        assertEq(
+            runMixedStatelessFullRotation(
+                bytes("account-example only-root rotation current key"),
+                bytes("account-example only-root rotation next key"),
+                false,
+                true
+            ),
+            0,
+            "a changed hypertreeRoot alone must reset stateless usage"
+        );
+    }
+
+    // Mirror of the test above for the other field: a changed pkSeed alone
+    // must reset the budget while hypertreeRoot is reused. Together the two
+    // pin both arms of the disjunction.
+    // line-length: allow — test name is one unbreakable token
+    function testExampleRotateFullKeyResetsUsageWhenOnlyPkSeedChanges()
+        public
+    {
+        assertEq(
+            runMixedStatelessFullRotation(
+                bytes("account-example only-pkseed rotation current key"),
+                bytes("account-example only-pkseed rotation next key"),
+                true,
+                false
+            ),
+            0,
+            "a changed pkSeed alone must reset stateless usage"
         );
     }
 
