@@ -1,7 +1,0 @@
-{
-  "database": "dolt",
-  "backend": "dolt",
-  "dolt_mode": "embedded",
-  "dolt_database": "hashsigs_solidity",
-  "project_id": "3926483a-3259-4467-981e-7f1d9b0f5d82"
-}

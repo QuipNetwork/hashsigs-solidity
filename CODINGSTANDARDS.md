@@ -5,8 +5,7 @@ This is production cryptographic code: the primary audience is auditors
 and reviewers checking the code against the source documents.
 Optimize for spec-to-code traceability, not brevity.
 
-Enforcement commands are in [§8](#8-enforcement). The repo-local Claude
-Code skill `.claude/skills/solidity-standards/` walks this document.
+Enforcement commands are in [§8](#8-enforcement).
 
 ## 1. Source documents and citations
 
