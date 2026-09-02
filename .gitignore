@@ -33,3 +33,9 @@ test/test_vectors/tmp.json
 # (skills in .claude/skills/ ARE tracked)
 .claude/settings.local.json
 .claude/worktrees/
+
+# Beads / Dolt files (added by bd init)
+.dolt/
+*.db
+.beads-credential-key
+.beads/proxieddb/
