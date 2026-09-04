@@ -44,6 +44,7 @@ format-and-checks:
     - test ! -f remappings.txt
     - forge fmt --check
     - scripts/check-line-length.sh
+    - scripts/check-production-profiles.sh
 
 # Every profile must build, lint clean, and pass its test set. Lint runs
 # per profile because each concrete verifier and its deploy script only
@@ -69,7 +70,7 @@ build-lint-test:
     - if: $CI_PIPELINE_SOURCE != "schedule"
   parallel:
     matrix:
-      - FOUNDRY_PROFILE: ["ci", "128s-q18", "128s-q20", "256s-sha2"]
+      - FOUNDRY_PROFILE: ["ci", "test-128s-q18", "test-128s-q20", "256s-sha2"]
   script:
     - forge build
     - forge lint --deny warnings contracts/ test/ script/
@@ -104,7 +105,7 @@ slither:
     - if: $CI_PIPELINE_SOURCE != "schedule"
   parallel:
     matrix:
-      - FOUNDRY_PROFILE: ["ci", "128s-q18", "128s-q20", "256s-sha2"]
+      - FOUNDRY_PROFILE: ["ci", "test-128s-q18", "test-128s-q20", "256s-sha2"]
   before_script:
     - apt-get update && apt-get install -y --no-install-recommends
       curl git ca-certificates
@@ -133,7 +134,7 @@ slither:
 # pipeline then restores that cache and fails until fixed (the promotion
 # path). Only the ci leg is covered this way: nightly runs the default
 # profile's test set, whose failure dirs are the cache/fuzz +
-# cache/invariant that profile.ci also uses; the 128s-q18/128s-q20/
+# cache/invariant that profile.ci also uses; the test-128s-q18/q20/
 # 256s-sha2 legs have their own disjoint cache keys and are not promoted
 # into. EVM execution is arch-deterministic, so results are comparable
 # across runners; arch tags below pin only tool-availability (medusa

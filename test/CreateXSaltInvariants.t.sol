@@ -29,15 +29,11 @@ import {CreateXSalt} from "../script/CreateXSalt.sol";
 /// list. It therefore runs under all four ci-matrix profiles.
 contract CreateXSaltInvariantsTest is Test {
     // Every canonical salt label. Order is the DEPLOYMENTS.md table order.
-    function _labels() internal pure returns (string[8] memory) {
+    function _labels() internal pure returns (string[4] memory) {
         return [
             "QUIP:SPHINCSPlusC256sKeccak:V3.0",
-            "QUIP:SPHINCSPlusC128sQ18Keccak:V3.0",
-            "QUIP:SPHINCSPlusC128sQ20Keccak:V3.0",
             "QUIP:SPHINCSPlusC256sSha2:V3.0",
             "QUIP:SHRINCS256sKeccak:V4.0",
-            "QUIP:SHRINCS128sQ18Keccak:V4.0",
-            "QUIP:SHRINCS128sQ20Keccak:V4.0",
             "QUIP:SHRINCS256sSha2:V4.0"
         ];
     }
@@ -45,15 +41,11 @@ contract CreateXSaltInvariantsTest is Test {
     // The published addresses, in the same order. This is the
     // DEPLOYMENTS.md <-> code regression lock: it fails loudly if anyone
     // edits a label, the deployer, the flag byte, or the entropy width.
-    function _addresses() internal pure returns (address[8] memory) {
+    function _addresses() internal pure returns (address[4] memory) {
         return [
             0xe52707C5D76E2F7c3314cF3dcc340eB9BbAE3864,
-            0x23cc6a3b31A3f6734530FCddB19eabE31F9a3037,
-            0xf6e309c6795447584110404FbaE112E4236d40AD,
             0x55346bdc46Cf36C844c0f708041C916c0B65718f,
             0xF2f9E6D692da41b089c3c261c41509669eEc5567,
-            0x695BA9d92FB431B4d446EEcb40b9874c9E43cc91,
-            0xa301C72c150d735ED741F3Fd980691d1a77F7c52,
             0x10eE478959bD9cd9E99573cf208D217d704C2FF5
         ];
     }
@@ -96,7 +88,7 @@ contract CreateXSaltInvariantsTest is Test {
     /// address per chain. Neither reverts inside CreateX, so this is the
     /// check that catches them.
     function testEverySaltIsWellFormed() public pure {
-        string[8] memory labels = _labels();
+        string[4] memory labels = _labels();
         for (uint256 i = 0; i < labels.length; i++) {
             bytes32 labelHash = keccak256(bytes(labels[i]));
             bytes32 raw = CreateXSalt.rawSalt(labelHash);
@@ -118,7 +110,7 @@ contract CreateXSaltInvariantsTest is Test {
         }
     }
 
-    /// @notice The layout holds for any label, not just the nine.
+    /// @notice The layout holds for any label, not just the four.
     function testFuzzSaltLayout(bytes32 labelHash) public pure {
         bytes32 raw = CreateXSalt.rawSalt(labelHash);
         assertEq(_senderField(raw), CreateXSalt.DEPLOYER, "sender");
@@ -211,7 +203,7 @@ contract CreateXSaltInvariantsTest is Test {
     /// those two were the same address, which is exactly the hazard
     /// test/CreateXCreate3.t.sol's Create3SquatTest still documents.
     function testSquatSurfaceIsClosed() public pure {
-        string[8] memory labels = _labels();
+        string[4] memory labels = _labels();
         for (uint256 i = 0; i < labels.length; i++) {
             bytes32 raw = CreateXSalt.rawSalt(keccak256(bytes(labels[i])));
 
@@ -227,10 +219,10 @@ contract CreateXSaltInvariantsTest is Test {
         }
     }
 
-    /// @notice The nine advertised addresses match DEPLOYMENTS.md.
+    /// @notice The four advertised addresses match DEPLOYMENTS.md.
     function testAdvertisedAddressesMatchRegistry() public pure {
-        string[8] memory labels = _labels();
-        address[8] memory expected = _addresses();
+        string[4] memory labels = _labels();
+        address[4] memory expected = _addresses();
         for (uint256 i = 0; i < labels.length; i++) {
             bytes32 raw = CreateXSalt.rawSalt(keccak256(bytes(labels[i])));
             assertEq(
@@ -243,7 +235,7 @@ contract CreateXSaltInvariantsTest is Test {
 
     /// @notice No two artifacts share an address.
     function testAdvertisedAddressesAreDistinct() public pure {
-        address[8] memory addrs = _addresses();
+        address[4] memory addrs = _addresses();
         for (uint256 i = 0; i < addrs.length; i++) {
             for (uint256 j = i + 1; j < addrs.length; j++) {
                 assertTrue(addrs[i] != addrs[j], "addresses must differ");

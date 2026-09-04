@@ -19,10 +19,9 @@ pragma solidity ^0.8.28;
 import {SHRINCSVerifier} from "./SHRINCSVerifier.sol";
 
 /// @title SHRINCS128sQ18Keccak
-/// @notice Concrete 128s-q18-profile SHRINCS. Deploy this
-/// artifact only from a build under the 128s-q18 profile
-/// (FOUNDRY_PROFILE=production-128s-q18); the deploy script enforces it.
-/// @dev Empty subclass beyond the profile tag and pinned sibling: the
+/// @notice Experimental 128s-q18 SHRINCS verifier for tests, vectors, and
+/// security research. It is not approved or tooled for production deployment.
+/// @dev Thin subclass beyond the profile tag and configured sibling: the
 /// reviewed verify/decode logic lives in the abstract base and takes its
 /// parameter tuple from the compile-time SHRINCSParams selected by the build
 /// profile. PROFILE_TAG identifies the compiled parameter set for on-chain
@@ -34,23 +33,19 @@ contract SHRINCS128sQ18Keccak is SHRINCSVerifier {
     bytes32 public constant PROFILE_TAG =
         keccak256("shrincs-128s-q18-keccak");
 
-    // Pinned CREATE3 address of the 128s-q18 SPHINCSPlusC sibling
-    // (SPHINCSPlusC128sQ18Keccak) this verifier delegates stateless
-    // verification to. Derivation (script/DeployBase.s.sol):
-    //   CREATEX = 0xba5Ed099633D3B313e4D5F7bdc1305d3c28ba5Ed (canonical
-    //     CreateX singleton, pre-deployed at that address on every chain)
-    //   raw salt = [20B DEPLOYER][0x00 flag][leading 11B of
-    //     keccak256("QUIP:SPHINCSPlusC128sQ18Keccak:V3.0")],
-    //     which CreateX guards to
-    //     keccak256(abi.encode(DEPLOYER, raw salt)) — its
-    //     permissioned mode, so only DEPLOYER can deploy here
-    //   address = CREATE3 child of (CREATEX, guarded salt)
-    // Pinned by test/SHRINCSPinned128sQ18.t.sol (profile-gated) so C8's
-    // deploy scripts cannot drift from this constant.
-    address internal constant SPHINCS_PLUS_C_VERIFIER =
-        0x23cc6a3b31A3f6734530FCddB19eabE31F9a3037;
+    // Supplied explicitly by an experimental harness. There is deliberately
+    // no canonical production address for this profile.
+    address internal immutable SPHINCS_PLUS_C_VERIFIER;
 
-    function _pinnedSphincsPlusC() internal pure override returns (address) {
+    constructor(address sphincsPlusCVerifier) {
+        require(
+            sphincsPlusCVerifier != address(0),
+            "SHRINCS128sQ18: zero SPHINCSPlusC"
+        );
+        SPHINCS_PLUS_C_VERIFIER = sphincsPlusCVerifier;
+    }
+
+    function _pinnedSphincsPlusC() internal view override returns (address) {
         return SPHINCS_PLUS_C_VERIFIER;
     }
 }
