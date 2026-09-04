@@ -28,6 +28,7 @@ import {FORSMinusC} from "../contracts/FORSMinusC.sol";
 import {Hypertree} from "../contracts/Hypertree.sol";
 import {WOTSPlusC} from "../contracts/WOTSPlusC.sol";
 import {SHRINCSParams} from "shrincs-profile/SHRINCSParams.sol";
+import {SHRINCSTestSigner} from "./helpers/SHRINCSTestSigner.sol";
 import {
     SHRINCSAccountSigningFacade
 } from "./helpers/SHRINCSAccountSigningFacade.sol";
@@ -227,6 +228,57 @@ contract SHRINCSStatelessDelegationTest is Test {
         );
     }
 
+    /// @dev Sibling-commitment replay. A stateless signature produced under
+    /// bundle A must not verify when re-presented under a DIFFERENT bundle B
+    /// that keeps A's pkSeed and hypertreeRoot — so the delegate key
+    /// abi.encode(pkSeed, hypertreeRoot) is byte-identical — but carries a
+    /// different statefulPublicKey. B is internally consistent: its embedded
+    /// publicKeyCommitment is the real commitment over B's own parts, so the
+    /// commitment-vs-key check and validPublicKey inside
+    /// prepareStatelessDelegation both pass and the call reaches the pinned
+    /// SPHINCSPlusC sibling with the same delegate key and the same signature
+    /// bytes A used. The probe below pins exactly that. The only thing left
+    /// separating the two bundles is the message binding in
+    /// SHRINCSVerifier.verifyStateless (statelessRawMessageHash over the
+    /// installed commitment), so the call must return 0xffffffff. Dropping
+    /// the commitment from that binding turns this case into a wrong-accept.
+    function testVerifyStatelessRejectsSignatureUnderSiblingCommitment()
+        public
+    {
+        (bytes32 siblingCommitment, bytes memory siblingEnvelope) =
+            this.buildSiblingCase();
+        bytes32 validCommitment = abi.decode(validKey, (bytes32));
+        assertTrue(
+            siblingCommitment != validCommitment,
+            "sibling bundle must carry its own distinct commitment"
+        );
+
+        // Non-vacuity: both bundles clear the commitment and shape checks and
+        // hand the pinned sibling the identical delegate key, so a rejection
+        // below can only come from the message binding.
+        (bool validOk, bytes memory validDelegateKey) =
+            this.probeStatelessDelegation(validEnvelope, validCommitment);
+        (bool siblingOk, bytes memory siblingDelegateKey) =
+            this.probeStatelessDelegation(siblingEnvelope, siblingCommitment);
+        assertTrue(validOk, "valid bundle must reach delegation");
+        assertTrue(siblingOk, "sibling bundle must reach delegation");
+        assertEq(
+            siblingDelegateKey,
+            validDelegateKey,
+            "sibling bundle must delegate under the same key"
+        );
+
+        assertEq(
+            verifier.verifyStateless(
+                abi.encodePacked(siblingCommitment),
+                signedHash,
+                siblingEnvelope
+            ),
+            INVALID_SIGNATURE,
+            "a signature made under a sibling commitment must be rejected"
+        );
+    }
+
     /// @dev The deliberate revert-model property, on the one external call
     /// the memory restructure left in the verifier surface. With no try/catch
     /// around the stateless delegation, an out-of-gas in the pinned
@@ -335,6 +387,45 @@ contract SHRINCSStatelessDelegationTest is Test {
         signature.hypertree = new Hypertree.HypertreeLayerSignature[](0);
         emptyHypertree =
             SHRINCSTestCodec.encodeStatelessEnvelope(publicKey, signature);
+    }
+
+    /// @dev Builds bundle B for the sibling-commitment replay: the valid
+    /// case's public-key bundle with a different statefulPublicKey, its own
+    /// recomputed publicKeyCommitment, and the valid case's stateless
+    /// signature unchanged. pkSeed and hypertreeRoot are carried over, so B
+    /// delegates under the same key as A. External so the large working set
+    /// runs in its own memory frame.
+    function buildSiblingCase()
+        external
+        returns (bytes32 commitment, bytes memory envelope)
+    {
+        (
+            SHRINCS.PublicKey memory publicKey,
+            SPHINCSPlusC.Signature memory signature,,
+        ) = obtainValidCase();
+
+        publicKey.statefulPublicKey =
+            siblingStatefulPublicKey(publicKey.statefulPublicKey);
+        commitment = SHRINCS.publicKeyCommitmentFromParts(
+            publicKey.statefulPublicKey,
+            publicKey.pkSeed,
+            publicKey.hypertreeRoot
+        );
+        publicKey.publicKeyCommitment = abi.encodePacked(commitment);
+        envelope =
+            SHRINCSTestCodec.encodeStatelessEnvelope(publicKey, signature);
+    }
+
+    /// @dev Calldata probe over SHRINCS.prepareStatelessDelegation: reports
+    /// whether an envelope clears the commitment-vs-key and validPublicKey
+    /// checks and which delegate key it hands the pinned sibling. External
+    /// because prepareStatelessDelegation re-tags a calldata envelope.
+    function probeStatelessDelegation(
+        bytes calldata envelope,
+        bytes32 commitment
+    ) external pure returns (bool ok, bytes memory delegateKey) {
+        (ok, delegateKey,) =
+            SHRINCS.prepareStatelessDelegation(commitment, envelope);
     }
 
     /// @dev The valid stateless case for the active profile: in-Solidity
@@ -571,6 +662,42 @@ contract SHRINCSStatelessDelegationTest is Test {
         assembly {
             out := mload(add(message, 32))
         }
+    }
+
+    /// @dev Re-encodes an encoded stateful public key with a different
+    /// stateful pkSeed, keeping the root and maxSignatures verbatim so the
+    /// result keeps the profile's canonical (HASH_MASK-clean) root and still
+    /// passes SHRINCS.validStatefulPublicKeyEncoding.
+    function siblingStatefulPublicKey(bytes memory encoded)
+        internal
+        pure
+        returns (bytes memory)
+    {
+        require(
+            encoded.length == SHRINCSParams.STATEFUL_PUBLIC_KEY_BYTES,
+            "sibling: stateful public key width"
+        );
+        bytes32 statefulPkSeed;
+        bytes32 statefulRoot;
+        uint32 maxSignatures;
+        // Encoded stateful public key in memory, 68 bytes
+        // (SHRINCSParams.STATEFUL_PUBLIC_KEY_BYTES), length word at +0:
+        //   [+32..+64)   statefulPkSeed  (32 bytes)
+        //   [+64..+96)   statefulRoot    (32 bytes)
+        //   [+96..+100)  maxSignatures   (4 bytes, uint32)
+        // maxSignatures is read from the word at +68 (the last 32 data
+        // bytes, fully in bounds) and masked to its low 4 bytes rather
+        // than from +96, which would read past the array.
+        assembly ("memory-safe") {
+            statefulPkSeed := mload(add(encoded, 32))
+            statefulRoot := mload(add(encoded, 64))
+            maxSignatures := and(mload(add(encoded, 68)), 0xffffffff)
+        }
+        return SHRINCSTestSigner.encodeStatefulPublicKey(
+            keccak256(abi.encodePacked(statefulPkSeed, "sibling")),
+            statefulRoot,
+            maxSignatures
+        );
     }
 
     function publicKeyCommitmentWord(SHRINCS.PublicKey memory publicKey)

@@ -31,6 +31,7 @@ import {
 import {
     SHRINCSStatelessVectorSigner
 } from "./helpers/SHRINCSStatelessVectorSigner.sol";
+import {SHRINCSTestSigner} from "./helpers/SHRINCSTestSigner.sol";
 
 contract GuardAccountSigningHarnessSha2 is SHRINCSStatelessVectorSigner {}
 
@@ -116,6 +117,168 @@ contract HashSuiteStatelessGuardSha2Test is Test {
         );
         assertEq(reads.length, 0, "verify must read no storage");
         assertEq(writes.length, 0, "verify must write no storage");
+    }
+
+    function test_statefulVerifyTouchesNoStorage() public {
+        (
+            SHRINCS.SigningKey memory signingKey,
+            SHRINCS.PublicKey memory publicKey,
+            bool ok
+        ) = SHRINCSTestSigner.keygen(
+            bytes("hashsuite stateful guard seed"), 4
+        );
+        assertTrue(ok, "guard keygen must succeed");
+
+        bytes32 hash = keccak256("hashsuite stateful guard message");
+        SHRINCS.Signature memory signature;
+        bool signed;
+        (signature, signed) = SHRINCSTestSigner.signStatefulAdapterAtLeaf(
+            signingKey, publicKey, 1, hash
+        );
+        assertTrue(signed, "guard signing must succeed");
+
+        GuardDelegationHarnessSha2 verifier =
+            new GuardDelegationHarnessSha2();
+        bytes memory key =
+            abi.encodePacked(publicKeyCommitmentWord(publicKey));
+        bytes memory envelope =
+            SHRINCSTestCodec.encodeStatefulEnvelope(publicKey, signature);
+
+        vm.record();
+        bytes4 magic = verifier.verify(key, hash, envelope);
+        (bytes32[] memory reads, bytes32[] memory writes) =
+            vm.accesses(address(verifier));
+
+        assertEq(
+            magic,
+            IERC7913SignatureVerifier.verify.selector,
+            "guard stateful verify must accept"
+        );
+        assertEq(reads.length, 0, "verify must read no storage");
+        assertEq(writes.length, 0, "verify must write no storage");
+    }
+
+    function test_sphincsPlusCVerifyTouchesNoStorage() public {
+        (
+            SHRINCS.SigningKey memory signingKey,
+            SHRINCS.PublicKey memory publicKey,
+            bool ok
+        ) = SHRINCSAccountSigningFacade.keygen(
+            bytes("hashsuite stateless guard seed"), 4
+        );
+        assertTrue(ok, "guard keygen must succeed");
+
+        bytes32 hash = keccak256("hashsuite stateless guard message");
+        bytes32 sessionId;
+        (sessionId, ok) = accountSigner.beginSession(
+            signingKey,
+            publicKey,
+            abi.encodePacked(
+                SHRINCS.statelessRawMessageHash(
+                    SHRINCSAccountSigningFacade.publicKeyCommitmentWord(
+                        publicKey
+                    ),
+                    hash
+                )
+            )
+        );
+        assertTrue(ok, "guard session must begin");
+        // line-length: allow — fmt canonical tuple head exceeds cap
+        (SPHINCSPlusC.Signature memory signature, bool completeOk) = SHRINCSAccountSigningFacade.completeStatelessSession(
+            accountSigner, sessionId
+        );
+        assertTrue(completeOk, "guard signing must complete");
+
+        GuardDelegationHarnessSha2 verifier =
+            new GuardDelegationHarnessSha2();
+        deployCodeTo(
+            "SPHINCSPlusC256sSha2.sol:SPHINCSPlusC256sSha2",
+            "",
+            verifier.pinned()
+        );
+        IERC7913SignatureVerifier sphincs =
+            IERC7913SignatureVerifier(verifier.pinned());
+        bytes memory sphincsKey = SHRINCS.encodeStatelessKey(
+            signingKey.pkSeed, signingKey.hypertreeRoot
+        );
+        bytes memory sphincsEnvelope =
+            SPHINCSPlusC.encodeStatelessSignatureEnvelope(signature);
+        bytes32 signedHash = SHRINCS.statelessRawMessageHash(
+            publicKeyCommitmentWord(publicKey), hash
+        );
+
+        vm.record();
+        bytes4 magic =
+            sphincs.verify(sphincsKey, signedHash, sphincsEnvelope);
+        (bytes32[] memory reads, bytes32[] memory writes) =
+            vm.accesses(address(sphincs));
+
+        assertEq(
+            magic,
+            IERC7913SignatureVerifier.verify.selector,
+            "guard sphincsplusc verify must accept"
+        );
+        assertEq(reads.length, 0, "verify must read no storage");
+        assertEq(writes.length, 0, "verify must write no storage");
+    }
+
+    function test_verifyEntrypointsAreView() public view {
+        _assertVerifyEntrypointsAreView(
+            "out-256s-sha2/SHRINCS256sSha2.sol/SHRINCS256sSha2.json"
+        );
+        _assertVerifyEntrypointsAreView(
+            string.concat(
+                "out-256s-sha2/SPHINCSPlusC256sSha2.sol/",
+                "SPHINCSPlusC256sSha2.json"
+            )
+        );
+    }
+
+    function _assertVerifyEntrypointsAreView(string memory path)
+        internal
+        view
+    {
+        string memory json = vm.readFile(path);
+        uint256 found;
+        for (uint256 i = 0; i < 64; ++i) {
+            string memory typeKey =
+                string.concat(".abi[", vm.toString(i), "].type");
+            if (!vm.keyExistsJson(json, typeKey)) break;
+            string memory abiType = vm.parseJsonString(json, typeKey);
+            if (keccak256(bytes(abiType)) != keccak256("function")) {
+                continue;
+            }
+            string memory name = vm.parseJsonString(
+                json, string.concat(".abi[", vm.toString(i), "].name")
+            );
+            if (!_hasVerifyPrefix(name)) continue;
+            string memory mutability = vm.parseJsonString(
+                json,
+                string.concat(".abi[", vm.toString(i), "].stateMutability")
+            );
+            if (keccak256(bytes(name)) == keccak256("verifyAndAttest")) {
+                assertEq(
+                    mutability,
+                    "nonpayable",
+                    "verifyAndAttest must be nonpayable"
+                );
+            } else {
+                assertEq(mutability, "view", "verify* must be view");
+            }
+            ++found;
+        }
+        assertGt(found, 0, "artifact must declare verify*");
+    }
+
+    function _hasVerifyPrefix(string memory name)
+        internal
+        pure
+        returns (bool)
+    {
+        bytes memory raw = bytes(name);
+        if (raw.length < 6) return false;
+        return raw[0] == "v" && raw[1] == "e" && raw[2] == "r"
+            && raw[3] == "i" && raw[4] == "f" && raw[5] == "y";
     }
 
     function publicKeyCommitmentWord(SHRINCS.PublicKey memory publicKey)

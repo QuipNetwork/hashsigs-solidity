@@ -2,71 +2,100 @@
 
 ## Unreleased
 
-### Changed
-- CREATE3 deploys now use CreateX's **permissioned** (sender-scoped) salt
-  mode. Each raw salt is `[20B DEPLOYER][0x00][11B of
-  keccak256("QUIP:<label>")]`, which CreateX guards to
-  `keccak256(abi.encode(DEPLOYER, salt))`, so only
-  `0xc68B64770Da7914DEb0EF238b048a0Bf3B5f6A26` can deploy at an
-  advertised address. This closes the squatting surface the previous
-  permissionless salts could only detect after the fact; the `0x00` flag
-  byte keeps addresses chain-invariant. New `script/CreateXSalt.sol` is
-  the single implementation of the layout, guard, and derivation.
-  `DeployBase._deploy` additionally asserts the broadcaster is the
-  canonical deployer and that the salt is well-formed — CreateX itself
-  does not revert on either, it silently deploys elsewhere.
-  **All nine advertised addresses move**, and the four SHRINCS runtime
-  codehashes move with them (each embeds its sibling's address); the four
-  SPHINCSPlusC codehashes and the WOTS+ codehash are unchanged. The salt
-  labels are unchanged, so `DEPLOYMENTS.md` now keys its registry on the
-  raw salt and records the superseded Base Sepolia / OP Sepolia
-  deployments made under the old scheme. Deploys now require an explicit
-  `--sender` and must not use `--resume` or `--skip-simulation`.
+Package version is 0.2.0. Removing public library functions is a
+breaking change under CODINGSTANDARDS section 7. The pre-1.0 minor
+version advances from 0.1.0.
 
 ### Added
-- Transient attestation registry on the SHRINCS ERC-7913 verifier
-  (`IERC7913TransientAttestation`): `verifyAndAttest` runs the exact
-  stateful `verify` path (shared `_verifyStateful`) and, on success,
-  TSTOREs 1 at `keccak256(abi.encode(msg.sender, keccak256(key),
-  hash))` — an ERC-7562 *associated* transient slot (address-first) so
-  ERC-4337 accounts may attest during validation; `wasVerified(account,
-  keyHash, hash)` TLOADs it. Nothing is written on failure; failure
-  values and reverts mirror `verify`; the attestation clears when the
-  transaction ends. The `view` `verify` is unchanged and never attests.
-  Requires Cancun (EIP-1153); `verifyAndAttest` reverts under
-  `staticcall` on a valid signature. Measured overhead vs `verify` is
-  ~0.8k gas (test profile, warm).
-- Compile-time profile selection. Per-profile `ShrincsParams` libraries
-  under `contracts/profiles/<profile>/`, chosen by a `shrincs-profile/`
-  Foundry remapping and re-exported as aliases in `ShrincsTypes`.
-  Profiles: `256s` (default), `128s-q18`, `128s-q20`. The 256s
-  production build stayed byte-identical to the pre-split verifier
-  (metadata-stripped deployed bytecode compared before/after).
-- `ShrincsUtils.maskHash` high-aligned hash truncation, applied at the
-  nine hash-producing sites so a truncated profile emits high-aligned,
-  zero-padded node values. All-ones (no-op) for 256s.
-- `test/ShrincsProfileInvariants.t.sol`: structural invariants and a
+- Transient attestation on the SHRINCS ERC-7913 verifier
+  (`IERC7913TransientAttestation`). `verifyAndAttest` runs the same
+  stateful path as `verify` (shared `_verifyStateful`). On success it
+  writes 1 to the ERC-7562 associated transient slot
+  `keccak256(abi.encode(msg.sender, keccak256(key), hash))`.
+  `wasVerified(account, keyHash, hash)` reads that slot. Nothing is
+  written on failure. Failure values and reverts match `verify`. The
+  attestation clears when the transaction ends. The `view` `verify`
+  never attests. Callers need Cancun (EIP-1153). `verifyAndAttest`
+  reverts under `staticcall` on a valid signature. Measured overhead
+  versus `verify` is about 0.8k gas on the test profile (warm).
+- Compile-time profile selection. Per-profile `SHRINCSParams` libraries
+  live under `contracts/profiles/<profile>/`. A `shrincs-profile/`
+  Foundry remapping selects the active library. Profiles: 256s (default
+  keccak), 128s-q18, 128s-q20, and 256s-sha2. The 256s keccak production
+  build stayed byte-identical to the pre-split verifier
+  (metadata-stripped deployed bytecode compared before and after).
+- `Hash.maskHash` high-aligned hash truncation at the eight
+  hash-producing sites in each hash suite. A truncated profile emits
+  high-aligned, zero-padded node values. The mask is all-ones (no-op)
+  for the 256s keccak profile.
+- `test/SHRINCSProfileInvariants.t.sol`: structural invariants and a
   profile-identity guard that fails closed on a wrong-profile or
   `remappings.txt`-shadowed build. CI adds a `remappings.txt` guard and
-  a build/lint/test matrix over the three profiles.
-- Concrete per-profile verifiers `ShrincsVerifier256s`,
-  `ShrincsVerifier128sQ18`, `ShrincsVerifier128sQ20`, each with a
-  `PROFILE_TAG`. CREATE3 deploy scripts (per-profile salts) for the
-  verifiers and WOTS+, plus `DEPLOYMENTS.md`.
+  a build, lint, and test matrix over the four profiles.
+- Concrete per-profile verifiers `SHRINCS256sKeccak`,
+  `SHRINCS128sQ18Keccak`, `SHRINCS128sQ20Keccak`, `SHRINCS256sSha2`,
+  and the matching SPHINCSPlusC siblings, each with a `PROFILE_TAG`.
+  CREATE3 deploy scripts (per-profile salts) for the verifiers and
+  WOTS+, plus `DEPLOYMENTS.md`.
 
 ### Changed
-- `ShrincsVerifier` is now an abstract base; deploy one of the concrete
-  per-profile subclasses. The ABI surface (`verify`, `VERSION_TAG`) is
-  unchanged. No chain had a `ShrincsVerifier` deployment (pre-release).
-- Deploys use CREATE3 (address depends only on factory + salt, not init
-  code), replacing the CREATE2 verifier script and the Hardhat-Ignition
-  WOTS+ deploy; both historical mechanisms are recorded in
-  `DEPLOYMENTS.md`.
+- Deploys use CREATE3 through CreateX permissioned (sender-scoped) salt
+  mode. A CREATE3 child address depends only on factory and salt, not
+  init code. This replaces the CREATE2 verifier script, the
+  Hardhat-Ignition WOTS+ deploy, and the earlier permissionless CREATE3
+  salts. Those older mechanisms stay recorded in `DEPLOYMENTS.md`.
+  Each raw salt is `[20B DEPLOYER][0x00][11B of
+  keccak256("QUIP:<label>")]`. CreateX guards that salt to
+  `keccak256(abi.encode(DEPLOYER, salt))`. Only
+  `0xc68B64770Da7914DEb0EF238b048a0Bf3B5f6A26` can deploy at an
+  advertised address. The `0x00` flag byte keeps addresses
+  chain-invariant. `script/CreateXSalt.sol` holds the layout, the guard,
+  and the derivation. `DeployBase._deploy` asserts the broadcaster is
+  the canonical deployer and that the salt is well-formed. CreateX
+  itself does not revert on either check. It deploys elsewhere instead.
+  All nine advertised addresses move. The four SHRINCS runtime
+  codehashes move with them, because each embeds its sibling address.
+  The four SPHINCSPlusC codehashes and the WOTS+ codehash stay the same.
+  Salt labels stay the same. `DEPLOYMENTS.md` now keys its registry on
+  the raw salt and records the superseded Base Sepolia and OP Sepolia
+  deploys made under the old scheme. Deploys require an explicit
+  `--sender` and must not use `--resume` or `--skip-simulation`.
+- `SHRINCSVerifier` is now an abstract base. Deploy one of the concrete
+  per-profile subclasses. The ERC-7913 function ABI (`verify`) stays
+  the same. `VERSION_TAG` remains a public constant. Its value changed
+  (see below).
+- Hash-construction wire format is incompatible with 0.1.0 signatures.
+  `fors-digest` now binds `PROFILE_ID` after the domain tag. WOTS-C and
+  FORS-C compression preimages now bind a 32-byte ADRS word. The SHRINCS
+  ERC-7913 raw adapters now bind the 32-byte message hash to the
+  installed bundle commitment (`statefulRawMessageHash` and
+  `statelessRawMessageHash`). A 0.1.0 signature does not verify under
+  this code.
+- `SHRINCSVerifier.VERSION_TAG` is now
+  `keccak256("quip.shrincs-verifier.v4")`. The 0.1.0 value was
+  `keccak256("quip.shrincs-verifier.v1")`. v2 binds `PROFILE_ID` in
+  `fors-digest`. v3 binds ADRS words in compression preimages. v4
+  binds the raw ERC-7913 message to the bundle commitment.
+  `SPHINCSPlusCVerifier.VERSION_TAG` is now
+  `keccak256("quip.sphincsplusc-verifier.v3")`. The initial value was
+  `keccak256("quip.sphincsplusc-verifier.v1")`. SPHINCSPlusCVerifier
+  did not exist at 0.1.0. That tag follows the same v2 and v3
+  hash-construction bumps. It does not bump to v4. The
+  bundle-commitment binding lives only on the SHRINCS adapter path.
+  `SPHINCSPlusCVerifier` still verifies the caller-supplied 32-byte
+  hash.
 
 ### Removed
 - Hardhat: `hardhat.config.ts`, `ignition/`, `tsconfig.json`,
   `package-lock.json`, and the hardhat devDependencies. The project is
-  Foundry-only; deploys go through the CREATE3 scripts.
+  Foundry-only. Deploys go through the CREATE3 scripts.
+- Production library functions `WOTSPlus.sign`,
+  `WOTSPlus.generateKeyPair`, `Hash.addressWord32`,
+  `SHRINCS.encodeStatefulEnvelope`, and
+  `SHRINCS.encodeStatelessEnvelope`. Test-only replacements live in
+  `test/helpers/WOTSPlusTestSigner.sol` (`sign`, `generateKeyPair`) and
+  `test/helpers/SHRINCSTestCodec.sol` (`encodeStatefulEnvelope`,
+  `encodeStatelessEnvelope`, `addressWord32`).
 
 ## 0.1.0 - 2026-07-10
 

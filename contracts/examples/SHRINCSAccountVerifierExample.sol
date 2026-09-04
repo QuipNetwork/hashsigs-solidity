@@ -411,6 +411,16 @@ contract SHRINCSAccountVerifierExample {
     /// few-time stateless key whenever a "full" rotation only replaces the
     /// stateful side, permitting over-use of that stateless key beyond its
     /// intended signature limit.
+    /// @dev Documented residual: an owner-driven A -> B -> A round trip does
+    /// restore A's budget, because the first hop away from A and the second
+    /// hop back to A each see changed stateless material and reset. Rotating
+    /// back to a retired stateless key is an owner decision, not something
+    /// an attacker can force: every hop needs the RecoveryRotation policy,
+    /// armed recovery mode, and a valid stateless recovery signature under
+    /// the then-installed key, and each hop spends one of that key's own
+    /// budgeted uses. The conditional reset closes the free-budget case
+    /// (rotating in place); it is not a defense against an owner who
+    /// deliberately reinstalls an old stateless key.
     /// @param currentPublicKey The currently installed public-key bundle.
     /// @param recoverySignature The stateless recovery signature.
     /// @param nextKey The full-key rotation target.
@@ -459,10 +469,19 @@ contract SHRINCSAccountVerifierExample {
         // justifies resetting the stateless usage budget; reusing the
         // current stateless key must carry its usage forward like a
         // stateful-only rotation would.
-        bool statelessKeyChanged = keccak256(currentPublicKey.pkSeed)
-                != keccak256(nextKey.pkSeed)
-            || keccak256(currentPublicKey.hypertreeRoot)
-                != keccak256(nextKey.hypertreeRoot);
+        // A successful statelessRotate has already pinned all four fields to
+        // exactly 32 bytes: validPublicKey rejects any other length for
+        // currentPublicKey, and statelessRotate length-checks both nextKey
+        // fields before it can return a nonzero commitment. Each
+        // bytes32(bytes calldata) conversion is therefore exact — never a
+        // zero pad of a short field, never a truncation of a long one.
+        // Given that, one word compare per field decides the same question
+        // as comparing hashes of the fields, without the two keccak256
+        // calls.
+        bool statelessKeyChanged = bytes32(currentPublicKey.pkSeed)
+                != bytes32(nextKey.pkSeed)
+            || bytes32(currentPublicKey.hypertreeRoot)
+                != bytes32(nextKey.hypertreeRoot);
         // Install the next key bundle, resetting stateless usage only when
         // the stateless material changed.
         installRotatedKey(nextCompositePublicKey, statelessKeyChanged);
@@ -819,15 +838,5 @@ contract SHRINCSAccountVerifierExample {
         internal
     {
         installRotatedKey(nextCompositePublicKey, false);
-    }
-
-    // installFreshFullKey: Install a fully fresh SHRINCS bundle for the next
-    // key epoch.
-    // 1. Install the next SHRINCS public-key commitment.
-    // 2. Reset stateless usage accounting because the stateless key material
-    // changes too.
-    // 3. Reset stateful tracking and wrapper policy state for the next epoch.
-    function installFreshFullKey(bytes32 nextCompositePublicKey) internal {
-        installRotatedKey(nextCompositePublicKey, true);
     }
 }

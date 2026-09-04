@@ -19,14 +19,14 @@ pragma solidity ^0.8.28;
 import {SPHINCSPlusCVerifier} from "./SPHINCSPlusCVerifier.sol";
 
 /// @title SPHINCSPlusC128sQ18Keccak
-/// @notice Concrete 128s-q18-profile SPHINCSPlusC verifier. Deploy this
-/// artifact only from a build under the 128s-q18 profile
-/// (FOUNDRY_PROFILE=production-128s-q18); the deploy script enforces it.
+/// @notice Experimental 128s-q18 SPHINCSPlusC verifier for tests, vectors,
+/// and security research. It is not approved or tooled for production
+/// deployment.
 /// @dev Empty subclass: the reviewed verify logic lives in the abstract base
 /// and takes its parameter tuple from the compile-time SHRINCSParams selected
 /// by the build profile. PROFILE_TAG identifies the compiled parameter set
-/// for on-chain and registry cross-checks. The SHRINCS128sQ18Keccak verifier
-/// pins this contract's CREATE3 address for stateless delegation.
+/// for cross-checks. Experimental SHRINCS128sQ18Keccak harnesses supply this
+/// contract's address explicitly for stateless delegation tests.
 contract SPHINCSPlusC128sQ18Keccak is SPHINCSPlusCVerifier {
     // PROFILE_TAG: the compiled parameter-set identifier for this
     // verifier. Matches SHRINCSParams.PROFILE_ID for the 128s-q18

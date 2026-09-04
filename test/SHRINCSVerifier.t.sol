@@ -24,6 +24,7 @@ import {
 } from "../contracts/interfaces/IERC7913SignatureVerifier.sol";
 import {SHRINCS} from "../contracts/SHRINCS.sol";
 import {SHRINCSVerifier} from "../contracts/SHRINCSVerifier.sol";
+import {SPHINCSPlusCVerifier} from "../contracts/SPHINCSPlusCVerifier.sol";
 import {SHRINCSParams} from "shrincs-profile/SHRINCSParams.sol";
 import {HashSuite} from "shrincs-hash/HashSuite.sol";
 import {SHRINCSTestSigner} from "./helpers/SHRINCSTestSigner.sol";
@@ -41,6 +42,10 @@ contract SHRINCSVerifierHarness is SHRINCSVerifier {
         return address(0);
     }
 }
+
+/// @dev Empty concrete subclass of the abstract SPHINCSPlusC profile base,
+/// used only to read VERSION_TAG under whichever profile the suite runs.
+contract SPHINCSPlusCVerifierHarness is SPHINCSPlusCVerifier {}
 
 contract SHRINCSVerifierTest is Test {
     bytes4 internal constant INVALID_SIGNATURE = 0xffffffff;
@@ -148,6 +153,16 @@ contract SHRINCSVerifierTest is Test {
             verifier.VERSION_TAG(),
             keccak256("quip.shrincs-verifier.v4"),
             "version tag"
+        );
+    }
+
+    function testSphincsPlusCVersionTag() public {
+        SPHINCSPlusCVerifierHarness sphincs =
+            new SPHINCSPlusCVerifierHarness();
+        assertEq(
+            sphincs.VERSION_TAG(),
+            keccak256("quip.sphincsplusc-verifier.v3"),
+            "sphincsplusc version tag"
         );
     }
 

@@ -29,15 +29,11 @@ import {CreateXSalt} from "../script/CreateXSalt.sol";
 /// list. It therefore runs under all four ci-matrix profiles.
 contract CreateXSaltInvariantsTest is Test {
     // Every canonical salt label. Order is the DEPLOYMENTS.md table order.
-    function _labels() internal pure returns (string[8] memory) {
+    function _labels() internal pure returns (string[4] memory) {
         return [
             "QUIP:SPHINCSPlusC256sKeccak:V3.0",
-            "QUIP:SPHINCSPlusC128sQ18Keccak:V3.0",
-            "QUIP:SPHINCSPlusC128sQ20Keccak:V3.0",
             "QUIP:SPHINCSPlusC256sSha2:V3.0",
             "QUIP:SHRINCS256sKeccak:V4.0",
-            "QUIP:SHRINCS128sQ18Keccak:V4.0",
-            "QUIP:SHRINCS128sQ20Keccak:V4.0",
             "QUIP:SHRINCS256sSha2:V4.0"
         ];
     }
@@ -45,15 +41,11 @@ contract CreateXSaltInvariantsTest is Test {
     // The published addresses, in the same order. This is the
     // DEPLOYMENTS.md <-> code regression lock: it fails loudly if anyone
     // edits a label, the deployer, the flag byte, or the entropy width.
-    function _addresses() internal pure returns (address[8] memory) {
+    function _addresses() internal pure returns (address[4] memory) {
         return [
             0xe52707C5D76E2F7c3314cF3dcc340eB9BbAE3864,
-            0x23cc6a3b31A3f6734530FCddB19eabE31F9a3037,
-            0xf6e309c6795447584110404FbaE112E4236d40AD,
             0x55346bdc46Cf36C844c0f708041C916c0B65718f,
             0xF2f9E6D692da41b089c3c261c41509669eEc5567,
-            0x695BA9d92FB431B4d446EEcb40b9874c9E43cc91,
-            0xa301C72c150d735ED741F3Fd980691d1a77F7c52,
             0x10eE478959bD9cd9E99573cf208D217d704C2FF5
         ];
     }
@@ -82,6 +74,12 @@ contract CreateXSaltInvariantsTest is Test {
         return bytes11(h);
     }
 
+    // External wrapper so vm.expectRevert can intercept the library's
+    // inlined `require` (internal library calls are not a CALL).
+    function requireWellFormedExternal(bytes32 raw) external pure {
+        CreateXSalt.requireWellFormed(raw);
+    }
+
     /// @notice Every salt is laid out as CreateX's sender-scoped branch
     /// requires: [20B DEPLOYER][0x00][11B of the label hash].
     /// @dev A wrong sender field silently routes CreateX to its
@@ -90,7 +88,7 @@ contract CreateXSaltInvariantsTest is Test {
     /// address per chain. Neither reverts inside CreateX, so this is the
     /// check that catches them.
     function testEverySaltIsWellFormed() public pure {
-        string[8] memory labels = _labels();
+        string[4] memory labels = _labels();
         for (uint256 i = 0; i < labels.length; i++) {
             bytes32 labelHash = keccak256(bytes(labels[i]));
             bytes32 raw = CreateXSalt.rawSalt(labelHash);
@@ -112,13 +110,46 @@ contract CreateXSaltInvariantsTest is Test {
         }
     }
 
-    /// @notice The layout holds for any label, not just the nine.
+    /// @notice The layout holds for any label, not just the four.
     function testFuzzSaltLayout(bytes32 labelHash) public pure {
         bytes32 raw = CreateXSalt.rawSalt(labelHash);
         assertEq(_senderField(raw), CreateXSalt.DEPLOYER, "sender");
         assertEq(raw[20], bytes1(0x00), "flag");
         assertEq(_entropy(raw), _labelPrefix(labelHash), "entropy");
         CreateXSalt.requireWellFormed(raw);
+    }
+
+    /// @notice requireWellFormed reverts when the sender field is not
+    /// the canonical deployer. CreateX would otherwise take its
+    /// permissionless branch and land at a squattable address.
+    function testRequireWellFormedRevertsOnWrongSender() public {
+        bytes32 labelHash = keccak256("QUIP:test:bad-sender");
+        bytes32 bad = bytes32(
+            abi.encodePacked(
+                bytes20(address(0xBAD)),
+                CreateXSalt.FLAG_NO_CHAIN_SCOPE,
+                _labelPrefix(labelHash)
+            )
+        );
+        vm.expectRevert(bytes("CreateXSalt: sender field != DEPLOYER"));
+        this.requireWellFormedExternal(bad);
+    }
+
+    /// @notice requireWellFormed reverts on CreateX's 0x01 chain-scope
+    /// flag. That flag would silently destroy chain-invariance.
+    function testRequireWellFormedRevertsOnChainScopedFlag() public {
+        bytes32 labelHash = keccak256("QUIP:test:bad-flag");
+        // 0x01 is CreateX's chain-scope flag (byte 20); the library
+        // mirrors only the 0x00 / no-chain-scope branch.
+        bytes32 bad = bytes32(
+            abi.encodePacked(
+                bytes20(CreateXSalt.DEPLOYER),
+                bytes1(0x01),
+                _labelPrefix(labelHash)
+            )
+        );
+        vm.expectRevert(bytes("CreateXSalt: flag byte != 0x00"));
+        this.requireWellFormedExternal(bad);
     }
 
     /// @notice Distinct labels give distinct salts and addresses.
@@ -136,6 +167,33 @@ contract CreateXSaltInvariantsTest is Test {
         );
     }
 
+    /// @notice Truncating the label hash to 11 entropy bytes is an
+    /// explicit reviewed property: two hashes that share a prefix
+    /// produce the same salt (and therefore the same address).
+    function testSharedPrefixGivesEqualSalts() public pure {
+        bytes32 labelA = keccak256("QUIP:test:truncation-a");
+        // Flip the last bit, which sits outside the leading 11 bytes
+        // (88 bits), so the prefix is unchanged and the full hashes
+        // differ.
+        bytes32 labelB = labelA ^ bytes32(uint256(1));
+        assertTrue(labelA != labelB, "full hashes differ");
+        assertEq(
+            _labelPrefix(labelA),
+            _labelPrefix(labelB),
+            "leading 11 bytes match"
+        );
+        assertEq(
+            CreateXSalt.rawSalt(labelA),
+            CreateXSalt.rawSalt(labelB),
+            "shared prefix -> equal salt"
+        );
+        assertEq(
+            CreateXSalt.addressOf(CreateXSalt.rawSalt(labelA)),
+            CreateXSalt.addressOf(CreateXSalt.rawSalt(labelB)),
+            "shared prefix -> equal address"
+        );
+    }
+
     /// @notice THE point of the permissioned scheme: publishing a raw salt
     /// does not hand anyone the advertised address.
     /// @dev A third party calling deployCreate3 with our published raw
@@ -145,7 +203,7 @@ contract CreateXSaltInvariantsTest is Test {
     /// those two were the same address, which is exactly the hazard
     /// test/CreateXCreate3.t.sol's Create3SquatTest still documents.
     function testSquatSurfaceIsClosed() public pure {
-        string[8] memory labels = _labels();
+        string[4] memory labels = _labels();
         for (uint256 i = 0; i < labels.length; i++) {
             bytes32 raw = CreateXSalt.rawSalt(keccak256(bytes(labels[i])));
 
@@ -161,10 +219,10 @@ contract CreateXSaltInvariantsTest is Test {
         }
     }
 
-    /// @notice The nine advertised addresses match DEPLOYMENTS.md.
+    /// @notice The four advertised addresses match DEPLOYMENTS.md.
     function testAdvertisedAddressesMatchRegistry() public pure {
-        string[8] memory labels = _labels();
-        address[8] memory expected = _addresses();
+        string[4] memory labels = _labels();
+        address[4] memory expected = _addresses();
         for (uint256 i = 0; i < labels.length; i++) {
             bytes32 raw = CreateXSalt.rawSalt(keccak256(bytes(labels[i])));
             assertEq(
@@ -177,7 +235,7 @@ contract CreateXSaltInvariantsTest is Test {
 
     /// @notice No two artifacts share an address.
     function testAdvertisedAddressesAreDistinct() public pure {
-        address[8] memory addrs = _addresses();
+        address[4] memory addrs = _addresses();
         for (uint256 i = 0; i < addrs.length; i++) {
             for (uint256 j = i + 1; j < addrs.length; j++) {
                 assertTrue(addrs[i] != addrs[j], "addresses must differ");

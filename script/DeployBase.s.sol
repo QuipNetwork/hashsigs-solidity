@@ -107,19 +107,30 @@ abstract contract CreateXDeployer is Script {
     // A SHRINCS verifier delegates stateless verification to its pinned
     // SPHINCSPlusC sibling. CREATE3 fixes the sibling address regardless
     // of deploy order, but verifyStateless reverts on empty code, so the
-    // sibling MUST be deployed (its own script) FIRST. Assert both before
-    // the verifier deploys: `siblingSalt` derives to exactly the pinned
-    // constant (drift guard vs the deploy-script salt), and the sibling
-    // already has code. Call from each SHRINCS script's run().
-    function _requireSibling(bytes32 siblingSalt, address pinned)
-        internal
-        view
-    {
+    // sibling MUST be deployed (its own script) FIRST. Assert all before
+    // the verifier deploys: `siblingSalt` is well-formed (sender field
+    // and chain-scope flag), it derives to exactly the pinned constant
+    // (drift guard vs the deploy-script salt), the sibling already has
+    // code, and its runtime codehash matches `siblingCodehash` — this
+    // last check catches our own earlier deploy of a different
+    // SPHINCSPlusC build at the same permissioned address, which would
+    // otherwise pin a sibling whose bytecode differs from
+    // DEPLOYMENTS.md. Call from each SHRINCS script's run().
+    function _requireSibling(
+        bytes32 siblingSalt,
+        address pinned,
+        bytes32 siblingCodehash
+    ) internal view {
+        CreateXSalt.requireWellFormed(siblingSalt);
         address derived = _addressOf(siblingSalt);
         require(derived == pinned, "deploy: SPHINCSPlusC sibling drift");
         require(
             derived.code.length != 0,
             "deploy: SPHINCSPlusC sibling not deployed"
+        );
+        require(
+            derived.codehash == siblingCodehash,
+            "deploy: sibling codehash drift"
         );
     }
 

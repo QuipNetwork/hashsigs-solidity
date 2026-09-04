@@ -184,7 +184,7 @@ and a `skip` list for the other profile's verifier/deploy/test files.
   (per-profile PUSH constants confirmed in both artifacts);
 - per-profile `remappings = [...]` + `skip = [...]` in foundry.toml
   produce correct, disjoint artifact sets under separate `out` dirs;
-- dashed profile names (`FOUNDRY_PROFILE=128s-q20`) work.
+- dashed profile names (`FOUNDRY_PROFILE=test-128s-q20`) work.
 
 **Verified hazard**: a `remappings.txt` file silently overrides
 per-profile TOML remappings — with one present, the 128s build
@@ -303,6 +303,9 @@ hypertree", "height is 14 bits", "64 chains") is generalized.
 
 ### 3.4 foundry.toml, deploy, CI
 
+> Historical design record: the production-128s proposal below is
+> superseded by the 2026-09-04 issue-12 decision recorded after Q1-Q6.
+
 Profiles (per-profile `out` dirs so artifacts never collide):
 
 ```toml
@@ -312,8 +315,8 @@ skip = ["contracts/ShrincsVerifier128sQ20.sol",
         "script/DeployShrincsVerifier128sQ20.s.sol",
         "test/profiles/128s-q20/**"]
 
-[profile.128s-q20]
-out = "out-128s-q20"
+[profile.test-128s-q20]
+out = "out-test-128s-q20"
 remappings = ["shrincs-profile/=contracts/profiles/128s-q20/"]
 skip = ["contracts/ShrincsVerifier256s.sol",
         "script/DeployShrincsVerifier256s.s.sol",
@@ -322,25 +325,15 @@ skip = ["contracts/ShrincsVerifier256s.sol",
 
 [profile.production]         # 256s canonical build (existing pin)
 solc = "0.8.35"  # via-ir, 1_000_000 runs, as today
-[profile.production-128s-q20]
-solc = "0.8.35"  # same pin + 128s remapping/skip + out-128s-q20-prod
+[profile.experimental-128s-q20]
+solc = "0.8.35"  # same pin + 128s remapping/skip; never deployable
 ```
 
-Both production profiles pin the same solc 0.8.35/via-ir/runs; they
-differ only in remapping, skip, and `out`. Two artifacts, two init
-codes, two CREATE2 addresses — deterministic per profile.
+The experimental profile pins the compiler for reproducible research
+artifacts, but it does not imply deployment approval or an address.
 
-Deploy: split `DeployShrincsVerifier.s.sol` into
-`DeployShrincsVerifier256s.s.sol` (salt
-`keccak256("QUIP:ShrincsVerifier256s:V1.0")`, requires
-`FOUNDRY_PROFILE=production`) and `DeployShrincsVerifier128sQ20.s.sol`
-(salt `...128sQ20:V1.0`, requires
-`FOUNDRY_PROFILE=production-128s-q20`). Keep the F-17 profile
-assertion pattern in both. The existing V1.0 salt has not been burned
-on-chain (pre-release), so renaming the contract is safe; if any chain
-already has a deployment, keep the old salt string for the 256s
-contract — decision Q5. RELEASES.md records (profile, version, tag,
-address, codehash, chain).
+Deploy only the 256s verifier under `FOUNDRY_PROFILE=production`.
+Experimental 128s artifacts have no deployment script or canonical salt.
 
 Verifier contracts: `ShrincsVerifier` becomes `abstract` (one-line
 diff; prevents deploying the unsuffixed artifact). Each thin subclass
@@ -349,7 +342,7 @@ adds `bytes32 public constant PROFILE_TAG` (constants cannot be
 format-family tag and the profile tag lives on the subclass). Empty
 subclass bodies otherwise — the reviewed verifier logic is untouched.
 
-CI: matrix the verify job over `FOUNDRY_PROFILE ∈ {default, 128s-q20}`
+CI: matrix the verify job over `FOUNDRY_PROFILE ∈ {default, test-128s-q20}`
 for `forge build`, `forge lint --deny warnings`, `forge test`; run
 `forge fmt --check` and the line-length script once. Add a guard step:
 `test ! -f remappings.txt` (see hazard, §2(d′)).
@@ -501,3 +494,12 @@ Rust-coordination window:
   path is removed; T6 is the single Rust-signer vector-regeneration
   event.)
 - Q6: default confirmed — stateful side follows n (32 chains, target 240).
+
+## Issue-12 production-status decision (2026-09-04)
+
+The q18 and q20 stateless-signature limits lack an approved documented
+birthday-bound analysis. Both 128-bit profiles are therefore experimental:
+they remain available for compilation, tests, vectors, and research, but
+are excluded from production profiles, deploy scripts, canonical salts,
+and advertised addresses. CI enforces that boundary. This decision
+supersedes Q1's suggestion that q18 was a production candidate.

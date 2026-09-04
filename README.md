@@ -33,11 +33,11 @@ Citation keys follow [CODINGSTANDARDS.md §1](./CODINGSTANDARDS.md).
   - `256s` (default) — keccak-256, 32-byte hashes, `h = 64`, `d = 8`,
     `a = 14`, `k = 22`, 64 WOTS-C chains, 2^20 stateless budget.
     Reviewed and anchored to Rust-generated signature vectors.
-  - `128s-q18` — 16-byte truncated hashes, single-layer `h = 18`
+  - `128s-q18` (experimental) — 16-byte truncated hashes, single-layer `h = 18`
     hypertree, `a = 24`, `k = 6`, 32 WOTS-C chains, 2^18 stateless
     budget. Anchored to Rust-generated signature vectors; the stateless
     path is verified against them by `SHRINCSSphincs128sVectors`.
-  - `128s-q20` — as `128s-q18` with a 2^20 stateless budget; shares the
+  - `128s-q20` (experimental) — as `128s-q18` with a 2^20 stateless budget; shares the
     128s vectors except the profile-bound commitment.
 - **SPHINCS+C** ([contracts/SPHINCSPlusC.sol](./contracts/SPHINCSPlusC.sol))
   — the stateless SPHINCS+C construction `[SPHINCSPLUSC]` (M. Kudinov,
@@ -149,13 +149,9 @@ Deployment and tooling:
 - [script/Create3.sol](./script/Create3.sol) and
   [script/DeployBase.s.sol](./script/DeployBase.s.sol)
   - CREATE3 factory and shared deploy plumbing
-- [script/DeploySHRINCS256sKeccak.s.sol](./script/DeploySHRINCS256sKeccak.s.sol),
-  [script/DeploySHRINCS128sQ18Keccak.s.sol](./script/DeploySHRINCS128sQ18Keccak.s.sol),
-  [script/DeploySHRINCS128sQ20Keccak.s.sol](./script/DeploySHRINCS128sQ20Keccak.s.sol),
-  [script/DeploySPHINCSPlusC256sKeccak.s.sol](./script/DeploySPHINCSPlusC256sKeccak.s.sol),
-  [script/DeploySPHINCSPlusC128sQ18Keccak.s.sol](./script/DeploySPHINCSPlusC128sQ18Keccak.s.sol),
-  [script/DeploySPHINCSPlusC128sQ20Keccak.s.sol](./script/DeploySPHINCSPlusC128sQ20Keccak.s.sol)
-  - per-profile CREATE3 deploy scripts (see [Deployment](#deployment))
+- [script/DeploySHRINCS256sKeccak.s.sol](./script/DeploySHRINCS256sKeccak.s.sol)
+  and [script/DeploySPHINCSPlusC256sKeccak.s.sol](./script/DeploySPHINCSPlusC256sKeccak.s.sol)
+  - production CREATE3 deploy scripts (see [Deployment](#deployment))
 - [scripts/check-line-length.sh](./scripts/check-line-length.sh)
   - 78-char line gate from [CODINGSTANDARDS.md](./CODINGSTANDARDS.md)
 - [dev/export-account-vectors.sh](./dev/export-account-vectors.sh)
@@ -782,21 +778,22 @@ Foundry remapping in `foundry.toml` (each build profile also gets its own
   above. The split into `SHRINCSParams` kept the 256s production build
   byte-identical to the pre-split verifier (metadata-stripped deployed
   bytecode compared before/after).
-- **`128s-q18` and `128s-q20`.** 16-byte truncated-hash profiles
+- **`128s-q18` and `128s-q20` (experimental).** 16-byte truncated-hash profiles
   (`HASH_LEN = 16`, high-aligned via `HASH_MASK`), single-layer `h = 18`
   hypertree, `a = 24`, `k = 6`, 32 stateful WOTS chains. They differ only
   in the stateless budget: `2^18` for q18, `2^20` for q20. Both compile
   and pass the structural and profile-invariant test sets, and their
   stateless paths are verified against Rust-generated signature vectors
-  by `SHRINCSSphincs128sVectors`. Deployment stays testnet-only; the
-  `128s-q20` `2^20` budget wants profile security-analysis backing before
-  production use.
+  by `SHRINCSSphincs128sVectors`. Neither limit has an approved
+  birthday-bound security analysis. These profiles are retained only for
+  tests, vectors, and research: no production Foundry profile, deployment
+  script, salt, or advertised address is provided.
 
 Build a non-default profile with `FOUNDRY_PROFILE`:
 
 ```bash
-FOUNDRY_PROFILE=128s-q18 forge build
-FOUNDRY_PROFILE=128s-q18 forge test
+FOUNDRY_PROFILE=test-128s-q18 forge build
+FOUNDRY_PROFILE=test-128s-q18 forge test
 ```
 
 `test/SHRINCSProfileInvariants.t.sol` checks the active profile's
@@ -1235,7 +1232,7 @@ scripts/gas-report.sh
 or a single profile directly:
 
 ```bash
-FOUNDRY_PROFILE=128s-q18 forge test --match-contract SHRINCSMeasurements -vv
+FOUNDRY_PROFILE=test-128s-q18 forge test --match-contract SHRINCSMeasurements -vv
 ```
 
 These figures require a clean full build per profile, which
@@ -1258,6 +1255,34 @@ citation conventions, and the enforcement gates (format, lint, line cap,
 tests, static analysis, and fuzz/invariant properties) are defined in
 [CODINGSTANDARDS.md](./CODINGSTANDARDS.md) §8; GitLab CI runs them all.
 
+### Agent tooling
+
+The repository tracks two kinds of files for LLM coding agents:
+
+- [AGENTS.md](./AGENTS.md): project instructions that every agent reads.
+- `.agents/skills/`: tool-neutral skills in the
+  [Agent Skills](https://agentskills.io) format (`<name>/SKILL.md`). The
+  `solidity-standards` skill walks
+  [CODINGSTANDARDS.md](./CODINGSTANDARDS.md) for any agent that writes or
+  reviews Solidity here.
+
+Every other agent file is local state and is ignored by `.gitignore`:
+`.claude/`, `CLAUDE.md`, `.codex/`, `.beads/`, `.serena/`, and the
+`bd`-generated `.agents/skills/beads/`. Put project instructions in
+`AGENTS.md`. Put reusable agent workflows in `.agents/skills/`, never in
+a tool-specific directory. Do not commit tool configuration or
+task-tracking databases.
+
+Codex, Cursor, Gemini CLI, Copilot, and most other agents read
+`.agents/skills/` directly. Claude Code reads only `.claude/skills/`, so
+link the shared skill into it once. The link stays local because
+`.claude/` is ignored:
+
+```bash
+mkdir -p .claude/skills
+ln -s ../../.agents/skills/solidity-standards .claude/skills/
+```
+
 ### Prerequisites
 
 Install Foundry:
@@ -1277,7 +1302,7 @@ forge build
 ```
 
 To build a non-default profile, set `FOUNDRY_PROFILE`
-(`FOUNDRY_PROFILE=128s-q18 forge build`); see [Profiles](#profiles) and the
+(`FOUNDRY_PROFILE=test-128s-q18 forge build`); see [Profiles](#profiles) and the
 profile sections in `foundry.toml`.
 
 ## Test
@@ -1475,14 +1500,12 @@ is already deployed at the pinned address.
   (profile `production`)
 - `script/DeploySHRINCS256sKeccak.s.sol` — 256s verifier (profile
   `production`)
-- `script/DeploySPHINCSPlusC128sQ18Keccak.s.sol` — 128s-q18 delegate
-  (profile `production-128s-q18`)
-- `script/DeploySHRINCS128sQ18Keccak.s.sol` — 128s-q18 verifier
-  (profile `production-128s-q18`)
-- `script/DeploySPHINCSPlusC128sQ20Keccak.s.sol` — 128s-q20 delegate
-  (profile `production-128s-q20`)
-- `script/DeploySHRINCS128sQ20Keccak.s.sol` — 128s-q20 verifier
-  (profile `production-128s-q20`)
+
+The 128s-q18 and 128s-q20 contracts are deliberately absent from this
+list. They are experimental test/vector artifacts and have no production
+deployment scripts, production salts, or advertised addresses. CI enforces
+this boundary with `scripts/check-production-profiles.sh`.
+
 Each script asserts its `FOUNDRY_PROFILE` and refuses to run under the
 wrong one. Example:
 
@@ -1492,9 +1515,7 @@ FOUNDRY_PROFILE=production forge script \
     --rpc-url $RPC --private-key $DEPLOYER_PK --broadcast --verify
 ```
 
-SHRINCS is testnet-only. The 128s-q20 stateless budget (2^20) wants
-profile security-analysis backing before production use. The example
-wrapper
+SHRINCS is testnet-only. The example wrapper
 (`contracts/examples/SHRINCSAccountVerifierExample.sol`) is a reference
 integration, not a canonical deployment; deploy it directly with
 `forge create` when you need one.

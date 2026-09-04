@@ -109,8 +109,8 @@ contract SHRINCSProfileInvariantsTest is Test {
             });
         }
         if (
-            nameHash == keccak256("128s-q18")
-                || nameHash == keccak256("production-128s-q18")
+            nameHash == keccak256("test-128s-q18")
+                || nameHash == keccak256("experimental-128s-q18")
         ) {
             return ProfileExpectation({
                 profileId: keccak256("shrincs-128s-q18-keccak"),
@@ -129,8 +129,8 @@ contract SHRINCSProfileInvariantsTest is Test {
             });
         }
         if (
-            nameHash == keccak256("128s-q20")
-                || nameHash == keccak256("production-128s-q20")
+            nameHash == keccak256("test-128s-q20")
+                || nameHash == keccak256("experimental-128s-q20")
         ) {
             return ProfileExpectation({
                 profileId: keccak256("shrincs-128s-q20-keccak"),

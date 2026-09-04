@@ -139,7 +139,7 @@ library FORSMinusC {
         //   [0..7)         "fors-pk"
         //   [7..39)        pkSeed
         //   [39..71)       FORS_ROOTS address (type 4)
-        //   [71..71+32*t) reconstructed per-tree roots (t = signedTrees)
+        //   [71..71+32*t)  reconstructed per-tree roots (t = signedTrees)
         // forsPkInputLen = 71 + signedTrees * 32.
         // Memory-safe: allocates roundup32(forsPkInputLen) bytes at the
         // free-memory pointer and advances the pointer past them; the loop
@@ -154,6 +154,8 @@ library FORSMinusC {
             calldatacopy(add(forsPkInput, 7), pkSeed.offset, 32)
             // FORS is below hypertree layer zero. Bind the compression to
             // its digest-derived tree and keypair coordinates.
+            // ADRS bit layout [FIPS205 §4.2]: layer<<224 | tree<<128 |
+            // type<<96 | keypair<<64 | chain<<32 | step
             mstore(
                 add(forsPkInput, 39),
                 or(

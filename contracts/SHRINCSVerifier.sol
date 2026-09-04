@@ -63,13 +63,12 @@ import {SHRINCS} from "./SHRINCS.sol";
 /// Caller obligations. The shared SHRINCS verification stack is `view`
 /// because it also compiles with the SHA-256 suite. Its hashing helpers use
 /// `staticcall` to precompile 0x02. Both adapters are storage-free: no
-/// entrypoint touches persistent storage, and the
-/// only non-`view` entrypoint, `verifyAndAttest`, writes exclusively
-/// EIP-1153 transient storage (cleared when the transaction ends); they
-/// verify a signature and nothing more. All statefulness is the WRAPPER
-/// contract's job: single-use tracking of stateful leaves, nonce and
-/// keyVersion replay scoping, and installing the commitment a rotation
-/// returns.
+/// entrypoint touches persistent storage, and the only non-`view` entrypoint,
+/// `verifyAndAttest`, writes exclusively EIP-1153 transient storage (cleared
+/// when the transaction ends); they verify a signature and nothing more.
+/// All statefulness is the WRAPPER contract's job: single-use tracking of
+/// stateful leaves, nonce and keyVersion replay scoping, and installing the
+/// commitment a rotation returns.
 /// SHRINCSAccountVerifierExample is the reference wrapper. Any future
 /// storage-needing helper belongs in a separate wrapper/base contract at the
 /// top of the inheritance chain, never in these libraries or adapters.

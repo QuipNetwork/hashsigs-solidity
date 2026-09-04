@@ -28,22 +28,22 @@ import {SPHINCSPlusC} from "./SPHINCSPlusC.sol";
 /// @dev Caller obligations. The shared verification stack is `view`: it
 /// compiles with the SHA-256 hash suite, whose hashing helpers use
 /// `staticcall` to precompile 0x02. No function reads or writes persistent
-/// storage. On a
-/// well-formed but invalid signature the verify and hash-building functions
-/// return a fail-closed boolean (never a wrong-accept), and the ERC-7913
-/// revert-vs-0xffffffff policy belongs to the calling contract. On a
-/// malformed envelope they MAY revert: the re-tag facades (statefulEnvelope,
-/// statelessActionEnvelope, prepareStatelessDelegation, ...) point calldata
-/// structs at the fields in place, and a framing that solc's calldata member
-/// access or a reconstruction loop's index bound cannot read Panics — that
-/// revert is the rejection channel. The guarantee is {revert, false}, never a
+/// storage. On a well-formed but invalid signature the verify and
+/// hash-building functions return a fail-closed boolean (never a
+/// wrong-accept), and the ERC-7913 revert-vs-0xffffffff policy belongs to
+/// the calling contract. On a malformed envelope they MAY revert: the re-tag
+/// facades (statefulEnvelope, statelessActionEnvelope,
+/// prepareStatelessDelegation, ...) point calldata structs at the fields in
+/// place, and a framing that solc's calldata member access or a
+/// reconstruction loop's index bound cannot read Panics — that revert is
+/// the rejection channel. The guarantee is {revert, false}, never a
 /// wrong-accept; the encoder/decoder revert-model note below states the
-/// exact acceptance bound. All statefulness is the WRAPPER
-/// contract's job: single-use tracking of stateful leaves, nonce and
-/// keyVersion replay scoping, and installing the commitment a rotation
-/// returns. SHRINCSAccountVerifierExample is the reference wrapper. Any
-/// future storage-needing helper belongs in a separate wrapper/base contract
-/// at the top of the inheritance chain, never in these libraries.
+/// exact acceptance bound. All statefulness is the WRAPPER contract's
+/// job: single-use tracking of stateful leaves, nonce and keyVersion
+/// replay scoping, and installing the commitment a rotation returns.
+/// SHRINCSAccountVerifierExample is the reference wrapper. Any future
+/// storage-needing helper belongs in a separate wrapper/base contract at
+/// the top of the inheritance chain, never in these libraries.
 /// @dev Calldata typing. The verify path is `calldata` end-to-end: the
 /// adapters and wrapper re-tag their calldata envelopes into typed struct
 /// pointers and hand them straight down, with no abi.decode and no copy.

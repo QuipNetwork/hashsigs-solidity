@@ -29,7 +29,20 @@ test/test_vectors/tmp.json
 .#*
 *~
 
-# Claude Code local settings and worktrees
-# (skills in .claude/skills/ ARE tracked)
-.claude/settings.local.json
-.claude/worktrees/
+# Agent tooling and local task tracking: not part of the library.
+# Tracked agent-facing files: AGENTS.md and the tool-neutral skills
+# under .agents/skills/. Everything below is local state.
+.agents/skills/beads/
+.claude/
+CLAUDE.md
+.codex/
+.serena/
+.beads/
+.beads-credential-key
+.dolt/
+*.db
+
+# Cargo artifacts (no Rust crate lives here; keeps stray builds out)
+.cargo/
+target/
+Cargo.lock
