@@ -16,6 +16,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 pragma solidity ^0.8.28;
 
+import {SHRINCSTestCodec} from "./SHRINCSTestCodec.sol";
+
 import {SHRINCSTestSigner} from "./SHRINCSTestSigner.sol";
 import {SHRINCS} from "../../contracts/SHRINCS.sol";
 import {SPHINCSPlusC} from "../../contracts/SPHINCSPlusC.sol";
@@ -69,6 +71,27 @@ contract SHRINCSStatelessVectorSigner {
 
     uint256 internal nextSessionNonce;
     mapping(bytes32 sessionId => Session session) internal sessions;
+
+    // TEST-ONLY mutation switches for the address-tweak binding. When a
+    // switch is set the signer omits the ADRS word from the matching
+    // compression preimage while the verifier still binds it, so the
+    // resulting signature must be rejected. Both default to false, so
+    // every other user of this signer is unaffected.
+    bool internal omitWotsPkAddressWord;
+    bool internal omitForsRootsAddressWord;
+
+    /// @notice TEST-ONLY: choose which compression preimages this signer
+    /// builds with an omitted (all-zero) ADRS word.
+    /// @param omitWotsPk Omit the WOTS_PK ADRS from the "wots-c-pk"
+    /// preimage [FIPS205 §4.2].
+    /// @param omitForsRoots Omit the FORS_ROOTS ADRS from the "fors-pk"
+    /// preimage [FIPS205 §4.2].
+    function setAddressWordOmission(bool omitWotsPk, bool omitForsRoots)
+        external
+    {
+        omitWotsPkAddressWord = omitWotsPk;
+        omitForsRootsAddressWord = omitForsRoots;
+    }
 
     function beginSessionFromSeed(
         bytes memory seedMaterial,
@@ -226,10 +249,21 @@ contract SHRINCSStatelessVectorSigner {
         // Verifier-shape FORS public value: route through the production
         // finalizer HashSuite.hashForsPk32 (the same helper
         // FORSMinusC.verify hashes the per-tree roots with; masking applied
-        // internally, no-op at 256s). The [tag | pkSeed | roots] buffer is
-        // suite-independent, so build it here and pass (ptr, len).
-        bytes memory forsPkInput =
-            abi.encodePacked("fors-pk", session.signingKey.pkSeed, roots);
+        // internally, no-op at 256s). The
+        // [tag | pkSeed | FORS_ROOTS ADRS | roots] buffer is
+        // suite-independent.
+        // TEST-ONLY omission: see setAddressWordOmission. An honest
+        // signing run always takes the false branch.
+        bytes32 addressWord = omitForsRootsAddressWord
+            ? bytes32(0)
+            : bytes32(
+                (uint256(session.bottomTreeIndex) << 128)
+                    | (uint256(FORSMinusC.AddressTypeForsRoots) << 96)
+                    | (uint256(session.bottomLeafIndex) << 64)
+            );
+        bytes memory forsPkInput = abi.encodePacked(
+            "fors-pk", session.signingKey.pkSeed, addressWord, roots
+        );
         uint256 forsPkPtr;
         // Memory-safe: reads forsPkInput's data pointer (length word + 32)
         // without writing memory; the finalizer only hashes the buffer.
@@ -685,6 +719,7 @@ contract SHRINCSStatelessVectorSigner {
     ) internal view returns (bytes memory out) {
         bytes memory base = abi.encodePacked(
             "fors-digest",
+            SHRINCSParams.PROFILE_ID,
             pkSeed,
             hypertreeRoot,
             randomizer,
@@ -695,8 +730,9 @@ contract SHRINCSStatelessVectorSigner {
         // production finalizer HashSuite.hashForsDigestBlock32 (the helper
         // FORSMinusC.forsDigestBytes emits; it returns the RAW block, no
         // masking, because a bit stream is read out of it). The
-        // [tag | pkSeed | root | randomizer | counter | message] buffer (plus
-        // an optional 4-byte block counter) is suite-independent, built here.
+        // [tag | PROFILE_ID | pkSeed | root | randomizer | counter |
+        // message] buffer (plus an optional 4-byte block counter) is
+        // suite-independent, built here.
         if (digestBytes <= 32) {
             out = new bytes(digestBytes);
             uint256 basePtr;
@@ -1038,9 +1074,19 @@ contract SHRINCSStatelessVectorSigner {
         }
         // Verifier-shape WOTS-C public-key hash: production finalizer
         // HashSuite.hashWotsCPk32 (masking applied internally, no-op at
-        // 256s). The [tag | pkSeed | endpoints] buffer is suite-independent.
+        // 256s). The [tag | pkSeed | WOTS_PK ADRS | endpoints] buffer is
+        // suite-independent.
+        // TEST-ONLY omission: see setAddressWordOmission. An honest
+        // signing run always takes the false branch.
+        bytes32 addressWord = omitWotsPkAddressWord
+            ? bytes32(0)
+            : bytes32(
+                (uint256(layer) << 224) | (uint256(tree) << 128)
+                    | (uint256(Hypertree.AddressTypeWotsPk) << 96)
+                    | (uint256(keypair) << 64)
+            );
         bytes memory pkInput =
-            abi.encodePacked("wots-c-pk", pkSeed, endpoints);
+            abi.encodePacked("wots-c-pk", pkSeed, addressWord, endpoints);
         uint256 pkInputPtr;
         // Memory-safe: reads pkInput's data pointer (length word + 32); the
         // finalizer only hashes the buffer.
@@ -1096,7 +1142,7 @@ contract SHRINCSStatelessVectorSigner {
     ) internal view returns (bytes32 out) {
         out = value;
         for (uint32 step = start; step < start + steps;) {
-            bytes32 addressWord = Hash.addressWord32(
+            bytes32 addressWord = SHRINCSTestCodec.addressWord32(
                 layer, tree, UXMSS.AddressTypeWotsHash, keypair, chain, step
             );
             // Verifier-shape chain step: production

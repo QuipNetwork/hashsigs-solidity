@@ -22,25 +22,28 @@ import {UXMSS} from "./UXMSS.sol";
 import {SPHINCSPlusC} from "./SPHINCSPlusC.sol";
 
 /// @title SHRINCS
-/// @notice Pure verification core for the hybrid SHRINCS scheme: builds the
-/// canonical action and rotation hashes and runs the stateful/stateless
-/// verify-and-decode logic the ERC-7913 SHRINCSVerifier calls into.
-/// @dev Caller obligations. Every function in this library is `pure`. On a
-/// well-formed but invalid signature the verify and hash-building functions
-/// return a fail-closed boolean (never a wrong-accept), and the ERC-7913
-/// revert-vs-0xffffffff policy belongs to the calling contract. On a
-/// malformed envelope they MAY revert: the re-tag facades (statefulEnvelope,
-/// statelessActionEnvelope, prepareStatelessDelegation, ...) point calldata
-/// structs at the fields in place, and a framing that solc's calldata member
-/// access or a reconstruction loop's index bound cannot read Panics — that
-/// revert is the rejection channel. The guarantee is {revert, false}, never a
+/// @notice Storage-free verification core for the hybrid SHRINCS scheme:
+/// builds canonical action and rotation hashes and runs the stateful and
+/// stateless verify-and-decode logic used by the ERC-7913 verifier.
+/// @dev Caller obligations. The shared verification stack is `view`: it
+/// compiles with the SHA-256 hash suite, whose hashing helpers use
+/// `staticcall` to precompile 0x02. No function reads or writes persistent
+/// storage. On a well-formed but invalid signature the verify and
+/// hash-building functions return a fail-closed boolean (never a
+/// wrong-accept), and the ERC-7913 revert-vs-0xffffffff policy belongs to
+/// the calling contract. On a malformed envelope they MAY revert: the re-tag
+/// facades (statefulEnvelope, statelessActionEnvelope,
+/// prepareStatelessDelegation, ...) point calldata structs at the fields in
+/// place, and a framing that solc's calldata member access or a
+/// reconstruction loop's index bound cannot read Panics — that revert is
+/// the rejection channel. The guarantee is {revert, false}, never a
 /// wrong-accept; the encoder/decoder revert-model note below states the
-/// exact acceptance bound. All statefulness is the WRAPPER
-/// contract's job: single-use tracking of stateful leaves, nonce and
-/// keyVersion replay scoping, and installing the commitment a rotation
-/// returns. SHRINCSAccountVerifierExample is the reference wrapper. Any
-/// future storage-needing helper belongs in a separate wrapper/base contract
-/// at the top of the inheritance chain, never in these libraries.
+/// exact acceptance bound. All statefulness is the WRAPPER contract's
+/// job: single-use tracking of stateful leaves, nonce and keyVersion
+/// replay scoping, and installing the commitment a rotation returns.
+/// SHRINCSAccountVerifierExample is the reference wrapper. Any future
+/// storage-needing helper belongs in a separate wrapper/base contract at
+/// the top of the inheritance chain, never in these libraries.
 /// @dev Calldata typing. The verify path is `calldata` end-to-end: the
 /// adapters and wrapper re-tag their calldata envelopes into typed struct
 /// pointers and hand them straight down, with no abi.decode and no copy.
@@ -52,6 +55,10 @@ import {SPHINCSPlusC} from "./SPHINCSPlusC.sol";
 /// The rotation/context helpers (rotateStatefulViaStateless, statelessRotate,
 /// and their message-hash builders) are likewise `calldata`-typed.
 library SHRINCS {
+    /// @dev A re-tagged stateless signature resolved its final byte before
+    /// its own start or beyond the enclosing call's calldata.
+    error InvalidStatelessSignatureSlice();
+
     // Sentinel for an unsupported hash suite. Kept as a named constant so
     // fail-closed suite checks and negative tests have a stable identifier
     // that never collides with a real suite id (keccak = 1, sha2 = 2). The
@@ -317,10 +324,9 @@ library SHRINCS {
         if (!validRotationContext(context)) return bytes32(0);
         // Stateful subkey rotation carries only a replacement stateful public
         // key payload.
-        if (
-            nextStatefulKey.statefulPublicKey.length
-                != SHRINCSParams.STATEFUL_PUBLIC_KEY_BYTES
-        ) return bytes32(0);
+        if (!SHRINCS.validStatefulPublicKeyEncoding(
+                nextStatefulKey.statefulPublicKey
+            )) return bytes32(0);
         {
             // Decode the fixed-width stateful key to check operational limits
             // such as maxSignatures.
@@ -420,12 +426,11 @@ library SHRINCS {
         }
         // Rotation messages must still carry a nonzero domain binding.
         if (!validRotationContext(context)) return bytes32(0);
-        // The replacement bundle must contain fixed-width stateful,
-        // commitment, seed, and root fields.
-        if (
-            nextKey.statefulPublicKey.length
-                != SHRINCSParams.STATEFUL_PUBLIC_KEY_BYTES
-        ) return bytes32(0);
+        // The replacement bundle must have a canonical stateful key plus
+        // fixed-width commitment, seed, and stateless-root fields.
+        if (!SHRINCS.validStatefulPublicKeyEncoding(
+                nextKey.statefulPublicKey
+            )) return bytes32(0);
         if (nextKey.publicKeyCommitment.length != 32) return bytes32(0);
         if (nextKey.pkSeed.length != 32) return bytes32(0);
         if (nextKey.hypertreeRoot.length != 32) return bytes32(0);
@@ -615,33 +620,6 @@ library SHRINCS {
         return (publicKey, signature, true);
     }
 
-    /// @notice Inverse of decodeStatefulEnvelope.
-    /// @dev Encodes the bundle and stateful signature with the exact layout
-    /// the decoder expects, so tests and off-chain encoders share one format
-    /// definition with the verifier.
-    /// @param publicKey The SHRINCS public-key bundle.
-    /// @param signature The stateful signature.
-    /// @return envelope The abi-encoded stateful envelope bytes.
-    function encodeStatefulEnvelope(
-        SHRINCS.PublicKey memory publicKey,
-        SHRINCS.Signature memory signature
-    ) internal pure returns (bytes memory envelope) {
-        return abi.encode(publicKey, signature);
-    }
-
-    /// @notice Inverse of the stateless envelope re-tag (statelessEnvelope).
-    /// @dev Shares one format definition with the decoder so the verifier,
-    /// tests, and off-chain encoders cannot drift.
-    /// @param publicKey The SHRINCS public-key bundle.
-    /// @param signature The stateless signature.
-    /// @return envelope The abi-encoded stateless envelope bytes.
-    function encodeStatelessEnvelope(
-        SHRINCS.PublicKey memory publicKey,
-        SPHINCSPlusC.Signature memory signature
-    ) internal pure returns (bytes memory envelope) {
-        return abi.encode(publicKey, signature);
-    }
-
     /// @notice Inverse of decodeStatelessKey.
     /// @dev Builds the SPHINCSPlusCVerifier key the sub-call verify expects.
     /// @param pkSeed The stateless SPHINCS-style public seed.
@@ -689,23 +667,36 @@ library SHRINCS {
         uint256 lastPath = signature.hypertree[lastLayer].authPath.length - 1;
         bytes calldata tail =
             signature.hypertree[lastLayer].authPath[lastPath];
+        uint256 signatureStart;
+        uint256 bodyEnd;
+        assembly ("memory-safe") {
+            signatureStart := signature
+            bodyEnd := add(tail.offset, and(add(tail.length, 31), not(31)))
+        }
+        // solc validates nested calldata tails against calldatasize(), but
+        // does not prove that independently resolved pointers are ordered.
+        // Reject before subtracting so a wrapped/reordered tail cannot turn
+        // into a near-2^256 calldatacopy and consume all forwarded gas.
+        if (bodyEnd < signatureStart || bodyEnd > msg.data.length) {
+            revert InvalidStatelessSignatureSlice();
+        }
         // Memory-safe: allocates the envelope at the free-memory pointer,
         // writes its length and the single 0x20 head offset word, bulk-copies
         // the signature's canonical body from calldata, and bumps the
         // free-memory pointer past the (word-aligned) allocation.
         assembly ("memory-safe") {
-            // Canonical body = last authPath element's padded end - the
-            // signature's calldata start; for canonical (and solc-checked)
-            // framings both bounds are word-aligned, so body is a whole
-            // number of 32-byte words.
-            let bodyEnd :=
-                add(tail.offset, and(add(tail.length, 31), not(31)))
-            let body := sub(bodyEnd, signature)
+            // Body = last authPath element's padded end - the signature's
+            // calldata start. Accepted non-canonical framings can make this
+            // length non-word-aligned, so reserve its rounded allocation.
+            let body := sub(bodyEnd, signatureStart)
             envelope := mload(0x40)
             mstore(envelope, add(0x20, body))
             mstore(add(envelope, 0x20), 0x20)
-            calldatacopy(add(envelope, 0x40), signature, body)
-            mstore(0x40, add(add(envelope, 0x20), add(0x20, body)))
+            calldatacopy(add(envelope, 0x40), signatureStart, body)
+            mstore(
+                0x40,
+                add(envelope, and(add(add(0x40, body), 31), not(31)))
+            )
         }
     }
 
@@ -941,24 +932,39 @@ library SHRINCS {
         return publicKeyCommitment(publicKey) == expectedPublicKeyCommitment;
     }
 
-    // validPublicKey: Validate public-key byte lengths and confirm its
-    // embedded commitment is correct.
-    // 1. Check the encoded stateful public-key length.
+    // validStatefulPublicKeyEncoding: Pin the packed stateful-key width and
+    // require its root to be canonical under the active profile hash mask.
+    // The 128-bit profiles use only the high HASH_LEN bytes, so nonzero low
+    // bytes can never equal a root reconstructed by verification.
+    function validStatefulPublicKeyEncoding(bytes calldata encoded)
+        internal
+        pure
+        returns (bool)
+    {
+        if (encoded.length != SHRINCSParams.STATEFUL_PUBLIC_KEY_BYTES) {
+            return false;
+        }
+        bytes32 root;
+        assembly ("memory-safe") {
+            root := calldataload(add(encoded.offset, 32))
+        }
+        return (root & SHRINCSParams.HASH_MASK) == root;
+    }
+
+    // validPublicKey: Validate public-key shape and embedded commitment.
+    // 1. Check the encoded stateful key width and canonical root.
     // 2. Check the commitment, public-seed, and hypertree-root lengths.
-    // 3. Load the embedded commitment from calldata.
-    // 4. Recompute the bundle commitment and require it to match the embedded
-    // field.
+    // 3. Recompute the bundle commitment and require it to match.
     function validPublicKey(SHRINCS.PublicKey calldata publicKey)
         internal
         pure
         returns (bool)
     {
-        // The stateful public key has a fixed packed byte width.
-        if (
-            publicKey.statefulPublicKey.length
-                != SHRINCSParams.STATEFUL_PUBLIC_KEY_BYTES
-        ) return false;
-        // The embedded commitment field is always one hash output wide.
+        // Reject a wrong-width key or a stateful root with noncanonical
+        // low bytes under a truncated profile.
+        if (!SHRINCS.validStatefulPublicKeyEncoding(
+                publicKey.statefulPublicKey
+            )) return false;
         if (publicKey.publicKeyCommitment.length != 32) return false;
         // The stateless public seed is always one hash output wide.
         if (publicKey.pkSeed.length != 32) return false;
@@ -980,13 +986,22 @@ library SHRINCS {
     // 1. Allocate the decoded struct in memory.
     // 2. Copy the public seed, root, and max-signatures fields from calldata.
     // 3. Return the decoded struct together with a success flag.
-    /// @dev Precondition: callers must supply the validPublicKey-checked
-    /// 68-byte encoding; the fixed-offset assembly reads below assume it.
+    /// @dev Rejects every length other than the fixed 68-byte encoding before
+    /// the fixed-offset assembly reads, returning a zero struct and false.
     function decodeStatefulPublicKey(bytes calldata encoded)
         internal
         pure
         returns (UXMSS.StatefulPublicKey memory publicKey, bool ok)
     {
+        if (encoded.length != SHRINCSParams.STATEFUL_PUBLIC_KEY_BYTES) {
+            return (
+                UXMSS.StatefulPublicKey({
+                    pkSeed: bytes32(0), root: bytes32(0), maxSignatures: 0
+                }),
+                false
+            );
+        }
+
         // Decoded StatefulPublicKey layout (0x60 bytes) written at the
         // free-memory pointer:
         //   [0x00..0x20) pkSeed
@@ -1087,6 +1102,40 @@ library SHRINCS {
                 context.keyVersion,
                 context.actionType,
                 context.payloadHash
+            )
+        );
+    }
+
+    // statefulRawMessageHash: Bind an ERC-7913 caller-supplied hash to the
+    // stateful operation family, active hash suite, and complete installed
+    // SHRINCS public-key commitment.
+    function statefulRawMessageHash(
+        bytes32 expectedPublicKeyCommitment,
+        bytes32 hash
+    ) internal pure returns (bytes32) {
+        return keccak256(
+            abi.encodePacked(
+                SHRINCS.OP_VERIFY_STATEFUL,
+                HashSuite.HASH_SUITE_ID,
+                expectedPublicKeyCommitment,
+                hash
+            )
+        );
+    }
+
+    // statelessRawMessageHash: Stateless counterpart of
+    // statefulRawMessageHash. The distinct operation tag prevents signatures
+    // from crossing between the two raw adapter paths.
+    function statelessRawMessageHash(
+        bytes32 expectedPublicKeyCommitment,
+        bytes32 hash
+    ) internal pure returns (bytes32) {
+        return keccak256(
+            abi.encodePacked(
+                SHRINCS.OP_VERIFY_STATELESS,
+                HashSuite.HASH_SUITE_ID,
+                expectedPublicKeyCommitment,
+                hash
             )
         );
     }

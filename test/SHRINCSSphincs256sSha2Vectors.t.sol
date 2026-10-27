@@ -68,9 +68,9 @@ contract SHRINCSSphincs256sSha2VectorsTest is Test {
     bytes32 internal constant GOLD_PK_SEED =
         0x6fb692d48a54a181431c14c7835f52ac92f430bde760f417abecce0bd006f369;
     bytes32 internal constant GOLD_HYPERTREE_ROOT =
-        0x731d8d0669305e5be0db9799afa1fbcd5c79e79ef1799604aa87f1069a6c805d;
+        0x8f1d4397a513eee3323f8a5945b4e4a1ec4ebcf416e772f60ea8009957a80aac;
     bytes32 internal constant GOLD_PUBLIC_KEY_COMMITMENT =
-        0xc92c4b5ac613593aa9447c635faca88241e316d5d05a78bad8ada677d3196af3;
+        0x89d7d495077a5966edcc66b91d7a93fb9e2691dc6aa5d2be3cef999f16d95425;
     bytes internal constant GOLD_STATEFUL_PUBLIC_KEY =
     // line-length: allow — one unbreakable test vector literal token
     hex"f494b6c697b228cdd907b2a3715b593add7c70aab70db1665420e18a857a4896987bbbb50688c43f8cb2f721f514c505e6b5628001b30b3ac1bfd70678d47ad800000004";

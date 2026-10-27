@@ -16,6 +16,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 pragma solidity ^0.8.28;
 
+import {SHRINCSTestCodec} from "./helpers/SHRINCSTestCodec.sol";
+
 import {Test} from "../lib/forge-std/src/Test.sol";
 import {SHRINCS} from "../contracts/SHRINCS.sol";
 import {SPHINCSPlusC} from "../contracts/SPHINCSPlusC.sol";
@@ -56,7 +58,7 @@ contract SHRINCSEnvelopeHarness {
         SHRINCS.PublicKey memory publicKey,
         SHRINCS.Signature memory signature
     ) external pure returns (bytes memory envelope) {
-        return SHRINCS.encodeStatefulEnvelope(publicKey, signature);
+        return SHRINCSTestCodec.encodeStatefulEnvelope(publicKey, signature);
     }
 
     function toMessage(bytes32 hash)

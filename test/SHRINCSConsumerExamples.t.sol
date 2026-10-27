@@ -16,6 +16,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 pragma solidity ^0.8.28;
 
+import {SHRINCSTestCodec} from "./helpers/SHRINCSTestCodec.sol";
+
 import {Test} from "../lib/forge-std/src/Test.sol";
 import {SHRINCS} from "../contracts/SHRINCS.sol";
 import {SPHINCSPlusC} from "../contracts/SPHINCSPlusC.sol";
@@ -252,14 +254,16 @@ contract SHRINCSConsumerExamplesTest is Test {
         assertTrue(keygenOk, "in-test keygen must succeed");
 
         signedHash = keccak256("shrincs consumer stateful vector");
-        bytes memory message = abi.encodePacked(signedHash);
 
-        (SHRINCS.Signature memory signature, bool signOk) =
-            SHRINCSTestSigner.signStatefulRawAtLeaf(signingKey, 1, message);
+        // line-length: allow — fmt canonical tuple head exceeds cap
+        (SHRINCS.Signature memory signature, bool signOk) = SHRINCSTestSigner.signStatefulAdapterAtLeaf(
+            signingKey, publicKey, 1, signedHash
+        );
         assertTrue(signOk, "stateful signing must succeed");
 
         bytes memory key = publicKey.publicKeyCommitment;
-        validEnvelope = SHRINCS.encodeStatefulEnvelope(publicKey, signature);
+        validEnvelope =
+            SHRINCSTestCodec.encodeStatefulEnvelope(publicKey, signature);
         consumer = new SHRINCSERC7913ConsumerExample(
             address(statefulVerifier), key
         );
@@ -284,7 +288,16 @@ contract SHRINCSConsumerExamplesTest is Test {
 
         signedHash = keccak256("shrincs consumer stateless vector");
         (bytes32 sessionId, bool beginOk) = signer.beginSession(
-            signingKey, publicKey, abi.encodePacked(signedHash)
+            signingKey,
+            publicKey,
+            abi.encodePacked(
+                SHRINCS.statelessRawMessageHash(
+                    SHRINCSAccountSigningFacade.publicKeyCommitmentWord(
+                        publicKey
+                    ),
+                    signedHash
+                )
+            )
         );
         assertTrue(beginOk, "stateless begin must succeed");
 
@@ -304,7 +317,8 @@ contract SHRINCSConsumerExamplesTest is Test {
         );
 
         bytes memory key = publicKey.publicKeyCommitment;
-        validEnvelope = SHRINCS.encodeStatelessEnvelope(publicKey, signature);
+        validEnvelope =
+            SHRINCSTestCodec.encodeStatelessEnvelope(publicKey, signature);
         consumer = new SHRINCSStatelessConsumerExample(
             address(statelessVerifier), key
         );

@@ -78,9 +78,9 @@ contract SHRINCSSignerKeygenTest is Test {
     bytes32 internal constant G256_STATEFUL_ROOT =
         0x4f26a29da785b7d9c0194e409dff00c4234e3708ad80a5506f40c0bc83d78f4e;
     bytes32 internal constant G256_HYPERTREE_ROOT =
-        0x51ed6195736b8c640399d7127c2073429879f795645b3fdaa7780bce6fd134b2;
+        0xd7f226d22ded059ce6c4067fc2210bd90ca1e7b78497b44b6aae70961a62c784;
     bytes32 internal constant G256_COMMITMENT =
-        0x38681966d8f8ddcbc3dc966d2cb03feb627182622893a0b9a1580f6440db5654;
+        0x6b923bae9e3fb3a9a4da81acdfc92e4b723e9e6a02079ea4eb1dc7ca3430b55b;
     bytes internal constant G256_STATEFUL_PUBLIC_KEY =
     // line-length: allow — one unbreakable test vector literal token
     hex"a4a372b30187a5bf20d242a6e0a87206cf281bc0fdbbc44c835b3811f800587e4f26a29da785b7d9c0194e409dff00c4234e3708ad80a5506f40c0bc83d78f4e00000004";
@@ -113,9 +113,9 @@ contract SHRINCSSignerKeygenTest is Test {
     bytes32 internal constant G256S2_STATEFUL_ROOT =
         0x987bbbb50688c43f8cb2f721f514c505e6b5628001b30b3ac1bfd70678d47ad8;
     bytes32 internal constant G256S2_HYPERTREE_ROOT =
-        0x731d8d0669305e5be0db9799afa1fbcd5c79e79ef1799604aa87f1069a6c805d;
+        0x8f1d4397a513eee3323f8a5945b4e4a1ec4ebcf416e772f60ea8009957a80aac;
     bytes32 internal constant G256S2_COMMITMENT =
-        0xc92c4b5ac613593aa9447c635faca88241e316d5d05a78bad8ada677d3196af3;
+        0x89d7d495077a5966edcc66b91d7a93fb9e2691dc6aa5d2be3cef999f16d95425;
     bytes internal constant G256S2_STATEFUL_PUBLIC_KEY =
     // line-length: allow — one unbreakable test vector literal token
     hex"f494b6c697b228cdd907b2a3715b593add7c70aab70db1665420e18a857a4896987bbbb50688c43f8cb2f721f514c505e6b5628001b30b3ac1bfd70678d47ad800000004";

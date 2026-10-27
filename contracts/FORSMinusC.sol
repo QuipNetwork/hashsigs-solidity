@@ -21,6 +21,9 @@ import {Hash} from "./Hash.sol";
 import {HashSuite} from "shrincs-hash/HashSuite.sol";
 
 library FORSMinusC {
+    // AddressTypeForsRoots: the FORS roots compression ADRS type constant
+    // [FIPS205 §4.2] (value 4).
+    uint32 internal constant AddressTypeForsRoots = 4;
     // AddressTypeForsTree: the FORS-tree ADRS type constant
     // [FIPS205 §4.2] (value 3) for the SPHINCS-style keyed hash inputs.
     uint32 internal constant AddressTypeForsTree = 3;
@@ -92,6 +95,14 @@ library FORSMinusC {
         // revealed entries and rejects any digest whose omitted final tree
         // would require a nonzero leaf.
         uint256 signedTrees = uint256(SHRINCSParams.NUM_FORS_TREES) - 1;
+        // Reject malformed dynamic fields before fixed-count iteration or
+        // fixed-width calldata reads. This prevents short arrays from
+        // panicking and prevents trailing entries or randomizer bytes from
+        // becoming ignored encoding malleability.
+        if (
+            signature.entries.length != signedTrees
+                || signature.randomizer.length != 32
+        ) return (bytes32(0), 0, 0, false);
 
         // Recompute the FORS digest and the hypertree coordinates that the
         // signer committed to. These digest-derived coordinates are the sole
@@ -121,14 +132,15 @@ library FORSMinusC {
             return (bytes32(0), 0, 0, false);
         }
 
-        // "fors-pk" || pkSeed || root_0 || ... || root_{k-2}
-        uint256 forsPkInputLen = 39 + signedTrees * 32;
+        // "fors-pk" || pkSeed || FORS_ROOTS ADRS || root_0 || ...
+        uint256 forsPkInputLen = 71 + signedTrees * 32;
         uint256 forsPkInput;
         // keccak256 input ("fors-pk" tag [§1 tags], forsPkInputLen bytes):
         //   [0..7)         "fors-pk"
         //   [7..39)        pkSeed
-        //   [39..39+32*t)  reconstructed per-tree roots (t = signedTrees)
-        // forsPkInputLen = 39 + signedTrees * 32.
+        //   [39..71)       FORS_ROOTS address (type 4)
+        //   [71..71+32*t)  reconstructed per-tree roots (t = signedTrees)
+        // forsPkInputLen = 71 + signedTrees * 32.
         // Memory-safe: allocates roundup32(forsPkInputLen) bytes at the
         // free-memory pointer and advances the pointer past them; the loop
         // below fills the per-tree roots and the final hash reads exactly
@@ -140,6 +152,17 @@ library FORSMinusC {
             mstore(forsPkInput, "fors-pk")
             // Copy the 32-byte public seed immediately after the 7-byte tag.
             calldatacopy(add(forsPkInput, 7), pkSeed.offset, 32)
+            // FORS is below hypertree layer zero. Bind the compression to
+            // its digest-derived tree and keypair coordinates.
+            // ADRS bit layout [FIPS205 §4.2]: layer<<224 | tree<<128 |
+            // type<<96 | keypair<<64 | chain<<32 | step
+            mstore(
+                add(forsPkInput, 39),
+                or(
+                    shl(128, treeIndex),
+                    or(shl(96, AddressTypeForsRoots), shl(64, leafIndex))
+                )
+            )
             // Bump the free-memory pointer to the next 32-byte aligned slot
             // after this buffer.
             mstore(
@@ -179,11 +202,11 @@ library FORSMinusC {
             // Append each reconstructed root into the final FORS public-key
             // hash input.
             // Memory-safe: writes one 32-byte root into the forsPkInput
-            // buffer allocated above (slot 39 + tree*32).
+            // buffer allocated above (slot 71 + tree*32).
             assembly ("memory-safe") {
                 // Write this 32-byte root at slot `tree` after the fixed
                 // tag-and-seed prefix.
-                mstore(add(add(forsPkInput, 39), mul(tree, 32)), root)
+                mstore(add(add(forsPkInput, 71), mul(tree, 32)), root)
             }
             unchecked {
                 ++tree;
@@ -387,9 +410,11 @@ library FORSMinusC {
         // spare word guarantees that slack is allocated, readable memory.
         out = new bytes(digestBytes + 32);
         uint256 messageLen = message.length;
-        // "fors-digest" || pkSeed || hypertreeRoot || randomizer || counter
-        // || message
-        uint256 baseLen = 111 + messageLen;
+        bytes32 profileId = SHRINCSParams.PROFILE_ID;
+        // "fors-digest" || PROFILE_ID || pkSeed || hypertreeRoot ||
+        // randomizer || counter || message. PROFILE_ID separates otherwise
+        // identical verification parameter sets such as 128s-q18 and q20.
+        uint256 baseLen = 143 + messageLen;
         // Reserve scratch covering roundup32(baseLen) plus one extra
         // word, so the whole-word message copy below (which rounds the
         // message length up to a 32-byte boundary) and the multi-block
@@ -401,12 +426,13 @@ library FORSMinusC {
         // 4-byte block counter is appended at [baseLen..baseLen+4) in the
         // multi-block path below):
         //   [0..11)      "fors-digest"
-        //   [11..43)     pkSeed
-        //   [43..75)     hypertreeRoot
-        //   [75..107)    randomizer
-        //   [107..111)   grind counter (big-endian uint32)
-        //   [111..111+m) message (m = messageLen)
-        // baseLen = 111 + messageLen; scratchLen bytes are reserved above.
+        //   [11..43)     PROFILE_ID
+        //   [43..75)     pkSeed
+        //   [75..107)    hypertreeRoot
+        //   [107..139)   randomizer
+        //   [139..143)   grind counter (big-endian uint32)
+        //   [143..143+m) message (m = messageLen)
+        // baseLen = 143 + messageLen; scratchLen bytes are reserved above.
         // Memory-safe: the whole scratch region is allocated by advancing
         // the free-memory pointer before any write, so the whole-word
         // message copy and the multi-block counter suffix stay at or below
@@ -420,16 +446,18 @@ library FORSMinusC {
             mstore(0x40, add(ptr, scratchLen))
             // Write the digest domain tag prefix.
             mstore(ptr, "fors-digest")
-            // Copy the 32-byte public seed after the 11-byte tag.
-            calldatacopy(add(ptr, 11), pkSeed.offset, 32)
+            // Bind the compiled profile immediately after the domain tag.
+            mstore(add(ptr, 11), profileId)
+            // Copy the 32-byte public seed after the profile identifier.
+            calldatacopy(add(ptr, 43), pkSeed.offset, 32)
             // Copy the 32-byte hypertree root after the seed.
-            calldatacopy(add(ptr, 43), hypertreeRoot.offset, 32)
+            calldatacopy(add(ptr, 75), hypertreeRoot.offset, 32)
             // Copy the 32-byte per-signature randomizer after the root.
-            calldatacopy(add(ptr, 75), randomizer.offset, 32)
+            calldatacopy(add(ptr, 107), randomizer.offset, 32)
             // Write the 4-byte grind counter after the randomizer.
-            mstore(add(ptr, 107), shl(224, counter))
+            mstore(add(ptr, 139), shl(224, counter))
             let src := add(message, 32)
-            let dst := add(ptr, 111)
+            let dst := add(ptr, 143)
             let end := add(src, messageLen)
             // Copy the variable-length message body into the digest preimage.
             for {} lt(src, end) {} {

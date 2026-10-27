@@ -21,6 +21,8 @@ import {SHRINCSParams} from "shrincs-profile/SHRINCSParams.sol";
 import {HashSuite} from "shrincs-hash/HashSuite.sol";
 import {WOTSPlusC} from "../contracts/WOTSPlusC.sol";
 import {UXMSS} from "../contracts/UXMSS.sol";
+import {Hypertree} from "../contracts/Hypertree.sol";
+import {FORSMinusC} from "../contracts/FORSMinusC.sol";
 
 /// @dev Calldata/(ptr,len) entry points into HashSuite so the KATs can drive
 /// every helper shape. The finalizers copy the buffer to memory and pass its
@@ -168,6 +170,12 @@ contract HashSuiteKatTest is Test {
     bytes32 internal constant MESSAGE = keccak256("hashsuite-kat.message");
     uint32 internal constant COUNTER = 0x01020304;
     uint32 internal constant LEAF_INDEX = 0x0000002a;
+    // Nonzero ADRS coordinates for the compression KATs: a zero triple
+    // would hide a dropped address word behind an all-zero preimage
+    // field, which is exactly the layout drift these KATs must catch.
+    uint32 internal constant ADDR_LAYER = 5;
+    uint64 internal constant ADDR_TREE = 0x0102030405060708;
+    uint32 internal constant ADDR_KEYPAIR = 0x0000002b;
 
     function setUp() public {
         h = new HashSuiteHarness();
@@ -303,20 +311,58 @@ contract HashSuiteKatTest is Test {
         assertEq(got, want, "uxmss-node KAT");
     }
 
+    // Production "fors-pk" preimage (FORSMinusC.verifyForsCAndReturnRoot):
+    //   [0..7)   "fors-pk"
+    //   [7..39)  pkSeed
+    //   [39..71) FORS_ROOTS address (type 4) [FIPS205 §4.2]
+    //   [71..)   reconstructed per-tree roots
+    // The second assertion swaps in a zero word at this fixed offset;
+    // any two distinct preimages hash differently, so it only pins the
+    // preimage LAYOUT (the ADRS word's offset), not the verifier's
+    // binding to it — SHRINCSAddressTweakMutation.t.sol proves binding.
     function test_kat_forsPk() public view {
+        bytes32 addressWord = _forsRootsAddressWord();
         bytes memory buffer =
-            abi.encodePacked("fors-pk", PK_SEED, LEFT, RIGHT);
+            abi.encodePacked("fors-pk", PK_SEED, addressWord, LEFT, RIGHT);
+        assertEq(buffer.length, 71 + 64, "fors-pk roots start at 71");
         bytes32 got = h.forsPk(buffer);
         bytes32 want = _mask(_suiteHash(buffer));
         assertEq(got, want, "fors-pk KAT");
+
+        bytes memory omitted =
+            abi.encodePacked("fors-pk", PK_SEED, bytes32(0), LEFT, RIGHT);
+        assertTrue(
+            got != h.forsPk(omitted),
+            "fors-pk preimage layout pins the ADRS word's offset"
+        );
     }
 
+    // Production "wots-c-pk" preimage (Hypertree.verifyWotsC32):
+    //   [0..9)   "wots-c-pk"
+    //   [9..41)  pkSeed
+    //   [41..73) WOTS_PK address (type 1) [FIPS205 §4.2]
+    //   [73..)   reconstructed chain endpoints
+    // The second assertion swaps in a zero word at this fixed offset;
+    // any two distinct preimages hash differently, so it only pins the
+    // preimage LAYOUT (the ADRS word's offset), not the verifier's
+    // binding to it — SHRINCSAddressTweakMutation.t.sol proves binding.
     function test_kat_wotsCPk() public view {
-        bytes memory buffer =
-            abi.encodePacked("wots-c-pk", PK_SEED, SEGMENT, SEGMENT);
+        bytes32 addressWord = _wotsPkAddressWord();
+        bytes memory buffer = abi.encodePacked(
+            "wots-c-pk", PK_SEED, addressWord, SEGMENT, SEGMENT
+        );
+        assertEq(buffer.length, 73 + 64, "wots-c-pk endpoints start at 73");
         bytes32 got = h.wotsCPk(buffer);
         bytes32 want = _mask(_suiteHash(buffer));
         assertEq(got, want, "wots-c-pk KAT");
+
+        bytes memory omitted = abi.encodePacked(
+            "wots-c-pk", PK_SEED, bytes32(0), SEGMENT, SEGMENT
+        );
+        assertTrue(
+            got != h.wotsCPk(omitted),
+            "wots-c-pk preimage layout pins the ADRS word's offset"
+        );
     }
 
     function test_kat_forsDigestBlock() public view {
@@ -358,5 +404,25 @@ contract HashSuiteKatTest is Test {
             )
         );
         assertEq(got, want, "uxmss-wots-pk KAT");
+    }
+
+    // ADRS word packing shared with the production compressions: the layer
+    // sits at bit 224, the tree at 128, the type at 96, and the keypair or
+    // leaf at 64 [FIPS205 §4.2]. FORS is below hypertree layer zero, so its
+    // layer field stays zero.
+    function _forsRootsAddressWord() internal pure returns (bytes32) {
+        return bytes32(
+            (uint256(ADDR_TREE) << 128)
+                | (uint256(FORSMinusC.AddressTypeForsRoots) << 96)
+                | (uint256(ADDR_KEYPAIR) << 64)
+        );
+    }
+
+    function _wotsPkAddressWord() internal pure returns (bytes32) {
+        return bytes32(
+            (uint256(ADDR_LAYER) << 224) | (uint256(ADDR_TREE) << 128)
+                | (uint256(Hypertree.AddressTypeWotsPk) << 96)
+                | (uint256(ADDR_KEYPAIR) << 64)
+        );
     }
 }

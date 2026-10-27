@@ -16,11 +16,12 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 pragma solidity ^0.8.28;
 
+import {SHRINCSTestCodec} from "./SHRINCSTestCodec.sol";
+
 import {SHRINCS} from "../../contracts/SHRINCS.sol";
 import {UXMSS} from "../../contracts/UXMSS.sol";
 import {WOTSPlusC} from "../../contracts/WOTSPlusC.sol";
 import {SHRINCSParams} from "shrincs-profile/SHRINCSParams.sol";
-import {Hash} from "../../contracts/Hash.sol";
 import {HashSuite} from "shrincs-hash/HashSuite.sol";
 import {SignerHashSuite} from "./SignerHashSuite.sol";
 
@@ -203,6 +204,29 @@ library SHRINCSTestSigner {
         return (signature, true);
     }
 
+    function signStatefulAdapterAtLeaf(
+        SHRINCS.SigningKey memory signingKey,
+        SHRINCS.PublicKey memory publicKey,
+        uint32 leafIndex,
+        bytes32 hash
+    ) internal view returns (SHRINCS.Signature memory signature, bool ok) {
+        if (publicKey.publicKeyCommitment.length != 32) {
+            return (signature, false);
+        }
+        bytes32 commitment;
+        bytes memory commitmentBytes = publicKey.publicKeyCommitment;
+        assembly ("memory-safe") {
+            commitment := mload(add(commitmentBytes, 0x20))
+        }
+        return signStatefulRawAtLeaf(
+            signingKey,
+            leafIndex,
+            abi.encodePacked(
+                SHRINCS.statefulRawMessageHash(commitment, hash)
+            )
+        );
+    }
+
     function encodeStatefulPublicKey(
         bytes32 pkSeed,
         bytes32 root,
@@ -349,7 +373,7 @@ library SHRINCSTestSigner {
     ) internal view returns (bytes32 out) {
         out = value;
         for (uint32 stepOffset = 0; stepOffset < steps;) {
-            bytes32 addressWord = Hash.addressWord32(
+            bytes32 addressWord = SHRINCSTestCodec.addressWord32(
                 0,
                 0,
                 UXMSS.AddressTypeWotsHash,
@@ -542,10 +566,14 @@ library SHRINCSTestSigner {
         // Verifier-shape WOTS-C public-key hash: route through the production
         // finalizer HashSuite.hashWotsCPk32 (the same helper Hypertree.verify
         // hashes the chain endpoints with; masking applied internally, no-op
-        // at 256s). The [tag | pkSeed | endpoints] buffer is
+        // at 256s). The [tag | pkSeed | WOTS_PK ADRS | endpoints] buffer is
         // suite-independent, so build it here and pass (ptr, len).
+        bytes32 addressWord = bytes32(
+            (uint256(layer) << 224) | (uint256(tree) << 128)
+                | (uint256(1) << 96) | (uint256(keypair) << 64)
+        );
         bytes memory pkInput =
-            abi.encodePacked("wots-c-pk", pkSeed, endpoints);
+            abi.encodePacked("wots-c-pk", pkSeed, addressWord, endpoints);
         uint256 pkInputPtr;
         // Memory-safe: reads pkInput's data pointer (len word + 32) without
         // writing memory; the finalizer only hashes the buffer.
@@ -578,7 +606,7 @@ library SHRINCSTestSigner {
     ) internal view returns (bytes32 out) {
         out = value;
         for (uint32 step = start; step < start + steps;) {
-            bytes32 addressWord = Hash.addressWord32(
+            bytes32 addressWord = SHRINCSTestCodec.addressWord32(
                 layer, tree, UXMSS.AddressTypeWotsHash, keypair, chain, step
             );
             // Verifier-shape chain step: production

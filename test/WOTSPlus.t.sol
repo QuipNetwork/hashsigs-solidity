@@ -18,6 +18,7 @@ pragma solidity ^0.8.28;
 
 import {Test} from "../lib/forge-std/src/Test.sol";
 import {WOTSPlus} from "../contracts/WOTSPlus.sol";
+import {WOTSPlusTestSigner} from "./helpers/WOTSPlusTestSigner.sol";
 
 contract WOTSPlusTest is Test {
     uint256 internal constant NUM_SIGNATURE_CHUNKS = 67;
@@ -35,7 +36,7 @@ contract WOTSPlusTest is Test {
     function testGenerateKeyPairMatchesKnownVector0() public pure {
         bytes32 privateSeed = keccak256(abi.encodePacked("seed", uint256(0)));
         (WOTSPlus.WinternitzAddress memory publicKey, bytes32 privateKey) =
-            WOTSPlus.generateKeyPair(privateSeed);
+            WOTSPlusTestSigner.generateKeyPair(privateSeed);
 
         assertEq(privateKey, VECTOR0_PRIVATE_KEY);
         assertEq(publicKey.publicSeed, VECTOR0_PUBLIC_SEED);
@@ -46,7 +47,7 @@ contract WOTSPlusTest is Test {
         vm.pauseGasMetering();
         bytes32 privateSeed = bytes32(uint256(1));
         (WOTSPlus.WinternitzAddress memory publicKey,) =
-            WOTSPlus.generateKeyPair(privateSeed);
+            WOTSPlusTestSigner.generateKeyPair(privateSeed);
         WOTSPlus.WinternitzMessage memory messageData =
             WOTSPlus.WinternitzMessage({
                 messageHash: _messageHashFromSequence()
@@ -63,14 +64,14 @@ contract WOTSPlusTest is Test {
         vm.pauseGasMetering();
         bytes32 privateSeed = bytes32(uint256(1));
         (WOTSPlus.WinternitzAddress memory publicKey, bytes32 privateKey) =
-            WOTSPlus.generateKeyPair(privateSeed);
+            WOTSPlusTestSigner.generateKeyPair(privateSeed);
         WOTSPlus.WinternitzMessage memory messageData =
             WOTSPlus.WinternitzMessage({
                 messageHash: _messageHashFromSequence()
             });
         WOTSPlus.WinternitzElements memory signature =
             WOTSPlus.WinternitzElements({
-                elements: WOTSPlus.sign(privateKey, messageData)
+                elements: WOTSPlusTestSigner.sign(privateKey, messageData)
             });
         vm.resumeGasMetering();
 
@@ -82,14 +83,14 @@ contract WOTSPlusTest is Test {
         vm.pauseGasMetering();
         bytes32 privateSeed = bytes32(uint256(1));
         (WOTSPlus.WinternitzAddress memory publicKey, bytes32 privateKey) =
-            WOTSPlus.generateKeyPair(privateSeed);
+            WOTSPlusTestSigner.generateKeyPair(privateSeed);
         WOTSPlus.WinternitzMessage memory messageData =
             WOTSPlus.WinternitzMessage({
                 messageHash: _messageHashFromSequence()
             });
         WOTSPlus.WinternitzElements memory signature =
             WOTSPlus.WinternitzElements({
-                elements: WOTSPlus.sign(privateKey, messageData)
+                elements: WOTSPlusTestSigner.sign(privateKey, messageData)
             });
         WOTSPlus.WinternitzElements memory randomizationElements =
             WOTSPlus.generateRandomizationElements(publicKey.publicSeed);
@@ -111,7 +112,7 @@ contract WOTSPlusTest is Test {
             (
                 WOTSPlus.WinternitzAddress memory publicKey,
                 bytes32 privateKey
-            ) = WOTSPlus.generateKeyPair(privateSeed);
+            ) = WOTSPlusTestSigner.generateKeyPair(privateSeed);
             WOTSPlus.WinternitzMessage memory message =
                 WOTSPlus.WinternitzMessage({
                     messageHash: keccak256(
@@ -120,7 +121,7 @@ contract WOTSPlusTest is Test {
                 });
             WOTSPlus.WinternitzElements memory signature =
                 WOTSPlus.WinternitzElements({
-                    elements: WOTSPlus.sign(privateKey, message)
+                    elements: WOTSPlusTestSigner.sign(privateKey, message)
                 });
             vm.resumeGasMetering();
 
@@ -135,11 +136,11 @@ contract WOTSPlusTest is Test {
         vm.pauseGasMetering();
         bytes32 privateSeed = keccak256(abi.encodePacked("seed", uint256(0)));
         (WOTSPlus.WinternitzAddress memory publicKey, bytes32 privateKey) =
-            WOTSPlus.generateKeyPair(privateSeed);
+            WOTSPlusTestSigner.generateKeyPair(privateSeed);
         WOTSPlus.WinternitzMessage memory message =
             WOTSPlus.WinternitzMessage({messageHash: VECTOR0_MESSAGE});
         bytes32[NUM_SIGNATURE_CHUNKS] memory signatureArray =
-            WOTSPlus.sign(privateKey, message);
+            WOTSPlusTestSigner.sign(privateKey, message);
         vm.resumeGasMetering();
 
         assertEq(signatureArray[0], VECTOR0_SIGNATURE0);
@@ -160,13 +161,13 @@ contract WOTSPlusTest is Test {
         vm.pauseGasMetering();
         bytes32 privateSeed = bytes32(uint256(7));
         (WOTSPlus.WinternitzAddress memory publicKey, bytes32 privateKey) =
-            WOTSPlus.generateKeyPair(privateSeed);
+            WOTSPlusTestSigner.generateKeyPair(privateSeed);
         WOTSPlus.WinternitzMessage memory messageData =
             WOTSPlus.WinternitzMessage({
                 messageHash: _messageHashFromSequence()
             });
         bytes32[NUM_SIGNATURE_CHUNKS] memory signatureArray =
-            WOTSPlus.sign(privateKey, messageData);
+            WOTSPlusTestSigner.sign(privateKey, messageData);
 
         uint256 index = bound(chainSelector, 0, NUM_SIGNATURE_CHUNKS - 1);
         // `| 1` guarantees a non-no-op flip regardless of the fuzzed value.
@@ -191,7 +192,7 @@ contract WOTSPlusTest is Test {
             (
                 WOTSPlus.WinternitzAddress memory publicKey,
                 bytes32 privateKey
-            ) = WOTSPlus.generateKeyPair(privateSeed);
+            ) = WOTSPlusTestSigner.generateKeyPair(privateSeed);
             WOTSPlus.WinternitzMessage memory message =
                 WOTSPlus.WinternitzMessage({
                     messageHash: keccak256(
@@ -200,7 +201,7 @@ contract WOTSPlusTest is Test {
                 });
             WOTSPlus.WinternitzElements memory signature =
                 WOTSPlus.WinternitzElements({
-                    elements: WOTSPlus.sign(privateKey, message)
+                    elements: WOTSPlusTestSigner.sign(privateKey, message)
                 });
             WOTSPlus.WinternitzElements memory randomizationElements =
                 WOTSPlus.generateRandomizationElements(publicKey.publicSeed);
@@ -233,7 +234,7 @@ contract WOTSPlusTest is Test {
             (
                 WOTSPlus.WinternitzAddress memory publicKey,
                 bytes32 privateKey
-            ) = WOTSPlus.generateKeyPair(privateSeed);
+            ) = WOTSPlusTestSigner.generateKeyPair(privateSeed);
 
             assertEq(
                 privateKey,
@@ -284,7 +285,7 @@ contract WOTSPlusTest is Test {
             );
 
             bytes32[NUM_SIGNATURE_CHUNKS] memory signatureArray =
-                WOTSPlus.sign(privateKey, messageData);
+                WOTSPlusTestSigner.sign(privateKey, messageData);
             for (uint256 k = 0; k < NUM_SIGNATURE_CHUNKS; k++) {
                 assertEq(
                     signatureArray[k],

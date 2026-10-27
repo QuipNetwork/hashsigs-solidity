@@ -16,7 +16,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 pragma solidity ^0.8.28;
 
-import {Create3Deployer} from "./DeployBase.s.sol";
+import {CreateXDeployer} from "./DeployBase.s.sol";
 import {SHRINCS256sSha2} from "../contracts/SHRINCS256sSha2.sol";
 
 /// @title DeploySHRINCS256sSha2
@@ -30,35 +30,56 @@ import {SHRINCS256sSha2} from "../contracts/SHRINCS256sSha2.sol";
 ///       script/DeploySHRINCS256sSha2.s.sol \
 ///       --rpc-url $RPC --private-key $DEPLOYER_PK --broadcast --verify
 /// Record (profile, salt, address, codehash, chain) in DEPLOYMENTS.md.
-contract DeploySHRINCS256sSha2 is Create3Deployer {
+contract DeploySHRINCS256sSha2 is CreateXDeployer {
     // Per-profile CREATE3 salt. A new verifier version is a NEW salt →
     // new address; deployed artifacts are never upgraded in place.
-    bytes32 internal constant SALT = keccak256("QUIP:SHRINCS256sSha2:V1.0");
+    bytes32 internal constant SALT = bytes32(
+        abi.encodePacked(
+            bytes20(DEPLOYER),
+            SALT_FLAG,
+            bytes11(keccak256("QUIP:SHRINCS256sSha2:V4.0"))
+        )
+    );
 
     // Stateless delegate. SPHINCS_PLUS_C_SALT is the sibling's CREATE3 salt;
     // SPHINCS_PLUS_C is its address and MUST equal the pinned
     // SPHINCS_PLUS_C_VERIFIER constant in SHRINCS256sSha2. _requireSibling
     // asserts the salt derives to this address, so a drift fails the deploy.
-    bytes32 internal constant SPHINCS_PLUS_C_SALT =
-        keccak256("QUIP:SPHINCSPlusC256sSha2:V1.0");
+    bytes32 internal constant SPHINCS_PLUS_C_SALT = bytes32(
+        abi.encodePacked(
+            bytes20(DEPLOYER),
+            SALT_FLAG,
+            bytes11(keccak256("QUIP:SPHINCSPlusC256sSha2:V3.0"))
+        )
+    );
     address internal constant SPHINCS_PLUS_C =
-        0x4634950D028606e7E0db97FC3CEd91511DAdE6cb;
+        0x55346bdc46Cf36C844c0f708041C916c0B65718f;
 
-    // Pinned runtime codehash of this artifact (production profile).
-    // _deploy fails closed if the CREATE3 address is occupied by code whose
-    // hash differs from this pin (squatted salt or stale pin) and asserts a
+    // Pinned runtime codehash of the SPHINCSPlusC sibling artifact
+    // (production profile). Duplicated from
+    // DeploySPHINCSPlusC256sSha2.RUNTIME_CODEHASH: internal constants
+    // are not cross-contract accessible, so _requireSibling takes it
+    // as an argument; SHRINCSPinned256sSha2.t.sol asserts the two
+    // stay equal.
+    bytes32 internal constant SPHINCS_PLUS_C_CODEHASH =
+        0x0b8695da83eb5afcfe6a63b48a5001cb6b4813082c23434146324d8f16253e6a;
+
+    // Pinned runtime codehash of this artifact (production profile). _deploy
+    // fails closed if the CREATE3 address is occupied by code whose hash
+    // differs from this pin (stale pin or drifted artifact) and asserts a
     // fresh deploy matches it. Metadata is stripped (foundry.toml), so the
     // hash is chain-invariant and is the value published in DEPLOYMENTS.md;
     // regenerate per DEPLOYMENTS.md.
     bytes32 internal constant RUNTIME_CODEHASH =
-        0x022f9c42a75ada629c3c3d7cc8591dd983c5aebf7dfc23f576f4ef21575e840b;
+        0x6b72096a091dbe8bb23b698f034a77f031d6b6a65cc5fb962255885eb3ad9560;
 
     function run() external {
-        // Assert the build profile FIRST: _requireSibling reaches _factory()
-        // (and its init-code-drift check), so a wrong-profile run must fail
-        // with "wrong FOUNDRY_PROFILE", not "factory init-code drift".
+        // Assert the build profile FIRST so a wrong-profile run fails
+        // with "wrong FOUNDRY_PROFILE", not a sibling-presence error.
         _requireProfile("production-256s-sha2");
-        _requireSibling(SPHINCS_PLUS_C_SALT, SPHINCS_PLUS_C);
+        _requireSibling(
+            SPHINCS_PLUS_C_SALT, SPHINCS_PLUS_C, SPHINCS_PLUS_C_CODEHASH
+        );
         _deploy(
             "SHRINCS256sSha2:",
             "production-256s-sha2",

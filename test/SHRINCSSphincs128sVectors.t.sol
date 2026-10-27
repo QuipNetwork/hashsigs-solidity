@@ -37,6 +37,29 @@ contract Stateless128sHarness {
             expectedCommitment, publicKey, message, signature
         );
     }
+
+    function encodeRaw(bytes calldata pkSeed, bytes calldata hypertreeRoot)
+        external
+        pure
+        returns (bytes memory)
+    {
+        bytes32 seed;
+        bytes32 root;
+        assembly ("memory-safe") {
+            seed := calldataload(pkSeed.offset)
+            root := calldataload(hypertreeRoot.offset)
+        }
+        return SHRINCS.encodeStatelessKey(seed, root);
+    }
+
+    function verifyRaw(
+        bytes calldata pkSeed,
+        bytes calldata hypertreeRoot,
+        bytes calldata message,
+        SPHINCSPlusC.Signature calldata signature
+    ) external view returns (bool) {
+        return SPHINCSPlusC.verify(pkSeed, hypertreeRoot, message, signature);
+    }
 }
 
 // SHRINCSSphincs128sVectors: the vector-backed 128s stateless coverage
@@ -100,6 +123,58 @@ contract SHRINCSSphincs128sVectorsTest is Test {
             return "test/test_vectors/shrincs_sphincs_128s_q18_keccak.json";
         }
         return "test/test_vectors/shrincs_sphincs_128s_q20_keccak.json";
+    }
+
+    function oppositeVectorPath() internal pure returns (string memory) {
+        if (SHRINCSParams.STATELESS_SIGNATURE_LIMIT == 262_144) {
+            return "test/test_vectors/shrincs_sphincs_128s_q20_keccak.json";
+        }
+        return "test/test_vectors/shrincs_sphincs_128s_q18_keccak.json";
+    }
+
+    function testIssue02RawKeyFormatRemains64Bytes() public {
+        vm.skip(SHRINCSParams.HASH_LEN == 32);
+        (SHRINCS.PublicKey memory publicKey,,) =
+            decodeStatelessVector(".stateless.cases.valid.calldata");
+        assertEq(
+            stateless.encodeRaw(publicKey.pkSeed, publicKey.hypertreeRoot)
+            .length,
+            64,
+            "profile binding must not widen the raw stateless key"
+        );
+    }
+
+    function testIssue02SameProfileRawVectorStillVerifies() public {
+        vm.skip(SHRINCSParams.HASH_LEN == 32);
+        (
+            SHRINCS.PublicKey memory publicKey,
+            bytes memory message,
+            SPHINCSPlusC.Signature memory signature
+        ) = decodeStatelessVector(".stateless.cases.valid.calldata");
+        assertTrue(
+            stateless.verifyRaw(
+                publicKey.pkSeed, publicKey.hypertreeRoot, message, signature
+            ),
+            "the regenerated vector must verify in its own profile"
+        );
+    }
+
+    function testIssue02OppositeProfileRawVectorIsRejected() public {
+        vm.skip(SHRINCSParams.HASH_LEN == 32);
+        string memory activeVectors = vectors;
+        vectors = vm.readFile(oppositeVectorPath());
+        (
+            SHRINCS.PublicKey memory publicKey,
+            bytes memory message,
+            SPHINCSPlusC.Signature memory signature
+        ) = decodeStatelessVector(".stateless.cases.valid.calldata");
+        vectors = activeVectors;
+        assertFalse(
+            stateless.verifyRaw(
+                publicKey.pkSeed, publicKey.hypertreeRoot, message, signature
+            ),
+            "a vector from the sibling 128-bit profile must be rejected"
+        );
     }
 
     function testStateless128sValidVectorVerifies() public {

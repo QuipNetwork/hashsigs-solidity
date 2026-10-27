@@ -16,6 +16,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 pragma solidity ^0.8.28;
 
+import {SHRINCSTestCodec} from "./helpers/SHRINCSTestCodec.sol";
+
 import {Test} from "../lib/forge-std/src/Test.sol";
 import {SHRINCS} from "../contracts/SHRINCS.sol";
 import {SPHINCSPlusC} from "../contracts/SPHINCSPlusC.sol";
@@ -189,7 +191,7 @@ contract SHRINCSStatelessSliceCopyTest is Test {
             hypertreeRoot: leaf
         });
         bytes memory envelope =
-            SHRINCS.encodeStatelessEnvelope(publicKey, signature);
+            SHRINCSTestCodec.encodeStatelessEnvelope(publicKey, signature);
         (bytes memory slice, bytes memory oracle) =
             harness.sliceVsOracle(envelope);
         assertEq(
@@ -226,6 +228,7 @@ contract SHRINCSStatelessSliceCopyTest is Test {
             );
         require(completeOk, "complete");
 
-        envelope = SHRINCS.encodeStatelessEnvelope(publicKey, signature);
+        envelope =
+            SHRINCSTestCodec.encodeStatelessEnvelope(publicKey, signature);
     }
 }

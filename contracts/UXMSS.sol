@@ -86,9 +86,11 @@ library UXMSS {
         // In this unbalanced stateful tree, the leaf index is encoded by
         // auth-path length.
         uint32 leafIndex = uint32(signature.authPath.length);
-        // Reject signatures that claim a leaf beyond the configured stateful
-        // budget.
-        if (leafIndex > maxSignatures) return false;
+        // Leaf zero is reserved and has no authentication path. Reject it
+        // explicitly before WOTS reconstruction so invalid signatures return
+        // false rather than relying on a downstream empty-array failure.
+        // Also reject leaves beyond the configured stateful budget.
+        if (leafIndex == 0 || leafIndex > maxSignatures) return false;
 
         // Reconstruct the compact WOTS-C public-key hash from the signature
         // and message.
@@ -147,8 +149,9 @@ library UXMSS {
         // hash address type (0) in bits 96..127 and the leaf index in bits
         // 64..95; layer and tree are 0 for the stateful subtree. The
         // per-step chain index and step are folded in by the shared walk
-        // (WOTSPlusC.wotsChainNoMaskBase), reproducing the address word this
-        // path previously built via Hash.addressWord32.
+        // (WOTSPlusC.wotsChainNoMaskBase).
+        // ADRS bit layout [FIPS205 §4.2]: layer<<224 | tree<<128 |
+        // type<<96 | keypair<<64 | chain<<32 | step
         uint256 addressBase = (uint256(AddressTypeWotsHash) << 96)
             | (uint256(leafIndex) << 64);
         // Hoist the calldata array reference so the loop reads element data
@@ -208,13 +211,16 @@ library UXMSS {
     // parent.
     // 2. Walk upward through the remaining auth path nodes in the tree's
     // unbalanced order.
-    // 3. Return the reconstructed root and success flag.
+    // 3. Return false for an empty path; otherwise return the reconstructed
+    // root and success.
     function rootFromUnbalancedPath(
         bytes32 pkSeed,
         uint32 leafIndex,
         bytes32 leaf,
         bytes32[] calldata authPath
     ) internal view returns (bytes32 root, bool ok) {
+        if (authPath.length == 0) return (bytes32(0), false);
+
         // The first parent hashes the leaf with the first auth-path node on
         // its right.
         root = HashSuite.statefulParentHash32(

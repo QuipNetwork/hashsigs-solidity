@@ -16,13 +16,17 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 pragma solidity ^0.8.28;
 
+import {SHRINCSTestCodec} from "./helpers/SHRINCSTestCodec.sol";
+
 import {Test} from "../lib/forge-std/src/Test.sol";
 import {
     IERC7913SignatureVerifier
 } from "../contracts/interfaces/IERC7913SignatureVerifier.sol";
 import {SHRINCS} from "../contracts/SHRINCS.sol";
 import {SHRINCSVerifier} from "../contracts/SHRINCSVerifier.sol";
+import {SPHINCSPlusCVerifier} from "../contracts/SPHINCSPlusCVerifier.sol";
 import {SHRINCSParams} from "shrincs-profile/SHRINCSParams.sol";
+import {HashSuite} from "shrincs-hash/HashSuite.sol";
 import {SHRINCSTestSigner} from "./helpers/SHRINCSTestSigner.sol";
 
 /// @dev Minimal concrete instance of the abstract profile base, used to
@@ -38,6 +42,10 @@ contract SHRINCSVerifierHarness is SHRINCSVerifier {
         return address(0);
     }
 }
+
+/// @dev Empty concrete subclass of the abstract SPHINCSPlusC profile base,
+/// used only to read VERSION_TAG under whichever profile the suite runs.
+contract SPHINCSPlusCVerifierHarness is SPHINCSPlusCVerifier {}
 
 contract SHRINCSVerifierTest is Test {
     bytes4 internal constant INVALID_SIGNATURE = 0xffffffff;
@@ -64,10 +72,19 @@ contract SHRINCSVerifierTest is Test {
         );
         assertTrue(keygenOk, "in-test keygen must succeed");
 
-        // The ERC-7913 hash IS the signed message: sign exactly its 32 packed
-        // bytes.
+        // The ERC-7913 caller hash is wrapped with the operation tag, active
+        // suite, and complete installed commitment before signing.
         signedHash = keccak256("shrincs erc7913 stateful verifier vector");
-        bytes memory message = abi.encodePacked(signedHash);
+
+        bytes memory commitmentBytes = publicKey.publicKeyCommitment;
+        bytes32 commitmentWord;
+        assembly {
+            commitmentWord := mload(add(commitmentBytes, 32))
+        }
+        keyCommitment = commitmentWord;
+        bytes memory message = abi.encodePacked(
+            SHRINCS.statefulRawMessageHash(keyCommitment, signedHash)
+        );
 
         (SHRINCS.Signature memory leafOneSignature, bool leafOneOk) =
             SHRINCSTestSigner.signStatefulRawAtLeaf(signingKey, 1, message);
@@ -77,20 +94,16 @@ contract SHRINCSVerifierTest is Test {
         assertTrue(leafTwoOk, "leaf-2 signing must succeed");
 
         // The ERC-7913 key is the 32-byte bundle commitment word.
-        bytes memory commitmentBytes = publicKey.publicKeyCommitment;
-        bytes32 commitmentWord;
-        assembly {
-            commitmentWord := mload(add(commitmentBytes, 32))
-        }
-        keyCommitment = commitmentWord;
         validKey = abi.encodePacked(keyCommitment);
 
         // Encode through the codec so the tests pin the same format
         // definition the verifier decodes.
-        validEnvelope =
-            SHRINCS.encodeStatefulEnvelope(publicKey, leafOneSignature);
-        secondLeafEnvelope =
-            SHRINCS.encodeStatefulEnvelope(publicKey, leafTwoSignature);
+        validEnvelope = SHRINCSTestCodec.encodeStatefulEnvelope(
+            publicKey, leafOneSignature
+        );
+        secondLeafEnvelope = SHRINCSTestCodec.encodeStatefulEnvelope(
+            publicKey, leafTwoSignature
+        );
     }
 
     // decodeStoredEnvelope: Reload the shared valid envelope as mutable
@@ -138,8 +151,56 @@ contract SHRINCSVerifierTest is Test {
     function testVersionTag() public view {
         assertEq(
             verifier.VERSION_TAG(),
-            keccak256("quip.shrincs-verifier.v1"),
+            keccak256("quip.shrincs-verifier.v4"),
             "version tag"
+        );
+    }
+
+    function testSphincsPlusCVersionTag() public {
+        SPHINCSPlusCVerifierHarness sphincs =
+            new SPHINCSPlusCVerifierHarness();
+        assertEq(
+            sphincs.VERSION_TAG(),
+            keccak256("quip.sphincsplusc-verifier.v3"),
+            "sphincsplusc version tag"
+        );
+    }
+
+    function testRawAdapterDigestVectors() public pure {
+        bytes32 commitment =
+        // line-length: allow — pinned digest input is one bytes32 token
+        0x1111111111111111111111111111111111111111111111111111111111111111;
+        bytes32 hash =
+        // line-length: allow — pinned digest input is one bytes32 token
+        0x2222222222222222222222222222222222222222222222222222222222222222;
+        bytes32 expectedStateful = HashSuite.HASH_SUITE_ID == 1
+            ? bytes32(
+                // line-length: allow — pinned digest is one bytes32 token
+                0xd6ef31520a66945c976ef04b8b5b00c381139e3bed92bfb173babaecaf4b1737
+            )
+            : bytes32(
+                // line-length: allow — pinned digest is one bytes32 token
+                0x6824c89e304f78f1ea53256e73315b087e5b5d921b731ffd23c7eaad68a77bbc
+            );
+        bytes32 expectedStateless = HashSuite.HASH_SUITE_ID == 1
+            ? bytes32(
+                // line-length: allow — pinned digest is one bytes32 token
+                0x75ce97e4e088f9a487640a5a88d457fedd1beaaa535b4c10de475cac3c73cbb3
+            )
+            : bytes32(
+                // line-length: allow — pinned digest is one bytes32 token
+                0x49f97748938a6c92e764b7c1096904219c4e05a1ea20512fd9145f0055748205
+            );
+
+        assertEq(
+            SHRINCS.statefulRawMessageHash(commitment, hash),
+            expectedStateful,
+            "stateful Rust/Solidity digest vector"
+        );
+        assertEq(
+            SHRINCS.statelessRawMessageHash(commitment, hash),
+            expectedStateless,
+            "stateless Rust/Solidity digest vector"
         );
     }
 
@@ -168,6 +229,62 @@ contract SHRINCSVerifierTest is Test {
         );
     }
 
+    function testRejectsStatefulSignatureUnderSiblingCommitment()
+        public
+        view
+    {
+        (
+            SHRINCS.PublicKey memory sibling,
+            SHRINCS.Signature memory signature
+        ) = decodeStoredEnvelope();
+        sibling.pkSeed =
+            abi.encodePacked(keccak256("sibling stateless seed"));
+        bytes32 siblingCommitment = SHRINCS.publicKeyCommitmentFromParts(
+            sibling.statefulPublicKey, sibling.pkSeed, sibling.hypertreeRoot
+        );
+        sibling.publicKeyCommitment = abi.encodePacked(siblingCommitment);
+
+        assertEq(
+            verifier.verify(
+                abi.encodePacked(siblingCommitment),
+                signedHash,
+                SHRINCSTestCodec.encodeStatefulEnvelope(sibling, signature)
+            ),
+            INVALID_SIGNATURE,
+            "signature must bind the complete bundle commitment"
+        );
+    }
+
+    function testRejectsStatefulSignatureWhenMaxSignaturesChanges()
+        public
+        view
+    {
+        (
+            SHRINCS.PublicKey memory sibling,
+            SHRINCS.Signature memory signature
+        ) = decodeStoredEnvelope();
+        // Preserve the stateful seed/root and both stateless fields while
+        // changing only the final big-endian maxSignatures word (4 -> 8).
+        sibling.statefulPublicKey[64] = 0;
+        sibling.statefulPublicKey[65] = 0;
+        sibling.statefulPublicKey[66] = 0;
+        sibling.statefulPublicKey[67] = bytes1(uint8(8));
+        bytes32 siblingCommitment = SHRINCS.publicKeyCommitmentFromParts(
+            sibling.statefulPublicKey, sibling.pkSeed, sibling.hypertreeRoot
+        );
+        sibling.publicKeyCommitment = abi.encodePacked(siblingCommitment);
+
+        assertEq(
+            verifier.verify(
+                abi.encodePacked(siblingCommitment),
+                signedHash,
+                SHRINCSTestCodec.encodeStatefulEnvelope(sibling, signature)
+            ),
+            INVALID_SIGNATURE,
+            "signature must bind maxSignatures through the commitment"
+        );
+    }
+
     function testRejectsTamperedHash() public view {
         bytes32 otherHash = keccak256("a different message hash");
         assertEq(
@@ -184,7 +301,7 @@ contract SHRINCSVerifierTest is Test {
         ) = decodeStoredEnvelope();
         signature.chains[0] = bytes32(uint256(signature.chains[0]) ^ 1);
         bytes memory envelope =
-            SHRINCS.encodeStatefulEnvelope(publicKey, signature);
+            SHRINCSTestCodec.encodeStatefulEnvelope(publicKey, signature);
         assertEq(
             verifier.verify(validKey, signedHash, envelope),
             INVALID_SIGNATURE,
@@ -199,7 +316,7 @@ contract SHRINCSVerifierTest is Test {
         ) = decodeStoredEnvelope();
         signature.authPath[0] = bytes32(uint256(signature.authPath[0]) ^ 1);
         bytes memory envelope =
-            SHRINCS.encodeStatefulEnvelope(publicKey, signature);
+            SHRINCSTestCodec.encodeStatefulEnvelope(publicKey, signature);
         assertEq(
             verifier.verify(validKey, signedHash, envelope),
             INVALID_SIGNATURE,
@@ -294,7 +411,7 @@ contract SHRINCSVerifierTest is Test {
         bytes32 fakeCommitment = keccak256("mismatched bundle commitment");
         publicKey.publicKeyCommitment = abi.encodePacked(fakeCommitment);
         bytes memory envelope =
-            SHRINCS.encodeStatefulEnvelope(publicKey, signature);
+            SHRINCSTestCodec.encodeStatefulEnvelope(publicKey, signature);
         assertEq(
             verifier.verify(
                 abi.encodePacked(fakeCommitment), signedHash, envelope

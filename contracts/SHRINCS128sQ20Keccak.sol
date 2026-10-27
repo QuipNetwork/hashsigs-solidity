@@ -19,15 +19,13 @@ pragma solidity ^0.8.28;
 import {SHRINCSVerifier} from "./SHRINCSVerifier.sol";
 
 /// @title SHRINCS128sQ20Keccak
-/// @notice Concrete 128s-q20-profile SHRINCS. Deploy this
-/// artifact only from a build under the 128s-q20 profile
-/// (FOUNDRY_PROFILE=production-128s-q20); the deploy script enforces it.
-/// @dev Empty subclass beyond the profile tag and pinned sibling: the
+/// @notice Experimental 128s-q20 SHRINCS verifier for tests, vectors, and
+/// security research. It is not approved or tooled for production deployment.
+/// @dev Thin subclass beyond the profile tag and configured sibling: the
 /// reviewed verify/decode logic lives in the abstract base and takes its
 /// parameter tuple from the compile-time SHRINCSParams selected by the build
-/// profile. PROFILE_TAG identifies the compiled parameter set for on-chain
-/// and registry cross-checks. The q20 stateless budget (2^20) wants profile
-/// security-analysis backing before production use (maintainer decision Q1).
+/// profile. PROFILE_TAG identifies the compiled parameter set. The q20
+/// stateless budget (2^20) lacks approved birthday-bound security analysis.
 contract SHRINCS128sQ20Keccak is SHRINCSVerifier {
     // PROFILE_TAG: the compiled parameter-set identifier for this
     // verifier. Matches SHRINCSParams.PROFILE_ID for the 128s-q20
@@ -35,24 +33,19 @@ contract SHRINCS128sQ20Keccak is SHRINCSVerifier {
     bytes32 public constant PROFILE_TAG =
         keccak256("shrincs-128s-q20-keccak");
 
-    // Pinned CREATE3 address of the 128s-q20 SPHINCSPlusC sibling
-    // (SPHINCSPlusC128sQ20Keccak) this verifier delegates stateless
-    // verification to. Derivation (script/Create3.sol + DeployBase.s.sol):
-    //   factory = CREATE2(
-    //     0x4e59b44847b379578588920cA78FbF26c0B4956C,
-    //     keccak256("QUIP:Create3Factory:V1.0"),
-    //     FACTORY_INITCODE_HASH)
-    //   address = CREATE3 child of (
-    //     factory, keccak256("QUIP:SPHINCSPlusC128sQ20Keccak:V1.0"))
-    // FACTORY_INITCODE_HASH is the production factory creation-code hash
-    // (solc metadata stripped in foundry.toml); factory =
-    // 0xcE8dAc13593a359d961F91c35F8694cb2A03D005. Pinned by
-    // test/SHRINCSPinned128sQ20.t.sol (profile-gated) so C8's deploy
-    // scripts cannot drift from this constant.
-    address internal constant SPHINCS_PLUS_C_VERIFIER =
-        0x7C30ef553deE8F6DF59eE1FF4477f382607d330f;
+    // Supplied explicitly by an experimental harness. There is deliberately
+    // no canonical production address for this profile.
+    address internal immutable SPHINCS_PLUS_C_VERIFIER;
 
-    function _pinnedSphincsPlusC() internal pure override returns (address) {
+    constructor(address sphincsPlusCVerifier) {
+        require(
+            sphincsPlusCVerifier != address(0),
+            "SHRINCS128sQ20: zero SPHINCSPlusC"
+        );
+        SPHINCS_PLUS_C_VERIFIER = sphincsPlusCVerifier;
+    }
+
+    function _pinnedSphincsPlusC() internal view override returns (address) {
         return SPHINCS_PLUS_C_VERIFIER;
     }
 }

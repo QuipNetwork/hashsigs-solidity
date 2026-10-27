@@ -7,20 +7,15 @@ optimizer = true
 optimizer_runs = 200
 gas_limit = "18446744073709551615" # u64::MAX
 # Strip solc metadata from every artifact (inherited by all profiles).
-# The CREATE3 Create3Factory address is CREATE2(canonical proxy,
-# FACTORY_SALT, keccak256(factory creation code)); with metadata the
-# creation code embeds each profile's remappings, so the factory —
-# and every CREATE3 child — moved per profile (DEPLOYMENTS.md, "CREATE3
-# factory address"). Dropping metadata makes the factory creation code
-# identical across the three production profiles, so ONE factory (and
-# one child address per salt) serves every suite. Consequence: runtime
-# codehashes lose their metadata tail and change from any earlier
-# record; SHRINCS is testnet-only and nothing is deployed, so nothing
-# is burned, and Etherscan source verification does not need the
-# metadata hash. Optimizer runs still differ between test (200) and
-# production (1,000,000), so the test-profile factory creation code is
-# NOT the production one; the pin tests derive through the pinned
-# production factory init-code hash (see DeployBase.s.sol FACTORY_SALT).
+# Deploys go through the pre-deployed CreateX singleton (see
+# DeployBase.s.sol), so no compiled artifact is address-load-bearing —
+# a CREATE3 child address is f(CREATEX, guarded salt) only, independent
+# of any build setting. Metadata stripping remains so each artifact's RUNTIME
+# codehash (the (address, codehash) pair consumers pin from
+# DEPLOYMENTS.md) is chain- and source-path-invariant; it still depends
+# on the solc version and optimizer settings, which the production
+# profiles pin. Etherscan source verification does not need the
+# metadata hash.
 bytecode_hash = "none"
 cbor_metadata = false
 # Suppress solc warning 2018 ("state mutability can be restricted to pure")
@@ -69,10 +64,6 @@ skip = [
     "contracts/SHRINCS128sQ20Keccak.sol",
     "contracts/SPHINCSPlusC128sQ18Keccak.sol",
     "contracts/SPHINCSPlusC128sQ20Keccak.sol",
-    "script/DeploySHRINCS128sQ18Keccak.s.sol",
-    "script/DeploySHRINCS128sQ20Keccak.s.sol",
-    "script/DeploySPHINCSPlusC128sQ18Keccak.s.sol",
-    "script/DeploySPHINCSPlusC128sQ20Keccak.s.sol",
     "contracts/SHRINCS256sSha2.sol",
     "contracts/SPHINCSPlusC256sSha2.sol",
     "script/DeploySHRINCS256sSha2.s.sol",
@@ -87,6 +78,13 @@ skip = [
 
 ffi = true
 fs_permissions = [
+    # The next three read grants (contracts/, script/, docs/) have no
+    # current test cheatcode consumer (rg vm.readFile / vm.readLine /
+    # vm.exists). Originally consumed by the deleted
+    # test/ExternalAuditRemediation.t.sol; left in place.
+    { access = "read", path = "./contracts/" },
+    { access = "read", path = "./script/" },
+    { access = "read", path = "./docs/" },
     { access = "read-write", path = "./test/test_vectors/" },
     # Read access to every profile's build artifacts: SHRINCSMeasurements
     # (task 1vn) selects its profile-gated harness contracts (e.g.
@@ -96,17 +94,18 @@ fs_permissions = [
     # explicit grant. Each profile builds into its own `out*` dir
     # ([profile.*] `out`) so every one needs its own entry.
     { access = "read", path = "./out" },
-    { access = "read", path = "./out-128s-q18" },
-    { access = "read", path = "./out-128s-q20" },
+    { access = "read", path = "./out-test-128s-q18" },
+    { access = "read", path = "./out-test-128s-q20" },
     { access = "read", path = "./out-256s-sha2" }
 ]
 
 [profile.production]
 # solc is PINNED so the 256s verifier's RUNTIME CODEHASH is chain-
 # invariant (consumers pin the codehash from DEPLOYMENTS.md). Deploys
-# now use CREATE3, so the deployed ADDRESS depends only on (factory,
-# salt) and is independent of the init code — but the pin still fixes
-# the codehash across chains. Inherits the [profile.default] remapping
+# use CREATE3 through CreateX, so the deployed ADDRESS depends only on
+# (CREATEX, salt) and is independent of the init code — but the pin
+# still fixes the codehash across chains. Inherits the
+# [profile.default] remapping
 # (256s) and skip (128s verifiers/deploys). Bump deliberately.
 solc = "0.8.35"
 via_ir = true
@@ -128,8 +127,8 @@ gas_limit = "18446744073709551615" # u64::MAX
 # (task 1vn) runs here too: stateful measurements sign in-process
 # (cheap at maxSignatures = 4), stateless measurements read the 128s
 # vector JSON instead of signing in-process.
-[profile.128s-q18]
-out = "out-128s-q18"
+[profile.test-128s-q18]
+out = "out-test-128s-q18"
 remappings = [
     "shrincs-profile/=contracts/profiles/128s-q18/",
     "shrincs-hash/=contracts/hash/keccak/",
@@ -140,9 +139,7 @@ skip = [
     "contracts/SPHINCSPlusC256sKeccak.sol",
     "contracts/SPHINCSPlusC128sQ20Keccak.sol",
     "script/DeploySHRINCS256sKeccak.s.sol",
-    "script/DeploySHRINCS128sQ20Keccak.s.sol",
     "script/DeploySPHINCSPlusC256sKeccak.s.sol",
-    "script/DeploySPHINCSPlusC128sQ20Keccak.s.sol",
     "contracts/SHRINCS256sSha2.sol",
     "contracts/SPHINCSPlusC256sSha2.sol",
     "script/DeploySHRINCS256sSha2.s.sol",
@@ -150,6 +147,7 @@ skip = [
     "test/SHRINCSSphincs256sVectors.t.sol",
     "test/SHRINCSSphincs256sSha2Vectors.t.sol",
     "test/SHRINCSStatelessVectorSigner.t.sol",
+    "test/SHRINCSAddressTweakMutation.t.sol",
     "test/SHRINCSAccountSigningFacade.t.sol",
     "test/SHRINCSAccountVectorExport.t.sol",
     "test/HashSuiteStatelessGuard.t.sol",
@@ -164,8 +162,8 @@ skip = [
     "test/HashSuiteStatelessGuardSha2.t.sol",
 ]
 
-[profile.128s-q20]
-out = "out-128s-q20"
+[profile.test-128s-q20]
+out = "out-test-128s-q20"
 remappings = [
     "shrincs-profile/=contracts/profiles/128s-q20/",
     "shrincs-hash/=contracts/hash/keccak/",
@@ -176,9 +174,7 @@ skip = [
     "contracts/SPHINCSPlusC256sKeccak.sol",
     "contracts/SPHINCSPlusC128sQ18Keccak.sol",
     "script/DeploySHRINCS256sKeccak.s.sol",
-    "script/DeploySHRINCS128sQ18Keccak.s.sol",
     "script/DeploySPHINCSPlusC256sKeccak.s.sol",
-    "script/DeploySPHINCSPlusC128sQ18Keccak.s.sol",
     "contracts/SHRINCS256sSha2.sol",
     "contracts/SPHINCSPlusC256sSha2.sol",
     "script/DeploySHRINCS256sSha2.s.sol",
@@ -186,6 +182,7 @@ skip = [
     "test/SHRINCSSphincs256sVectors.t.sol",
     "test/SHRINCSSphincs256sSha2Vectors.t.sol",
     "test/SHRINCSStatelessVectorSigner.t.sol",
+    "test/SHRINCSAddressTweakMutation.t.sol",
     "test/SHRINCSAccountSigningFacade.t.sol",
     "test/SHRINCSAccountVectorExport.t.sol",
     "test/HashSuiteStatelessGuard.t.sol",
@@ -200,17 +197,17 @@ skip = [
     "test/SHRINCSPinned128sQ18.t.sol",
 ]
 
-# Production twins of the 128s profiles: same solc/via-ir/runs pin as
+# Experimental twins of the 128s profiles: same solc/via-ir/runs pin as
 # [profile.production], differing only in remapping, `out`, and skip
-# ([DESIGN §3.4]). Used to build each profile's canonical verifier
-# artifact; each skips the other profiles' verifiers and deploy scripts.
-[profile.production-128s-q18]
+# ([DESIGN §3.4]). Used only to compile and test experimental artifacts;
+# neither profile has a production deployment script.
+[profile.experimental-128s-q18]
 solc = "0.8.35"
 via_ir = true
 optimizer = true
 optimizer_runs = 1000000
 gas_limit = "18446744073709551615" # u64::MAX
-out = "out-128s-q18-prod"
+out = "out-experimental-128s-q18"
 remappings = [
     "shrincs-profile/=contracts/profiles/128s-q18/",
     "shrincs-hash/=contracts/hash/keccak/",
@@ -221,22 +218,20 @@ skip = [
     "contracts/SPHINCSPlusC256sKeccak.sol",
     "contracts/SPHINCSPlusC128sQ20Keccak.sol",
     "script/DeploySHRINCS256sKeccak.s.sol",
-    "script/DeploySHRINCS128sQ20Keccak.s.sol",
     "script/DeploySPHINCSPlusC256sKeccak.s.sol",
-    "script/DeploySPHINCSPlusC128sQ20Keccak.s.sol",
     "contracts/SHRINCS256sSha2.sol",
     "contracts/SPHINCSPlusC256sSha2.sol",
     "script/DeploySHRINCS256sSha2.s.sol",
     "script/DeploySPHINCSPlusC256sSha2.s.sol",
 ]
 
-[profile.production-128s-q20]
+[profile.experimental-128s-q20]
 solc = "0.8.35"
 via_ir = true
 optimizer = true
 optimizer_runs = 1000000
 gas_limit = "18446744073709551615" # u64::MAX
-out = "out-128s-q20-prod"
+out = "out-experimental-128s-q20"
 remappings = [
     "shrincs-profile/=contracts/profiles/128s-q20/",
     "shrincs-hash/=contracts/hash/keccak/",
@@ -247,9 +242,7 @@ skip = [
     "contracts/SPHINCSPlusC256sKeccak.sol",
     "contracts/SPHINCSPlusC128sQ18Keccak.sol",
     "script/DeploySHRINCS256sKeccak.s.sol",
-    "script/DeploySHRINCS128sQ18Keccak.s.sol",
     "script/DeploySPHINCSPlusC256sKeccak.s.sol",
-    "script/DeploySPHINCSPlusC128sQ18Keccak.s.sol",
     "contracts/SHRINCS256sSha2.sol",
     "contracts/SPHINCSPlusC256sSha2.sol",
     "script/DeploySHRINCS256sSha2.s.sol",
@@ -291,11 +284,7 @@ skip = [
     "contracts/SPHINCSPlusC128sQ18Keccak.sol",
     "contracts/SPHINCSPlusC128sQ20Keccak.sol",
     "script/DeploySHRINCS256sKeccak.s.sol",
-    "script/DeploySHRINCS128sQ18Keccak.s.sol",
-    "script/DeploySHRINCS128sQ20Keccak.s.sol",
     "script/DeploySPHINCSPlusC256sKeccak.s.sol",
-    "script/DeploySPHINCSPlusC128sQ18Keccak.s.sol",
-    "script/DeploySPHINCSPlusC128sQ20Keccak.s.sol",
     # The remaining test skips are NOT signer-hash-mismatch skips (those were
     # lifted once the in-Solidity signers were routed onto the seam, task
     # 80u). They stay skipped because they are bound to keccak artifacts:
@@ -313,10 +302,16 @@ skip = [
     #    verifier (they select artifacts by SHRINCSParams.PROFILE_ID via
     #    deployCode) and run here instead;
     #  - AccountVectorExport, AccountInvariants, and MutationFuzz drive
-    #    stateless in-Solidity signing under randomized/export loops; under the
-    #    sha2 precompile path that is prohibitively slow, and their sha2
-    #    correctness is already covered deterministically by the lifted
-    #    SHRINCSStatelessVectorSigner / SHRINCSSignerKeygen suites.
+    #    stateless in-Solidity signing under randomized/export/mutation
+    #    loops; under the sha2 precompile path that is prohibitively
+    #    slow, and their sha2 correctness is already covered
+    #    deterministically by the lifted SHRINCSStatelessVectorSigner /
+    #    SHRINCSSignerKeygen suites.
+    #  - AddressTweakMutation signs stateless in-Solidity (two full
+    #    signings per test, deterministic, gated by a test-only
+    #    ADRS-word omission switch), which is prohibitively slow under
+    #    the sha2 precompile path; its sha2 correctness is covered the
+    #    same way.
     "test/SHRINCSSphincs256sVectors.t.sol",
     "test/SHRINCSSphincs128sVectors.t.sol",
     "test/SHRINCSPinned256s.t.sol",
@@ -327,6 +322,7 @@ skip = [
     "test/SHRINCSAccountVectorExport.t.sol",
     "test/SHRINCSAccountInvariants.t.sol",
     "test/SHRINCSMutationFuzz.t.sol",
+    "test/SHRINCSAddressTweakMutation.t.sol",
     "test/SHRINCSEnvelope.t.sol",
     "test/SHRINCSCalldataRetag.t.sol",
     "test/SHRINCSConsumerExamples.t.sol",
@@ -352,11 +348,7 @@ skip = [
     "contracts/SPHINCSPlusC128sQ18Keccak.sol",
     "contracts/SPHINCSPlusC128sQ20Keccak.sol",
     "script/DeploySHRINCS256sKeccak.s.sol",
-    "script/DeploySHRINCS128sQ18Keccak.s.sol",
-    "script/DeploySHRINCS128sQ20Keccak.s.sol",
     "script/DeploySPHINCSPlusC256sKeccak.s.sol",
-    "script/DeploySPHINCSPlusC128sQ18Keccak.s.sol",
-    "script/DeploySPHINCSPlusC128sQ20Keccak.s.sol",
 ]
 
 # Per-MR security gate: the 256s (default) profile plus bounded,

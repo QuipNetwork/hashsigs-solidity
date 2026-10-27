@@ -60,14 +60,15 @@ import {SHRINCS} from "./SHRINCS.sol";
 /// surrounds it, so an out-of-gas there propagates as a revert instead of
 /// being misreported as an invalid signature.
 ///
-/// Caller obligations. Every SHRINCS library is `pure` and both adapters
-/// are storage-free: no entrypoint touches persistent storage, and the
-/// only non-`view` entrypoint, `verifyAndAttest`, writes exclusively
-/// EIP-1153 transient storage (cleared when the transaction ends); they
-/// verify a signature and nothing more. All statefulness is the WRAPPER
-/// contract's job: single-use tracking of stateful leaves, nonce and
-/// keyVersion replay scoping, and installing the commitment a rotation
-/// returns.
+/// Caller obligations. The shared SHRINCS verification stack is `view`
+/// because it also compiles with the SHA-256 suite. Its hashing helpers use
+/// `staticcall` to precompile 0x02. Both adapters are storage-free: no
+/// entrypoint touches persistent storage, and the only non-`view` entrypoint,
+/// `verifyAndAttest`, writes exclusively EIP-1153 transient storage (cleared
+/// when the transaction ends); they verify a signature and nothing more.
+/// All statefulness is the WRAPPER contract's job: single-use tracking of
+/// stateful leaves, nonce and keyVersion replay scoping, and installing the
+/// commitment a rotation returns.
 /// SHRINCSAccountVerifierExample is the reference wrapper. Any future
 /// storage-needing helper belongs in a separate wrapper/base contract at the
 /// top of the inheritance chain, never in these libraries or adapters.
@@ -91,7 +92,7 @@ abstract contract SHRINCSVerifier is
     // each subclass's PROFILE_TAG. Unchanged by the adapter restructure:
     // the key/envelope format family it names is unchanged.
     bytes32 public constant VERSION_TAG =
-        keccak256("quip.shrincs-verifier.v1");
+        keccak256("quip.shrincs-verifier.v4");
     // Any non-magic value denotes signature failure.
     bytes4 private constant INVALID_SIGNATURE = 0xffffffff;
     // Transient attestation slot value for a successful verification
@@ -206,8 +207,10 @@ abstract contract SHRINCSVerifier is
         );
         if (!okDelegation) return INVALID_SIGNATURE;
 
+        bytes32 message =
+            SHRINCS.statelessRawMessageHash(publicKeyCommitment, hash);
         return IERC7913SignatureVerifier(_pinnedSphincsPlusC())
-            .verify(delegateKey, hash, delegateSignature);
+            .verify(delegateKey, message, delegateSignature);
     }
 
     /// @notice Whether `verifyAndAttest` succeeded for the exact triple
@@ -264,8 +267,10 @@ abstract contract SHRINCSVerifier is
             SHRINCS.Signature calldata statefulSignature
         ) = SHRINCS.statefulEnvelope(signature);
 
+        bytes32 message =
+            SHRINCS.statefulRawMessageHash(publicKeyCommitment, hash);
         if (SHRINCS.verify(
-                publicKeyCommitment, hash, publicKey, statefulSignature
+                publicKeyCommitment, message, publicKey, statefulSignature
             )) {
             return IERC7913SignatureVerifier.verify.selector;
         }

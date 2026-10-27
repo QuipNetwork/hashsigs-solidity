@@ -372,6 +372,113 @@ contract SHRINCSStatefulPolicyExamplesTest is Test {
         );
     }
 
+    // Regression for the rotation-lockout fix: before the fix,
+    // setStatefulPolicyRecoveryRotation required !statefulPolicyFrozen, the
+    // same guard the other two setters keep. Because commitStatefulLeafUse
+    // freezes policy changes on the first successful stateful use, and only
+    // a completed rotation (which requires RecoveryRotation policy) clears
+    // that freeze, a used monotonic/bitmap account could never reach
+    // RecoveryRotation and could therefore never rotate again. This test
+    // freezes a monotonic account with one real stateful signature, then
+    // proves the full recovery path is still reachable: the setter succeeds
+    // while frozen, recovery mode arms, and a properly signed rotation
+    // completes.
+    function testRecoveryRotationSetterSucceedsAfterStatefulUseFreezesPolicy()
+        public
+    {
+        (
+            SHRINCS.SigningKey memory currentSigningKey,
+            SHRINCS.PublicKey memory currentPublicKey,
+            bool currentOk
+        ) = SHRINCSAccountSigningFacade.keygen(
+            bytes("policy-examples frozen recovery rotation current key"), 4
+        );
+        assertTrue(currentOk, "current keygen must succeed");
+
+        // forgefmt: disable-next-line
+        SHRINCSAccountVerifierExample account =
+            new SHRINCSAccountVerifierExample(
+                SHRINCSAccountSigningFacade.publicKeyCommitmentWord(
+                    currentPublicKey
+                )
+            );
+
+        bytes32 actionType = keccak256("action");
+        bytes32 payloadHash = keccak256("payload");
+        // line-length: allow — fmt canonical tuple head exceeds cap
+        (,, SHRINCS.Signature memory signature, bool signOk) = SHRINCSAccountSigningFacade.signStatefulActionNow(
+            account, currentSigningKey, actionType, payloadHash
+        );
+        assertTrue(signOk, "stateful action signing must succeed");
+
+        bool actionOk = account.verifyStatefulAction(
+            currentPublicKey, actionType, payloadHash, signature
+        );
+        assertTrue(
+            actionOk, "stateful action must verify to freeze the policy"
+        );
+        assertTrue(
+            account.statefulPolicyFrozen(),
+            "successful stateful use must freeze policy changes"
+        );
+
+        // The fix under test: a frozen account must still be able to select
+        // the recovery-rotation policy — it is the only route back to
+        // rotation once frozen.
+        account.setStatefulPolicyRecoveryRotation();
+        assertEq(
+            uint8(account.statefulPolicy()),
+            uint8(
+                SHRINCSAccountVerifierExample.StatefulPolicy.RecoveryRotation
+            ),
+            "frozen account must still reach the recovery-rotation policy"
+        );
+
+        account.enterRecoveryMode();
+        assertTrue(account.recoveryMode(), "recovery mode must arm");
+
+        // Prove the fix restores rotation itself, not just the setter call:
+        // complete a real stateful-only rotation signed under the
+        // previously frozen key.
+        // line-length: allow — fmt canonical tuple head exceeds cap
+        (, SHRINCS.PublicKey memory nextPublicKey, bool nextOk) = SHRINCSAccountSigningFacade.keygen(
+            bytes("policy-examples frozen recovery rotation next key"), 4
+        );
+        assertTrue(nextOk, "next keygen must succeed");
+
+        SHRINCS.StatefulRotationTarget memory nextKey =
+            SHRINCSAccountSigningFacade.statefulRotationTarget(
+                currentPublicKey, nextPublicKey.statefulPublicKey
+            );
+
+        SHRINCSStatelessVectorSigner signer =
+            new SHRINCSStatelessVectorSigner();
+        // line-length: allow — fmt canonical tuple head exceeds cap
+        (, bytes32 sessionId, bool rotationSignOk) = SHRINCSAccountSigningFacade.beginStatefulOnlyRotationSessionNow(
+            signer, account, currentSigningKey, currentPublicKey, nextKey
+        );
+        assertTrue(rotationSignOk, "stateful-only rotation must start");
+
+        // line-length: allow — fmt canonical tuple head exceeds cap
+        (SPHINCSPlusC.Signature memory recoverySignature, bool completeOk) = SHRINCSAccountSigningFacade.completeStatelessSession(
+            signer, sessionId
+        );
+        assertTrue(completeOk, "stateful-only rotation must complete");
+
+        bool rotateOk = account.rotateToFreshKey(
+            currentPublicKey, recoverySignature, nextKey
+        );
+        assertTrue(
+            rotateOk,
+            "previously-frozen account must be able to rotate via recovery"
+        );
+        assertEq(
+            account.currentSHRINCSPublicKey(),
+            SHRINCSAccountSigningFacade.publicKeyCommitmentWord(nextKey),
+            "rotation must install the recovery target key"
+        );
+    }
+
     function testLeafBitmapExampleRejectsReuseOfSameLeaf() public {
         (
             SHRINCS.PublicKey memory publicKey,

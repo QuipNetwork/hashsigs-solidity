@@ -42,9 +42,15 @@ contract MedusaAccountHarness is SHRINCSAccountVerifierExample {
         statelessSignaturesUsed = value;
     }
 
-    function applyFullRotationForTest(bytes32 nextKey) external {
+    // Mirrors rotateFullKey's tail: the recovery signature is always
+    // announced as a full rotation, but the budget resets only when the
+    // rotation target's stateless material actually differs from the
+    // installed key. statelessChanged stands in for that comparison.
+    function applyFullRotationForTest(bytes32 nextKey, bool statelessChanged)
+        external
+    {
         consumeStatelessRotationUse(nextKey, true);
-        installFreshFullKey(nextKey);
+        installRotatedKey(nextKey, statelessChanged);
     }
 }
 
@@ -56,7 +62,7 @@ contract MedusaAccountHarness is SHRINCSAccountVerifierExample {
 /// key in the constructor — Medusa deploys the target and cannot split the
 /// 256s keygen across frames as the forge harness does, so one key is used;
 /// simulated full rotations reinstall the same commitment, which still
-/// advances the key epoch and resets the budget.
+/// advances the key epoch and applies the conditional budget rule.
 /// @dev property_* functions must always return true; a false return or a
 /// revert is a Medusa finding. State-mutating act* functions supply the
 /// coverage. This complements the per-MR forge invariant suite
@@ -139,13 +145,19 @@ contract SHRINCSMedusaHarness {
         _afterOp();
     }
 
-    function actSimulateFullRotation() external {
-        if (
-            account.statelessSignaturesUsed()
-                >= SHRINCSParams.STATELESS_SIGNATURE_LIMIT
-        ) return;
-        account.applyFullRotationForTest(_commitmentWord(publicKey));
-        if (account.statelessSignaturesUsed() != 0) resetViolated = true;
+    // A full rotation always consumes one recovery signature. The budget
+    // resets to zero only when the rotation target's stateless material
+    // changed; reusing it must carry the incremented budget forward.
+    function actSimulateFullRotation(bool statelessChanged) external {
+        uint64 budgetBefore = account.statelessSignaturesUsed();
+        if (budgetBefore >= SHRINCSParams.STATELESS_SIGNATURE_LIMIT) return;
+        account.applyFullRotationForTest(
+            _commitmentWord(publicKey), statelessChanged
+        );
+        uint64 expected = statelessChanged ? 0 : budgetBefore + 1;
+        if (account.statelessSignaturesUsed() != expected) {
+            resetViolated = true;
+        }
         _afterOp();
     }
 
@@ -154,6 +166,8 @@ contract SHRINCSMedusaHarness {
             <= SHRINCSParams.STATELESS_SIGNATURE_LIMIT;
     }
 
+    // Conditional reset rule: zero when the rotation changed the stateless
+    // material, carried-forward-plus-one when it did not.
     function property_budgetResetOnFullRotation()
         external
         view

@@ -50,12 +50,12 @@ import {SPHINCSPlusC} from "./SPHINCSPlusC.sol";
 /// calldata-typed SPHINCSPlusC library, verifying the re-tagged envelope in
 /// place with no external call.
 ///
-/// Caller obligations. Every SPHINCSPlusC library is `pure` and this
-/// adapter's `verify` is likewise storage-free and `pure` (removing the
-/// self-call hop left no external call); it verifies a signature and nothing
-/// more. All statefulness — stateless-budget accounting, nonce/keyVersion
-/// replay scoping, installing a rotated key — is the WRAPPER contract's
-/// job. SHRINCSAccountVerifierExample is the reference wrapper. Any future
+/// Caller obligations. The shared SPHINCSPlusC verification stack is `view`
+/// because it also compiles with the SHA-256 suite. Its hashing helpers use
+/// `staticcall` to precompile 0x02. The adapter verifies signatures without
+/// touching persistent state. Budget accounting, nonce and key-version replay
+/// scoping, and rotated-key installation belong to the WRAPPER contract.
+/// SHRINCSAccountVerifierExample is the reference wrapper. Any future
 /// storage-needing helper belongs in a separate wrapper/base contract at the
 /// top of the inheritance chain, never in this adapter or its libraries.
 ///
@@ -72,7 +72,7 @@ abstract contract SPHINCSPlusCVerifier is IERC7913SignatureVerifier {
     // the stateless SPHINCSPlusC scheme, not the parameter set. The
     // per-profile parameter identity lives in each subclass's PROFILE_TAG.
     bytes32 public constant VERSION_TAG =
-        keccak256("quip.sphincsplusc-verifier.v1");
+        keccak256("quip.sphincsplusc-verifier.v3");
     // Any non-magic value denotes signature failure.
     bytes4 private constant INVALID_SIGNATURE = 0xffffffff;
 

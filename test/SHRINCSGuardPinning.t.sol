@@ -23,6 +23,7 @@ import {SPHINCSPlusC} from "../contracts/SPHINCSPlusC.sol";
 import {FORSMinusC} from "../contracts/FORSMinusC.sol";
 import {Hypertree} from "../contracts/Hypertree.sol";
 import {WOTSPlusC} from "../contracts/WOTSPlusC.sol";
+import {HashSuite} from "shrincs-hash/HashSuite.sol";
 
 // GUARD-PINNING SAFETY ENVELOPE (epic Z1).
 //
@@ -42,19 +43,10 @@ import {WOTSPlusC} from "../contracts/WOTSPlusC.sol";
 //     or fails a downstream hash/target-sum compare and returns `false`.
 // No test asserts a specific error or Panic selector.
 //
-// LONG-ARRAY MALLEABILITY (review rows 20, 26). A valid envelope with an
-// OVER-LONG count/length array is the accepted-by-design byte-malleability
-// case: pre-drop the count guard rejected it (`false`); post-drop the extra
-// element is never read (UXMSS loops WOTS_CHAINS_STATEFUL times, FORS-C loops
-// NUM_FORS_TREES - 1 times — both fixed counts, never the array `.length`),
-// so the SAME-message envelope verifies IDENTICALLY (`true`). The two
-// `...Long...` tests below pin exactly that property over the CORRECT
-// (signed) message: padding the array leaves the verify outcome unchanged
-// from the unpadded anchor. Were the extra element ever read, the
-// reconstruction would change and the correct-message verification would
-// flip to `false`; asserting the outcome is unchanged is therefore a real
-// pin of "extra element never read", not the vacuous
-// rejection-over-a-wrong-message it replaced.
+// LONG-ARRAY MALLEABILITY (review rows 20, 26). The stateful UXMSS
+// chains array retains fixed-count, ignored-suffix behavior under row 20.
+// Issue 08 restores the exact FORS-C entry-count guard for row 26, so a long
+// FORS array returns `false`. The long-array tests pin these different rules.
 //
 // NOT APPLICABLE: "stateful randomizer wrong length". SHRINCS.Signature
 // .randomizer is a fixed `bytes32` (SHRINCS.sol / UXMSS.sol twin), so there
@@ -248,27 +240,61 @@ contract SHRINCSGuardPinningTest is Test {
     // ---------------------------------------------------------------------
 
     // Class: stateful leaf-0 signature (empty authPath). Review rows
-    // 18/21/22. leafIndex := authPath.length, so an empty path claims the
-    // reserved leaf 0. Pre-drop UXMSS.sol:79 returns false; post-drop it
-    // Panics on authPath[0] or fails the crypto compare (the
-    // rootFromUnbalancedPath length check it once hit was itself dropped in
-    // Z1).
-    function testStatefulLeafZeroEmptyAuthPathRejected() public {
+    // 18/21/22. Grind the public digest inputs until the WOTS-C target sum
+    // passes, so rejection cannot come from that earlier cryptographic gate.
+    // The explicit leaf-zero guard must return false without a Panic.
+    function testStatefulGroundLeafZeroReturnsFalse() public {
         (
             SHRINCS.PublicKey memory publicKey,
             bytes memory message,
             SHRINCS.Signature memory signature
         ) = decodeStatefulVector(".stateful.cases.valid.calldata");
         signature.authPath = new bytes32[](0);
-        assertTrue(
-            statefulRejected(
+        signature.randomizer = keccak256("guard-pinning leaf zero");
+        signature.counter = _groundLeafZeroCounter(
+            _statefulPkSeed(publicKey.statefulPublicKey),
+            message,
+            signature.randomizer
+        );
+        assertFalse(
+            stateful.verifyUnsafeRaw(
                 compositePublicKeyWord(publicKey),
                 publicKey,
                 message,
                 signature
             ),
-            "stateful leaf-0 empty authPath must not wrong-accept"
+            "ground stateful leaf-0 claim must return false"
         );
+    }
+
+    function _groundLeafZeroCounter(
+        bytes32 pkSeed,
+        bytes memory message,
+        bytes32 randomizer
+    ) internal view returns (uint32 counter) {
+        for (uint32 candidate = 0; candidate < (1 << 24); ++candidate) {
+            bytes32 digest = HashSuite.uxmssWotsDigits32(
+                pkSeed, 0, randomizer, candidate, message
+            );
+            uint32 sum;
+            for (uint256 i = 0; i < SHRINCSParams.WOTS_CHAINS_STATEFUL; ++i) {
+                sum += WOTSPlusC.baseW16Digit32(digest, i);
+            }
+            if (sum == SHRINCSParams.WOTS_TARGET_SUM_STATEFUL) {
+                return candidate;
+            }
+        }
+        revert("leaf-zero grind exhausted");
+    }
+
+    function _statefulPkSeed(bytes memory encoded)
+        internal
+        pure
+        returns (bytes32 pkSeed)
+    {
+        assembly ("memory-safe") {
+            pkSeed := mload(add(encoded, 32))
+        }
     }
 
     // Class: wrong stateful chains count (SHORT). Review row 20.
@@ -324,9 +350,8 @@ contract SHRINCSGuardPinningTest is Test {
     // Stateless (FORS-C + hypertree) input classes.
     // ---------------------------------------------------------------------
 
-    // Class: FORS entries count wrong (SHORT). Review row 26.
-    // Pre-drop FORSMinusC.sol:83 returns false; post-drop the fixed k-1 loop
-    // Panics indexing the short entries array.
+    // Class: FORS entries count wrong (SHORT). Review row 26. The restored
+    // local shape guard returns false before the fixed-count loop can Panic.
     function testStatelessShortForsEntriesRejected() public {
         (
             SHRINCS.PublicKey memory publicKey,
@@ -345,30 +370,24 @@ contract SHRINCSGuardPinningTest is Test {
         );
     }
 
-    // Class: FORS entries count wrong (LONG) — malleability safety pin.
-    // Review row 26. Post-drop the extra entry is never read (FORS-C loops
-    // NUM_FORS_TREES - 1 times, not entries.length), so padding a valid
-    // signature over its CORRECT message leaves the verify outcome
-    // unchanged from the unpadded anchor (`true`). Were the extra entry
-    // read, the FORS digest / root reconstruction would change and
-    // verification would flip to `false`; asserting the outcome is
-    // unchanged pins "extra element never read" for real (replaces the
-    // vacuous rejection-over-WRONG_MESSAGE check).
-    function testStatelessLongForsEntriesMalleabilitySafety() public {
+    // Class: FORS entries count wrong (LONG). Review row 26. The local
+    // exact-shape guard rejects trailing entries instead of silently ignoring
+    // them, removing the prior encoding malleability.
+    function testStatelessLongForsEntriesRejected() public {
         (
             SHRINCS.PublicKey memory publicKey,
             bytes memory message,
             SPHINCSPlusC.Signature memory signature
         ) = decodeStatelessVector(".stateless.cases.valid.calldata");
         bytes32 word = compositePublicKeyWord(publicKey);
-        bool baseline =
-            stateless.verifyUnsafeRaw(word, publicKey, message, signature);
-        assertTrue(baseline, "anchor: unpadded stateless vector verifies");
-        signature.fors.entries = appendForsEntry(signature.fors.entries);
-        assertEq(
+        assertTrue(
             stateless.verifyUnsafeRaw(word, publicKey, message, signature),
-            baseline,
-            "padding valid FORS entries must not change outcome"
+            "anchor: unpadded stateless vector verifies"
+        );
+        signature.fors.entries = appendForsEntry(signature.fors.entries);
+        assertFalse(
+            stateless.verifyUnsafeRaw(word, publicKey, message, signature),
+            "long FORS entries must return false"
         );
     }
 

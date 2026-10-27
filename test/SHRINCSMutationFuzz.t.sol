@@ -16,6 +16,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 pragma solidity ^0.8.28;
 
+import {SHRINCSTestCodec} from "./helpers/SHRINCSTestCodec.sol";
+
 import {Test} from "../lib/forge-std/src/Test.sol";
 import {
     IERC7913SignatureVerifier
@@ -111,7 +113,7 @@ contract SHRINCSMutationFuzzTest is Test {
         signature.chains[index] =
             bytes32(uint256(signature.chains[index]) ^ (uint256(flip) | 1));
         bytes memory mutated =
-            SHRINCS.encodeStatefulEnvelope(publicKey, signature);
+            SHRINCSTestCodec.encodeStatefulEnvelope(publicKey, signature);
         assertEq(
             rawVerifier.verify(rawKey, rawHash, mutated),
             INVALID_SIGNATURE,
@@ -134,7 +136,7 @@ contract SHRINCSMutationFuzzTest is Test {
         signature.randomizer =
             bytes32(uint256(signature.randomizer) ^ (uint256(flip) | 1));
         bytes memory mutated =
-            SHRINCS.encodeStatefulEnvelope(publicKey, signature);
+            SHRINCSTestCodec.encodeStatefulEnvelope(publicKey, signature);
         assertEq(
             rawVerifier.verify(rawKey, rawHash, mutated),
             INVALID_SIGNATURE,
@@ -152,7 +154,7 @@ contract SHRINCSMutationFuzzTest is Test {
         // XOR flips at least one counter bit without overflowing uint32.
         signature.counter = signature.counter ^ bump;
         bytes memory mutated =
-            SHRINCS.encodeStatefulEnvelope(publicKey, signature);
+            SHRINCSTestCodec.encodeStatefulEnvelope(publicKey, signature);
         assertEq(
             rawVerifier.verify(rawKey, rawHash, mutated),
             INVALID_SIGNATURE,
@@ -196,11 +198,12 @@ contract SHRINCSMutationFuzzTest is Test {
         rawHash = keccak256("shrincs mutation raw vector");
         SHRINCS.Signature memory signature;
         bool ok;
-        (signature, ok) = SHRINCSTestSigner.signStatefulRawAtLeaf(
-            signingKey, 1, abi.encodePacked(rawHash)
+        (signature, ok) = SHRINCSTestSigner.signStatefulAdapterAtLeaf(
+            signingKey, publicKey, 1, rawHash
         );
         assertTrue(ok, "raw sign");
         rawKey = abi.encodePacked(commitment);
-        rawEnvelope = SHRINCS.encodeStatefulEnvelope(publicKey, signature);
+        rawEnvelope =
+            SHRINCSTestCodec.encodeStatefulEnvelope(publicKey, signature);
     }
 }

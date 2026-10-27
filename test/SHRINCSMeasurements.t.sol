@@ -16,6 +16,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 pragma solidity ^0.8.28;
 
+import {SHRINCSTestCodec} from "./helpers/SHRINCSTestCodec.sol";
+
 import {Test} from "../lib/forge-std/src/Test.sol";
 import {Vm} from "../lib/forge-std/src/Vm.sol";
 import {
@@ -233,8 +235,10 @@ contract SHRINCSMeasurementsTest is Test {
                 bytes32 commitment,
                 SHRINCS.PublicKey memory publicKey,
                 bytes memory message,
-                SPHINCSPlusC.Signature memory signature
+                SPHINCSPlusC.Signature memory signature,
+                bytes memory ignoredCallerHash
             ) = loadStatelessVectorCase();
+            ignoredCallerHash;
             MeasurementRawStatelessHarness harness =
                 new MeasurementRawStatelessHarness();
             bytes memory callData = abi.encodeCall(
@@ -289,8 +293,10 @@ contract SHRINCSMeasurementsTest is Test {
                 bytes32 commitment,
                 SHRINCS.PublicKey memory publicKey,
                 bytes memory message,
-                SPHINCSPlusC.Signature memory signature
+                SPHINCSPlusC.Signature memory signature,
+                bytes memory ignoredCallerHash
             ) = loadStatelessVectorCase();
+            ignoredCallerHash;
             bytes32 hash = messageToHash(message);
             MeasurementRawStatelessHarness harness =
                 new MeasurementRawStatelessHarness();
@@ -488,12 +494,14 @@ contract SHRINCSMeasurementsTest is Test {
             (
                 bytes32 vectorCommitment,
                 SHRINCS.PublicKey memory vectorPublicKey,
-                bytes memory vectorMessage,
-                SPHINCSPlusC.Signature memory vectorSignature
+                bytes memory ignoredMessage,
+                SPHINCSPlusC.Signature memory vectorSignature,
+                bytes memory vectorCallerHash
             ) = loadStatelessVectorCase();
-            hash = messageToHash(vectorMessage);
+            ignoredMessage;
+            hash = messageToHash(vectorCallerHash);
             key = abi.encodePacked(vectorCommitment);
-            envelope = SHRINCS.encodeStatelessEnvelope(
+            envelope = SHRINCSTestCodec.encodeStatelessEnvelope(
                 vectorPublicKey, vectorSignature
             );
             return (verifier, key, envelope, hash);
@@ -509,7 +517,16 @@ contract SHRINCSMeasurementsTest is Test {
         hash = keccak256("verifyStateless delegation message");
         bytes32 sessionId;
         (sessionId, ok) = accountSigner.beginSession(
-            signingKey, publicKey, abi.encodePacked(hash)
+            signingKey,
+            publicKey,
+            abi.encodePacked(
+                SHRINCS.statelessRawMessageHash(
+                    SHRINCSAccountSigningFacade.publicKeyCommitmentWord(
+                        publicKey
+                    ),
+                    hash
+                )
+            )
         );
         assertTrue(ok, "delegation session must begin");
         // line-length: allow — fmt canonical tuple head exceeds cap
@@ -519,7 +536,8 @@ contract SHRINCSMeasurementsTest is Test {
         assertTrue(completeOk, "delegation signing must complete");
 
         key = abi.encodePacked(publicKeyCommitmentWord(publicKey));
-        envelope = SHRINCS.encodeStatelessEnvelope(publicKey, signature);
+        envelope =
+            SHRINCSTestCodec.encodeStatelessEnvelope(publicKey, signature);
     }
 
     // pinHarnessArtifact / siblingArtifact: select the active profile's
@@ -581,7 +599,8 @@ contract SHRINCSMeasurementsTest is Test {
             bytes32 commitment,
             SHRINCS.PublicKey memory publicKey,
             bytes memory message,
-            SPHINCSPlusC.Signature memory signature
+            SPHINCSPlusC.Signature memory signature,
+            bytes memory callerHash
         )
     {
         string memory vectors = vm.readFile(statelessVectorPath());
@@ -596,6 +615,7 @@ contract SHRINCSMeasurementsTest is Test {
         (legacyPublicKey, message, legacySignature) = abi.decode(
             args, (LegacyPublicKey, bytes, LegacyStatelessSignature)
         );
+        callerHash = vm.parseJsonBytes(vectors, ".stateless.callerHash");
 
         publicKey = SHRINCS.PublicKey({
             statefulPublicKey: legacyPublicKey.statefulPublicKey,

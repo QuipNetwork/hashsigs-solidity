@@ -17,11 +17,14 @@
 pragma solidity ^0.8.28;
 
 import {Test} from "../lib/forge-std/src/Test.sol";
-import {Create3} from "../script/Create3.sol";
+import {CreateXSalt} from "../script/CreateXSalt.sol";
 import {SHRINCSParams} from "shrincs-profile/SHRINCSParams.sol";
 import {SHRINCS256sSha2} from "../contracts/SHRINCS256sSha2.sol";
 import {SPHINCSPlusC256sSha2} from "../contracts/SPHINCSPlusC256sSha2.sol";
 import {DeploySHRINCS256sSha2} from "../script/DeploySHRINCS256sSha2.s.sol";
+import {
+    DeploySPHINCSPlusC256sSha2
+} from "../script/DeploySPHINCSPlusC256sSha2.s.sol";
 
 /// @dev Exposes the internal pinned SPHINCSPlusC address of the concrete
 /// 256s-sha2 deployable so the pin test can compare it to the CREATE3
@@ -44,30 +47,55 @@ contract DeploySHRINCS256sSha2Probe is DeploySHRINCS256sSha2 {
     function siblingAddr() external pure returns (address) {
         return SPHINCS_PLUS_C;
     }
+
+    function siblingCodehash() external pure returns (bytes32) {
+        return SPHINCS_PLUS_C_CODEHASH;
+    }
+}
+
+/// @dev Exposes the SPHINCSPlusC deploy script's internal SALT and
+/// RUNTIME_CODEHASH so the pin test can assert that script's inline
+/// salt composition matches the library derivation, and that the
+/// sibling codehash the SHRINCS script duplicates has not drifted.
+/// The scripts must duplicate both (Solidity forbids a function call
+/// in a `constant` initializer, and internal constants are not
+/// cross-contract accessible), so this is what keeps the duplicates
+/// honest.
+contract DeploySPHINCSPlusC256sSha2Probe is DeploySPHINCSPlusC256sSha2 {
+    function salt() external pure returns (bytes32) {
+        return SALT;
+    }
+
+    function runtimeCodehash() external pure returns (bytes32) {
+        return RUNTIME_CODEHASH;
+    }
 }
 
 /// @notice Pins the 256s-sha2 SHRINCS verifier's SPHINCSPlusC sibling address
 /// to its CREATE3 derivation so the deploy scripts cannot drift from the
-/// pinned constant. The CREATE3 factory is suite-independent (the
-/// metadata-stripped factory creation code is identical across suites), so
-/// the same FACTORY_INITCODE_HASH derives the sha2 child address.
-/// Profile-gated (256s-sha2) like the deployable itself.
+/// pinned constant. The derivation goes through the pre-deployed CreateX
+/// singleton, so it is suite-independent pure math — no compiled factory
+/// artifact is involved. Profile-gated (256s-sha2) like the deployable
+/// itself.
 contract SHRINCSPinned256sSha2Test is Test {
-    bytes32 internal constant FACTORY_SALT =
-        keccak256("QUIP:Create3Factory:V1.0");
-    bytes32 internal constant CHILD_SALT =
-        keccak256("QUIP:SPHINCSPlusC256sSha2:V1.0");
-    // Production Create3Factory creation-code hash (solc metadata stripped
-    // in foundry.toml), identical across suites. Mirrors
-    // DeployBase.s.sol FACTORY_INITCODE_HASH.
-    bytes32 internal constant FACTORY_INITCODE_HASH =
-        0xbe6eb1cac061b12187ed962ba44e19142929386dd027feee67ed5ea587777f05;
+    // Canonical CreateX singleton; mirrors DeployBase.s.sol CREATEX.
+    address internal constant CREATEX =
+        0xba5Ed099633D3B313e4D5F7bdc1305d3c28ba5Ed;
+    bytes32 internal constant CHILD_LABEL =
+        keccak256("QUIP:SPHINCSPlusC256sSha2:V3.0");
 
     function testPinnedAddressMatchesCreate3Derivation() public {
-        address factory = vm.computeCreate2Address(
-            FACTORY_SALT, FACTORY_INITCODE_HASH, CREATE2_FACTORY
+        // CreateX guards our sender-prefixed salt to
+        // keccak256(abi.encode(DEPLOYER, salt)) before its CREATE3
+        // deploy, so only the canonical deployer can reach this
+        // address. CREATEX is asserted against the library below.
+        assertEq(
+            CREATEX,
+            CreateXSalt.CREATEX,
+            "pin test CREATEX must match the deploy library"
         );
-        address expected = Create3.addressOf(CHILD_SALT, factory);
+        bytes32 childSalt = CreateXSalt.rawSalt(CHILD_LABEL);
+        address expected = CreateXSalt.addressOf(childSalt);
 
         SHRINCS256sSha2PinHarness harness = new SHRINCS256sSha2PinHarness();
         assertEq(
@@ -81,13 +109,27 @@ contract SHRINCSPinned256sSha2Test is Test {
         DeploySHRINCS256sSha2Probe probe = new DeploySHRINCS256sSha2Probe();
         assertEq(
             probe.siblingSalt(),
-            CHILD_SALT,
+            childSalt,
             "deploy script SPHINCS_PLUS_C_SALT must match pin test"
         );
         assertEq(
             probe.siblingAddr(),
             expected,
             "deploy script SPHINCS_PLUS_C must match CREATE3 derivation"
+        );
+
+        DeploySPHINCSPlusC256sSha2Probe childProbe =
+            new DeploySPHINCSPlusC256sSha2Probe();
+        assertEq(
+            childProbe.salt(),
+            childSalt,
+            "SPHINCSPlusC deploy script SALT must match derivation"
+        );
+        assertEq(
+            probe.siblingCodehash(),
+            childProbe.runtimeCodehash(),
+            "SHRINCS script's sibling codehash pin must match the "
+            "SPHINCSPlusC script's own RUNTIME_CODEHASH"
         );
     }
 

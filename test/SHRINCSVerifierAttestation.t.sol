@@ -16,6 +16,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 pragma solidity ^0.8.28;
 
+import {SHRINCSTestCodec} from "./helpers/SHRINCSTestCodec.sol";
+
 import {Test} from "../lib/forge-std/src/Test.sol";
 import {
     IERC7913SignatureVerifier
@@ -63,12 +65,11 @@ contract SHRINCSVerifierAttestationTest is Test {
         );
         assertTrue(keygenOk, "in-test keygen must succeed");
 
-        // The ERC-7913 hash IS the signed message: sign exactly its 32
-        // packed bytes.
         signedHash = keccak256("shrincs erc7913 transient attestation");
-        bytes memory message = abi.encodePacked(signedHash);
-        (SHRINCS.Signature memory leafOneSignature, bool leafOneOk) =
-            SHRINCSTestSigner.signStatefulRawAtLeaf(signingKey, 1, message);
+        // line-length: allow — fmt canonical tuple head exceeds cap
+        (SHRINCS.Signature memory leafOneSignature, bool leafOneOk) = SHRINCSTestSigner.signStatefulAdapterAtLeaf(
+            signingKey, publicKey, 1, signedHash
+        );
         assertTrue(leafOneOk, "leaf-1 signing must succeed");
 
         // The ERC-7913 key is the 32-byte bundle commitment word; the
@@ -80,8 +81,9 @@ contract SHRINCSVerifierAttestationTest is Test {
         }
         validKey = abi.encodePacked(commitmentWord);
         validKeyHash = keccak256(validKey);
-        validEnvelope =
-            SHRINCS.encodeStatefulEnvelope(publicKey, leafOneSignature);
+        validEnvelope = SHRINCSTestCodec.encodeStatefulEnvelope(
+            publicKey, leafOneSignature
+        );
 
         // Attest here so testAttestationClearedInNextTransaction can
         // assert the transient slot is gone: Foundry runs setUp and each

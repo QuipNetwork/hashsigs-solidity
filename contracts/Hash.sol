@@ -20,51 +20,15 @@ import {SHRINCSParams} from "shrincs-profile/SHRINCSParams.sol";
 
 /// @title Hash
 /// @notice Profile-independent, suite-independent hash and bit primitives
-/// shared by every SHRINCS module: address-word packing, hash-output
-/// masking, base-w digit extraction, and the memory-safe bit readers. This
-/// library is NEVER remapped and holds no scheme-hash logic.
+/// shared by every SHRINCS module: hash-output masking, base-w digit
+/// extraction, and the memory-safe bit readers. This library is NEVER
+/// remapped and holds no scheme-hash logic.
 /// @dev The compile-time hash-suite seam is `HashSuite` (remapped via the
 /// `shrincs-hash/` prefix): every tagged scheme hash lives there, so a future
 /// SHA-256 suite plugs in by remapping that prefix without touching the
 /// verifier logic. The primitives here (masking included) are identical
 /// across suites, which is why they stay in this shared, never-remapped file.
 library Hash {
-    // addressWord32: Pack the SPHINCS/XMSS-style address components into one
-    // 32-byte word.
-    // 1. Shift each address component into its reserved bit range.
-    // 2. OR the shifted components together into one packed value.
-    // 3. Return the packed 32-byte address word.
-    function addressWord32(
-        uint32 layer,
-        uint64 tree,
-        uint32 addressType,
-        uint32 keypair,
-        uint32 chain,
-        uint32 step
-    ) internal pure returns (bytes32) {
-        // Place the layer identifier in the top address bits.
-        uint256 shiftedLayer = uint256(layer) << 224;
-        // Place the subtree index below the layer field.
-        uint256 shiftedTree = uint256(tree) << 128;
-        // Place the address-domain selector below the tree field.
-        uint256 shiftedAddressType = uint256(addressType) << 96;
-        // Place the keypair identifier below the address-type field.
-        uint256 shiftedKeypair = uint256(keypair) << 64;
-        // Place the chain index below the keypair field.
-        uint256 shiftedChain = uint256(chain) << 32;
-        // Place the per-chain step index in the low 32 bits.
-        uint256 shiftedStep = uint256(step);
-
-        uint256 addressValue = shiftedLayer;
-        addressValue |= shiftedTree;
-        addressValue |= shiftedAddressType;
-        addressValue |= shiftedKeypair;
-        addressValue |= shiftedChain;
-        addressValue |= shiftedStep;
-
-        return bytes32(addressValue);
-    }
-
     // maskHash: Truncate a freshly produced 32-byte hash to the active
     // profile's HASH_LEN, keeping the high HASH_LEN bytes and zeroing
     // the low (32 - HASH_LEN) ([DESIGN §2(b)/§3.3]). Applied at every

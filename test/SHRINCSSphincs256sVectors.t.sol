@@ -857,12 +857,14 @@ contract SHRINCSSphincs256sVectorsTest is Test {
             SPHINCSPlusC.Signature memory signature
         ) = decodeStatelessVector(".stateless.cases.valid.calldata");
         signature.fors.entries = dropLastForsEntries(signature.fors.entries);
-        // Post guard-pruning a short FORS entries array reverts (Panic) at
-        // the fixed k-1 loop read instead of returning false; both are
-        // fail-closed.
-        vm.expectRevert();
-        stateless.verifyUnsafeRaw(
-            compositePublicKeyWord(publicKey), publicKey, message, signature
+        assertFalse(
+            stateless.verifyUnsafeRaw(
+                compositePublicKeyWord(publicKey),
+                publicKey,
+                message,
+                signature
+            ),
+            "short FORS entries must return false"
         );
     }
 
@@ -980,12 +982,15 @@ contract SHRINCSSphincs256sVectorsTest is Test {
         ) = decodeStatelessVector(".stateless.cases.valid.calldata");
         signature.hypertree[0].authPath =
             dropLastBytes(signature.hypertree[0].authPath);
-        // Post guard-pruning a wrong-length hypertree auth path reverts
-        // (Panic) at the per-level read instead of returning false; both are
-        // fail-closed.
-        vm.expectRevert();
-        stateless.verifyUnsafeRaw(
-            compositePublicKeyWord(publicKey), publicKey, message, signature
+        // Issue 05 makes the helper contract explicit: malformed path
+        // lengths return false instead of reaching an out-of-bounds Panic.
+        assertFalse(
+            stateless.verifyUnsafeRaw(
+                compositePublicKeyWord(publicKey),
+                publicKey,
+                message,
+                signature
+            )
         );
     }
 

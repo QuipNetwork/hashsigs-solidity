@@ -6,7 +6,7 @@
 set -euo pipefail
 
 FORGE=/opt/homebrew/bin/forge
-PROFILES=(default 128s-q18 128s-q20 256s-sha2)
+PROFILES=(default test-128s-q18 test-128s-q20 256s-sha2)
 
 # Mirrors test/SHRINCSMeasurements.t.sol's isStateless128sVectorProfile()
 # gate: under these profiles, these two labels measure the raw
@@ -15,7 +15,7 @@ PROFILES=(default 128s-q18 128s-q20 256s-sha2)
 # excluded) instead of the full account wrapper. The delegation label is
 # excluded: it calls the real verifyStateless entrypoint on every
 # profile, vector-sourced inputs at 128s notwithstanding.
-RAW_HARNESS_PROFILES=(128s-q18 128s-q20)
+RAW_HARNESS_PROFILES=(test-128s-q18 test-128s-q20)
 RAW_HARNESS_LABELS=(
 	stateless.canonical_wrapper_call_gas
 	stateless.erc1271_call_gas

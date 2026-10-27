@@ -30,6 +30,8 @@ pragma solidity ^0.8.28;
 /// HASH_LEN = 16 bytes, high-aligned in a 32-byte slot (HASH_MASK,
 /// [DESIGN §2(b)]). Stateful side follows n (32 chains, target sum
 /// 240; maintainer decision Q6). See [DESIGN].
+/// This profile is experimental: its limit has no approved documented
+/// birthday-bound analysis and is not supported by production tooling.
 library SHRINCSParams {
     // PROFILE_NAME: the canonical suite-qualified profile string. It is
     // the sole source of this profile's identity: PROFILE_ID hashes it,
@@ -56,7 +58,8 @@ library SHRINCSParams {
     // Python: 32 * (16 - 1) // 2
     uint32 internal constant WOTS_TARGET_SUM_STATEFUL = 240;
     // STATELESS_SIGNATURE_LIMIT: the stateless-signature budget for this
-    // profile = 2^18 (matches the h = 18 hypertree leaf count).
+    // experimental profile = 2^18 (matches the h = 18 leaf count).
+    // Equality with the leaf count is not a security justification.
     // -> 1 << 18 = 262144
     // Python: 2 ** 18
     uint64 internal constant STATELESS_SIGNATURE_LIMIT = 262_144;

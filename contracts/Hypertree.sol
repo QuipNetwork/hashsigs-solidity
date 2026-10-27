@@ -21,6 +21,9 @@ import {HashSuite} from "shrincs-hash/HashSuite.sol";
 import {WOTSPlusC} from "./WOTSPlusC.sol";
 
 library Hypertree {
+    // AddressTypeWotsPk: the WOTS public-key compression ADRS type constant
+    // [FIPS205 §4.2] (value 1).
+    uint32 internal constant AddressTypeWotsPk = 1;
     // AddressTypeTree: the tree ADRS type constant [FIPS205 §4.2]
     // (value 2) for the SPHINCS-style keyed hash inputs.
     uint32 internal constant AddressTypeTree = 2;
@@ -212,14 +215,15 @@ library Hypertree {
         bytes32 digest = HashSuite.wotsDigest32(
             pkSeed, expectedPkHash, randomizer, signature.counter, message
         );
-        // "wots-c-pk" || pkSeed || segment_0 || ... || segment_{len-1}
-        uint256 pkInputLen = 41 + chainCount * 32;
+        // "wots-c-pk" || pkSeed || WOTS_PK ADRS || segment_0 || ...
+        uint256 pkInputLen = 73 + chainCount * 32;
         uint256 pkInput;
         // keccak256 input ("wots-c-pk" tag [§1 tags], pkInputLen bytes):
         //   [0..9)          "wots-c-pk"
         //   [9..41)         pkSeed
-        //   [41..41+32*len) reconstructed chain endpoints (len = chainCount)
-        // pkInputLen = 41 + chainCount * 32.
+        //   [41..73)        WOTS_PK address (type 1)
+        //   [73..73+32*len) reconstructed chain endpoints (len = chainCount)
+        // pkInputLen = 73 + chainCount * 32.
         // Memory-safe: allocates roundup32(pkInputLen) bytes at the
         // free-memory pointer and advances the pointer past them; the loop
         // below fills the endpoints and the final hash reads exactly
@@ -232,6 +236,17 @@ library Hypertree {
             mstore(pkInput, "wots-c-pk")
             // Write the public seed immediately after the 9-byte tag.
             mstore(add(pkInput, 9), pkSeed)
+            // Bind the compression to this WOTS key's position. Chain and
+            // step fields remain zero for the WOTS_PK address type.
+            // ADRS bit layout [FIPS205 §4.2]: layer<<224 | tree<<128 |
+            // type<<96 | keypair<<64 | chain<<32 | step
+            mstore(
+                add(pkInput, 41),
+                or(
+                    or(shl(224, layer), shl(128, tree)),
+                    or(shl(96, AddressTypeWotsPk), shl(64, keypair))
+                )
+            )
             // Bump the free-memory pointer to the next 32-byte aligned slot
             // after this buffer.
             mstore(0x40, add(pkInput, and(add(pkInputLen, 31), not(31))))
@@ -280,11 +295,11 @@ library Hypertree {
                 digit
             );
             // Memory-safe: writes one 32-byte endpoint into the pkInput
-            // buffer allocated above (slot 41 + i*32).
+            // buffer allocated above (slot 73 + i*32).
             assembly ("memory-safe") {
                 // Write this reconstructed chain endpoint after the fixed
                 // tag-and-seed prefix.
-                mstore(add(add(pkInput, 41), mul(i, 32)), segment)
+                mstore(add(add(pkInput, 73), mul(i, 32)), segment)
             }
             unchecked {
                 ++i;
@@ -326,8 +341,9 @@ library Hypertree {
     // 3. Rebuild each parent node with the correct left/right ordering and
     // address.
     // 4. Return the reconstructed subtree root and success flag.
-    /// @dev Precondition: pkSeed is exactly 32 bytes, validPublicKey-checked
-    /// or a 32-byte key slice, as the fixed calldata read below assumes.
+    /// @dev Rejects an authentication path whose length differs from height.
+    /// Precondition: pkSeed is exactly 32 bytes, validPublicKey-checked or a
+    /// 32-byte key slice, as the fixed calldata read below assumes.
     function hypertreeRootFromPath32(
         uint32 height,
         bytes calldata pkSeed,
@@ -337,6 +353,8 @@ library Hypertree {
         bytes32 leaf,
         bytes[] calldata authPath
     ) internal view returns (bytes32 node, bool ok) {
+        if (authPath.length != height) return (bytes32(0), false);
+
         bytes32 pkSeedWord;
         // Memory-safe: reads one calldata word into a stack variable; no
         // memory is written.
