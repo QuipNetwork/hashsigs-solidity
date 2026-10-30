@@ -17,6 +17,11 @@
 #
 # Pin the foundry version deliberately, together with local toolchains.
 
+include:
+  - project: quip.network/ci-templates
+    ref: v1.0.0
+    file: templates/dependency-gate.yml
+
 stages:
   - verify
 
