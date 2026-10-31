@@ -2,9 +2,9 @@
 
 ## Unreleased
 
-Package version is 0.2.0. Removing public library functions is a
+Package version is 0.3.0. Removing public library functions is a
 breaking change under CODINGSTANDARDS section 7. The pre-1.0 minor
-version advances from 0.1.0.
+version advances from 0.2.0.
 
 ### Added
 - Transient attestation on the SHRINCS ERC-7913 verifier

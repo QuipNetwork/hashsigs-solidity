@@ -5,6 +5,11 @@
 # versions are pinned; bump them together with local toolchains so fmt
 # output stays canonical.
 
+include:
+  - project: quip.network/ci-templates
+    ref: v1.1.0
+    file: templates/dependency-gate.yml
+
 stages:
   - verify
   - analyze
