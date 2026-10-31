@@ -1,0 +1,415 @@
+// Copyright (C) 2026 quip.network
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Affero General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with this program.  If not, see <https://www.gnu.org/licenses/>.
+//
+// SPDX-License-Identifier: AGPL-3.0-or-later
+pragma solidity ^0.8.28;
+
+import {SHRINCSParams} from "shrincs-profile/SHRINCSParams.sol";
+import {HashSuite} from "shrincs-hash/HashSuite.sol";
+import {WOTSPlusC} from "./WOTSPlusC.sol";
+
+library Hypertree {
+    // AddressTypeWotsPk: the WOTS public-key compression ADRS type constant
+    // [FIPS205 §4.2] (value 1).
+    uint32 internal constant AddressTypeWotsPk = 1;
+    // AddressTypeTree: the tree ADRS type constant [FIPS205 §4.2]
+    // (value 2) for the SPHINCS-style keyed hash inputs.
+    uint32 internal constant AddressTypeTree = 2;
+
+    struct HypertreeLayerSignature {
+        // Commitment to the reconstructed WOTS-C public key for this layer.
+        bytes wotsCPkHash;
+        // WOTS-C signature carrying the previous layer's root upward.
+        WOTSPlusC.WotsCSignature wotsCSignature;
+        // Authentication path from the WOTS leaf to the next layer root.
+        bytes[] authPath;
+    }
+
+    // verifyHypertree: Verify every SHRINCS hypertree layer from the FORS
+    // root to the public root.
+    // 1. Check that the signature provides exactly one layer signature per
+    // hypertree layer.
+    // 2. Seed the expected subtree coordinates from the caller-supplied
+    // FORS-derived coordinates (no longer carried in the signature).
+    // 3. Verify each layer's WOTS-C signature against the running
+    // message/root value.
+    // 4. Rebuild the XMSS-style subtree root from the revealed auth path.
+    // 5. Derive the next layer's expected coordinates from the current tree
+    // index.
+    // 6. Accept only if the final reconstructed root matches the installed
+    // hypertree root.
+    function verifyHypertree(
+        bytes calldata pkSeed,
+        bytes calldata hypertreeRoot,
+        bytes32 forsRoot,
+        uint64 seedTreeIndex,
+        uint32 seedLeafIndex,
+        Hypertree.HypertreeLayerSignature[] calldata layers
+    ) internal view returns (bool) {
+        // Every hypertree layer must be present exactly once.
+        if (layers.length != SHRINCSParams.NUM_HYPERTREE_LAYERS) {
+            return false;
+        }
+        // Each subtree has height h / d in the supported balanced hypertree
+        // layout.
+        uint32 subtreeHeight = uint32(
+            SHRINCSParams.HYPERTREE_HEIGHT
+                / SHRINCSParams.NUM_HYPERTREE_LAYERS
+        );
+        // Mask off one subtree-height slice of tree-index bits at a time.
+        uint64 leafMask = uint64((uint256(1) << subtreeHeight) - 1);
+        // T6 wire change: the hypertree coordinates are no longer carried in
+        // the layer signature. Layer 0 starts from the FORS-digest-derived
+        // coordinates the caller passes in; each upper layer is then derived
+        // by the shift/mask recurrence below, so the derived value is the
+        // sole coordinate input and a signature cannot verify under any
+        // coordinate other than the one the FORS digest dictates.
+        uint64 expectedTreeIndex = seedTreeIndex;
+        uint32 expectedLeafIndex = seedLeafIndex;
+        // Carry the FORS root upward as the running message/root value.
+        bytes32 current = forsRoot;
+
+        for (uint256 layer = 0; layer < layers.length;) {
+            Hypertree.HypertreeLayerSignature calldata layerSig =
+                layers[layer];
+            // Deviates from [FIPS205 §8.2]: SHRINCS chains the hypertree
+            // coordinates sequentially per layer instead of following the
+            // FIPS-205 tree/leaf index recurrence. Layer 0 uses the
+            // FORS-derived coordinate; each upper layer's coordinate is
+            // derived from the lower layer's tree index (see the right-shift
+            // below), binding every layer's address to the derived value.
+            // Verify the WOTS-C layer signature against the current carried
+            // value.
+            if (!verifyWotsC32(
+                    pkSeed,
+                    // casting to 'uint32' is safe because layer is bounded by
+                    // the fixed 8-layer hypertree
+                    // forge-lint: disable-next-line(unsafe-typecast)
+                    uint32(layer),
+                    expectedTreeIndex,
+                    expectedLeafIndex,
+                    layerSig.wotsCPkHash,
+                    current,
+                    layerSig.wotsCSignature
+                )) return false;
+
+            bytes calldata wotsPkHash = layerSig.wotsCPkHash;
+            bytes32 leaf;
+            // Memory-safe: reads one calldata word into a stack variable;
+            // no memory is written.
+            assembly ("memory-safe") {
+                // Load the 32-byte WOTS-C public-key hash that becomes the
+                // subtree leaf value.
+                leaf := calldataload(wotsPkHash.offset)
+            }
+
+            // casting to 'uint32' is safe because layer is bounded by the
+            // fixed 8-layer hypertree
+            // forge-lint: disable-next-line(unsafe-typecast)
+            uint32 layerIndex = uint32(layer);
+            // Rebuild the subtree root above this WOTS-C leaf.
+            (bytes32 nextRoot, bool ok) = hypertreeRootFromPath32(
+                subtreeHeight,
+                pkSeed,
+                layerIndex,
+                expectedTreeIndex,
+                expectedLeafIndex,
+                leaf,
+                layerSig.authPath
+            );
+            if (!ok) return false;
+            // Carry the reconstructed subtree root into the next layer.
+            current = nextRoot;
+
+            // The next layer's leaf index comes from the low subtree-height
+            // bits of the current tree index.
+            // casting to 'uint32' is safe because leafMask keeps only
+            // subtreeHeight bits
+            // forge-lint: disable-next-line(unsafe-typecast)
+            expectedLeafIndex = uint32(expectedTreeIndex & leafMask);
+            // Shift away this layer's subtree bits to get the next layer's
+            // tree index.
+            expectedTreeIndex >>= subtreeHeight;
+            unchecked {
+                ++layer;
+            }
+        }
+
+        bytes calldata expectedRootBytes = hypertreeRoot;
+        bytes32 expectedRoot;
+        // Memory-safe: reads one calldata word into a stack variable; no
+        // memory is written.
+        assembly ("memory-safe") {
+            // Load the installed 32-byte hypertree root directly from
+            // calldata.
+            expectedRoot := calldataload(expectedRootBytes.offset)
+        }
+        return current == expectedRoot;
+    }
+
+    // verifyWotsC32: Verify one compressed stateless WOTS-C signature inside
+    // a hypertree layer.
+    // WOTS-C (WOTS+C in [SPHINCSPLUSC §3]): a fixed target-sum check
+    // replaces the WOTS checksum chains. Construction: [SHRINCS §5].
+    // 1. Check the WOTS-C digest width assumption.
+    // 2. Load the public seed, expected public-key hash, and signature
+    // randomizer.
+    // 3. Recompute the WOTS-C message digest that selects one base-w digit
+    // per chain.
+    // 4. Advance each revealed chain value to its endpoint to reconstruct the
+    // compressed public key.
+    // 5. Enforce the fixed WOTS-C digit-sum constraint used instead of an
+    // explicit checksum suffix.
+    // 6. Hash the reconstructed segments and compare them to the expected
+    // public-key hash.
+    /// @dev Precondition: pkSeedBytes is exactly 32 bytes,
+    /// validPublicKey-checked or a 32-byte slice, as the read below assumes.
+    function verifyWotsC32(
+        bytes calldata pkSeedBytes,
+        uint32 layer,
+        uint64 tree,
+        uint32 keypair,
+        bytes calldata expectedPkHashBytes,
+        bytes32 message,
+        WOTSPlusC.WotsCSignature calldata signature
+    ) internal view returns (bool) {
+        uint256 chainCount = uint256(SHRINCSParams.NUM_WOTS_CHAINS);
+        // The base-w digits are read from the first len/2 bytes of the
+        // 32-byte digest word (baseW16Digit32). A profile whose digest
+        // needs more than one 32-byte word is unsupported here; the
+        // exact per-profile expectation is asserted by the profile-
+        // invariants test ([DESIGN §3.3/§3.5]). For every supported
+        // profile wotsDigestBytes() <= 32, so this folds to false.
+        if (wotsDigestBytes() > 32) return false;
+
+        bytes calldata randomizerBytes = signature.randomizer;
+        bytes32 pkSeed;
+        bytes32 expectedPkHash;
+        bytes32 randomizer;
+        // Memory-safe: reads three calldata words into stack variables; no
+        // memory is written.
+        assembly ("memory-safe") {
+            // Load the 32-byte public seed directly from calldata.
+            pkSeed := calldataload(pkSeedBytes.offset)
+            // Load the expected compressed WOTS-C public-key hash from
+            // calldata.
+            expectedPkHash := calldataload(expectedPkHashBytes.offset)
+            // Load the 32-byte per-signature randomizer from calldata.
+            randomizer := calldataload(randomizerBytes.offset)
+        }
+
+        // Recompute the digest whose base-w digits determine chain stopping
+        // points.
+        bytes32 digest = HashSuite.wotsDigest32(
+            pkSeed, expectedPkHash, randomizer, signature.counter, message
+        );
+        // "wots-c-pk" || pkSeed || WOTS_PK ADRS || segment_0 || ...
+        uint256 pkInputLen = 73 + chainCount * 32;
+        uint256 pkInput;
+        // keccak256 input ("wots-c-pk" tag [§1 tags], pkInputLen bytes):
+        //   [0..9)          "wots-c-pk"
+        //   [9..41)         pkSeed
+        //   [41..73)        WOTS_PK address (type 1)
+        //   [73..73+32*len) reconstructed chain endpoints (len = chainCount)
+        // pkInputLen = 73 + chainCount * 32.
+        // Memory-safe: allocates roundup32(pkInputLen) bytes at the
+        // free-memory pointer and advances the pointer past them; the loop
+        // below fills the endpoints and the final hash reads exactly
+        // pkInputLen bytes.
+        assembly ("memory-safe") {
+            // Allocate a scratch buffer starting at the free-memory pointer.
+            pkInput := mload(0x40)
+            // Write the domain tag prefix for compressed WOTS-C public-key
+            // hashing.
+            mstore(pkInput, "wots-c-pk")
+            // Write the public seed immediately after the 9-byte tag.
+            mstore(add(pkInput, 9), pkSeed)
+            // Bind the compression to this WOTS key's position. Chain and
+            // step fields remain zero for the WOTS_PK address type.
+            // ADRS bit layout [FIPS205 §4.2]: layer<<224 | tree<<128 |
+            // type<<96 | keypair<<64 | chain<<32 | step
+            mstore(
+                add(pkInput, 41),
+                or(
+                    or(shl(224, layer), shl(128, tree)),
+                    or(shl(96, AddressTypeWotsPk), shl(64, keypair))
+                )
+            )
+            // Bump the free-memory pointer to the next 32-byte aligned slot
+            // after this buffer.
+            mstore(0x40, add(pkInput, and(add(pkInputLen, 31), not(31))))
+        }
+
+        // Encode the layer, tree, and keypair location shared by all chains
+        // in this WOTS key.
+        uint256 shiftedLayer = uint256(layer) << 224;
+        uint256 shiftedTree = uint256(tree) << 128;
+        uint256 shiftedKeypair = uint256(keypair) << 64;
+        uint256 addressBase = shiftedLayer;
+        addressBase |= shiftedTree;
+        addressBase |= shiftedKeypair;
+        uint32 digitSum;
+        // Hoist the calldata array reference so the loop reads element data
+        // from a fixed base pointer instead of re-resolving the struct member
+        // offset on every iteration.
+        bytes[] calldata chains = signature.chains;
+        for (uint256 i = 0; i < chainCount;) {
+            // Read the revealed starting value for this chain.
+            bytes calldata chain = chains[i];
+            // Read the digest-selected base-w digit for this chain.
+            uint32 digit = WOTSPlusC.baseW16Digit32(digest, i);
+            // Accumulate the fixed WOTS-C target-sum check.
+            digitSum += digit;
+            bytes32 chainValue;
+            // Memory-safe: reads one calldata word into a stack variable; no
+            // memory is written.
+            assembly ("memory-safe") {
+                // Load the revealed 32-byte chain value directly from
+                // calldata.
+                chainValue := calldataload(chain.offset)
+            }
+            // Complete the chain from the revealed value to its endpoint.
+            bytes32 segment = WOTSPlusC.wotsChainNoMaskBase(
+                WOTSPlusC.WOTS_C_CHAIN_TAG,
+                WOTSPlusC.WOTS_C_CHAIN_TAG_LEN,
+                SHRINCSParams.WOTS_CHAIN_LEN,
+                pkSeed,
+                addressBase,
+                // casting to 'uint32' is safe because i ranges over the
+                // fixed 64 WOTS chains
+                // forge-lint: disable-next-line(unsafe-typecast)
+                uint32(i),
+                chainValue,
+                digit
+            );
+            // Memory-safe: writes one 32-byte endpoint into the pkInput
+            // buffer allocated above (slot 73 + i*32).
+            assembly ("memory-safe") {
+                // Write this reconstructed chain endpoint after the fixed
+                // tag-and-seed prefix.
+                mstore(add(add(pkInput, 73), mul(i, 32)), segment)
+            }
+            unchecked {
+                ++i;
+            }
+        }
+        // WOTS-C does not carry an explicit checksum chain suffix. Instead
+        // the message expansion is accepted only when the reconstructed
+        // base-w digits add up to the fixed target sum ([SHRINCS §5]).
+        // This is the stateless hypertree WOTS-C check (chainCount =
+        // NUM_WOTS_CHAINS), so it compares against the matching
+        // stateless target sum, not the stateful side's constant.
+        if (digitSum != SHRINCSParams.WOTS_TARGET_SUM_STATELESS) {
+            return false;
+        }
+
+        // Hash the reconstructed chain endpoints into the compressed WOTS-C
+        // public-key hash. The buffer above is suite-independent; only this
+        // finalizer swaps per suite. Output truncated to HASH_LEN bytes,
+        // high-aligned (maskHash inside the suite helper); 256s no-op.
+        return HashSuite.hashWotsCPk32(pkInput, pkInputLen) == expectedPkHash;
+    }
+
+    // wotsDigestBytes: Return the number of bytes needed to encode all WOTS-C
+    // digits.
+    // 1. Choose the number of bits per base-w digit from the chain length.
+    // 2. Multiply by the number of WOTS chains.
+    // 3. Round up to a whole number of bytes.
+    function wotsDigestBytes() internal pure returns (uint256) {
+        uint256 bitsPerDigit = SHRINCSParams.WOTS_CHAIN_LEN == 256 ? 8 : 4;
+        return
+            (uint256(SHRINCSParams.NUM_WOTS_CHAINS) * bitsPerDigit + 7) / 8;
+    }
+
+    // hypertreeRootFromPath32: Rebuild one XMSS-style subtree root from a
+    // leaf value and auth path.
+    // 1. Construct the shared tree-hash address prefix for this layer and
+    // tree.
+    // 2. Walk upward from the supplied leaf one level at a time.
+    // 3. Rebuild each parent node with the correct left/right ordering and
+    // address.
+    // 4. Return the reconstructed subtree root and success flag.
+    /// @dev Rejects an authentication path whose length differs from height.
+    /// Precondition: pkSeed is exactly 32 bytes, validPublicKey-checked or a
+    /// 32-byte key slice, as the fixed calldata read below assumes.
+    function hypertreeRootFromPath32(
+        uint32 height,
+        bytes calldata pkSeed,
+        uint32 layer,
+        uint64 treeIndex,
+        uint32 leafIndex,
+        bytes32 leaf,
+        bytes[] calldata authPath
+    ) internal view returns (bytes32 node, bool ok) {
+        if (authPath.length != height) return (bytes32(0), false);
+
+        bytes32 pkSeedWord;
+        // Memory-safe: reads one calldata word into a stack variable; no
+        // memory is written.
+        assembly ("memory-safe") {
+            // Load the 32-byte public seed from calldata once for repeated
+            // subtree hashing.
+            pkSeedWord := calldataload(pkSeed.offset)
+        }
+        // Encode the hypertree layer in the shared address prefix.
+        uint256 shiftedLayer = uint256(layer) << 224;
+        // Encode the hypertree tree index in the shared address prefix.
+        uint256 shiftedTree = uint256(treeIndex) << 128;
+        // Mark these addresses as belonging to the tree-hash domain.
+        uint256 shiftedAddressType = uint256(Hypertree.AddressTypeTree) << 96;
+        uint256 addressBase = shiftedLayer;
+        addressBase |= shiftedTree;
+        addressBase |= shiftedAddressType;
+        // Start the upward walk from the supplied leaf value.
+        node = leaf;
+        uint256 index = leafIndex;
+        for (uint256 level = 0; level < height;) {
+            // Read the sibling node supplied for this subtree level.
+            bytes calldata authNode = authPath[level];
+            bytes32 sibling;
+            // Memory-safe: reads one calldata word into a stack variable;
+            // no memory is written.
+            assembly ("memory-safe") {
+                // Load the 32-byte sibling node directly from calldata.
+                sibling := calldataload(authNode.offset)
+            }
+            // Place the current node and sibling in canonical left/right
+            // order for this level.
+            (bytes32 left, bytes32 right) =
+                index & 1 == 0 ? (node, sibling) : (sibling, node);
+            // Parent nodes live one level higher than their children.
+            uint256 nodeHeight = level + 1;
+            uint256 shiftedNodeHeight = nodeHeight << 32;
+            // Collapse the current leaf/node index to its parent index.
+            uint256 parentIndex = index >> 1;
+            // Start from the shared address prefix and then fill in height
+            // and parent index.
+            uint256 addressValue = addressBase;
+            addressValue |= shiftedNodeHeight;
+            addressValue |= parentIndex;
+            bytes32 addressWord = bytes32(addressValue);
+            // Hash the two children into their parent node using the parent
+            // address.
+            node = HashSuite.hashHypertreeNode32(
+                pkSeedWord, addressWord, left, right
+            );
+            index >>= 1;
+            unchecked {
+                ++level;
+            }
+        }
+        ok = true;
+    }
+}

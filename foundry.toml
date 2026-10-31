@@ -1,26 +1,406 @@
 [profile.default]
-src = "src"
+src = "contracts"
 out = "out"
 libs = ["lib"]
+via_ir = true
 optimizer = true
 optimizer_runs = 200
 gas_limit = "18446744073709551615" # u64::MAX
+# Strip solc metadata from every artifact (inherited by all profiles).
+# Deploys go through the pre-deployed CreateX singleton (see
+# DeployBase.s.sol), so no compiled artifact is address-load-bearing —
+# a CREATE3 child address is f(CREATEX, guarded salt) only, independent
+# of any build setting. Metadata stripping remains so each artifact's RUNTIME
+# codehash (the (address, codehash) pair consumers pin from
+# DEPLOYMENTS.md) is chain- and source-path-invariant; it still depends
+# on the solc version and optimizer settings, which the production
+# profiles pin. Etherscan source verification does not need the
+# metadata hash.
+bytecode_hash = "none"
+cbor_metadata = false
+# Suppress solc warning 2018 ("state mutability can be restricted to pure")
+# in addition to Foundry's defaults. Under the hash-suite seam (mechanism
+# (c), [DESIGN §5.1]) the shared verifier stack is declared `view` so it can
+# call the SHA-256 suite's staticcall-based helpers; under a keccak build the
+# same functions reach only pure keccak256, so solc would flag them as
+# restrictable to pure. The widening is deliberate and source-only (keccak
+# bytecode is bit-identical), and the lost compiler-enforced statelessness is
+# replaced by the vm.record zero-storage guard (HashSuiteStatelessGuard).
+# solc has no per-function suppression for 2018, so it is ignored globally.
+# The remaining entries are Foundry's own defaults, restated because setting
+# this key replaces (not extends) them.
+ignored_error_codes = [
+    "license",
+    "code-size",
+    "init-code-size",
+    "transient-storage",
+    "transfer-deprecated",
+    "natspec-memory-safe-assembly-deprecated",
+    2018,
+]
+# Profile selection ([DESIGN §3.4]): the `shrincs-profile/` prefix
+# resolves to the active profile's SHRINCSParams library. Default is
+# the 256s profile. Other profiles override this remapping AND the
+# `out` dir. The `shrincs-hash/` prefix selects the hash suite (keccak
+# by default); a future SHA-256 suite remaps it to contracts/hash/sha2/.
+# Foundry replaces (not merges) the remapping array per profile, so
+# every profile that overrides remappings lists both axes. WARNING: a
+# top-level remappings.txt silently overrides these per-profile TOML
+# remappings (verified hazard, [DESIGN §2(d′)]); the profile-identity
+# test + CI guard (T3) fail closed if one exists.
+remappings = [
+    "shrincs-profile/=contracts/profiles/256s/",
+    "shrincs-hash/=contracts/hash/keccak/",
+]
+# The concrete per-profile verifiers and their deploy scripts each
+# compile only under their own profile (so the artifact carries the
+# right constants). Default is 256s, so skip the 128s SHRINCS and
+# SPHINCSPlusC verifiers and their deploy scripts here; each SHRINCS
+# verifier and its SPHINCSPlusC sibling build in the SAME profile (the
+# SHRINCS one pins the sibling's address). [profile.production] inherits
+# this skip.
+skip = [
+    "contracts/SHRINCS128sQ18Keccak.sol",
+    "contracts/SHRINCS128sQ20Keccak.sol",
+    "contracts/SPHINCSPlusC128sQ18Keccak.sol",
+    "contracts/SPHINCSPlusC128sQ20Keccak.sol",
+    "contracts/SHRINCS256sSha2.sol",
+    "contracts/SPHINCSPlusC256sSha2.sol",
+    "script/DeploySHRINCS256sSha2.s.sol",
+    "script/DeploySPHINCSPlusC256sSha2.s.sol",
+    "test/SHRINCSPinned128sQ18.t.sol",
+    "test/SHRINCSPinned128sQ20.t.sol",
+    "test/SHRINCSPinned256sSha2.t.sol",
+    "test/HashSuiteStatelessGuardSha2.t.sol",
+    "test/SHRINCSSphincs128sVectors.t.sol",
+    "test/SHRINCSSphincs256sSha2Vectors.t.sol",
+]
 
 ffi = true
 fs_permissions = [
-    { access = "read-write", path = "./test/test_vectors/" }
+    # The next three read grants (contracts/, script/, docs/) have no
+    # current test cheatcode consumer (rg vm.readFile / vm.readLine /
+    # vm.exists). Originally consumed by the deleted
+    # test/ExternalAuditRemediation.t.sol; left in place.
+    { access = "read", path = "./contracts/" },
+    { access = "read", path = "./script/" },
+    { access = "read", path = "./docs/" },
+    { access = "read-write", path = "./test/test_vectors/" },
+    # Read access to every profile's build artifacts: SHRINCSMeasurements
+    # (task 1vn) selects its profile-gated harness contracts (e.g.
+    # SHRINCSPinned256s.t.sol:SHRINCS256sPinHarness) by artifact-name
+    # string via deployCode, and vm.getCode only auto-allows artifacts
+    # compiled from `src` (contracts/); test/-sourced artifacts need an
+    # explicit grant. Each profile builds into its own `out*` dir
+    # ([profile.*] `out`) so every one needs its own entry.
+    { access = "read", path = "./out" },
+    { access = "read", path = "./out-test-128s-q18" },
+    { access = "read", path = "./out-test-128s-q20" },
+    { access = "read", path = "./out-256s-sha2" }
 ]
 
 [profile.production]
+# solc is PINNED so the 256s verifier's RUNTIME CODEHASH is chain-
+# invariant (consumers pin the codehash from DEPLOYMENTS.md). Deploys
+# use CREATE3 through CreateX, so the deployed ADDRESS depends only on
+# (CREATEX, salt) and is independent of the init code — but the pin
+# still fixes the codehash across chains. Inherits the
+# [profile.default] remapping
+# (256s) and skip (128s verifiers/deploys). Bump deliberately.
+solc = "0.8.35"
 via_ir = true
 optimizer = true
 optimizer_runs = 1000000
-contract_size_limit = 24576 # Optional: limits contract size to 24KB
 gas_limit = "18446744073709551615" # u64::MAX
-no_console = true
+
+# 128s profiles ([DESIGN §3.4]). Each overrides the `shrincs-profile/`
+# remapping and uses its own `out` dir so artifacts never collide.
+# `skip` excludes the 256s-specific tests: those either read the
+# Rust-anchored 256s vectors or run the in-Solidity stateless signer
+# (full 2^a FORS trees + fixed 8-layer hypertree), which is infeasible
+# at 128s (a = 24, d = 1). 128s stateless coverage lands with the
+# regenerated vectors in T6 ([DESIGN §3.6]). Stateful, toy-profile,
+# WOTS+, and profile-invariant tests run under every profile.
+# Each 128s `skip` excludes the non-matching concrete verifiers and
+# deploy scripts (so only this profile's verifier compiles, with this
+# profile's constants) and the 256s-specific tests. SHRINCSMeasurements
+# (task 1vn) runs here too: stateful measurements sign in-process
+# (cheap at maxSignatures = 4), stateless measurements read the 128s
+# vector JSON instead of signing in-process.
+[profile.test-128s-q18]
+out = "out-test-128s-q18"
+remappings = [
+    "shrincs-profile/=contracts/profiles/128s-q18/",
+    "shrincs-hash/=contracts/hash/keccak/",
+]
+skip = [
+    "contracts/SHRINCS256sKeccak.sol",
+    "contracts/SHRINCS128sQ20Keccak.sol",
+    "contracts/SPHINCSPlusC256sKeccak.sol",
+    "contracts/SPHINCSPlusC128sQ20Keccak.sol",
+    "script/DeploySHRINCS256sKeccak.s.sol",
+    "script/DeploySPHINCSPlusC256sKeccak.s.sol",
+    "contracts/SHRINCS256sSha2.sol",
+    "contracts/SPHINCSPlusC256sSha2.sol",
+    "script/DeploySHRINCS256sSha2.s.sol",
+    "script/DeploySPHINCSPlusC256sSha2.s.sol",
+    "test/SHRINCSSphincs256sVectors.t.sol",
+    "test/SHRINCSSphincs256sSha2Vectors.t.sol",
+    "test/SHRINCSStatelessVectorSigner.t.sol",
+    "test/SHRINCSAddressTweakMutation.t.sol",
+    "test/SHRINCSAccountSigningFacade.t.sol",
+    "test/SHRINCSAccountVectorExport.t.sol",
+    "test/HashSuiteStatelessGuard.t.sol",
+    "test/SHRINCSAccountVerifierExample.t.sol",
+    "test/SHRINCSEnvelope.t.sol",
+    "test/SHRINCSStatefulPolicyExamples.t.sol",
+    "test/SHRINCSStatelessSliceCopy.t.sol",
+    "test/SHRINCSCalldataRetag.t.sol",
+    "test/SHRINCSPinned256s.t.sol",
+    "test/SHRINCSPinned128sQ20.t.sol",
+    "test/SHRINCSPinned256sSha2.t.sol",
+    "test/HashSuiteStatelessGuardSha2.t.sol",
+]
+
+[profile.test-128s-q20]
+out = "out-test-128s-q20"
+remappings = [
+    "shrincs-profile/=contracts/profiles/128s-q20/",
+    "shrincs-hash/=contracts/hash/keccak/",
+]
+skip = [
+    "contracts/SHRINCS256sKeccak.sol",
+    "contracts/SHRINCS128sQ18Keccak.sol",
+    "contracts/SPHINCSPlusC256sKeccak.sol",
+    "contracts/SPHINCSPlusC128sQ18Keccak.sol",
+    "script/DeploySHRINCS256sKeccak.s.sol",
+    "script/DeploySPHINCSPlusC256sKeccak.s.sol",
+    "contracts/SHRINCS256sSha2.sol",
+    "contracts/SPHINCSPlusC256sSha2.sol",
+    "script/DeploySHRINCS256sSha2.s.sol",
+    "script/DeploySPHINCSPlusC256sSha2.s.sol",
+    "test/SHRINCSSphincs256sVectors.t.sol",
+    "test/SHRINCSSphincs256sSha2Vectors.t.sol",
+    "test/SHRINCSStatelessVectorSigner.t.sol",
+    "test/SHRINCSAddressTweakMutation.t.sol",
+    "test/SHRINCSAccountSigningFacade.t.sol",
+    "test/SHRINCSAccountVectorExport.t.sol",
+    "test/HashSuiteStatelessGuard.t.sol",
+    "test/SHRINCSAccountVerifierExample.t.sol",
+    "test/SHRINCSEnvelope.t.sol",
+    "test/SHRINCSStatefulPolicyExamples.t.sol",
+    "test/SHRINCSStatelessSliceCopy.t.sol",
+    "test/SHRINCSCalldataRetag.t.sol",
+    "test/SHRINCSPinned256s.t.sol",
+    "test/SHRINCSPinned256sSha2.t.sol",
+    "test/HashSuiteStatelessGuardSha2.t.sol",
+    "test/SHRINCSPinned128sQ18.t.sol",
+]
+
+# Experimental twins of the 128s profiles: same solc/via-ir/runs pin as
+# [profile.production], differing only in remapping, `out`, and skip
+# ([DESIGN §3.4]). Used only to compile and test experimental artifacts;
+# neither profile has a production deployment script.
+[profile.experimental-128s-q18]
+solc = "0.8.35"
+via_ir = true
+optimizer = true
+optimizer_runs = 1000000
+gas_limit = "18446744073709551615" # u64::MAX
+out = "out-experimental-128s-q18"
+remappings = [
+    "shrincs-profile/=contracts/profiles/128s-q18/",
+    "shrincs-hash/=contracts/hash/keccak/",
+]
+skip = [
+    "contracts/SHRINCS256sKeccak.sol",
+    "contracts/SHRINCS128sQ20Keccak.sol",
+    "contracts/SPHINCSPlusC256sKeccak.sol",
+    "contracts/SPHINCSPlusC128sQ20Keccak.sol",
+    "script/DeploySHRINCS256sKeccak.s.sol",
+    "script/DeploySPHINCSPlusC256sKeccak.s.sol",
+    "contracts/SHRINCS256sSha2.sol",
+    "contracts/SPHINCSPlusC256sSha2.sol",
+    "script/DeploySHRINCS256sSha2.s.sol",
+    "script/DeploySPHINCSPlusC256sSha2.s.sol",
+]
+
+[profile.experimental-128s-q20]
+solc = "0.8.35"
+via_ir = true
+optimizer = true
+optimizer_runs = 1000000
+gas_limit = "18446744073709551615" # u64::MAX
+out = "out-experimental-128s-q20"
+remappings = [
+    "shrincs-profile/=contracts/profiles/128s-q20/",
+    "shrincs-hash/=contracts/hash/keccak/",
+]
+skip = [
+    "contracts/SHRINCS256sKeccak.sol",
+    "contracts/SHRINCS128sQ18Keccak.sol",
+    "contracts/SPHINCSPlusC256sKeccak.sol",
+    "contracts/SPHINCSPlusC128sQ18Keccak.sol",
+    "script/DeploySHRINCS256sKeccak.s.sol",
+    "script/DeploySPHINCSPlusC256sKeccak.s.sol",
+    "contracts/SHRINCS256sSha2.sol",
+    "contracts/SPHINCSPlusC256sSha2.sol",
+    "script/DeploySHRINCS256sSha2.s.sol",
+    "script/DeploySPHINCSPlusC256sSha2.s.sol",
+]
+
+# SHA-256 suite profiles ([DESIGN §3.3]). The suite axis multiplies only
+# where a deployable exists: 256s-sha2 is the first (and, for now, only)
+# SHA-256 deployable. Both axes are listed explicitly because Foundry
+# REPLACES the remapping array per profile — `shrincs-profile/` selects the
+# 256s-sha2 params duplicate, `shrincs-hash/` selects the sha2 HashSuite.
+# The skip list excludes every keccak deployable/script (the sha2 twins
+# compile instead). The in-Solidity test signers
+# (test/helpers/SHRINCSTestSigner.sol and SHRINCSStatelessVectorSigner.sol)
+# now route their scheme hashes through the HashSuite seam (task 80u), so
+# under the sha2 suite the signer swaps to SHA-256 in lockstep with the
+# verifier and produce-then-verify tests pass; the signing-dependent suites
+# that are NOT bound to a keccak artifact are therefore un-skipped here. The
+# remaining test skips (below) stay for keccak-artifact reasons, documented
+# inline. 256s-sha2 coverage is: compile; the per-helper sha2 KATs
+# (HashSuiteKat); the vector-backed end-to-end suite SHRINCSSphincs256sSha2
+# Vectors (Rust sha2 vector through the production verifier); the seam-routed
+# self-signing suites (keygen goldens anchored to the Rust sha2 signer, plus
+# stateful and stateless produce-then-verify); the call-level gas suite
+# SHRINCSMeasurements (profile-selected artifacts, task 1vn); and the
+# non-signing structural/profile suites (incl. the params drift guard in
+# SHRINCSProfileInvariants).
+[profile.256s-sha2]
+out = "out-256s-sha2"
+remappings = [
+    "shrincs-profile/=contracts/profiles/256s-sha2/",
+    "shrincs-hash/=contracts/hash/sha2/",
+]
+skip = [
+    "contracts/SHRINCS256sKeccak.sol",
+    "contracts/SHRINCS128sQ18Keccak.sol",
+    "contracts/SHRINCS128sQ20Keccak.sol",
+    "contracts/SPHINCSPlusC256sKeccak.sol",
+    "contracts/SPHINCSPlusC128sQ18Keccak.sol",
+    "contracts/SPHINCSPlusC128sQ20Keccak.sol",
+    "script/DeploySHRINCS256sKeccak.s.sol",
+    "script/DeploySPHINCSPlusC256sKeccak.s.sol",
+    # The remaining test skips are NOT signer-hash-mismatch skips (those were
+    # lifted once the in-Solidity signers were routed onto the seam, task
+    # 80u). They stay skipped because they are bound to keccak artifacts:
+    #  - SHRINCSSphincs256s/128sVectors read shrincs_sphincs_*_keccak.json;
+    #  - Pinned* pin keccak runtime codehashes;
+    #  - StatefulPolicyExamples, AccountVerifierExample, and Envelope's
+    #    256s-vector-bound ERC-7913 integration half read the 256s keccak
+    #    vector file (Envelope's profile-independent codec unit tests split
+    #    to SHRINCSEnvelopeCodec.t.sol, which runs here; GuardPinning is now
+    #    profile-keyed on its own vector JSON and runs here too);
+    #  - CalldataRetag, ConsumerExamples, and HashSuiteStatelessGuard import
+    #    the concrete SHRINCS256sKeccak verifier (skipped under this profile);
+    #    the sha2 statelessness guard is HashSuiteStatelessGuardSha2 instead.
+    #    Measurements and StatelessDelegation no longer import a concrete
+    #    verifier (they select artifacts by SHRINCSParams.PROFILE_ID via
+    #    deployCode) and run here instead;
+    #  - AccountVectorExport, AccountInvariants, and MutationFuzz drive
+    #    stateless in-Solidity signing under randomized/export/mutation
+    #    loops; under the sha2 precompile path that is prohibitively
+    #    slow, and their sha2 correctness is already covered
+    #    deterministically by the lifted SHRINCSStatelessVectorSigner /
+    #    SHRINCSSignerKeygen suites.
+    #  - AddressTweakMutation signs stateless in-Solidity (two full
+    #    signings per test, deterministic, gated by a test-only
+    #    ADRS-word omission switch), which is prohibitively slow under
+    #    the sha2 precompile path; its sha2 correctness is covered the
+    #    same way.
+    "test/SHRINCSSphincs256sVectors.t.sol",
+    "test/SHRINCSSphincs128sVectors.t.sol",
+    "test/SHRINCSPinned256s.t.sol",
+    "test/SHRINCSPinned128sQ18.t.sol",
+    "test/SHRINCSPinned128sQ20.t.sol",
+    "test/SHRINCSStatefulPolicyExamples.t.sol",
+    "test/SHRINCSAccountVerifierExample.t.sol",
+    "test/SHRINCSAccountVectorExport.t.sol",
+    "test/SHRINCSAccountInvariants.t.sol",
+    "test/SHRINCSMutationFuzz.t.sol",
+    "test/SHRINCSAddressTweakMutation.t.sol",
+    "test/SHRINCSEnvelope.t.sol",
+    "test/SHRINCSCalldataRetag.t.sol",
+    "test/SHRINCSConsumerExamples.t.sol",
+    "test/HashSuiteStatelessGuard.t.sol",
+]
+
+[profile.production-256s-sha2]
+solc = "0.8.35"
+via_ir = true
+optimizer = true
+optimizer_runs = 1000000
+gas_limit = "18446744073709551615" # u64::MAX
+out = "out-256s-sha2-prod"
+remappings = [
+    "shrincs-profile/=contracts/profiles/256s-sha2/",
+    "shrincs-hash/=contracts/hash/sha2/",
+]
+skip = [
+    "contracts/SHRINCS256sKeccak.sol",
+    "contracts/SHRINCS128sQ18Keccak.sol",
+    "contracts/SHRINCS128sQ20Keccak.sol",
+    "contracts/SPHINCSPlusC256sKeccak.sol",
+    "contracts/SPHINCSPlusC128sQ18Keccak.sol",
+    "contracts/SPHINCSPlusC128sQ20Keccak.sol",
+    "script/DeploySHRINCS256sKeccak.s.sol",
+    "script/DeploySPHINCSPlusC256sKeccak.s.sol",
+]
+
+# Per-MR security gate: the 256s (default) profile plus bounded,
+# deterministic fuzz/invariant runs. Inherits src/remappings/skip/
+# via_ir/optimizer/gas_limit/ffi/fs_permissions from [profile.default]
+# (Foundry merges the selected profile over default). Foundry >= 1.7.0
+# randomizes the fuzz seed by default, so per-MR determinism requires
+# pinning FOUNDRY_FUZZ_SEED in .gitlab-ci.yml; bump it deliberately in
+# its own commit to rotate cases. failure_persist_dir is cached in CI so
+# any counterexample a nightly (or prior MR) found replays first here.
+[profile.ci]
+
+[profile.ci.fuzz]
+runs = 512
+max_test_rejects = 65536
+failure_persist_dir = "cache/fuzz"
+
+[profile.ci.invariant]
+runs = 64
+depth = 32
+fail_on_revert = true
+failure_persist_dir = "cache/invariant"
+shrink_run_limit = 5000
+
+# Nightly deep campaign: the 256s (default) profile plus long randomized
+# runs with a coverage-guided corpus. The nightly pipeline leaves
+# FOUNDRY_FUZZ_SEED unset (random). corpus_dir enables coverage-guided
+# mutation (foundry >= 1.7.0 for stateless fuzz, >= 1.3.0 for
+# invariants); both corpus and failure dirs are cached across runs.
+[profile.nightly]
+
+[profile.nightly.fuzz]
+runs = 65536
+failure_persist_dir = "cache/fuzz"
+corpus_dir = "cache/fuzz-corpus"
+corpus_gzip = true
+
+[profile.nightly.invariant]
+runs = 2048
+depth = 128
+fail_on_revert = true
+failure_persist_dir = "cache/invariant"
+corpus_dir = "cache/invariant-corpus"
+corpus_gzip = true
+timeout = 10800 # 3h wall-clock cap per invariant test
 
 [fmt]
-line_length = 120
+# 78-char cap (CODINGSTANDARDS.md §3). Set to 77 because forge fmt
+# 1.7.1 excludes the trailing token (';', '{') from its width
+# accounting; 77 keeps canonical output within the 78-char hard limit
+# enforced by scripts/check-line-length.sh.
+line_length = 77
 tab_width = 4
 bracket_spacing = false
 int_types = 'long'
@@ -28,3 +408,8 @@ multiline_func_header = 'attributes_first'
 quote_style = 'double'
 number_underscore = 'preserve'
 single_line_statement_blocks = 'preserve'
+
+[lint]
+# PascalCase spec-parameter constants are codified in
+# CODINGSTANDARDS.md §2 and deliberately override the style guide.
+exclude_lints = ["screaming-snake-case-const"]

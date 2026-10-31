@@ -1,46 +1,251 @@
-# GitLab CI for the main branch: build the contracts and run the Foundry
-# test suite on every merge request and on main itself.
-#
-# The project sets only_allow_merge_if_pipeline_succeeds, so a branch with
-# no pipeline can never be merged. This file gives main a pipeline. The
-# active development branch, shrincs-main, carries a much larger config
-# covering format, lint, per-profile builds, Slither and nightly fuzzing;
-# keep this one minimal, matching the smaller surface on main.
-#
-# This job does not use the ghcr.io/foundry-rs/foundry image. That image
-# runs as a non-root user, and testVectors() reads
-# test/test_vectors/wotsplus_keccak256.json through vm.ffi and jq, which
-# the image does not ship and an unprivileged job cannot install. Use the
-# same base-image-plus-foundryup pattern the slither job on shrincs-main
-# uses instead. python:3.12-slim is multi-arch, so foundryup fetches the
-# matching foundry binary and no runner arch tag is needed.
-#
-# Pin the foundry version deliberately, together with local toolchains.
+# GitLab CI: runs the CODINGSTANDARDS.md §8 gates. Per-MR: format, build,
+# lint with zero-warnings enforcement, hard line cap, tests (including the
+# ci-profile fuzz/invariant runs), and Slither static analysis. Schedule
+# only: nightly deep-fuzz, medusa, and advisory hevm campaigns. Image
+# versions are pinned; bump them together with local toolchains so fmt
+# output stays canonical.
 
 include:
   - project: quip.network/ci-templates
-    ref: v1.0.0
+    ref: v1.1.0
     file: templates/dependency-gate.yml
 
 stages:
   - verify
+  - analyze
+  - nightly
 
 variables:
   GIT_SUBMODULE_STRATEGY: recursive
+  # Deterministic per-MR fuzzing: foundry >= 1.7.0 randomizes the fuzz
+  # seed by default, so pin it here. A rerun of the same commit then
+  # replays identical fuzz cases and any flake is a real bug. Bump this
+  # deliberately, in its own commit, to rotate the explored cases.
+  # Value: "SHRNCS" as hex.
+  FOUNDRY_FUZZ_SEED: "0x5348524e4353"
 
-build-and-test:
+.foundry:
   stage: verify
+  image:
+    name: ghcr.io/foundry-rs/foundry:v1.7.1
+    entrypoint: [""]
+  before_script:
+    - git config --global --add safe.directory "$CI_PROJECT_DIR"
+    - forge --version
+
+# Profile-independent gates, run once. Format, hard line cap, and the
+# profile-selection hazard guard: a top-level remappings.txt silently
+# overrides the per-profile TOML remappings, so a profile build could
+# compile with another profile's constants (verified hazard,
+# [DESIGN §2(d′)/§3.5]). Per-profile remappings live only in
+# foundry.toml; fail closed if a remappings.txt exists. The
+# SHRINCSProfileInvariants identity test is the in-Solidity backstop
+# for the same hazard.
+format-and-checks:
+  extends: .foundry
+  rules:
+    - if: $CI_PIPELINE_SOURCE != "schedule"
+  script:
+    - test ! -f remappings.txt
+    - forge fmt --check
+    - scripts/check-line-length.sh
+    - scripts/check-production-profiles.sh
+
+# Every profile must build, lint clean, and pass its test set. Lint runs
+# per profile because each concrete verifier and its deploy script only
+# compile under their own profile (the others are skipped); lint emits a
+# cosmetic "AST source not found" note for the skipped files but exits 0.
+# The 256s-specific vector/stateless tests are skipped under the 128s
+# profiles via foundry.toml until the T6 vector regeneration
+# ([DESIGN §3.6]). The 256s leg runs under the `ci` profile: 256s
+# params (inherited from default) plus bounded, deterministic
+# fuzz/invariant runs (foundry.toml). FOUNDRY_FUZZ_SEED (global) pins
+# the seed; the failure_persist cache (cache: when: always, key
+# fuzz-failures-ci shared with fuzz-deep) replays any counterexample a
+# nightly or prior MR found before exploring new cases — see the
+# nightly section below for the promotion path. The `256s-sha2`
+# leg builds the SHA-256 suite and runs its coverage — compile, the
+# per-helper sha2 KATs, the vector-backed end-to-end suite
+# (SHRINCSSphincs256sSha2Vectors, Rust sha2 vector through the production
+# verifier), and the non-signing structural/profile suites; in-Solidity
+# signing suites stay skipped (the test signers are keccak-hardcoded).
+build-lint-test:
+  extends: .foundry
+  rules:
+    - if: $CI_PIPELINE_SOURCE != "schedule"
+  parallel:
+    matrix:
+      - FOUNDRY_PROFILE: ["ci", "test-128s-q18", "test-128s-q20", "256s-sha2"]
+  script:
+    - forge build
+    - forge lint --deny warnings contracts/ test/ script/
+    - forge test
+  cache:
+    key: "fuzz-failures-$FOUNDRY_PROFILE"
+    when: always
+    paths:
+      - cache/fuzz
+      - cache/invariant
+
+# Static analysis (Slither 0.11.5), matrixed over the same profiles as
+# build-lint-test: crytic-compile shells out to `forge`, which honors
+# FOUNDRY_PROFILE for remappings/skip, and each profile's skip list
+# excludes a different set of concrete verifiers/deploy scripts
+# (foundry.toml) — a single default-profile run would never analyze the
+# 128s and sha2 deployables. Slither reads the solc compact AST via
+# crytic-compile, so via_ir does not change what it sees. slither.config.json
+# excludes the assembly/naming/pragma informational tiers and filters
+# lib/ and test/. The four false-positive medium findings
+# (divide-before-multiply, uninitialized-local) are suppressed inline with
+# justifications; dead-code stays enabled (F-15) and surfaces as
+# informational SARIF. --fail-medium gates the pipeline on any medium+
+# finding. Each leg writes slither-$FOUNDRY_PROFILE.sarif so matrix legs
+# don't clobber each other's artifact. python:3.12-slim is multi-arch and
+# foundryup installs the matching foundry binary, so no runner arch tag is
+# needed.
+slither:
+  stage: analyze
   image: python:3.12-slim
+  rules:
+    - if: $CI_PIPELINE_SOURCE != "schedule"
+  parallel:
+    matrix:
+      - FOUNDRY_PROFILE: ["ci", "test-128s-q18", "test-128s-q20", "256s-sha2"]
   before_script:
     - apt-get update && apt-get install -y --no-install-recommends
-      curl git ca-certificates jq
+      curl git ca-certificates
     - curl -L https://foundry.paradigm.xyz | bash
     - export PATH="$HOME/.foundry/bin:$PATH"
     - foundryup --install v1.7.1
+    - pip install --no-cache-dir slither-analyzer==0.11.5
+  script:
+    - git config --global --add safe.directory "$CI_PROJECT_DIR"
+    - slither . --config-file slither.config.json --fail-medium
+      --sarif "slither-$FOUNDRY_PROFILE.sarif"
+  artifacts:
+    when: always
+    reports:
+      sarif: slither-$FOUNDRY_PROFILE.sarif
+    paths:
+      - slither-$FOUNDRY_PROFILE.sarif
+
+# ---------------------------------------------------------------------------
+# Nightly campaigns (schedule-only). Long randomized runs that do not block
+# MRs directly: fuzz-deep persists a counterexample into cache/fuzz and
+# cache/invariant under the fuzz-failures-ci key — the same key
+# build-lint-test's ci-profile leg restores from — and `cache: when:
+# always` uploads it even though the job that found it fails (GitLab's
+# default is on_success, which would otherwise drop it). The next per-MR
+# pipeline then restores that cache and fails until fixed (the promotion
+# path). Only the ci leg is covered this way: nightly runs the default
+# profile's test set, whose failure dirs are the cache/fuzz +
+# cache/invariant that profile.ci also uses; the test-128s-q18/q20/
+# 256s-sha2 legs have their own disjoint cache keys and are not promoted
+# into. EVM execution is arch-deterministic, so results are comparable
+# across runners; arch tags below pin only tool-availability (medusa
+# binary and hevm ship x86_64-only). Tag choice verified against the
+# group's runner fleet (2026-07-10): `docker` + `linux` + `x86_64` selects
+# exactly lovelace and finney (Linux/amd64 Docker executors). A bare
+# `x86_64` tag would also match hopper (Windows) and tesla-x86_64 (macOS
+# on arm64 hardware), neither of which can run these Docker-image jobs.
+# ---------------------------------------------------------------------------
+
+# Deep forge fuzz + invariant campaign under [profile.nightly] (random seed,
+# coverage-guided corpus). Foundry is multi-arch, so no arch tag is needed.
+# Two cache entries: fuzz-failures-ci carries the failure_persist dirs (see
+# the promotion path above) with `when: always` so a failing run still
+# uploads them; nightly-corpus carries the coverage-guided corpus dirs.
+fuzz-deep:
+  stage: nightly
+  image:
+    name: ghcr.io/foundry-rs/foundry:v1.7.1
+    entrypoint: [""]
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+  timeout: 5h
+  variables:
+    GIT_SUBMODULE_STRATEGY: recursive
+    FOUNDRY_FUZZ_SEED: "" # randomized nightly
+  script:
     - git config --global --add safe.directory "$CI_PROJECT_DIR"
     - forge --version
-    - jq --version
-  script:
+    - FOUNDRY_PROFILE=nightly forge test
+  cache:
+    - key: fuzz-failures-ci
+      when: always
+      paths:
+        - cache/fuzz
+        - cache/invariant
+    - key: nightly-corpus
+      when: always
+      paths:
+        - cache/fuzz-corpus
+        - cache/invariant-corpus
+  artifacts:
+    when: on_failure
+    paths:
+      - cache/fuzz
+      - cache/invariant
+
+# Medusa v1.5.1 coverage-guided campaign over the state-machine harness
+# (SHRINCSMedusaHarness). eth-security-toolbox bundles medusa + crytic-compile
+# + foundry + solc; foundryup pins forge to v1.7.1 for a via-ir-honest build.
+# medusa ships an x86_64 binary, so this job is pinned to an x86_64 runner.
+medusa:
+  stage: nightly
+  image: ghcr.io/trailofbits/eth-security-toolbox:nightly
+  tags:
+    - docker
+    - linux
+    - x86_64
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+  timeout: 5h
+  before_script:
+    - git config --global --add safe.directory "$CI_PROJECT_DIR"
     - export PATH="$HOME/.foundry/bin:$PATH"
+    - foundryup --install v1.7.1
+  script:
+    - medusa fuzz --config medusa.json
+  cache:
+    key: medusa-corpus
+    when: always
+    paths:
+      - medusa-corpus
+  artifacts:
+    when: on_failure
+    paths:
+      - medusa-corpus
+
+# Advisory hevm 0.58.0 symbolic checks over the base-w/readBits bounds slice
+# (SHRINCSSymbolic prove_ functions). hevm ships an x86_64-only static binary
+# and needs an SMT solver (z3), so this job installs both on an x86_64 runner
+# and is allow_failure (upstream is advisory here). The release asset URL
+# below was verified against the argotorg/hevm release/0.58.0 assets on
+# 2026-07-10 (hevm-x86_64-linux is published there).
+hevm:
+  stage: nightly
+  image: ubuntu:24.04
+  tags:
+    - docker
+    - linux
+    - x86_64
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+  timeout: 90m
+  allow_failure: true
+  variables:
+    GIT_SUBMODULE_STRATEGY: recursive
+  before_script:
+    - apt-get update && apt-get install -y --no-install-recommends
+      curl git z3 ca-certificates
+    - curl -L https://foundry.paradigm.xyz | bash
+    - export PATH="$HOME/.foundry/bin:$PATH"
+    - foundryup --install v1.7.1
+    - curl -L -o /usr/local/bin/hevm
+      https://github.com/argotorg/hevm/releases/download/release/0.58.0/hevm-x86_64-linux
+    - chmod +x /usr/local/bin/hevm
+  script:
+    - git config --global --add safe.directory "$CI_PROJECT_DIR"
     - forge build
-    - forge test -vv
+    - hevm test --root . --match "prove_" --smttimeout 120000

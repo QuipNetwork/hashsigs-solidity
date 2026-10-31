@@ -1,3 +1,9 @@
+out/
+# Per-profile build output dirs (foundry.toml 128s profiles).
+out-*/
+
+.DS_Store
+
 node_modules
 .env
 
@@ -8,5 +14,35 @@ node_modules
 # Coverage output
 /coverage
 /coverage.json
+lcov.info
+
+# Slither SARIF report (CI artifact, not committed)
+slither.sarif
+
+# Medusa corpus (CI cache, not committed)
+medusa-corpus/
 
 test/test_vectors/tmp.json
+
+# Editor autosave/backup/lock files
+*#
+.#*
+*~
+
+# Agent tooling and local task tracking: not part of the library.
+# Tracked agent-facing files: AGENTS.md and the tool-neutral skills
+# under .agents/skills/. Everything below is local state.
+.agents/skills/beads/
+.claude/
+CLAUDE.md
+.codex/
+.serena/
+.beads/
+.beads-credential-key
+.dolt/
+*.db
+
+# Cargo artifacts (no Rust crate lives here; keeps stray builds out)
+.cargo/
+target/
+Cargo.lock

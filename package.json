@@ -1,15 +1,15 @@
 {
   "name": "@quip.network/hashsigs-solidity",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": false,
-  "description": "A Solidity implementation of the Winternitz One-Time Signature Plus (WOTS+) scheme",
+  "description": "A Solidity implementation of WOTS+ and the SHRINCS verifier-oriented signature construction",
   "license": "AGPL-3.0-or-later",
   "author": "quip.network",
   "files": [
-    "contracts/*.sol",
+    "contracts",
     "package.json",
     "README.md",
-    "LICENSE"
+    "COPYING"
   ],
   "scripts": {
     "build": "forge build",
@@ -25,6 +25,11 @@
     "ethereum",
     "smart-contracts",
     "wots",
+    "wots-plus",
+    "shrincs",
+    "xmss",
+    "sphincs",
+    "verifier",
     "cryptography",
     "signatures",
     "hash",
