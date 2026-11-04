@@ -18,6 +18,7 @@ pragma solidity ^0.8.28;
 
 import {SHRINCSParams} from "shrincs-profile/SHRINCSParams.sol";
 import {Hash} from "./Hash.sol";
+import {StatelessLayout} from "./StatelessLayout.sol";
 import {HashSuite} from "shrincs-hash/HashSuite.sol";
 
 library FORSMinusC {
@@ -35,274 +36,6 @@ library FORSMinusC {
         uint32 leafIndex;
         // Message-derived FORS digest bits used to choose revealed leaves.
         bytes digest;
-    }
-
-    struct ForsEntry {
-        // Revealed secret leaf for one FORS tree.
-        bytes secretLeaf;
-        // Authentication path from that leaf to the tree root.
-        bytes[] authPath;
-    }
-
-    struct ForsSignature {
-        // Per-signature randomizer used in FORS message hashing.
-        bytes randomizer;
-        // Grinding counter for the FORS-C constrained digest.
-        uint32 counter;
-        // Revealed FORS leaves and authentication paths.
-        ForsEntry[] entries;
-    }
-
-    // verifyForsCAndReturnRoot: Verify the FORS-C portion of a stateless
-    // SHRINCS signature.
-    // FORS-C (FORS+C in [SPHINCSPLUSC §4]): the omitted final tree is
-    // forced to select leaf 0 by grinding the digest so its last a
-    // bits (a = FORS_TREE_HEIGHT) are zero. Construction: [SHRINCS §9.2].
-    // 1. Check the compact FORS-C signature shape and randomizer length.
-    // 2. Recompute the FORS digest bits and the hypertree coordinates the
-    // signer committed to.
-    // 3. Enforce the FORS-C convention that the omitted final tree selects
-    // leaf 0.
-    // 4. Rebuild each signed FORS tree root from its revealed leaf and auth
-    // path.
-    // 5. Hash those per-tree roots together into the reconstructed FORS root.
-    // 6. Return the FORS root plus the digest-derived hypertree coordinates
-    // (the seed for hypertree verification) together with a success flag.
-    /// @dev T6 wire change: the hypertree coordinates are no longer carried
-    /// in the signature. This returns the digest-derived coordinates for the
-    /// caller to seed Hypertree.verifyHypertree; they are a pure function of
-    /// the public key, message, and signature (randomizer, counter), never
-    /// attacker-chosen.
-    /// @dev Precondition: pkSeed is exactly 32 bytes, validPublicKey-checked
-    /// or a 32-byte key slice, as the fixed calldata read below assumes.
-    function verifyForsCAndReturnRoot(
-        bytes calldata pkSeed,
-        bytes calldata hypertreeRoot,
-        bytes memory message,
-        FORSMinusC.ForsSignature calldata signature
-    )
-        internal
-        view
-        returns (
-            bytes32 forsRoot,
-            uint64 treeIndex,
-            uint32 leafIndex,
-            bool ok
-        )
-    {
-        // FORS-C omits the final FORS tree by forcing its digest-selected
-        // leaf index to zero. Verification therefore expects only k - 1
-        // revealed entries and rejects any digest whose omitted final tree
-        // would require a nonzero leaf.
-        uint256 signedTrees = uint256(SHRINCSParams.NUM_FORS_TREES) - 1;
-        // Reject malformed dynamic fields before fixed-count iteration or
-        // fixed-width calldata reads. This prevents short arrays from
-        // panicking and prevents trailing entries or randomizer bytes from
-        // becoming ignored encoding malleability.
-        if (
-            signature.entries.length != signedTrees
-                || signature.randomizer.length != 32
-        ) return (bytes32(0), 0, 0, false);
-
-        // Recompute the FORS digest and the hypertree coordinates that the
-        // signer committed to. These digest-derived coordinates are the sole
-        // source of the layer-0 hypertree address (T6: no longer carried in
-        // the signature); they are returned to seed hypertree verification.
-        FORSMinusC.ForsDigest memory digest = forsDigest(
-            pkSeed,
-            hypertreeRoot,
-            message,
-            signature.randomizer,
-            signature.counter
-        );
-        treeIndex = digest.treeIndex;
-        leafIndex = digest.leafIndex;
-        // forsHeight: the SPHINCSPLUS `a` parameter [SPHINCSPLUS §5.5]
-        // — FORS tree height.
-        uint256 forsHeight = uint256(SHRINCSParams.FORS_TREE_HEIGHT);
-        // The omitted final FORS tree must always select leaf 0 in the
-        // compressed FORS-C layout.
-        if (
-            Hash.readBits32(
-                    digest.digest,
-                    signedTrees * forsHeight,
-                    SHRINCSParams.FORS_TREE_HEIGHT
-                ) != 0
-        ) {
-            return (bytes32(0), 0, 0, false);
-        }
-
-        // "fors-pk" || pkSeed || FORS_ROOTS ADRS || root_0 || ...
-        uint256 forsPkInputLen = 71 + signedTrees * 32;
-        uint256 forsPkInput;
-        // keccak256 input ("fors-pk" tag [§1 tags], forsPkInputLen bytes):
-        //   [0..7)         "fors-pk"
-        //   [7..39)        pkSeed
-        //   [39..71)       FORS_ROOTS address (type 4)
-        //   [71..71+32*t)  reconstructed per-tree roots (t = signedTrees)
-        // forsPkInputLen = 71 + signedTrees * 32.
-        // Memory-safe: allocates roundup32(forsPkInputLen) bytes at the
-        // free-memory pointer and advances the pointer past them; the loop
-        // below fills the per-tree roots and the final hash reads exactly
-        // forsPkInputLen bytes.
-        assembly ("memory-safe") {
-            // Allocate a scratch buffer starting at the free-memory pointer.
-            forsPkInput := mload(0x40)
-            // Write the domain tag prefix at the start of the buffer.
-            mstore(forsPkInput, "fors-pk")
-            // Copy the 32-byte public seed immediately after the 7-byte tag.
-            calldatacopy(add(forsPkInput, 7), pkSeed.offset, 32)
-            // FORS is below hypertree layer zero. Bind the compression to
-            // its digest-derived tree and keypair coordinates.
-            // ADRS bit layout [FIPS205 §4.2]: layer<<224 | tree<<128 |
-            // type<<96 | keypair<<64 | chain<<32 | step
-            mstore(
-                add(forsPkInput, 39),
-                or(
-                    shl(128, treeIndex),
-                    or(shl(96, AddressTypeForsRoots), shl(64, leafIndex))
-                )
-            )
-            // Bump the free-memory pointer to the next 32-byte aligned slot
-            // after this buffer.
-            mstore(
-                0x40,
-                add(forsPkInput, and(add(forsPkInputLen, 31), not(31)))
-            )
-        }
-
-        for (uint256 tree = 0; tree < signedTrees;) {
-            // Read one revealed FORS entry for this tree.
-            FORSMinusC.ForsEntry calldata entry = signature.entries[tree];
-            // Read the digest-selected leaf for this FORS tree.
-            uint32 entryLeafIndex = Hash.readBits32(
-                digest.digest,
-                tree * forsHeight,
-                SHRINCSParams.FORS_TREE_HEIGHT
-            );
-            // casting to 'uint32' is safe because the supported FORS tree
-            // height is 14 bits
-            // forge-lint: disable-next-line(unsafe-typecast)
-            uint32 treeHeight = uint32(forsHeight);
-            // casting to 'uint32' is safe because tree ranges over the fixed
-            // 21 signed FORS trees
-            // forge-lint: disable-next-line(unsafe-typecast)
-            uint32 forsTreeIndex = uint32(tree);
-            // Rebuild this FORS tree root from the revealed leaf and
-            // authentication path.
-            bytes32 root = forsEntryRoot32(
-                treeHeight,
-                pkSeed,
-                treeIndex,
-                leafIndex,
-                forsTreeIndex,
-                entryLeafIndex,
-                entry
-            );
-            // Append each reconstructed root into the final FORS public-key
-            // hash input.
-            // Memory-safe: writes one 32-byte root into the forsPkInput
-            // buffer allocated above (slot 71 + tree*32).
-            assembly ("memory-safe") {
-                // Write this 32-byte root at slot `tree` after the fixed
-                // tag-and-seed prefix.
-                mstore(add(add(forsPkInput, 71), mul(tree, 32)), root)
-            }
-            unchecked {
-                ++tree;
-            }
-        }
-
-        // Hash the per-tree roots into the reconstructed FORS public value.
-        // The buffer above is suite-independent; only this finalizer swaps
-        // per suite. Output truncated to HASH_LEN bytes, high-aligned
-        // (maskHash inside the suite helper); for 256s this folds to a no-op.
-        return (
-            HashSuite.hashForsPk32(forsPkInput, forsPkInputLen),
-            treeIndex,
-            leafIndex,
-            true
-        );
-    }
-
-    // forsEntryRoot32: Rebuild one FORS tree root from a revealed secret leaf
-    // and auth path.
-    // 1. Construct the shared address prefix for this hypertree tree/leaf
-    // location.
-    // 2. Hash the revealed secret leaf into its public FORS leaf value.
-    // 3. Walk upward through the authentication path one level at a time.
-    // 4. Rebuild each parent node with the correct left/right ordering and
-    // address.
-    // 5. Return the reconstructed root for this FORS tree.
-    function forsEntryRoot32(
-        uint32 height,
-        bytes calldata pkSeed,
-        uint64 treeIndex,
-        uint32 leafIndex,
-        uint32 forsTreeIndex,
-        uint32 entryLeafIndex,
-        FORSMinusC.ForsEntry calldata entry
-    ) internal view returns (bytes32 node) {
-        // Build the shared address prefix used by all nodes in this FORS tree
-        // location.
-        uint256 addressBase = forsAddressBase(treeIndex, leafIndex);
-        // Shift this FORS tree into the low-index range reserved for its
-        // leaves.
-        uint256 shiftedForsTree = uint256(forsTreeIndex) << height;
-        // Select the concrete low leaf index inside this FORS tree.
-        uint256 leafLowIndex = shiftedForsTree + uint256(entryLeafIndex);
-        // Finish the address for the revealed leaf.
-        uint256 leafAddressValue = addressBase | leafLowIndex;
-        // Hash the revealed secret leaf into the corresponding public FORS
-        // leaf value.
-        node = HashSuite.hashForsLeaf32(
-            pkSeed, bytes32(leafAddressValue), entry.secretLeaf
-        );
-        // Track the current node position as we walk upward through the auth
-        // path.
-        uint256 index = entryLeafIndex;
-        // Hoist the calldata array reference so the loop reads element data
-        // from a fixed base pointer instead of re-resolving the struct member
-        // offset on every iteration.
-        bytes[] calldata authPath = entry.authPath;
-        for (uint256 level = 0; level < height;) {
-            // Read the sibling node supplied for this level.
-            bytes calldata authNode = authPath[level];
-            bytes32 sibling;
-            // Memory-safe: reads one calldata word into a stack variable;
-            // no memory is written.
-            assembly ("memory-safe") {
-                // Load the 32-byte sibling node directly from calldata.
-                sibling := calldataload(authNode.offset)
-            }
-            // Place the current node and sibling in canonical left/right
-            // order for this level.
-            (bytes32 left, bytes32 right) =
-                index & 1 == 0 ? (node, sibling) : (sibling, node);
-            // Parent nodes live one level higher than their children.
-            uint256 nodeHeight = level + 1;
-            uint256 shiftedNodeHeight = nodeHeight << 32;
-            // Shift this FORS tree into the low-index range reserved for this
-            // parent level.
-            uint256 shiftedTree =
-                uint256(forsTreeIndex) << (height - nodeHeight);
-            // Collapse the current leaf/node index to its parent index.
-            uint256 parentIndex = index >> 1;
-            uint256 parentLowIndex = shiftedTree + parentIndex;
-            // Start from the shared address prefix and then fill in height
-            // and low index.
-            uint256 addressValue = addressBase;
-            addressValue |= shiftedNodeHeight;
-            addressValue |= parentLowIndex;
-            bytes32 addressWord = bytes32(addressValue);
-            // Hash the two children into their parent node using the parent
-            // address.
-            node = HashSuite.hashForsNode32(pkSeed, addressWord, left, right);
-            index >>= 1;
-            unchecked {
-                ++level;
-            }
-        }
     }
 
     // forsAddressBase: Construct the shared address prefix for one FORS
@@ -517,6 +250,248 @@ library FORSMinusC {
             offset += chunk;
             unchecked {
                 ++blockCounter;
+            }
+        }
+    }
+
+    // verifyForsCAndReturnRoot: Verify the FORS-C portion of a stateless
+    // SHRINCS signature.
+    // FORS-C (FORS+C in [SPHINCSPLUSC §4]): the omitted final tree is
+    // forced to select leaf 0 by grinding the digest so its last a
+    // bits (a = FORS_TREE_HEIGHT) are zero. Construction: [SHRINCS §9.2].
+    // `fors` is the fixed-layout FORS slice of a StatelessLayout payload.
+    // 1. Reject any slice whose length is not exactly FORS_LEN.
+    // 2. Recompute the FORS digest bits and the hypertree coordinates the
+    // signer committed to.
+    // 3. Enforce the FORS-C convention that the omitted final tree selects
+    // leaf 0.
+    // 4. Rebuild each signed FORS tree root from its fixed-offset entry.
+    // 5. Hash those per-tree roots together into the reconstructed FORS root.
+    // 6. Return the FORS root plus the digest-derived hypertree coordinates
+    // (the seed for hypertree verification) together with a success flag.
+    /// @dev The hypertree coordinates are not carried in the signature. This
+    /// returns the digest-derived coordinates for the caller to seed
+    /// Hypertree.verifyHypertree; they are a pure function of the public
+    /// key, message, and signature (randomizer, counter), never
+    /// attacker-chosen. Never reverts on malformed input: the length check is
+    /// the only input guard, and it proves every fixed-offset read below in
+    /// bounds. Precondition: pkSeed and hypertreeRoot are 32-byte slices,
+    /// validPublicKey-checked or key slices.
+    function verifyForsCAndReturnRoot(
+        bytes calldata pkSeed,
+        bytes calldata hypertreeRoot,
+        bytes memory message,
+        bytes calldata fors
+    )
+        internal
+        view
+        returns (
+            bytes32 forsRoot,
+            uint64 treeIndex,
+            uint32 leafIndex,
+            bool ok
+        )
+    {
+        // The single input guard: a fixed-layout FORS slice has exactly one
+        // valid length, so a short, long, or empty slice fails here.
+        if (fors.length != StatelessLayout.FORS_LEN) {
+            return (bytes32(0), 0, 0, false);
+        }
+        // FORS-C omits the final FORS tree by forcing its digest-selected
+        // leaf index to zero. Verification therefore expects only k - 1
+        // revealed entries and rejects any digest whose omitted final tree
+        // would require a nonzero leaf.
+        uint256 signedTrees = StatelessLayout.FORS_SIGNED_TREES;
+        // Each entry is secretLeaf || authPath[a], all 32-byte words.
+        uint256 entryLen = StatelessLayout.FORS_ENTRY_LEN;
+
+        // Recompute the FORS digest and the hypertree coordinates that the
+        // signer committed to. These digest-derived coordinates are the sole
+        // source of the layer-0 hypertree address; they are returned to seed
+        // hypertree verification.
+        FORSMinusC.ForsDigest memory digest = forsDigest(
+            pkSeed,
+            hypertreeRoot,
+            message,
+            fors[0:StatelessLayout.FORS_COUNTER_OFFSET],
+            StatelessLayout.readUint32(
+                fors, StatelessLayout.FORS_COUNTER_OFFSET
+            )
+        );
+        treeIndex = digest.treeIndex;
+        leafIndex = digest.leafIndex;
+        // The omitted final FORS tree must always select leaf 0 in the
+        // compressed FORS-C layout. Its a-bit choice (a = FORS_TREE_HEIGHT
+        // [SPHINCSPLUS §5.5]) follows the k - 1 signed choices.
+        if (
+            Hash.readBits32(
+                    digest.digest,
+                    signedTrees * SHRINCSParams.FORS_TREE_HEIGHT,
+                    SHRINCSParams.FORS_TREE_HEIGHT
+                ) != 0
+        ) {
+            return (bytes32(0), 0, 0, false);
+        }
+
+        // "fors-pk" || pkSeed || FORS_ROOTS ADRS || root_0 || ...
+        uint256 forsPkInputLen = 71 + signedTrees * 32;
+        uint256 forsPkInput;
+        // keccak256 input ("fors-pk" tag [§1 tags], forsPkInputLen bytes):
+        //   [0..7)         "fors-pk"
+        //   [7..39)        pkSeed
+        //   [39..71)       FORS_ROOTS address (type 4)
+        //   [71..71+32*t)  reconstructed per-tree roots (t = signedTrees)
+        // forsPkInputLen = 71 + signedTrees * 32.
+        // Memory-safe: allocates roundup32(forsPkInputLen) bytes at the
+        // free-memory pointer and advances the pointer past them; the loop
+        // below fills the per-tree roots and the final hash reads exactly
+        // forsPkInputLen bytes.
+        assembly ("memory-safe") {
+            // Allocate a scratch buffer starting at the free-memory pointer.
+            forsPkInput := mload(0x40)
+            // Write the domain tag prefix at the start of the buffer.
+            mstore(forsPkInput, "fors-pk")
+            // Copy the 32-byte public seed immediately after the 7-byte tag.
+            calldatacopy(add(forsPkInput, 7), pkSeed.offset, 32)
+            // FORS is below hypertree layer zero. Bind the compression to
+            // its digest-derived tree and keypair coordinates.
+            // ADRS bit layout [FIPS205 §4.2]: layer<<224 | tree<<128 |
+            // type<<96 | keypair<<64 | chain<<32 | step
+            mstore(
+                add(forsPkInput, 39),
+                or(
+                    shl(128, treeIndex),
+                    or(shl(96, AddressTypeForsRoots), shl(64, leafIndex))
+                )
+            )
+            // Bump the free-memory pointer to the next 32-byte aligned slot
+            // after this buffer.
+            mstore(
+                0x40,
+                add(forsPkInput, and(add(forsPkInputLen, 31), not(31)))
+            )
+        }
+
+        for (uint256 tree = 0; tree < signedTrees;) {
+            // Locate this tree's fixed-width entry inside the FORS slice.
+            uint256 entryOffset =
+                StatelessLayout.FORS_ENTRIES_OFFSET + tree * entryLen;
+            // Read the digest-selected leaf for this FORS tree.
+            uint32 entryLeafIndex = Hash.readBits32(
+                digest.digest,
+                tree * SHRINCSParams.FORS_TREE_HEIGHT,
+                SHRINCSParams.FORS_TREE_HEIGHT
+            );
+            // casting to 'uint32' is safe because tree ranges over the fixed
+            // signed FORS trees
+            // forge-lint: disable-next-line(unsafe-typecast)
+            uint32 forsTreeIndex = uint32(tree);
+            // Rebuild this FORS tree root from the revealed leaf and
+            // authentication path.
+            bytes32 root = forsEntryRoot32(
+                pkSeed,
+                treeIndex,
+                leafIndex,
+                forsTreeIndex,
+                entryLeafIndex,
+                fors[entryOffset:entryOffset + entryLen]
+            );
+            // Append each reconstructed root into the final FORS public-key
+            // hash input.
+            // Memory-safe: writes one 32-byte root into the forsPkInput
+            // buffer allocated above (slot 71 + tree*32).
+            assembly ("memory-safe") {
+                // Write this 32-byte root at slot `tree` after the fixed
+                // tag-and-seed prefix.
+                mstore(add(add(forsPkInput, 71), mul(tree, 32)), root)
+            }
+            unchecked {
+                ++tree;
+            }
+        }
+
+        // Hash the per-tree roots into the reconstructed FORS public value.
+        // The buffer above is suite-independent; only this finalizer swaps
+        // per suite. Output truncated to HASH_LEN bytes, high-aligned
+        // (maskHash inside the suite helper); for 256s this folds to a no-op.
+        return (
+            HashSuite.hashForsPk32(forsPkInput, forsPkInputLen),
+            treeIndex,
+            leafIndex,
+            true
+        );
+    }
+
+    // forsEntryRoot32: Rebuild one FORS tree root from a fixed-layout entry
+    // secretLeaf || authPath[a], a = FORS_TREE_HEIGHT.
+    // 1. Construct the shared address prefix for this hypertree tree/leaf
+    // location.
+    // 2. Hash the revealed secret leaf into its public FORS leaf value.
+    // 3. Walk upward through the authentication path one level at a time.
+    // 4. Rebuild each parent node with the correct left/right ordering and
+    // address.
+    // 5. Return the reconstructed root for this FORS tree.
+    /// @dev Precondition: entry.length == StatelessLayout.FORS_ENTRY_LEN,
+    /// guaranteed by verifyForsCAndReturnRoot's length check.
+    function forsEntryRoot32(
+        bytes calldata pkSeed,
+        uint64 treeIndex,
+        uint32 leafIndex,
+        uint32 forsTreeIndex,
+        uint32 entryLeafIndex,
+        bytes calldata entry
+    ) internal view returns (bytes32 node) {
+        // Build the shared address prefix used by all nodes in this FORS tree
+        // location.
+        uint256 addressBase = forsAddressBase(treeIndex, leafIndex);
+        // Finish the address for the revealed leaf:
+        //   shiftedForsTree = forsTreeIndex << a  (this tree's low-index
+        //                     range for its leaves, a = FORS_TREE_HEIGHT)
+        //   leafLowIndex    = shiftedForsTree + entryLeafIndex  (the
+        //                     concrete leaf inside this FORS tree)
+        //   leafAddress     = addressBase | leafLowIndex
+        uint256 leafAddressValue = addressBase
+            | ((uint256(forsTreeIndex) << SHRINCSParams.FORS_TREE_HEIGHT)
+                    + uint256(entryLeafIndex));
+        // Hash the revealed secret leaf (the entry's first 32-byte word)
+        // into the corresponding public FORS leaf value.
+        node = HashSuite.hashForsLeaf32(
+            pkSeed, bytes32(leafAddressValue), entry[0:32]
+        );
+        // Track the current node position as we walk upward through the auth
+        // path.
+        uint256 index = entryLeafIndex;
+        for (uint256 level = 0; level < SHRINCSParams.FORS_TREE_HEIGHT;) {
+            // Read the sibling node supplied for this level: auth node
+            // `level` sits at 32 + level * 32, after the secret leaf.
+            bytes32 sibling =
+                StatelessLayout.readWord(entry, 32 + level * 32);
+            // Place the current node and sibling in canonical left/right
+            // order for this level.
+            (bytes32 left, bytes32 right) =
+                index & 1 == 0 ? (node, sibling) : (sibling, node);
+            // Parent nodes live one level higher than their children:
+            //   nodeHeight     = level + 1
+            //   shiftedTree    = forsTreeIndex << (a - nodeHeight)  (this
+            //                    tree's low-index range at the parent level)
+            //   parentIndex    = index >> 1  (collapse to the parent)
+            //   parentLowIndex = shiftedTree + parentIndex
+            //   address        = addressBase | nodeHeight << 32
+            //                    | parentLowIndex
+            uint256 nodeHeight = level + 1;
+            bytes32 addressWord = bytes32(
+                addressBase | (nodeHeight << 32)
+                    | ((uint256(forsTreeIndex)
+                                    << (SHRINCSParams.FORS_TREE_HEIGHT
+                                            - nodeHeight)) + (index >> 1))
+            );
+            // Hash the two children into their parent node using the parent
+            // address. Building addressWord before the call, not inline in
+            // the argument list, measured 882 gas cheaper per verify.
+            node = HashSuite.hashForsNode32(pkSeed, addressWord, left, right);
+            index >>= 1;
+            unchecked {
+                ++level;
             }
         }
     }

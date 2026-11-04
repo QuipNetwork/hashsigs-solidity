@@ -16,6 +16,10 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 pragma solidity ^0.8.28;
 
+import {SHRINCSTestCodec} from "./helpers/SHRINCSTestCodec.sol";
+import {
+    StatelessSignatureTypes
+} from "./helpers/StatelessSignatureTypes.sol";
 import {Test} from "../lib/forge-std/src/Test.sol";
 import {SHRINCS} from "../contracts/SHRINCS.sol";
 import {SPHINCSPlusC} from "../contracts/SPHINCSPlusC.sol";
@@ -172,7 +176,7 @@ contract SHRINCSAccountVectorExportTest is Test {
         assertTrue(signOk, "stateless signing must start");
 
         // line-length: allow — fmt canonical tuple head exceeds cap
-        SPHINCSPlusC.Signature memory signature;
+        StatelessSignatureTypes.Signature memory signature;
         bool completeOk;
         (signature, completeOk) =
             SHRINCSAccountSigningFacade.completeStatelessSession(
@@ -227,7 +231,10 @@ contract SHRINCSAccountVectorExportTest is Test {
         );
 
         bool verifyOk = account.verifyStatelessAction(
-            publicKey, actionType, payloadHash, signature
+            publicKey,
+            actionType,
+            payloadHash,
+            SHRINCSTestCodec.encodeCompactSignature(signature)
         );
         assertTrue(
             verifyOk, "exported stateless vector must feed the wrapper"
@@ -279,7 +286,7 @@ contract SHRINCSAccountVectorExportTest is Test {
             );
         assertTrue(signOk, "stateful-only rotation must start");
 
-        SPHINCSPlusC.Signature memory recoverySignature;
+        StatelessSignatureTypes.Signature memory recoverySignature;
         bool completeOk;
         (recoverySignature, completeOk) =
             SHRINCSAccountSigningFacade.completeStatelessSession(
@@ -317,7 +324,9 @@ contract SHRINCSAccountVectorExportTest is Test {
         );
 
         bool rotateOk = account.rotateToFreshKey(
-            currentPublicKey, recoverySignature, nextKey
+            currentPublicKey,
+            SHRINCSTestCodec.encodeCompactSignature(recoverySignature),
+            nextKey
         );
         assertTrue(
             rotateOk,
@@ -368,7 +377,7 @@ contract SHRINCSAccountVectorExportTest is Test {
             );
         assertTrue(signOk, "full rotation must start");
 
-        SPHINCSPlusC.Signature memory recoverySignature;
+        StatelessSignatureTypes.Signature memory recoverySignature;
         bool completeOk;
         (recoverySignature, completeOk) =
             SHRINCSAccountSigningFacade.completeStatelessSession(
@@ -403,7 +412,9 @@ contract SHRINCSAccountVectorExportTest is Test {
         );
 
         bool rotateOk = account.rotateFullKey(
-            currentPublicKey, recoverySignature, nextKey
+            currentPublicKey,
+            SHRINCSTestCodec.encodeCompactSignature(recoverySignature),
+            nextKey
         );
         assertTrue(
             rotateOk, "exported full rotation vector must feed the wrapper"

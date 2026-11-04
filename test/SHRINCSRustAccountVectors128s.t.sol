@@ -16,6 +16,10 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 pragma solidity ^0.8.28;
 
+import {SHRINCSTestCodec} from "./helpers/SHRINCSTestCodec.sol";
+import {
+    StatelessSignatureTypes
+} from "./helpers/StatelessSignatureTypes.sol";
 import {Test} from "../lib/forge-std/src/Test.sol";
 import {SHRINCS} from "../contracts/SHRINCS.sol";
 import {SPHINCSPlusC} from "../contracts/SPHINCSPlusC.sol";
@@ -46,7 +50,7 @@ contract SHRINCSAccountHarness128s {
         bytes32 expectedCommitment,
         SHRINCS.PublicKey calldata publicKey,
         SHRINCS.ActionContext calldata context,
-        SPHINCSPlusC.Signature calldata signature
+        bytes calldata signature
     ) external view returns (bool) {
         return SHRINCS.verifyStateless(
             expectedCommitment, publicKey, context, signature
@@ -57,7 +61,7 @@ contract SHRINCSAccountHarness128s {
         bytes32 expectedCommitment,
         SHRINCS.PublicKey calldata currentPublicKey,
         SHRINCS.RotationContext calldata context,
-        SPHINCSPlusC.Signature calldata recoverySignature,
+        bytes calldata recoverySignature,
         SHRINCS.StatefulRotationTarget calldata nextStatefulKey
     ) external view returns (bytes32) {
         return SHRINCS.rotateStatefulViaStateless(
@@ -73,7 +77,7 @@ contract SHRINCSAccountHarness128s {
         bytes32 expectedCommitment,
         SHRINCS.PublicKey calldata currentPublicKey,
         SHRINCS.RotationContext calldata context,
-        SPHINCSPlusC.Signature calldata recoverySignature,
+        bytes calldata recoverySignature,
         SHRINCS.RotationTarget calldata nextKey
     ) external view returns (bytes32) {
         return SHRINCS.statelessRotate(
@@ -243,7 +247,7 @@ contract SHRINCSRustAccountVectors128sTest is Test {
                 vector_.currentSHRINCSPublicKey,
                 vector_.publicKey,
                 vector_.context,
-                vector_.signature
+                SHRINCSTestCodec.encodeCompactSignature(vector_.signature)
             ),
             "Rust stateless action vector must verify"
         );
@@ -266,7 +270,7 @@ contract SHRINCSRustAccountVectors128sTest is Test {
             vector_.currentSHRINCSPublicKey,
             vector_.publicKey,
             vector_.context,
-            vector_.signature
+            SHRINCSTestCodec.encodeCompactSignature(vector_.signature)
         );
         uint256 used = before - gasleft();
         assertTrue(ok, "stateless vector must verify for gas measurement");
@@ -292,7 +296,7 @@ contract SHRINCSRustAccountVectors128sTest is Test {
             vector_.currentSHRINCSPublicKey,
             vector_.publicKey,
             vector_.context,
-            vector_.signature
+            SHRINCSTestCodec.encodeCompactSignature(vector_.signature)
         ) returns (
             bool ok
         ) {
@@ -331,7 +335,9 @@ contract SHRINCSRustAccountVectors128sTest is Test {
             vector_.currentSHRINCSPublicKey,
             vector_.currentPublicKey,
             vector_.context,
-            vector_.recoverySignature,
+            SHRINCSTestCodec.encodeCompactSignature(
+                    vector_.recoverySignature
+                ),
             vector_.nextKey
         );
         assertTrue(
@@ -354,7 +360,9 @@ contract SHRINCSRustAccountVectors128sTest is Test {
             vector_.currentSHRINCSPublicKey,
             vector_.currentPublicKey,
             vector_.context,
-            vector_.recoverySignature,
+            SHRINCSTestCodec.encodeCompactSignature(
+                    vector_.recoverySignature
+                ),
             vector_.nextKey
         );
         uint256 used = before - gasleft();
@@ -384,7 +392,9 @@ contract SHRINCSRustAccountVectors128sTest is Test {
             vector_.currentSHRINCSPublicKey,
             vector_.currentPublicKey,
             vector_.context,
-            vector_.recoverySignature,
+            SHRINCSTestCodec.encodeCompactSignature(
+                    vector_.recoverySignature
+                ),
             vector_.nextKey
         ) returns (
             bytes32 nextCommitment
@@ -421,7 +431,9 @@ contract SHRINCSRustAccountVectors128sTest is Test {
             vector_.currentSHRINCSPublicKey,
             vector_.currentPublicKey,
             vector_.context,
-            vector_.recoverySignature,
+            SHRINCSTestCodec.encodeCompactSignature(
+                    vector_.recoverySignature
+                ),
             vector_.nextKey
         );
         assertTrue(
@@ -444,7 +456,9 @@ contract SHRINCSRustAccountVectors128sTest is Test {
             vector_.currentSHRINCSPublicKey,
             vector_.currentPublicKey,
             vector_.context,
-            vector_.recoverySignature,
+            SHRINCSTestCodec.encodeCompactSignature(
+                    vector_.recoverySignature
+                ),
             vector_.nextKey
         );
         uint256 used = before - gasleft();
@@ -474,7 +488,9 @@ contract SHRINCSRustAccountVectors128sTest is Test {
             vector_.currentSHRINCSPublicKey,
             vector_.currentPublicKey,
             vector_.context,
-            vector_.recoverySignature,
+            SHRINCSTestCodec.encodeCompactSignature(
+                    vector_.recoverySignature
+                ),
             vector_.nextKey
         ) returns (
             bytes32 nextCommitment

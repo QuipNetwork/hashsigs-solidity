@@ -16,6 +16,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 pragma solidity ^0.8.28;
 
+import {StatelessLayout} from "../contracts/StatelessLayout.sol";
 import {Test} from "forge-std/Test.sol";
 import {FORSMinusC} from "../contracts/FORSMinusC.sol";
 import {Hypertree} from "../contracts/Hypertree.sol";
@@ -44,7 +45,7 @@ contract Issue09CanonicalRootHarness {
         bytes32 expectedCommitment,
         SHRINCS.PublicKey calldata currentPublicKey,
         SHRINCS.RotationContext calldata context,
-        SPHINCSPlusC.Signature calldata recoverySignature,
+        bytes calldata recoverySignature,
         SHRINCS.StatefulRotationTarget calldata nextStatefulKey
     ) external view returns (bytes32) {
         return SHRINCS.rotateStatefulViaStateless(
@@ -58,13 +59,6 @@ contract Issue09CanonicalRootHarness {
 }
 
 contract Issue09CanonicalRootValidationTest is Test {
-    // HASH_WORD_BYTES: width of every hash-sized field in the stateless
-    // signature wire format. The verifier reads each randomizer, FORS
-    // leaf, auth node, WOTS-C chain, and public-key hash with a single
-    // calldataload and its shape checks pin them to one 32-byte word,
-    // independent of the profile HASH_LEN.
-    uint256 internal constant HASH_WORD_BYTES = 32;
-
     // ROTATION_REJECT_GAS_CEILING: gas ceiling for one rotation call
     // rejected on a noncanonical next stateful root, measured around the
     // staticcall alone with the signature already encoded. Under
@@ -147,20 +141,20 @@ contract Issue09CanonicalRootValidationTest is Test {
             )
         );
 
-        // Every array length in this recovery signature matches the
-        // compiled profile, so it clears each shape check the stateless
-        // verifier applies before hashing, and only the canonical-root
-        // guard keeps the call away from that work. Encode it outside
-        // the measured window: ABI-encoding a full-size stateless
-        // signature costs several times the rejection itself and would
-        // mask the difference the assertion below measures.
+        // This recovery signature has the compiled profile's exact
+        // StatelessLayout length (all zero words), so it clears the length
+        // check the stateless verifier applies before hashing, and only the
+        // canonical-root guard keeps the call away from that work. Encode it
+        // outside the measured window: ABI-encoding a full-size stateless
+        // signature costs several times the rejection itself and would mask
+        // the difference the assertion below measures.
         bytes memory callData = abi.encodeCall(
             harness.rotateStatefulViaStateless,
             (
                 expectedCommitment,
                 currentPublicKey,
                 context,
-                _shapeValidRecoverySignature(),
+                new bytes(StatelessLayout.PQ_LEN),
                 nextStatefulKey
             )
         );
@@ -193,58 +187,6 @@ contract Issue09CanonicalRootValidationTest is Test {
             )
         );
         assertFalse(harness.validStatefulPublicKeyEncoding(dirtyEncoded));
-    }
-
-    // _shapeValidRecoverySignature: Build a stateless recovery signature
-    // sized for the compiled profile and filled with zero words. It is
-    // cryptographically invalid, but every length the FORS-C and
-    // hypertree verifiers check is correct, so a rotation that reaches
-    // the stateless verifier pays for the digest work instead of
-    // returning on a malformed-shape branch.
-    function _shapeValidRecoverySignature()
-        internal
-        pure
-        returns (SPHINCSPlusC.Signature memory signature)
-    {
-        // FORS-C omits the final FORS tree by forcing its leaf index to
-        // zero, so verification expects k - 1 revealed entries.
-        uint256 signedTrees = uint256(SHRINCSParams.NUM_FORS_TREES) - 1;
-        uint256 forsHeight = uint256(SHRINCSParams.FORS_TREE_HEIGHT);
-        signature.fors.randomizer = new bytes(HASH_WORD_BYTES);
-        signature.fors.entries = new FORSMinusC.ForsEntry[](signedTrees);
-        for (uint256 tree = 0; tree < signedTrees; ++tree) {
-            FORSMinusC.ForsEntry memory entry = signature.fors.entries[tree];
-            entry.secretLeaf = new bytes(HASH_WORD_BYTES);
-            entry.authPath = new bytes[](forsHeight);
-            for (uint256 node = 0; node < forsHeight; ++node) {
-                entry.authPath[node] = new bytes(HASH_WORD_BYTES);
-            }
-        }
-
-        // Each layer carries one WOTS-C signature over NUM_WOTS_CHAINS
-        // chains plus an auth path of one subtree height (h / d).
-        uint256 layerCount = uint256(SHRINCSParams.NUM_HYPERTREE_LAYERS);
-        uint256 chainCount = uint256(SHRINCSParams.NUM_WOTS_CHAINS);
-        uint256 subtreeHeight =
-            uint256(SHRINCSParams.HYPERTREE_HEIGHT) / layerCount;
-        signature.hypertree =
-            new Hypertree.HypertreeLayerSignature[](layerCount);
-        for (uint256 layer = 0; layer < layerCount; ++layer) {
-            Hypertree.HypertreeLayerSignature memory layerSignature =
-                signature.hypertree[layer];
-            layerSignature.wotsCPkHash = new bytes(HASH_WORD_BYTES);
-            layerSignature.wotsCSignature.randomizer =
-                new bytes(HASH_WORD_BYTES);
-            layerSignature.wotsCSignature.chains = new bytes[](chainCount);
-            for (uint256 chain = 0; chain < chainCount; ++chain) {
-                layerSignature.wotsCSignature.chains[chain] =
-                    new bytes(HASH_WORD_BYTES);
-            }
-            layerSignature.authPath = new bytes[](subtreeHeight);
-            for (uint256 node = 0; node < subtreeHeight; ++node) {
-                layerSignature.authPath[node] = new bytes(HASH_WORD_BYTES);
-            }
-        }
     }
 
     function _publicKey(bytes32 root)

@@ -16,6 +16,10 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 pragma solidity ^0.8.28;
 
+import {SHRINCSTestCodec} from "./helpers/SHRINCSTestCodec.sol";
+import {
+    StatelessSignatureTypes
+} from "./helpers/StatelessSignatureTypes.sol";
 import {Test} from "../lib/forge-std/src/Test.sol";
 import {SHRINCS} from "../contracts/SHRINCS.sol";
 import {SHRINCSParams} from "shrincs-profile/SHRINCSParams.sol";
@@ -33,7 +37,7 @@ contract Stateless256sSha2Harness {
         bytes32 expectedCommitment,
         SHRINCS.PublicKey calldata publicKey,
         bytes calldata message,
-        SPHINCSPlusC.Signature calldata signature
+        bytes calldata signature
     ) external view returns (bool) {
         return SHRINCS.verifyStatelessUncheckedMessage(
             expectedCommitment, publicKey, message, signature
@@ -126,11 +130,14 @@ contract SHRINCSSphincs256sSha2VectorsTest is Test {
         (
             SHRINCS.PublicKey memory publicKey,
             bytes memory message,
-            SPHINCSPlusC.Signature memory signature
+            StatelessSignatureTypes.Signature memory signature
         ) = decodeStatelessVector(".stateless.cases.valid.calldata");
         assertTrue(
             stateless.verifyUnsafeRaw(
-                commitmentWord(publicKey), publicKey, message, signature
+                commitmentWord(publicKey),
+                publicKey,
+                message,
+                SHRINCSTestCodec.encodeCompactSignature(signature)
             ),
             "256s-sha2 stateless Rust vector must verify through verifier"
         );
@@ -144,12 +151,15 @@ contract SHRINCSSphincs256sSha2VectorsTest is Test {
         (
             SHRINCS.PublicKey memory publicKey,
             bytes memory message,
-            SPHINCSPlusC.Signature memory signature
+            StatelessSignatureTypes.Signature memory signature
         ) = decodeStatelessVector(".stateless.cases.valid.calldata");
         bytes32 commitment = commitmentWord(publicKey);
         uint256 startGas = gasleft();
         bool ok = stateless.verifyUnsafeRaw(
-            commitment, publicKey, message, signature
+            commitment,
+            publicKey,
+            message,
+            SHRINCSTestCodec.encodeCompactSignature(signature)
         );
         uint256 used = startGas - gasleft();
         assertTrue(ok, "256s-sha2 stateless vector must verify");
@@ -161,11 +171,14 @@ contract SHRINCSSphincs256sSha2VectorsTest is Test {
         (
             SHRINCS.PublicKey memory publicKey,
             bytes memory message,
-            SPHINCSPlusC.Signature memory signature
+            StatelessSignatureTypes.Signature memory signature
         ) = decodeStatelessVector(".stateless.cases.valid.calldata");
         assertEq(
             stateless.verifyUnsafeRaw(
-                bytes32(uint256(1)), publicKey, message, signature
+                bytes32(uint256(1)),
+                publicKey,
+                message,
+                SHRINCSTestCodec.encodeCompactSignature(signature)
             ),
             false,
             "256s-sha2 stateless wrong commitment must be rejected"
@@ -177,7 +190,7 @@ contract SHRINCSSphincs256sSha2VectorsTest is Test {
         (
             SHRINCS.PublicKey memory publicKey,
             bytes memory message,
-            SPHINCSPlusC.Signature memory signature
+            StatelessSignatureTypes.Signature memory signature
         ) = decodeStatelessVector(".stateless.cases.valid.calldata");
         signature.fors.entries[0].secretLeaf =
             abi.encodePacked(keccak256("256s-sha2 tampered fors leaf"));
@@ -195,7 +208,7 @@ contract SHRINCSSphincs256sSha2VectorsTest is Test {
         (
             SHRINCS.PublicKey memory publicKey,
             bytes memory message,
-            SPHINCSPlusC.Signature memory signature
+            StatelessSignatureTypes.Signature memory signature
         ) = decodeStatelessVector(".stateless.cases.valid.calldata");
         signature.hypertree[0].authPath[0] =
             abi.encodePacked(keccak256("256s-sha2 tampered hypertree auth"));
@@ -240,10 +253,13 @@ contract SHRINCSSphincs256sSha2VectorsTest is Test {
         bytes32 expectedCommitment,
         SHRINCS.PublicKey memory publicKey,
         bytes memory message,
-        SPHINCSPlusC.Signature memory signature
+        StatelessSignatureTypes.Signature memory signature
     ) internal view returns (bool) {
         try stateless.verifyUnsafeRaw(
-            expectedCommitment, publicKey, message, signature
+            expectedCommitment,
+            publicKey,
+            message,
+            SHRINCSTestCodec.encodeCompactSignature(signature)
         ) returns (
             bool ok
         ) {
@@ -277,7 +293,7 @@ contract SHRINCSSphincs256sSha2VectorsTest is Test {
         returns (
             SHRINCS.PublicKey memory publicKey,
             bytes memory message,
-            SPHINCSPlusC.Signature memory signature
+            StatelessSignatureTypes.Signature memory signature
         )
     {
         bytes memory args = vectorArgs(vectorKey);
@@ -310,24 +326,26 @@ contract SHRINCSSphincs256sSha2VectorsTest is Test {
     function convertLegacyStatelessSignature(LegacyStatelessSignature memory legacy)
         internal
         pure
-        returns (SPHINCSPlusC.Signature memory signature)
+        returns (StatelessSignatureTypes.Signature memory signature)
     {
-        FORSMinusC.ForsEntry[] memory entries =
-            new FORSMinusC.ForsEntry[](legacy.fors.entries.length);
+        // line-length: allow — fmt canonical declaration exceeds cap
+        StatelessSignatureTypes.ForsEntry[] memory entries = new StatelessSignatureTypes
+            .ForsEntry[](legacy.fors.entries.length);
         for (uint256 i = 0; i < entries.length; ++i) {
-            entries[i] = FORSMinusC.ForsEntry({
+            entries[i] = StatelessSignatureTypes.ForsEntry({
                 secretLeaf: legacy.fors.entries[i].secretLeaf,
                 authPath: legacy.fors.entries[i].authPath
             });
         }
 
         // forgefmt: disable-next-line
-        Hypertree.HypertreeLayerSignature[] memory layers =
-            new Hypertree.HypertreeLayerSignature[](legacy.hypertree.length);
+        StatelessSignatureTypes.HypertreeLayerSignature[] memory layers =
+            new StatelessSignatureTypes
+                .HypertreeLayerSignature[](legacy.hypertree.length);
         for (uint256 i = 0; i < layers.length; ++i) {
-            layers[i] = Hypertree.HypertreeLayerSignature({
+            layers[i] = StatelessSignatureTypes.HypertreeLayerSignature({
                 wotsCPkHash: legacy.hypertree[i].wotsCPkHash,
-                wotsCSignature: WOTSPlusC.WotsCSignature({
+                wotsCSignature: StatelessSignatureTypes.WotsCSignature({
                     randomizer: legacy.hypertree[i].wotsCSignature
                     .randomizer,
                     counter: legacy.hypertree[i].wotsCSignature.counter,
@@ -337,8 +355,8 @@ contract SHRINCSSphincs256sSha2VectorsTest is Test {
             });
         }
 
-        signature = SPHINCSPlusC.Signature({
-            fors: FORSMinusC.ForsSignature({
+        signature = StatelessSignatureTypes.Signature({
+            fors: StatelessSignatureTypes.ForsSignature({
                 randomizer: legacy.fors.randomizer,
                 counter: legacy.fors.counter,
                 entries: entries

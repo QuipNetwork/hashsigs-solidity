@@ -16,6 +16,9 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 pragma solidity ^0.8.28;
 
+import {
+    StatelessSignatureTypes
+} from "./helpers/StatelessSignatureTypes.sol";
 import {SHRINCSTestCodec} from "./helpers/SHRINCSTestCodec.sol";
 
 import {Test} from "../lib/forge-std/src/Test.sol";
@@ -85,9 +88,12 @@ contract HashSuiteStatelessGuardTest is Test {
         );
         assertTrue(ok, "guard session must begin");
         // line-length: allow — fmt canonical tuple head exceeds cap
-        (SPHINCSPlusC.Signature memory signature, bool completeOk) = SHRINCSAccountSigningFacade.completeStatelessSession(
-            accountSigner, sessionId
-        );
+        (
+            StatelessSignatureTypes.Signature memory signature,
+            bool completeOk
+        ) = SHRINCSAccountSigningFacade.completeStatelessSession(
+                accountSigner, sessionId
+            );
         assertTrue(completeOk, "guard signing must complete");
 
         GuardDelegationHarness verifier = new GuardDelegationHarness();
@@ -99,7 +105,7 @@ contract HashSuiteStatelessGuardTest is Test {
         bytes memory key =
             abi.encodePacked(publicKeyCommitmentWord(publicKey));
         bytes memory envelope =
-            SHRINCSTestCodec.encodeStatelessEnvelope(publicKey, signature);
+            SHRINCSTestCodec.encodeCompactPayload(publicKey, signature);
 
         vm.record();
         bytes4 magic = verifier.verifyStateless(key, hash, envelope);
@@ -179,9 +185,12 @@ contract HashSuiteStatelessGuardTest is Test {
         );
         assertTrue(ok, "guard session must begin");
         // line-length: allow — fmt canonical tuple head exceeds cap
-        (SPHINCSPlusC.Signature memory signature, bool completeOk) = SHRINCSAccountSigningFacade.completeStatelessSession(
-            accountSigner, sessionId
-        );
+        (
+            StatelessSignatureTypes.Signature memory signature,
+            bool completeOk
+        ) = SHRINCSAccountSigningFacade.completeStatelessSession(
+                accountSigner, sessionId
+            );
         assertTrue(completeOk, "guard signing must complete");
 
         GuardDelegationHarness verifier = new GuardDelegationHarness();
@@ -196,7 +205,7 @@ contract HashSuiteStatelessGuardTest is Test {
             signingKey.pkSeed, signingKey.hypertreeRoot
         );
         bytes memory sphincsEnvelope =
-            SPHINCSPlusC.encodeStatelessSignatureEnvelope(signature);
+            SHRINCSTestCodec.encodeCompactSignature(signature);
         bytes32 signedHash = SHRINCS.statelessRawMessageHash(
             publicKeyCommitmentWord(publicKey), hash
         );

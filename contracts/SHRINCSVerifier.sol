@@ -32,12 +32,16 @@ import {SHRINCS} from "./SHRINCS.sol";
 /// upgradability. `key` is the 32-byte SHRINCS publicKeyCommitment;
 /// `signature` is the SHRINCS stateful envelope
 /// (abi.encode(PublicKey, SHRINCS.Signature)) for `verify`, or the
-/// stateless envelope (abi.encode(PublicKey, SPHINCSPlusC.Signature)) for
+/// fixed-layout stateless payload PK || PQ (StatelessLayout) for
 /// `verifyStateless`. Verifies signature validity only.
 ///
 /// Revert model (deliberate: replaces the previous try/catch swallow).
 /// A malformed key (wrong length) returns 0xffffffff through the length-
-/// guarded key decoder. A malformed envelope reverts downstream through
+/// guarded key decoder. `verifyStateless` has no reverting decode: a payload
+/// of the wrong length returns 0xffffffff, and every later read sits at a
+/// fixed offset the length check proves in bounds, so the rest of this
+/// paragraph applies to the stateful `verify` path only. There, a malformed
+/// envelope reverts downstream through
 /// solc's calldata member access on the re-tagged struct (the canonicity
 /// walk is gone; a short buffer, out-of-range offset or length, or dirty
 /// value-type high bits reverts there) — that revert is the rejection
@@ -89,10 +93,10 @@ abstract contract SHRINCSVerifier is
     // Version tag identifying this verifier's key/envelope format family.
     // Shared across profiles: it names the ERC-7913 key/envelope format,
     // not the parameter set. The per-profile parameter identity lives in
-    // each subclass's PROFILE_TAG. Unchanged by the adapter restructure:
-    // the key/envelope format family it names is unchanged.
+    // each subclass's PROFILE_TAG. v5: the stateless envelope is the
+    // fixed StatelessLayout layout.
     bytes32 public constant VERSION_TAG =
-        keccak256("quip.shrincs-verifier.v4");
+        keccak256("quip.shrincs-verifier.v5");
     // Any non-magic value denotes signature failure.
     bytes4 private constant INVALID_SIGNATURE = 0xffffffff;
     // Transient attestation slot value for a successful verification
@@ -168,27 +172,25 @@ abstract contract SHRINCSVerifier is
 
     /// @notice ERC-7913-style verification entrypoint for stateless
     /// signatures, delegated to the pinned SPHINCSPlusC verifier.
-    /// @dev Decodes the 32-byte key (the installed commitment; wrong length
-    /// -> 0xffffffff), then hands the stateless envelope to
-    /// SHRINCS.prepareStatelessDelegation, which re-tags it in place (a
-    /// malformed envelope reverts downstream), runs the bundle-vs-commitment
-    /// check (commitment first, then shape, mirroring the library stateless
-    /// path),
-    /// loads the two 32-byte stateless seed words, and returns the delegate
-    /// key
-    /// (abi.encode(pkSeed, hypertreeRoot)) and stateless signature envelope.
-    /// This adapter then delegates the FORS-C + hypertree cryptography to the
-    /// pinned SPHINCSPlusC deployment, returning that verifier's selector or
-    /// 0xffffffff. No try/catch: a failure in the delegate reverts.
-    /// This is a high-level bytes4-returning call, so solc's extcodesize and
-    /// return-data-length checks make a call to an undeployed or
-    /// short-returning sibling revert, never a false 0xffffffff.
+    /// @dev Decodes the 32-byte key (the installed commitment), then hands
+    /// the payload to SHRINCS.prepareStatelessDelegation, which checks the
+    /// payload length, runs the bundle-vs-commitment check (commitment
+    /// first, then shape), and returns the two stateless seed words and the
+    /// SPHINCSPlusC section as a calldata slice. This adapter then delegates
+    /// the FORS-C + hypertree cryptography to the pinned SPHINCSPlusC
+    /// deployment over statelessRawMessageHash(commitment, hash).
+    /// `signature` is the fixed-layout payload PK || PQ described in
+    /// StatelessLayout; there is no reverting decode, so a wrong payload
+    /// length, malformed key, or failed check returns 0xffffffff. No
+    /// try/catch surrounds the delegate call: it is a high-level
+    /// bytes4-returning call, so solc's extcodesize and return-data-length
+    /// checks make an undeployed or short-returning sibling revert, never a
+    /// false 0xffffffff. Out-of-gas reverts.
     /// @param key The 32-byte SHRINCS publicKeyCommitment.
     /// @param hash The 32-byte message hash to verify.
-    /// @param signature The SHRINCS stateless envelope.
-    /// @return The verify selector on success; 0xffffffff for a malformed key
-    /// (wrong length) or a well-formed but invalid signature. A malformed
-    /// envelope and other execution failures revert.
+    /// @param signature The stateless payload
+    /// (StatelessLayout.PAYLOAD_LEN bytes).
+    /// @return The verify selector on success; 0xffffffff otherwise.
     function verifyStateless(
         bytes calldata key,
         bytes32 hash,
@@ -200,8 +202,9 @@ abstract contract SHRINCSVerifier is
 
         (
             bool okDelegation,
-            bytes memory delegateKey,
-            bytes memory delegateSignature
+            bytes32 pkSeed,
+            bytes32 hypertreeRoot,
+            bytes calldata statelessSignature
         ) = SHRINCS.prepareStatelessDelegation(
             publicKeyCommitment, signature
         );
@@ -210,7 +213,11 @@ abstract contract SHRINCSVerifier is
         bytes32 message =
             SHRINCS.statelessRawMessageHash(publicKeyCommitment, hash);
         return IERC7913SignatureVerifier(_pinnedSphincsPlusC())
-            .verify(delegateKey, message, delegateSignature);
+            .verify(
+                SHRINCS.encodeStatelessKey(pkSeed, hypertreeRoot),
+                message,
+                statelessSignature
+            );
     }
 
     /// @notice Whether `verifyAndAttest` succeeded for the exact triple

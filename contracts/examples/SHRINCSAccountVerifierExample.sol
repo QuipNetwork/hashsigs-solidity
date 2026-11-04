@@ -17,7 +17,6 @@
 pragma solidity ^0.8.28;
 
 import {SHRINCS} from "../SHRINCS.sol";
-import {SPHINCSPlusC} from "../SPHINCSPlusC.sol";
 import {SHRINCSParams} from "shrincs-profile/SHRINCSParams.sol";
 
 contract SHRINCSAccountVerifierExample {
@@ -171,7 +170,7 @@ contract SHRINCSAccountVerifierExample {
                 SHRINCS.PublicKey calldata publicKey,
                 bytes32 actionType,
                 bytes32 payloadHash,
-                SPHINCSPlusC.Signature calldata shrincsSignature
+                bytes calldata shrincsSignature
             ) = SHRINCS.statelessActionEnvelope(payload);
             // Direct in-contract calldata-typed check, no self-call hop.
             if (isValidStatelessActionSignatureNow(
@@ -304,7 +303,7 @@ contract SHRINCSAccountVerifierExample {
         SHRINCS.PublicKey calldata publicKey,
         bytes32 actionType,
         bytes32 payloadHash,
-        SPHINCSPlusC.Signature calldata signature
+        bytes calldata signature
     ) external returns (bool) {
         // Recovery-only policy forbids stateless actions until recovery mode
         // is explicitly entered.
@@ -357,7 +356,7 @@ contract SHRINCSAccountVerifierExample {
     /// @return True when rotation succeeds.
     function rotateToFreshKey(
         SHRINCS.PublicKey calldata currentPublicKey,
-        SPHINCSPlusC.Signature calldata recoverySignature,
+        bytes calldata recoverySignature,
         SHRINCS.StatefulRotationTarget calldata nextKey
     ) external returns (bool) {
         // Fresh-key rotation is available only in the dedicated recovery
@@ -427,7 +426,7 @@ contract SHRINCSAccountVerifierExample {
     /// @return True when rotation succeeds.
     function rotateFullKey(
         SHRINCS.PublicKey calldata currentPublicKey,
-        SPHINCSPlusC.Signature calldata recoverySignature,
+        bytes calldata recoverySignature,
         SHRINCS.RotationTarget calldata nextKey
     ) external returns (bool) {
         // Full-key rotation is available only in the dedicated recovery
@@ -691,7 +690,7 @@ contract SHRINCSAccountVerifierExample {
         SHRINCS.PublicKey calldata publicKey,
         bytes32 actionType,
         bytes32 payloadHash,
-        SPHINCSPlusC.Signature calldata signature
+        bytes calldata signature
     ) internal view returns (bool) {
         if (
             statefulPolicy == StatefulPolicy.RecoveryRotation

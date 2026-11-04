@@ -16,6 +16,10 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 pragma solidity ^0.8.28;
 
+import {SHRINCSTestCodec} from "./helpers/SHRINCSTestCodec.sol";
+import {
+    StatelessSignatureTypes
+} from "./helpers/StatelessSignatureTypes.sol";
 import {Test} from "../lib/forge-std/src/Test.sol";
 import {SHRINCS} from "../contracts/SHRINCS.sol";
 import {SPHINCSPlusC} from "../contracts/SPHINCSPlusC.sol";
@@ -34,7 +38,7 @@ contract SHRINCSStatelessVectorSignerHarness is
         bytes32 expectedPublicKeyCommitment,
         SHRINCS.PublicKey calldata publicKey,
         bytes calldata message,
-        SPHINCSPlusC.Signature calldata signature
+        bytes calldata signature
     ) external view returns (bool) {
         return SHRINCS.verifyStatelessUncheckedMessage(
             expectedPublicKeyCommitment, publicKey, message, signature
@@ -117,8 +121,9 @@ contract SHRINCSStatelessVectorSignerTest is Test {
         );
 
         bytes memory encodedSignature = signer.finalizeSignature(sessionId);
-        SPHINCSPlusC.Signature memory signature =
-            abi.decode(encodedSignature, (SPHINCSPlusC.Signature));
+        StatelessSignatureTypes.Signature memory signature = abi.decode(
+            encodedSignature, (StatelessSignatureTypes.Signature)
+        );
         SHRINCS.PublicKey memory publicKey =
             signer.sessionPublicKey(sessionId);
         bytes memory signedMessage = signer.sessionMessage(sessionId);
@@ -145,7 +150,7 @@ contract SHRINCSStatelessVectorSignerTest is Test {
                 expectedPublicKeyCommitment,
                 publicKey,
                 signedMessage,
-                signature
+                SHRINCSTestCodec.encodeCompactSignature(signature)
             ),
             "staged stateless signer output must verify"
         );
@@ -159,7 +164,7 @@ contract SHRINCSStatelessVectorSignerTest is Test {
         );
         (
             SHRINCS.PublicKey memory publicKey,
-            SPHINCSPlusC.Signature memory signature,
+            StatelessSignatureTypes.Signature memory signature,
             bool ok
         ) = signer.signFromSeed(
             bytes("high level stateless vector seed"), 4, message
@@ -185,7 +190,10 @@ contract SHRINCSStatelessVectorSignerTest is Test {
 
         assertTrue(
             signer.verifyUnsafeRaw(
-                expectedPublicKeyCommitment, publicKey, message, signature
+                expectedPublicKeyCommitment,
+                publicKey,
+                message,
+                SHRINCSTestCodec.encodeCompactSignature(signature)
             ),
             "high-level stateless signer output must verify"
         );
@@ -206,7 +214,7 @@ contract SHRINCSStatelessVectorSignerTest is Test {
         }
         (
             SHRINCS.PublicKey memory publicKey,
-            SPHINCSPlusC.Signature memory signature,
+            StatelessSignatureTypes.Signature memory signature,
             bool ok
         ) = signer.signFromSeed(
             bytes("forsDigestBytes overhang regression seed"), 4, message
@@ -220,7 +228,10 @@ contract SHRINCSStatelessVectorSignerTest is Test {
         }
         assertTrue(
             signer.verifyUnsafeRaw(
-                expectedPublicKeyCommitment, publicKey, message, signature
+                expectedPublicKeyCommitment,
+                publicKey,
+                message,
+                SHRINCSTestCodec.encodeCompactSignature(signature)
             ),
             "raw stateless signer output must verify"
         );

@@ -16,6 +16,10 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 pragma solidity ^0.8.28;
 
+import {SHRINCSTestCodec} from "./helpers/SHRINCSTestCodec.sol";
+import {
+    StatelessSignatureTypes
+} from "./helpers/StatelessSignatureTypes.sol";
 import {Test} from "../lib/forge-std/src/Test.sol";
 import {SHRINCS} from "../contracts/SHRINCS.sol";
 import {SHRINCSParams} from "shrincs-profile/SHRINCSParams.sol";
@@ -231,7 +235,7 @@ contract SHRINCSStatefulPolicyExamplesTest is Test {
     {
         (
             SHRINCS.PublicKey memory publicKey,,
-            SPHINCSPlusC.Signature memory signature
+            StatelessSignatureTypes.Signature memory signature
         ) = decodeStatelessVector(".stateless.cases.valid.calldata");
         bytes32 expectedCompositePublicKey =
             compositePublicKeyWord(publicKey);
@@ -244,7 +248,10 @@ contract SHRINCSStatefulPolicyExamplesTest is Test {
 
         assertEq(
             account.verifyStatelessAction(
-                publicKey, actionType, payloadHash, signature
+                publicKey,
+                actionType,
+                payloadHash,
+                SHRINCSTestCodec.encodeCompactSignature(signature)
             ),
             false,
             "canonical stateless path should be blocked before recovery mode"
@@ -252,7 +259,10 @@ contract SHRINCSStatefulPolicyExamplesTest is Test {
         account.enterRecoveryMode();
 
         bool ok = account.verifyStatelessAction(
-            publicKey, actionType, payloadHash, signature
+            publicKey,
+            actionType,
+            payloadHash,
+            SHRINCSTestCodec.encodeCompactSignature(signature)
         );
 
         assertEq(
@@ -273,7 +283,7 @@ contract SHRINCSStatefulPolicyExamplesTest is Test {
     {
         (
             SHRINCS.PublicKey memory publicKey,,
-            SPHINCSPlusC.Signature memory signature
+            StatelessSignatureTypes.Signature memory signature
         ) = decodeStatelessVector(".stateless.cases.valid.calldata");
         bytes32 expectedCompositePublicKey =
             compositePublicKeyWord(publicKey);
@@ -287,7 +297,11 @@ contract SHRINCSStatefulPolicyExamplesTest is Test {
                 publicKey, publicKey.statefulPublicKey
             );
 
-        bool ok = account.rotateToFreshKey(publicKey, signature, target);
+        bool ok = account.rotateToFreshKey(
+            publicKey,
+            SHRINCSTestCodec.encodeCompactSignature(signature),
+            target
+        );
 
         assertEq(
             ok,
@@ -353,13 +367,18 @@ contract SHRINCSStatefulPolicyExamplesTest is Test {
         assertTrue(signOk, "stateful-only rotation must start");
 
         // line-length: allow — fmt canonical tuple head exceeds cap
-        (SPHINCSPlusC.Signature memory recoverySignature, bool completeOk) = SHRINCSAccountSigningFacade.completeStatelessSession(
+        (
+            StatelessSignatureTypes.Signature memory recoverySignature,
+            bool completeOk
+        ) = SHRINCSAccountSigningFacade.completeStatelessSession(
             signer, sessionId
         );
         assertTrue(completeOk, "stateful-only rotation must complete");
 
         bool rotateOk = account.rotateToFreshKey(
-            currentPublicKey, recoverySignature, nextKey
+            currentPublicKey,
+            SHRINCSTestCodec.encodeCompactSignature(recoverySignature),
+            nextKey
         );
 
         assertTrue(
@@ -460,13 +479,18 @@ contract SHRINCSStatefulPolicyExamplesTest is Test {
         assertTrue(rotationSignOk, "stateful-only rotation must start");
 
         // line-length: allow — fmt canonical tuple head exceeds cap
-        (SPHINCSPlusC.Signature memory recoverySignature, bool completeOk) = SHRINCSAccountSigningFacade.completeStatelessSession(
+        (
+            StatelessSignatureTypes.Signature memory recoverySignature,
+            bool completeOk
+        ) = SHRINCSAccountSigningFacade.completeStatelessSession(
             signer, sessionId
         );
         assertTrue(completeOk, "stateful-only rotation must complete");
 
         bool rotateOk = account.rotateToFreshKey(
-            currentPublicKey, recoverySignature, nextKey
+            currentPublicKey,
+            SHRINCSTestCodec.encodeCompactSignature(recoverySignature),
+            nextKey
         );
         assertTrue(
             rotateOk,
@@ -574,7 +598,7 @@ contract SHRINCSStatefulPolicyExamplesTest is Test {
         returns (
             SHRINCS.PublicKey memory publicKey,
             bytes memory message,
-            SPHINCSPlusC.Signature memory signature
+            StatelessSignatureTypes.Signature memory signature
         )
     {
         bytes memory args = vectorArgs(vectorKey);
@@ -607,24 +631,26 @@ contract SHRINCSStatefulPolicyExamplesTest is Test {
     function convertLegacyStatelessSignature(LegacyStatelessSignature memory legacy)
         internal
         pure
-        returns (SPHINCSPlusC.Signature memory signature)
+        returns (StatelessSignatureTypes.Signature memory signature)
     {
-        FORSMinusC.ForsEntry[] memory entries =
-            new FORSMinusC.ForsEntry[](legacy.fors.entries.length);
+        // line-length: allow — fmt canonical declaration exceeds cap
+        StatelessSignatureTypes.ForsEntry[] memory entries = new StatelessSignatureTypes
+            .ForsEntry[](legacy.fors.entries.length);
         for (uint256 i = 0; i < entries.length; ++i) {
-            entries[i] = FORSMinusC.ForsEntry({
+            entries[i] = StatelessSignatureTypes.ForsEntry({
                 secretLeaf: legacy.fors.entries[i].secretLeaf,
                 authPath: legacy.fors.entries[i].authPath
             });
         }
 
         // forgefmt: disable-next-line
-        Hypertree.HypertreeLayerSignature[] memory layers =
-            new Hypertree.HypertreeLayerSignature[](legacy.hypertree.length);
+        StatelessSignatureTypes.HypertreeLayerSignature[] memory layers =
+            new StatelessSignatureTypes
+                .HypertreeLayerSignature[](legacy.hypertree.length);
         for (uint256 i = 0; i < layers.length; ++i) {
-            layers[i] = Hypertree.HypertreeLayerSignature({
+            layers[i] = StatelessSignatureTypes.HypertreeLayerSignature({
                 wotsCPkHash: legacy.hypertree[i].wotsCPkHash,
-                wotsCSignature: WOTSPlusC.WotsCSignature({
+                wotsCSignature: StatelessSignatureTypes.WotsCSignature({
                     randomizer: legacy.hypertree[i].wotsCSignature
                     .randomizer,
                     counter: legacy.hypertree[i].wotsCSignature.counter,
@@ -634,8 +660,8 @@ contract SHRINCSStatefulPolicyExamplesTest is Test {
             });
         }
 
-        signature = SPHINCSPlusC.Signature({
-            fors: FORSMinusC.ForsSignature({
+        signature = StatelessSignatureTypes.Signature({
+            fors: StatelessSignatureTypes.ForsSignature({
                 randomizer: legacy.fors.randomizer,
                 counter: legacy.fors.counter,
                 entries: entries

@@ -95,7 +95,7 @@ library SHRINCSParams {
     // checksum chains, so len = 2n = 32 for w = 16.
     uint16 internal constant NUM_WOTS_CHAINS = 32;
     // WOTS_TARGET_SUM_STATELESS: the WOTS-C constant digit-sum target
-    // for the stateless hypertree WOTS chains (Hypertree.verifyWotsC32)
+    // for the stateless hypertree WOTS chains (Hypertree._verifyWotsC32)
     // = len * (w - 1) / 2
     // -> NUM_WOTS_CHAINS * (WOTS_CHAIN_LEN - 1) / 2
     //    = 32 * (16 - 1) / 2 = 240

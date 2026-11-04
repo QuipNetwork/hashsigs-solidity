@@ -16,6 +16,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 pragma solidity ^0.8.28;
 
+import {StatelessSignatureTypes} from "./StatelessSignatureTypes.sol";
 import {
     SHRINCSStatelessVectorSigner
 } from "./SHRINCSStatelessVectorSigner.sol";
@@ -36,7 +37,7 @@ library SHRINCSStatelessVectorSigningFacade {
         internal
         returns (
             SHRINCS.PublicKey memory publicKey,
-            SPHINCSPlusC.Signature memory signature,
+            StatelessSignatureTypes.Signature memory signature,
             bool ok
         )
     {
@@ -55,7 +56,7 @@ library SHRINCSStatelessVectorSigningFacade {
         internal
         returns (
             SHRINCS.PublicKey memory publicKey,
-            SPHINCSPlusC.Signature memory signature,
+            StatelessSignatureTypes.Signature memory signature,
             bool ok
         )
     {
@@ -72,7 +73,9 @@ library SHRINCSStatelessVectorSigningFacade {
 
         bytes memory encodedSignature = signer.finalizeSignature(sessionId);
         publicKey = signer.sessionPublicKey(sessionId);
-        signature = abi.decode(encodedSignature, (SPHINCSPlusC.Signature));
+        signature = abi.decode(
+            encodedSignature, (StatelessSignatureTypes.Signature)
+        );
         return (publicKey, signature, true);
     }
 }

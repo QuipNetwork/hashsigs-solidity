@@ -238,7 +238,7 @@ contract SHRINCSProfileInvariantsTest is Test {
     }
 
     // WOTS-C target sum equals len * (w - 1) / 2 on the stateless
-    // hypertree side too (Hypertree.verifyWotsC32's chainCount is
+    // hypertree side too (Hypertree._verifyWotsC32's chainCount is
     // NUM_WOTS_CHAINS, not WOTS_CHAINS_STATEFUL).
     function testWotsTargetSumStatelessMatchesChainCount() public pure {
         uint256 base = uint256(SHRINCSParams.WOTS_CHAIN_LEN);

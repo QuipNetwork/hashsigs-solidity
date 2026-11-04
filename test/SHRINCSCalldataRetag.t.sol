@@ -16,6 +16,9 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 pragma solidity ^0.8.28;
 
+import {
+    StatelessSignatureTypes
+} from "./helpers/StatelessSignatureTypes.sol";
 import {SHRINCSTestCodec} from "./helpers/SHRINCSTestCodec.sol";
 
 import {Test} from "../lib/forge-std/src/Test.sol";
@@ -28,6 +31,7 @@ import {FORSMinusC} from "../contracts/FORSMinusC.sol";
 import {Hypertree} from "../contracts/Hypertree.sol";
 import {WOTSPlusC} from "../contracts/WOTSPlusC.sol";
 import {SHRINCSParams} from "shrincs-profile/SHRINCSParams.sol";
+import {StatelessLayout} from "../contracts/StatelessLayout.sol";
 import {SHRINCS256sKeccak} from "../contracts/SHRINCS256sKeccak.sol";
 import {
     SHRINCSAccountVerifierExample
@@ -97,47 +101,6 @@ contract RetagDigestHarness {
                 signature.counter,
                 signature.chains,
                 signature.authPath
-            )
-        );
-    }
-
-    // stateless ----------------------------------------------------------
-    function retagStateless(bytes calldata payload)
-        external
-        pure
-        returns (bytes32)
-    {
-        (
-            SHRINCS.PublicKey calldata publicKey,
-            SPHINCSPlusC.Signature calldata signature
-        ) = SHRINCS.statelessEnvelope(payload);
-        return keccak256(
-            abi.encode(
-                publicKey.statefulPublicKey,
-                publicKey.publicKeyCommitment,
-                publicKey.pkSeed,
-                publicKey.hypertreeRoot,
-                signature
-            )
-        );
-    }
-
-    function abiStateless(bytes calldata payload)
-        external
-        pure
-        returns (bytes32)
-    {
-        (
-            SHRINCS.PublicKey memory publicKey,
-            SPHINCSPlusC.Signature memory signature
-        ) = abi.decode(payload, (SHRINCS.PublicKey, SPHINCSPlusC.Signature));
-        return keccak256(
-            abi.encode(
-                publicKey.statefulPublicKey,
-                publicKey.publicKeyCommitment,
-                publicKey.pkSeed,
-                publicKey.hypertreeRoot,
-                signature
             )
         );
     }
@@ -212,7 +175,7 @@ contract RetagDigestHarness {
             SHRINCS.PublicKey calldata publicKey,
             bytes32 actionType,
             bytes32 payloadHash,
-            SPHINCSPlusC.Signature calldata signature
+            bytes calldata signature
         ) = SHRINCS.statelessActionEnvelope(payload);
         return keccak256(
             abi.encode(
@@ -236,11 +199,8 @@ contract RetagDigestHarness {
             SHRINCS.PublicKey memory publicKey,
             bytes32 actionType,
             bytes32 payloadHash,
-            SPHINCSPlusC.Signature memory signature
-        ) = abi.decode(
-            payload,
-            (SHRINCS.PublicKey, bytes32, bytes32, SPHINCSPlusC.Signature)
-        );
+            bytes memory signature
+        ) = abi.decode(payload, (SHRINCS.PublicKey, bytes32, bytes32, bytes));
         return keccak256(
             abi.encode(
                 publicKey.statefulPublicKey,
@@ -258,12 +218,9 @@ contract RetagDigestHarness {
     // stateless-action verify path consumes, so two envelopes with the same
     // digest authorize the same signature. The public-key fields enter
     // whole because validPublicKey width-pins all four and the installed
-    // commitment binds them; every signature `bytes` field enters as the
-    // single 32-byte word the verifier reads, and every dynamic array is
-    // walked over the fixed element count the verifier iterates. Trailing
-    // bytes and trailing elements past those are the accepted length
-    // malleability ([docs/guard-applicability-review.md] rows 25-41), so
-    // they must not move this digest.
+    // commitment binds them; the fixed-layout signature enters whole
+    // because SPHINCSPlusC.verify accepts exactly StatelessLayout.PQ_LEN
+    // bytes and reads every one of them.
     function consumedStatelessAction(bytes calldata payload)
         external
         pure
@@ -273,7 +230,7 @@ contract RetagDigestHarness {
             SHRINCS.PublicKey calldata publicKey,
             bytes32 actionType,
             bytes32 payloadHash,
-            SPHINCSPlusC.Signature calldata signature
+            bytes calldata signature
         ) = SHRINCS.statelessActionEnvelope(payload);
         consumed = keccak256(
             abi.encode(
@@ -283,110 +240,9 @@ contract RetagDigestHarness {
                 publicKey.hypertreeRoot,
                 actionType,
                 payloadHash,
-                // FORSMinusC.sol:104 pins this randomizer to 32 bytes.
-                signature.fors.randomizer,
-                signature.fors.counter
+                signature
             )
         );
-        consumed = _consumedFors(consumed, signature.fors);
-        consumed = _consumedHypertree(consumed, signature.hypertree);
-    }
-
-    // signature-only -----------------------------------------------------
-    function retagSignature(bytes calldata payload)
-        external
-        pure
-        returns (bytes32)
-    {
-        SPHINCSPlusC.Signature calldata signature =
-            SPHINCSPlusC.statelessSignatureEnvelope(payload);
-        return keccak256(abi.encode(signature));
-    }
-
-    function abiSignature(bytes calldata payload)
-        external
-        pure
-        returns (bytes32)
-    {
-        SPHINCSPlusC.Signature memory signature =
-            abi.decode(payload, (SPHINCSPlusC.Signature));
-        return keccak256(abi.encode(signature));
-    }
-
-    // _consumedFors: Fold in the FORS-C values the verifier reads. It walks
-    // exactly NUM_FORS_TREES - 1 entries and FORS_TREE_HEIGHT auth nodes per
-    // entry, each read as one calldata word (FORSMinusC.sol:170,235-275).
-    function _consumedFors(
-        bytes32 running,
-        FORSMinusC.ForsSignature calldata forsSignature
-    ) private pure returns (bytes32) {
-        uint256 signedTrees = uint256(SHRINCSParams.NUM_FORS_TREES) - 1;
-        uint256 forsHeight = uint256(SHRINCSParams.FORS_TREE_HEIGHT);
-        for (uint256 i = 0; i < signedTrees; ++i) {
-            FORSMinusC.ForsEntry calldata entry = forsSignature.entries[i];
-            running =
-                keccak256(abi.encode(running, _firstWord(entry.secretLeaf)));
-            for (uint256 j = 0; j < forsHeight; ++j) {
-                running = keccak256(
-                    abi.encode(running, _firstWord(entry.authPath[j]))
-                );
-            }
-        }
-        return running;
-    }
-
-    // _consumedHypertree: Fold in the per-layer WOTS-C and subtree values
-    // the verifier reads. It walks exactly NUM_HYPERTREE_LAYERS layers,
-    // NUM_WOTS_CHAINS chain values, and HYPERTREE_HEIGHT /
-    // NUM_HYPERTREE_LAYERS auth nodes per layer (Hypertree.sol:84-130,
-    // 265-275).
-    function _consumedHypertree(
-        bytes32 running,
-        Hypertree.HypertreeLayerSignature[] calldata layers
-    ) private pure returns (bytes32) {
-        uint256 layerCount = uint256(SHRINCSParams.NUM_HYPERTREE_LAYERS);
-        uint256 chainCount = uint256(SHRINCSParams.NUM_WOTS_CHAINS);
-        uint256 subtreeHeight =
-            uint256(SHRINCSParams.HYPERTREE_HEIGHT) / layerCount;
-        for (uint256 i = 0; i < layerCount; ++i) {
-            Hypertree.HypertreeLayerSignature calldata layerSig = layers[i];
-            WOTSPlusC.WotsCSignature calldata wotsC = layerSig.wotsCSignature;
-            running = keccak256(
-                abi.encode(
-                    running,
-                    _firstWord(layerSig.wotsCPkHash),
-                    _firstWord(wotsC.randomizer),
-                    wotsC.counter
-                )
-            );
-            for (uint256 j = 0; j < chainCount; ++j) {
-                running = keccak256(
-                    abi.encode(running, _firstWord(wotsC.chains[j]))
-                );
-            }
-            for (uint256 j = 0; j < subtreeHeight; ++j) {
-                running = keccak256(
-                    abi.encode(running, _firstWord(layerSig.authPath[j]))
-                );
-            }
-        }
-        return running;
-    }
-
-    // _firstWord: The one 32-byte calldata word every verifier read of a
-    // hash-width `bytes` field takes. Bytes past this word are never read,
-    // which is exactly the accepted length malleability.
-    function _firstWord(bytes calldata field)
-        private
-        pure
-        returns (bytes32 word)
-    {
-        // Memory-safe: reads one calldata word into a stack variable; no
-        // memory is written.
-        assembly ("memory-safe") {
-            // Load the leading 32 bytes of the field from calldata.
-            word := calldataload(field.offset)
-        }
     }
 }
 
@@ -550,7 +406,7 @@ contract SHRINCSCalldataRetagTest is Test {
             );
         require(signOk, "stateless action begin");
 
-        SPHINCSPlusC.Signature memory signature;
+        StatelessSignatureTypes.Signature memory signature;
         bool completeOk;
         (signature, completeOk) =
             SHRINCSAccountSigningFacade.completeStatelessSession(
@@ -561,7 +417,12 @@ contract SHRINCSCalldataRetagTest is Test {
         hash = SHRINCS.statelessActionMessageHash(
             acct.currentSHRINCSPublicKey(), context
         );
-        payload = abi.encode(publicKey, actionType, payloadHash, signature);
+        payload = abi.encode(
+            publicKey,
+            actionType,
+            payloadHash,
+            SHRINCSTestCodec.encodeCompactSignature(signature)
+        );
         account = address(acct);
     }
 
@@ -620,7 +481,7 @@ contract SHRINCSCalldataRetagTest is Test {
             signingKey, publicKey, abi.encodePacked(sigHash)
         );
         require(beginOk, "begin");
-        SPHINCSPlusC.Signature memory signature;
+        StatelessSignatureTypes.Signature memory signature;
         bool completeOk;
         (signature, completeOk) =
             SHRINCSAccountSigningFacade.completeStatelessSession(
@@ -632,12 +493,11 @@ contract SHRINCSCalldataRetagTest is Test {
             SHRINCSAccountSigningFacade.publicKeyCommitmentWord(publicKey)
         );
         sEnvelope =
-            SHRINCSTestCodec.encodeStatelessEnvelope(publicKey, signature);
+            SHRINCSTestCodec.encodeCompactPayload(publicKey, signature);
         sigKey = SHRINCS.encodeStatelessKey(
             signingKey.pkSeed, signingKey.hypertreeRoot
         );
-        sigEnvelope =
-            SPHINCSPlusC.encodeStatelessSignatureEnvelope(signature);
+        sigEnvelope = SHRINCSTestCodec.encodeCompactSignature(signature);
     }
 
     // ---------------------------------------------------------------- //
@@ -649,22 +509,6 @@ contract SHRINCSCalldataRetagTest is Test {
             digest.retagStateful(statefulEnvelope),
             digest.abiStateful(statefulEnvelope),
             "stateful re-tag must read the same fields as abi.decode"
-        );
-    }
-
-    function testDifferentialStatelessVector() public view {
-        assertEq(
-            digest.retagStateless(statelessEnvelope),
-            digest.abiStateless(statelessEnvelope),
-            "stateless re-tag must read the same fields as abi.decode"
-        );
-    }
-
-    function testDifferentialSignatureVector() public view {
-        assertEq(
-            digest.retagSignature(signatureEnvelope),
-            digest.abiSignature(signatureEnvelope),
-            "signature re-tag must read the same fields as abi.decode"
         );
     }
 
@@ -757,72 +601,16 @@ contract SHRINCSCalldataRetagTest is Test {
         );
     }
 
-    /// @dev Fuzz over well-formed, re-encoded signature-only envelopes,
-    /// exercising the single-offset-word re-tag over the deeply nested
-    /// SPHINCSPlusC.Signature. Shapes vary in both dynamic members: a
-    /// multi-entry FORS signature (1..4 entries) and a possibly non-empty
-    /// hypertree (0..2 layers, each a fully populated WOTS-C layer), so the
-    /// re-tag is proven against abi.decode across the full signature shape,
-    /// not just the empty-hypertree / single-entry corner.
-    function testFuzzDifferentialSignatureWellFormed(
-        bytes calldata randomizer,
-        uint32 counter,
-        bytes calldata secretLeaf,
-        bytes[] calldata authPath,
-        uint8 entryShape,
-        uint8 layerShape
-    ) public view {
-        uint256 entryCount = 1 + (uint256(entryShape) % 4);
-        FORSMinusC.ForsEntry[] memory entries =
-            new FORSMinusC.ForsEntry[](entryCount);
-        for (uint256 i = 0; i < entryCount; i++) {
-            entries[i] = FORSMinusC.ForsEntry({
-                secretLeaf: secretLeaf, authPath: authPath
-            });
-        }
-        uint256 layerCount = uint256(layerShape) % 3;
-        Hypertree.HypertreeLayerSignature[] memory hypertree =
-            new Hypertree.HypertreeLayerSignature[](layerCount);
-        for (uint256 i = 0; i < layerCount; i++) {
-            hypertree[i] = Hypertree.HypertreeLayerSignature({
-                wotsCPkHash: secretLeaf,
-                wotsCSignature: WOTSPlusC.WotsCSignature({
-                    randomizer: randomizer,
-                    counter: counter,
-                    chains: authPath
-                }),
-                authPath: authPath
-            });
-        }
-        SPHINCSPlusC.Signature memory signature = SPHINCSPlusC.Signature({
-            fors: FORSMinusC.ForsSignature({
-                randomizer: randomizer, counter: counter, entries: entries
-            }),
-            hypertree: hypertree
-        });
-        bytes memory envelope =
-            SPHINCSPlusC.encodeStatelessSignatureEnvelope(signature);
-        assertEq(
-            digest.retagSignature(envelope),
-            digest.abiSignature(envelope),
-            "well-formed signature re-tag must match abi.decode"
-        );
-    }
-
     /// @dev Fuzz over well-formed stateless ACTION envelopes: the same
-    /// four-word interleaved head as the stateful action, but wrapping the
-    /// deeply nested SPHINCSPlusC.Signature (varying FORS entry count and
-    /// hypertree layer count) so the interleaved re-tag is proven against
-    /// abi.decode across the full stateless signature shape.
+    /// four-word interleaved head as the stateful action, with the
+    /// fixed-layout signature as a trailing `bytes` field, so the public-key
+    /// re-tag and the bounded signature slice are proven against abi.decode
+    /// across arbitrary field lengths.
     function testFuzzDifferentialStatelessActionWellFormed(
         bytes calldata pkBytes,
         bytes32 actionType,
         bytes32 payloadHash,
-        bytes calldata randomizer,
-        uint32 counter,
-        bytes[] calldata authPath,
-        uint8 entryShape,
-        uint8 layerShape
+        bytes calldata signature
     ) public view {
         SHRINCS.PublicKey memory publicKey =
             SHRINCS.PublicKey({
@@ -831,34 +619,6 @@ contract SHRINCSCalldataRetagTest is Test {
                 pkSeed: pkBytes,
                 hypertreeRoot: pkBytes
             });
-        uint256 entryCount = 1 + (uint256(entryShape) % 4);
-        FORSMinusC.ForsEntry[] memory entries =
-            new FORSMinusC.ForsEntry[](entryCount);
-        for (uint256 i = 0; i < entryCount; i++) {
-            entries[i] = FORSMinusC.ForsEntry({
-                secretLeaf: randomizer, authPath: authPath
-            });
-        }
-        uint256 layerCount = uint256(layerShape) % 3;
-        Hypertree.HypertreeLayerSignature[] memory hypertree =
-            new Hypertree.HypertreeLayerSignature[](layerCount);
-        for (uint256 i = 0; i < layerCount; i++) {
-            hypertree[i] = Hypertree.HypertreeLayerSignature({
-                wotsCPkHash: randomizer,
-                wotsCSignature: WOTSPlusC.WotsCSignature({
-                    randomizer: randomizer,
-                    counter: counter,
-                    chains: authPath
-                }),
-                authPath: authPath
-            });
-        }
-        SPHINCSPlusC.Signature memory signature = SPHINCSPlusC.Signature({
-            fors: FORSMinusC.ForsSignature({
-                randomizer: randomizer, counter: counter, entries: entries
-            }),
-            hypertree: hypertree
-        });
         bytes memory envelope =
             abi.encode(publicKey, actionType, payloadHash, signature);
         assertEq(
@@ -891,36 +651,102 @@ contract SHRINCSCalldataRetagTest is Test {
         );
     }
 
+    /// @dev The flat payload has no offset words, so the head probes below
+    /// land in field bytes (the stateful public key) and must fail the
+    /// commitment check. Unlike the ABI envelope, this path never reverts,
+    /// so each case asserts the exact invalid selector. Positive control:
+    /// testStatelessEnvelopeVerifies.
     function testAdversarialStatelessRejectsMalformed() public view {
-        _assertStatelessNotSuccess(
-            _e1b(statelessEnvelope, 0), "stateless E1b head 0"
+        _assertStatelessInvalid(
+            _e1b(statelessEnvelope, 0), "stateless word 0 = 2^255"
         );
-        _assertStatelessNotSuccess(
-            _e1b(statelessEnvelope, 1), "stateless E1b head 1"
+        _assertStatelessInvalid(
+            _e1b(statelessEnvelope, 1), "stateless word 1 = 2^255"
         );
-        _assertStatelessNotSuccess(
-            _truncate(statelessEnvelope), "stateless truncated"
+        _assertStatelessInvalid(
+            _oobOffset(statelessEnvelope), "stateless word 0 huge"
         );
-        _assertStatelessNotSuccess(
-            _oobOffset(statelessEnvelope), "stateless OOB offset"
+        _assertStatelessInvalid(
+            _aliasSecondOffset(statelessEnvelope),
+            "stateless word 1 = word 0"
         );
-        _assertStatelessNotSuccess(
-            _aliasSecondOffset(statelessEnvelope), "stateless aliased"
+        _assertStatelessInvalid(
+            _truncate(statelessEnvelope), "stateless one byte short"
+        );
+        _assertStatelessInvalid(
+            bytes.concat(statelessEnvelope, bytes1(0)),
+            "stateless one byte long"
+        );
+        _assertStatelessInvalid(
+            _aliasLayers(
+                statelessEnvelope,
+                StatelessLayout.PK_LEN + StatelessLayout.FORS_LEN
+            ),
+            "stateless layer 0 = layer 1"
         );
     }
 
+    /// @dev The same probes against the PQ section alone, through the
+    /// signature-only verifier. Positive control:
+    /// testSignatureEnvelopeVerifies.
     function testAdversarialSignatureRejectsMalformed() public view {
-        _assertSignatureNotSuccess(
-            _e1b(signatureEnvelope, 0), "signature E1b head 0"
+        _assertSignatureInvalid(
+            _e1b(signatureEnvelope, 0), "signature word 0 = 2^255"
         );
-        _assertSignatureNotSuccess(
-            _truncate(signatureEnvelope), "signature truncated"
+        _assertSignatureInvalid(
+            _oobOffset(signatureEnvelope), "signature word 0 huge"
         );
-        _assertSignatureNotSuccess(
-            _oobOffset(signatureEnvelope), "signature OOB offset"
+        _assertSignatureInvalid(
+            _truncate(signatureEnvelope), "signature one byte short"
         );
-        _assertSignatureNotSuccess(
-            _aliasNestedOffset(signatureEnvelope), "signature nested aliased"
+        _assertSignatureInvalid(
+            bytes.concat(signatureEnvelope, bytes1(0)),
+            "signature one byte long"
+        );
+        _assertSignatureInvalid(
+            _aliasLayers(signatureEnvelope, StatelessLayout.FORS_LEN),
+            "signature layer 0 = layer 1"
+        );
+    }
+
+    /// @dev statelessActionEnvelope is the one stateless path still reading
+    /// offset words, so these probes hit the re-tag itself. The hash matches
+    /// the signed action, so the flow reaches the probed offset. Positive
+    /// control: testStatelessActionEnvelopeVerifies.
+    function testAdversarialStatelessActionRejectsMalformed() public view {
+        bytes memory valid = statelessActionPayload;
+        _assertStatelessActionNotSuccess(
+            _e1b(valid, 0), "action publicKey offset = 2^255"
+        );
+        _assertStatelessActionNotSuccess(
+            _e1b(valid, 3), "action signature offset = 2^255"
+        );
+        _assertStatelessActionNotSuccess(
+            _oobOffset(valid), "action publicKey offset huge"
+        );
+        _assertStatelessActionNotSuccess(
+            _setWord(valid, 3, 0xffffffffffff),
+            "action signature offset huge"
+        );
+        // The offset addition wraps: the length word is read one byte before
+        // the payload, so the length no longer equals PQ_LEN.
+        _assertStatelessActionNotSuccess(
+            _setWord(valid, 3, type(uint256).max),
+            "action signature offset wraps"
+        );
+        // The signature reads the public-key tail as its length and body.
+        _assertStatelessActionNotSuccess(
+            _setWord(valid, 3, _word(valid, 0)),
+            "action signature aliases publicKey"
+        );
+        // abi.encode pads the signature to a word boundary, and cutting only
+        // padding leaves the signature intact. Cut the padding plus one whole
+        // word, so the last auth node reads as zeros past the calldata end.
+        _assertStatelessActionNotSuccess(
+            _truncateBy(
+                valid, (32 - (StatelessLayout.PQ_LEN % 32)) % 32 + 32
+            ),
+            "action signature body truncated"
         );
     }
 
@@ -938,7 +764,7 @@ contract SHRINCSCalldataRetagTest is Test {
                 statelessKey, statelessHash, statelessEnvelope
             ),
             SELECTOR,
-            "valid stateless envelope must verify (positive control)"
+            "valid stateless payload must verify (positive control)"
         );
     }
 
@@ -946,7 +772,7 @@ contract SHRINCSCalldataRetagTest is Test {
         assertEq(
             sphincs.verify(signatureKey, signatureHash, signatureEnvelope),
             SELECTOR,
-            "valid signature envelope must verify (positive control)"
+            "valid stateless signature must verify (positive control)"
         );
     }
 
@@ -973,6 +799,48 @@ contract SHRINCSCalldataRetagTest is Test {
             ),
             MAGIC_VALUE,
             "valid stateless action envelope must verify (positive control)"
+        );
+    }
+
+    /// @dev Pins the encoding malleability SHRINCS.statelessActionEnvelope
+    /// accepts by design. The re-tag reads the signature in place and never
+    /// checks the bytes around it, so a framing that leaves every field value
+    /// unchanged is a second encoding of the same signature: not a forgery,
+    /// but envelope bytes are not unique, so consumers must key on field
+    /// values. The flat verify and verifyStateless payloads have no such
+    /// framing, and SHRINCSCompactAdversarial pins their exact-length
+    /// rejection. If this test fails, the accepted framing has changed.
+    function testStatelessActionEnvelopeEncodingMalleability() public view {
+        bytes memory valid = statelessActionPayload;
+        // abi.encode pads the signature body up to a 32-byte boundary.
+        uint256 padding = (32 - (StatelessLayout.PQ_LEN % 32)) % 32;
+        assertGt(padding, 0, "the signature must be padded");
+
+        _assertStatelessActionSecondEncoding(
+            _truncateBy(valid, 1), "one padding byte removed"
+        );
+        _assertStatelessActionSecondEncoding(
+            _truncateBy(valid, padding), "all padding removed"
+        );
+        _assertStatelessActionSecondEncoding(
+            bytes.concat(valid, bytes32(uint256(7))), "trailing bytes added"
+        );
+        bytes memory dirtyPadding = bytes.concat(valid);
+        dirtyPadding[dirtyPadding.length - 1] = 0xff;
+        _assertStatelessActionSecondEncoding(dirtyPadding, "dirty padding");
+
+        // The boundary: one more byte removes signature data, which then
+        // reads as zero past the end of calldata and changes the signature.
+        assertEq(
+            statelessAccount.isValidSignature(
+                statelessActionHash,
+                abi.encodePacked(
+                    bytes1(MODE_STATELESS_ACTION),
+                    _truncateBy(valid, padding + 1)
+                )
+            ),
+            INVALID_SIGNATURE,
+            "removing signature data must be rejected"
         );
     }
 
@@ -1154,91 +1022,6 @@ contract SHRINCSCalldataRetagTest is Test {
         }
     }
 
-    /// @dev Byte-flip battery for the two-struct stateless envelope, driven
-    /// through the real verifier.verifyStateless path (prepareStatelessDele-
-    /// gation + the hand-written sliceStatelessSignatureEnvelope assembly).
-    /// Flip exactly one byte and require a non-fail-open trichotomy: a revert
-    /// or the invalid selector (a load-bearing byte changed, or the framing
-    /// broke), or the verify selector — and on an accepted framing the
-    /// zero-copy re-tag must still read byte-identically to abi.decode, so no
-    /// flip can leak a wrong selector or a re-tag/abi.decode disagreement.
-    function testFuzzStatelessEnvelopeByteFlip(uint256 position, uint8 flip)
-        public
-        view
-    {
-        vm.assume(flip != 0);
-        bytes memory mutant = _flipByte(statelessEnvelope, position, flip);
-        try verifier.verifyStateless(
-            statelessKey, statelessHash, mutant
-        ) returns (
-            bytes4 result
-        ) {
-            if (result == SELECTOR) {
-                try digest.abiStateless(mutant) returns (bytes32 abiD) {
-                    assertEq(
-                        digest.retagStateless(mutant),
-                        abiD,
-                        "re-tag must match abi.decode on accepted framing"
-                    );
-                } catch {}
-            } else {
-                assertEq(
-                    result,
-                    INVALID_SIGNATURE,
-                    "non-success must be the invalid selector"
-                );
-            }
-        } catch {
-            // A revert on a malformed envelope is a safe rejection.
-        }
-    }
-
-    /// @dev Byte-flip battery for the signature-only (shape-2) envelope,
-    /// the modern stand-in for the shape-2 differential walk dropped with
-    /// the canonicity channel in fe472df. Flip exactly one byte of the
-    /// valid SPHINCSPlusC.Signature envelope and drive it through the real
-    /// SPHINCSPlusC verify with the real vector key. A single flip lands in
-    /// the framing trichotomy: a revert or the invalid selector (a load-
-    /// bearing byte changed, or the framing broke), or success. The codec
-    /// is ABI-tolerant of non-canonical framing since fe472df, so a flip
-    /// the fixed-width calldata reads ignore (e.g. a length word of a
-    /// 32-byte field) still verifies the same signature; on an accepted
-    /// framing, confirm the zero-copy re-tag still reads byte-identically
-    /// to abi.decode (this suite's core invariant, exercised here on an
-    /// adversarial envelope rather than a re-encoded canonical one).
-    function testFuzzSignatureEnvelopeByteFlip(uint256 position, uint8 flip)
-        public
-        view
-    {
-        vm.assume(flip != 0);
-        bytes memory mutant = _flipByte(signatureEnvelope, position, flip);
-        try sphincs.verify(signatureKey, signatureHash, mutant) returns (
-            bytes4 result
-        ) {
-            if (result == SELECTOR) {
-                // A materializing digest can itself revert on a
-                // pathological-but-accepted framing (e.g. a length word
-                // grown past the buffer); that is not a re-tag/abi.decode
-                // disagreement, so only compare when abi.decode succeeds.
-                try digest.abiSignature(mutant) returns (bytes32 abiD) {
-                    assertEq(
-                        digest.retagSignature(mutant),
-                        abiD,
-                        "re-tag must match abi.decode on accepted framing"
-                    );
-                } catch {}
-            } else {
-                assertEq(
-                    result,
-                    INVALID_SIGNATURE,
-                    "non-success must be the invalid selector"
-                );
-            }
-        } catch {
-            // A revert on a malformed envelope is a safe rejection.
-        }
-    }
-
     /// @dev Demonstrates the success-and-equivalent trichotomy branch: a
     /// non-canonical re-encoding (trailing padding bytes) of the valid
     /// envelope still verifies and decodes to the same fields.
@@ -1271,27 +1054,60 @@ contract SHRINCSCalldataRetagTest is Test {
         } catch {}
     }
 
-    function _assertStatelessNotSuccess(
-        bytes memory envelope,
+    function _assertStatelessInvalid(
+        bytes memory payload,
         string memory label
     ) internal view {
-        try verifier.verifyStateless(
-            statelessKey, statelessHash, envelope
+        assertEq(
+            verifier.verifyStateless(statelessKey, statelessHash, payload),
+            INVALID_SIGNATURE,
+            label
+        );
+    }
+
+    function _assertSignatureInvalid(
+        bytes memory signature,
+        string memory label
+    ) internal view {
+        assertEq(
+            sphincs.verify(signatureKey, signatureHash, signature),
+            INVALID_SIGNATURE,
+            label
+        );
+    }
+
+    /// @dev `payload` must verify and must read the same field values as the
+    /// valid payload.
+    function _assertStatelessActionSecondEncoding(
+        bytes memory payload,
+        string memory label
+    ) internal view {
+        assertEq(
+            statelessAccount.isValidSignature(
+                statelessActionHash,
+                abi.encodePacked(bytes1(MODE_STATELESS_ACTION), payload)
+            ),
+            MAGIC_VALUE,
+            label
+        );
+        assertEq(
+            digest.consumedStatelessAction(payload),
+            statelessActionConsumed,
+            label
+        );
+    }
+
+    function _assertStatelessActionNotSuccess(
+        bytes memory payload,
+        string memory label
+    ) internal view {
+        try statelessAccount.isValidSignature(
+            statelessActionHash,
+            abi.encodePacked(bytes1(MODE_STATELESS_ACTION), payload)
         ) returns (
             bytes4 result
         ) {
-            assertTrue(result != SELECTOR, label);
-        } catch {}
-    }
-
-    function _assertSignatureNotSuccess(
-        bytes memory envelope,
-        string memory label
-    ) internal view {
-        try sphincs.verify(signatureKey, signatureHash, envelope) returns (
-            bytes4 result
-        ) {
-            assertTrue(result != SELECTOR, label);
+            assertTrue(result != MAGIC_VALUE, label);
         } catch {}
     }
 
@@ -1301,9 +1117,10 @@ contract SHRINCSCalldataRetagTest is Test {
 
     /// @dev E1b: set the head offset word at index `headWord` to 2^255, past
     /// solc's signed tail bound. `headWord` selects which head slot is
-    /// corrupted: word 0 is the first head offset (the signature-only
-    /// envelope's only head word, or a two-struct envelope's publicKey
-    /// offset), word 1 is a two-struct envelope's second (signature) offset.
+    /// corrupted: word 0 is the first head offset (an envelope's publicKey
+    /// offset), word 1 is a two-struct envelope's second (signature) offset,
+    /// and word 3 is an action envelope's signature offset. On a flat
+    /// stateless payload, the same bytes are field data instead of offsets.
     function _e1b(bytes memory envelope, uint256 headWord)
         internal
         pure
@@ -1326,6 +1143,66 @@ contract SHRINCSCalldataRetagTest is Test {
         out = bytes.concat(envelope);
         assembly {
             mstore(out, sub(mload(out), 1))
+        }
+    }
+
+    /// @dev Set the 32-byte word at index `index` to `value`.
+    function _setWord(bytes memory envelope, uint256 index, uint256 value)
+        internal
+        pure
+        returns (bytes memory out)
+    {
+        out = bytes.concat(envelope);
+        uint256 slot = 32 + index * 32;
+        // Memory layout of `out`:
+        //   [0..32)                 length
+        //   [slot..slot+32)         word `index`, overwritten
+        assembly {
+            mstore(add(out, slot), value)
+        }
+    }
+
+    /// @dev Read the 32-byte word at index `index`.
+    function _word(bytes memory envelope, uint256 index)
+        internal
+        pure
+        returns (uint256 value)
+    {
+        uint256 slot = 32 + index * 32;
+        // Memory layout of `envelope`:
+        //   [0..32)                 length
+        //   [slot..slot+32)         word `index`, read
+        assembly {
+            value := mload(add(envelope, slot))
+        }
+    }
+
+    /// @dev Remove the last `count` bytes of the envelope.
+    function _truncateBy(bytes memory envelope, uint256 count)
+        internal
+        pure
+        returns (bytes memory out)
+    {
+        out = bytes.concat(envelope);
+        // Memory layout of `out`:
+        //   [0..32)                 length, reduced by `count`
+        assembly {
+            mstore(out, sub(mload(out), count))
+        }
+    }
+
+    /// @dev Copy hypertree layer 1 over layer 0, keeping the total length, so
+    /// only a check on the layer contents can reject it. `hypertreeOffset` is
+    /// where the hypertree section starts in `envelope`.
+    function _aliasLayers(bytes memory envelope, uint256 hypertreeOffset)
+        internal
+        pure
+        returns (bytes memory out)
+    {
+        out = bytes.concat(envelope);
+        for (uint256 i = 0; i < StatelessLayout.LAYER_LEN; ++i) {
+            out[hypertreeOffset + i] =
+                out[hypertreeOffset + StatelessLayout.LAYER_LEN + i];
         }
     }
 
@@ -1353,25 +1230,6 @@ contract SHRINCSCalldataRetagTest is Test {
         out = bytes.concat(envelope);
         assembly {
             mstore(add(out, 64), mload(add(out, 32)))
-        }
-    }
-
-    /// @dev Alias the signature-only envelope's nested hypertree offset onto
-    /// its fors offset. The one-word outer head has no head-level alias, so
-    /// this in-bounds aliasing case lives one level down, inside the single
-    /// wrapped SPHINCSPlusC.Signature struct.
-    function _aliasNestedOffset(bytes memory envelope)
-        internal
-        pure
-        returns (bytes memory out)
-    {
-        out = bytes.concat(envelope);
-        // The outer offset at content[0..32) points to the struct start at
-        // content byte 32; that struct's head is the fors offset at
-        // content[32..64) and the hypertree offset at content[64..96). Point
-        // the hypertree offset at the fors tail (both are struct-relative).
-        assembly {
-            mstore(add(out, 96), mload(add(out, 64)))
         }
     }
 

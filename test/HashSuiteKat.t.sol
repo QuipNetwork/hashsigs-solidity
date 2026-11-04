@@ -337,7 +337,7 @@ contract HashSuiteKatTest is Test {
         );
     }
 
-    // Production "wots-c-pk" preimage (Hypertree.verifyWotsC32):
+    // Production "wots-c-pk" preimage (Hypertree._verifyWotsC32):
     //   [0..9)   "wots-c-pk"
     //   [9..41)  pkSeed
     //   [41..73) WOTS_PK address (type 1) [FIPS205 §4.2]

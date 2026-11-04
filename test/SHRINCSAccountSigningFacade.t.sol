@@ -16,6 +16,10 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 pragma solidity ^0.8.28;
 
+import {SHRINCSTestCodec} from "./helpers/SHRINCSTestCodec.sol";
+import {
+    StatelessSignatureTypes
+} from "./helpers/StatelessSignatureTypes.sol";
 import {Test} from "../lib/forge-std/src/Test.sol";
 import {SHRINCS} from "../contracts/SHRINCS.sol";
 import {SPHINCSPlusC} from "../contracts/SPHINCSPlusC.sol";
@@ -253,7 +257,7 @@ contract SHRINCSAccountSigningFacadeTest is Test {
         );
 
         // line-length: allow — fmt canonical tuple head exceeds cap
-        SPHINCSPlusC.Signature memory signature;
+        StatelessSignatureTypes.Signature memory signature;
         bool completeOk;
         (signature, completeOk) =
             SHRINCSAccountSigningFacade.completeStatelessSession(
@@ -262,7 +266,10 @@ contract SHRINCSAccountSigningFacadeTest is Test {
         assertTrue(completeOk, "stateless session completion must succeed");
 
         bool verifyOk = account.verifyStatelessAction(
-            publicKey, actionType, payloadHash, signature
+            publicKey,
+            actionType,
+            payloadHash,
+            SHRINCSTestCodec.encodeCompactSignature(signature)
         );
         assertTrue(
             verifyOk,
@@ -316,7 +323,7 @@ contract SHRINCSAccountSigningFacadeTest is Test {
         assertTrue(signOk, "stateless action signing must succeed");
 
         // line-length: allow — fmt canonical tuple head exceeds cap
-        SPHINCSPlusC.Signature memory signature;
+        StatelessSignatureTypes.Signature memory signature;
         bool completeOk;
         (signature, completeOk) =
             SHRINCSAccountSigningFacade.completeStatelessSession(
@@ -339,7 +346,10 @@ contract SHRINCSAccountSigningFacadeTest is Test {
         );
 
         bool verifyOk = account.verifyStatelessAction(
-            publicKey, actionType, payloadHash, signature
+            publicKey,
+            actionType,
+            payloadHash,
+            SHRINCSTestCodec.encodeCompactSignature(signature)
         );
         assertTrue(verifyOk, "wrapper must accept the stateless action");
         assertEq(
@@ -390,7 +400,7 @@ contract SHRINCSAccountSigningFacadeTest is Test {
         assertTrue(signOk, "stateless action signing must succeed");
 
         // line-length: allow — fmt canonical tuple head exceeds cap
-        SPHINCSPlusC.Signature memory signature;
+        StatelessSignatureTypes.Signature memory signature;
         bool completeOk;
         (signature, completeOk) =
             SHRINCSAccountSigningFacade.completeStatelessSession(
@@ -468,7 +478,7 @@ contract SHRINCSAccountSigningFacadeTest is Test {
             "rotation should sign the current wrapper nonce"
         );
 
-        SPHINCSPlusC.Signature memory recoverySignature;
+        StatelessSignatureTypes.Signature memory recoverySignature;
         bool completeOk;
         (recoverySignature, completeOk) =
             SHRINCSAccountSigningFacade.completeStatelessSession(
@@ -480,7 +490,9 @@ contract SHRINCSAccountSigningFacadeTest is Test {
         );
 
         bool rotateOk = account.rotateToFreshKey(
-            currentPublicKey, recoverySignature, nextKey
+            currentPublicKey,
+            SHRINCSTestCodec.encodeCompactSignature(recoverySignature),
+            nextKey
         );
         assertTrue(
             rotateOk,
@@ -545,7 +557,7 @@ contract SHRINCSAccountSigningFacadeTest is Test {
             "rotation should sign the current wrapper nonce"
         );
 
-        SPHINCSPlusC.Signature memory recoverySignature;
+        StatelessSignatureTypes.Signature memory recoverySignature;
         bool completeOk;
         (recoverySignature, completeOk) =
             SHRINCSAccountSigningFacade.completeStatelessSession(
@@ -556,7 +568,9 @@ contract SHRINCSAccountSigningFacadeTest is Test {
         );
 
         bool rotateOk = account.rotateFullKey(
-            currentPublicKey, recoverySignature, nextKey
+            currentPublicKey,
+            SHRINCSTestCodec.encodeCompactSignature(recoverySignature),
+            nextKey
         );
         assertTrue(
             rotateOk, "wrapper must accept the account-aware full rotation"

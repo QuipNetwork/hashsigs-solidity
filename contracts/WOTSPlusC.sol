@@ -37,15 +37,6 @@ library WOTSPlusC {
     bytes32 internal constant WOTS_C_CHAIN_TAG = "wots-c-chain";
     uint256 internal constant WOTS_C_CHAIN_TAG_LEN = 12;
 
-    struct WotsCSignature {
-        // Per-layer randomizer for this WOTS-C signature.
-        bytes randomizer;
-        // Grinding counter for the WOTS-C target-sum constraint.
-        uint32 counter;
-        // Revealed WOTS-C chain values for this layer.
-        bytes[] chains;
-    }
-
     // baseW16Digit32: Read one base-16 digit from a fixed 32-byte WOTS
     // digest.
     function baseW16Digit32(bytes32 digest, uint256 index)

@@ -16,6 +16,10 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 pragma solidity ^0.8.28;
 
+import {SHRINCSTestCodec} from "./helpers/SHRINCSTestCodec.sol";
+import {
+    StatelessSignatureTypes
+} from "./helpers/StatelessSignatureTypes.sol";
 import {Test} from "../lib/forge-std/src/Test.sol";
 import {SHRINCS} from "../contracts/SHRINCS.sol";
 import {SPHINCSPlusC} from "../contracts/SPHINCSPlusC.sol";
@@ -35,7 +39,7 @@ contract SHRINCSAddressTweakSignerHarness is SHRINCSStatelessVectorSigner {
         bytes32 expectedPublicKeyCommitment,
         SHRINCS.PublicKey calldata publicKey,
         bytes calldata message,
-        SPHINCSPlusC.Signature calldata signature
+        bytes calldata signature
     ) external view returns (bool) {
         return SHRINCS.verifyStatelessUncheckedMessage(
             expectedPublicKeyCommitment, publicKey, message, signature
@@ -117,12 +121,15 @@ contract SHRINCSAddressTweakMutationTest is Test {
         (signingKey, publicKey, commitment) =
             _rebindHypertreeRoot(signingKey, publicKey, omittedRoot);
 
-        SPHINCSPlusC.Signature memory signature;
+        StatelessSignatureTypes.Signature memory signature;
         (publicKey, signature) = _signWithKey(signingKey, publicKey, message);
 
         assertFalse(
             signer.verifyUnsafeRaw(
-                commitment, publicKey, message, signature
+                commitment,
+                publicKey,
+                message,
+                SHRINCSTestCodec.encodeCompactSignature(signature)
             ),
             "signature built without the WOTS_PK ADRS must be rejected"
         );
@@ -146,13 +153,16 @@ contract SHRINCSAddressTweakMutationTest is Test {
         assertTrue(ok, "session must start");
 
         SHRINCS.PublicKey memory publicKey;
-        SPHINCSPlusC.Signature memory signature;
+        StatelessSignatureTypes.Signature memory signature;
         (publicKey, signature, ok) = signer.completeSession(sessionId);
         assertTrue(ok, "signing must complete");
 
         assertFalse(
             signer.verifyUnsafeRaw(
-                _commitmentOf(publicKey), publicKey, message, signature
+                _commitmentOf(publicKey),
+                publicKey,
+                message,
+                SHRINCSTestCodec.encodeCompactSignature(signature)
             ),
             "signature built without the FORS_ROOTS ADRS must be rejected"
         );
@@ -193,12 +203,15 @@ contract SHRINCSAddressTweakMutationTest is Test {
         bytes memory message
     )
         internal
-        returns (SHRINCS.PublicKey memory, SPHINCSPlusC.Signature memory)
+        returns (
+            SHRINCS.PublicKey memory,
+            StatelessSignatureTypes.Signature memory
+        )
     {
         (bytes32 sessionId, bool ok) =
             signer.beginSession(signingKey, publicKey, message);
         assertTrue(ok, "session must start");
-        SPHINCSPlusC.Signature memory signature;
+        StatelessSignatureTypes.Signature memory signature;
         (publicKey, signature, ok) = signer.completeSession(sessionId);
         assertTrue(ok, "signing must complete");
         return (publicKey, signature);

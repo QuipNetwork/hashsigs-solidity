@@ -16,6 +16,10 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 pragma solidity ^0.8.28;
 
+import {SHRINCSTestCodec} from "./helpers/SHRINCSTestCodec.sol";
+import {
+    StatelessSignatureTypes
+} from "./helpers/StatelessSignatureTypes.sol";
 import {Test} from "../lib/forge-std/src/Test.sol";
 import {SHRINCS} from "../contracts/SHRINCS.sol";
 import {SHRINCSParams} from "shrincs-profile/SHRINCSParams.sol";
@@ -74,7 +78,7 @@ contract StatelessHarness {
         bytes32 expectedCompositePublicKey,
         SHRINCS.PublicKey calldata publicKey,
         bytes calldata message,
-        SPHINCSPlusC.Signature calldata signature
+        bytes calldata signature
     ) external view returns (bool) {
         return SHRINCS.verifyStatelessUncheckedMessage(
             expectedCompositePublicKey, publicKey, message, signature
@@ -222,14 +226,14 @@ contract SHRINCSGuardPinningTest is Test {
         (
             SHRINCS.PublicKey memory publicKey,
             bytes memory message,
-            SPHINCSPlusC.Signature memory signature
+            StatelessSignatureTypes.Signature memory signature
         ) = decodeStatelessVector(".stateless.cases.valid.calldata");
         assertTrue(
             stateless.verifyUnsafeRaw(
                 compositePublicKeyWord(publicKey),
                 publicKey,
                 message,
-                signature
+                SHRINCSTestCodec.encodeCompactSignature(signature)
             ),
             "stateless valid vector must verify (anchor)"
         );
@@ -356,7 +360,7 @@ contract SHRINCSGuardPinningTest is Test {
         (
             SHRINCS.PublicKey memory publicKey,
             bytes memory message,
-            SPHINCSPlusC.Signature memory signature
+            StatelessSignatureTypes.Signature memory signature
         ) = decodeStatelessVector(".stateless.cases.valid.calldata");
         signature.fors.entries = dropLastForsEntries(signature.fors.entries);
         assertTrue(
@@ -377,16 +381,26 @@ contract SHRINCSGuardPinningTest is Test {
         (
             SHRINCS.PublicKey memory publicKey,
             bytes memory message,
-            SPHINCSPlusC.Signature memory signature
+            StatelessSignatureTypes.Signature memory signature
         ) = decodeStatelessVector(".stateless.cases.valid.calldata");
         bytes32 word = compositePublicKeyWord(publicKey);
         assertTrue(
-            stateless.verifyUnsafeRaw(word, publicKey, message, signature),
+            stateless.verifyUnsafeRaw(
+                word,
+                publicKey,
+                message,
+                SHRINCSTestCodec.encodeCompactSignature(signature)
+            ),
             "anchor: unpadded stateless vector verifies"
         );
         signature.fors.entries = appendForsEntry(signature.fors.entries);
         assertFalse(
-            stateless.verifyUnsafeRaw(word, publicKey, message, signature),
+            stateless.verifyUnsafeRaw(
+                word,
+                publicKey,
+                message,
+                SHRINCSTestCodec.encodeCompactSignature(signature)
+            ),
             "long FORS entries must return false"
         );
     }
@@ -398,7 +412,7 @@ contract SHRINCSGuardPinningTest is Test {
         (
             SHRINCS.PublicKey memory publicKey,
             bytes memory message,
-            SPHINCSPlusC.Signature memory signature
+            StatelessSignatureTypes.Signature memory signature
         ) = decodeStatelessVector(".stateless.cases.valid.calldata");
         signature.fors.entries[0].authPath =
             dropLastBytes(signature.fors.entries[0].authPath);
@@ -421,7 +435,7 @@ contract SHRINCSGuardPinningTest is Test {
         (
             SHRINCS.PublicKey memory publicKey,
             bytes memory message,
-            SPHINCSPlusC.Signature memory signature
+            StatelessSignatureTypes.Signature memory signature
         ) = decodeStatelessVector(".stateless.cases.valid.calldata");
         signature.fors.entries[0].authPath[0] = hex"1234";
         assertTrue(
@@ -442,7 +456,7 @@ contract SHRINCSGuardPinningTest is Test {
         (
             SHRINCS.PublicKey memory publicKey,
             bytes memory message,
-            SPHINCSPlusC.Signature memory signature
+            StatelessSignatureTypes.Signature memory signature
         ) = decodeStatelessVector(".stateless.cases.valid.calldata");
         signature.fors.entries[0].secretLeaf = hex"1234";
         assertTrue(
@@ -463,7 +477,7 @@ contract SHRINCSGuardPinningTest is Test {
         (
             SHRINCS.PublicKey memory publicKey,
             bytes memory message,
-            SPHINCSPlusC.Signature memory signature
+            StatelessSignatureTypes.Signature memory signature
         ) = decodeStatelessVector(".stateless.cases.valid.calldata");
         signature.fors.randomizer = hex"1234";
         assertTrue(
@@ -485,7 +499,7 @@ contract SHRINCSGuardPinningTest is Test {
         (
             SHRINCS.PublicKey memory publicKey,
             bytes memory message,
-            SPHINCSPlusC.Signature memory signature
+            StatelessSignatureTypes.Signature memory signature
         ) = decodeStatelessVector(".stateless.cases.valid.calldata");
         signature.hypertree[0].wotsCPkHash = hex"1234";
         assertTrue(
@@ -508,7 +522,7 @@ contract SHRINCSGuardPinningTest is Test {
         (
             SHRINCS.PublicKey memory publicKey,
             bytes memory message,
-            SPHINCSPlusC.Signature memory signature
+            StatelessSignatureTypes.Signature memory signature
         ) = decodeStatelessVector(".stateless.cases.valid.calldata");
         signature.hypertree[0].authPath =
             dropLastBytes(signature.hypertree[0].authPath);
@@ -533,7 +547,7 @@ contract SHRINCSGuardPinningTest is Test {
         (
             SHRINCS.PublicKey memory publicKey,
             bytes memory message,
-            SPHINCSPlusC.Signature memory signature
+            StatelessSignatureTypes.Signature memory signature
         ) = decodeStatelessVector(".stateless.cases.valid.calldata");
         signature.hypertree[0].authPath[0] = hex"1234";
         assertTrue(
@@ -555,7 +569,7 @@ contract SHRINCSGuardPinningTest is Test {
         (
             SHRINCS.PublicKey memory publicKey,
             bytes memory message,
-            SPHINCSPlusC.Signature memory signature
+            StatelessSignatureTypes.Signature memory signature
         ) = decodeStatelessVector(".stateless.cases.valid.calldata");
         signature.hypertree[0].wotsCSignature.chains[0] = hex"1234";
         assertTrue(
@@ -576,9 +590,10 @@ contract SHRINCSGuardPinningTest is Test {
         (
             SHRINCS.PublicKey memory publicKey,
             bytes memory message,
-            SPHINCSPlusC.Signature memory signature
+            StatelessSignatureTypes.Signature memory signature
         ) = decodeStatelessVector(".stateless.cases.valid.calldata");
-        signature.hypertree = new Hypertree.HypertreeLayerSignature[](0);
+        signature.hypertree =
+            new StatelessSignatureTypes.HypertreeLayerSignature[](0);
         assertTrue(
             statelessRejected(
                 compositePublicKeyWord(publicKey),
@@ -620,10 +635,13 @@ contract SHRINCSGuardPinningTest is Test {
         bytes32 expectedCompositePublicKey,
         SHRINCS.PublicKey memory publicKey,
         bytes memory message,
-        SPHINCSPlusC.Signature memory signature
+        StatelessSignatureTypes.Signature memory signature
     ) internal view returns (bool) {
         try stateless.verifyUnsafeRaw(
-            expectedCompositePublicKey, publicKey, message, signature
+            expectedCompositePublicKey,
+            publicKey,
+            message,
+            SHRINCSTestCodec.encodeCompactSignature(signature)
         ) returns (
             bool ok
         ) {
@@ -735,7 +753,7 @@ contract SHRINCSGuardPinningTest is Test {
         returns (
             SHRINCS.PublicKey memory publicKey,
             bytes memory message,
-            SPHINCSPlusC.Signature memory signature
+            StatelessSignatureTypes.Signature memory signature
         )
     {
         bytes memory args = vectorArgs(vectorKey);
@@ -769,24 +787,26 @@ contract SHRINCSGuardPinningTest is Test {
     function convertLegacyStatelessSignature(LegacyStatelessSignature memory legacy)
         internal
         pure
-        returns (SPHINCSPlusC.Signature memory signature)
+        returns (StatelessSignatureTypes.Signature memory signature)
     {
-        FORSMinusC.ForsEntry[] memory entries =
-            new FORSMinusC.ForsEntry[](legacy.fors.entries.length);
+        // line-length: allow — fmt canonical declaration exceeds cap
+        StatelessSignatureTypes.ForsEntry[] memory entries = new StatelessSignatureTypes
+            .ForsEntry[](legacy.fors.entries.length);
         for (uint256 i = 0; i < entries.length; ++i) {
-            entries[i] = FORSMinusC.ForsEntry({
+            entries[i] = StatelessSignatureTypes.ForsEntry({
                 secretLeaf: legacy.fors.entries[i].secretLeaf,
                 authPath: legacy.fors.entries[i].authPath
             });
         }
 
         // forgefmt: disable-next-line
-        Hypertree.HypertreeLayerSignature[] memory layers =
-            new Hypertree.HypertreeLayerSignature[](legacy.hypertree.length);
+        StatelessSignatureTypes.HypertreeLayerSignature[] memory layers =
+            new StatelessSignatureTypes
+                .HypertreeLayerSignature[](legacy.hypertree.length);
         for (uint256 i = 0; i < layers.length; ++i) {
-            layers[i] = Hypertree.HypertreeLayerSignature({
+            layers[i] = StatelessSignatureTypes.HypertreeLayerSignature({
                 wotsCPkHash: legacy.hypertree[i].wotsCPkHash,
-                wotsCSignature: WOTSPlusC.WotsCSignature({
+                wotsCSignature: StatelessSignatureTypes.WotsCSignature({
                     randomizer: legacy.hypertree[i].wotsCSignature
                     .randomizer,
                     counter: legacy.hypertree[i].wotsCSignature.counter,
@@ -796,8 +816,8 @@ contract SHRINCSGuardPinningTest is Test {
             });
         }
 
-        signature = SPHINCSPlusC.Signature({
-            fors: FORSMinusC.ForsSignature({
+        signature = StatelessSignatureTypes.Signature({
+            fors: StatelessSignatureTypes.ForsSignature({
                 randomizer: legacy.fors.randomizer,
                 counter: legacy.fors.counter,
                 entries: entries
@@ -904,23 +924,25 @@ contract SHRINCSGuardPinningTest is Test {
         }
     }
 
-    function dropLastForsEntries(FORSMinusC.ForsEntry[] memory input)
+    function dropLastForsEntries(StatelessSignatureTypes
+                .ForsEntry[] memory input)
         internal
         pure
-        returns (FORSMinusC.ForsEntry[] memory output)
+        returns (StatelessSignatureTypes.ForsEntry[] memory output)
     {
-        output = new FORSMinusC.ForsEntry[](input.length - 1);
+        output = new StatelessSignatureTypes.ForsEntry[](input.length - 1);
         for (uint256 i = 0; i < output.length; ++i) {
             output[i] = input[i];
         }
     }
 
-    function appendForsEntry(FORSMinusC.ForsEntry[] memory input)
+    function appendForsEntry(StatelessSignatureTypes
+                .ForsEntry[] memory input)
         internal
         pure
-        returns (FORSMinusC.ForsEntry[] memory output)
+        returns (StatelessSignatureTypes.ForsEntry[] memory output)
     {
-        output = new FORSMinusC.ForsEntry[](input.length + 1);
+        output = new StatelessSignatureTypes.ForsEntry[](input.length + 1);
         for (uint256 i = 0; i < input.length; ++i) {
             output[i] = input[i];
         }

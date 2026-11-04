@@ -89,7 +89,7 @@ library SHRINCSParams {
     // number of hash chains per WOTS signature.
     uint16 internal constant NUM_WOTS_CHAINS = 64;
     // WOTS_TARGET_SUM_STATELESS: the WOTS-C constant digit-sum target
-    // for the stateless hypertree WOTS chains (Hypertree.verifyWotsC32)
+    // for the stateless hypertree WOTS chains (Hypertree._verifyWotsC32)
     // = len * (w - 1) / 2
     // -> NUM_WOTS_CHAINS * (WOTS_CHAIN_LEN - 1) / 2
     //    = 64 * (16 - 1) / 2 = 480

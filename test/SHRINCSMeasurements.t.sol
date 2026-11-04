@@ -16,6 +16,9 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 pragma solidity ^0.8.28;
 
+import {
+    StatelessSignatureTypes
+} from "./helpers/StatelessSignatureTypes.sol";
 import {SHRINCSTestCodec} from "./helpers/SHRINCSTestCodec.sol";
 
 import {Test} from "../lib/forge-std/src/Test.sol";
@@ -73,7 +76,7 @@ contract MeasurementRawStatelessHarness {
         bytes32 expectedCommitment,
         SHRINCS.PublicKey calldata publicKey,
         bytes calldata message,
-        SPHINCSPlusC.Signature calldata signature
+        bytes calldata signature
     ) external view returns (bool) {
         return SHRINCS.verifyStatelessUncheckedMessage(
             expectedCommitment, publicKey, message, signature
@@ -84,11 +87,15 @@ contract MeasurementRawStatelessHarness {
         bytes32 expectedCommitment,
         bytes32 hash,
         SHRINCS.PublicKey calldata publicKey,
-        SPHINCSPlusC.Signature calldata signature
+        bytes calldata signature
     ) external view returns (bytes4) {
-        bool ok = SHRINCS.verifyStatelessUncheckedMessage(
-            expectedCommitment, publicKey, abi.encodePacked(hash), signature
-        );
+        bool ok =
+            SHRINCS.verifyStatelessUncheckedMessage(
+                expectedCommitment,
+                publicKey,
+                abi.encodePacked(hash),
+                signature
+            );
         return ok ? MAGIC_VALUE : INVALID_SIGNATURE;
     }
 }
@@ -127,7 +134,7 @@ contract SHRINCSMeasurementsTest is Test {
     struct StatelessCase {
         SHRINCS.PublicKey publicKey;
         SHRINCS.ActionContext context;
-        SPHINCSPlusC.Signature signature;
+        StatelessSignatureTypes.Signature signature;
         SHRINCSAccountVerifierExample account;
         bytes message;
         bytes32 hash;
@@ -235,7 +242,7 @@ contract SHRINCSMeasurementsTest is Test {
                 bytes32 commitment,
                 SHRINCS.PublicKey memory publicKey,
                 bytes memory message,
-                SPHINCSPlusC.Signature memory signature,
+                StatelessSignatureTypes.Signature memory signature,
                 bytes memory ignoredCallerHash
             ) = loadStatelessVectorCase();
             ignoredCallerHash;
@@ -243,7 +250,12 @@ contract SHRINCSMeasurementsTest is Test {
                 new MeasurementRawStatelessHarness();
             bytes memory callData = abi.encodeCall(
                 harness.verifyCanonical,
-                (commitment, publicKey, message, signature)
+                (
+                    commitment,
+                    publicKey,
+                    message,
+                    SHRINCSTestCodec.encodeCompactSignature(signature)
+                )
             );
             vm.resumeGasMetering();
 
@@ -267,7 +279,12 @@ contract SHRINCSMeasurementsTest is Test {
             prepareStatelessCase(bytes("measure stateless wrapper seed"));
         bytes memory wrapperCallData = abi.encodeCall(
             c.account.verifyStatelessAction,
-            (c.publicKey, ACTION_TYPE, PAYLOAD_HASH, c.signature)
+            (
+                c.publicKey,
+                ACTION_TYPE,
+                PAYLOAD_HASH,
+                SHRINCSTestCodec.encodeCompactSignature(c.signature)
+            )
         );
         vm.resumeGasMetering();
 
@@ -293,7 +310,7 @@ contract SHRINCSMeasurementsTest is Test {
                 bytes32 commitment,
                 SHRINCS.PublicKey memory publicKey,
                 bytes memory message,
-                SPHINCSPlusC.Signature memory signature,
+                StatelessSignatureTypes.Signature memory signature,
                 bytes memory ignoredCallerHash
             ) = loadStatelessVectorCase();
             ignoredCallerHash;
@@ -302,7 +319,12 @@ contract SHRINCSMeasurementsTest is Test {
                 new MeasurementRawStatelessHarness();
             bytes memory callData = abi.encodeCall(
                 harness.verifyErc1271,
-                (commitment, hash, publicKey, signature)
+                (
+                    commitment,
+                    hash,
+                    publicKey,
+                    SHRINCSTestCodec.encodeCompactSignature(signature)
+                )
             );
             vm.resumeGasMetering();
 
@@ -421,9 +443,12 @@ contract SHRINCSMeasurementsTest is Test {
         assertTrue(ok, "stateless session must begin");
 
         // line-length: allow — fmt canonical tuple head exceeds cap
-        (SPHINCSPlusC.Signature memory signature, bool completeOk) = SHRINCSAccountSigningFacade.completeStatelessSession(
-            accountSigner, sessionId
-        );
+        (
+            StatelessSignatureTypes.Signature memory signature,
+            bool completeOk
+        ) = SHRINCSAccountSigningFacade.completeStatelessSession(
+                accountSigner, sessionId
+            );
         assertTrue(completeOk, "stateless signing must complete");
 
         SHRINCS.ActionContext memory context =
@@ -495,13 +520,13 @@ contract SHRINCSMeasurementsTest is Test {
                 bytes32 vectorCommitment,
                 SHRINCS.PublicKey memory vectorPublicKey,
                 bytes memory ignoredMessage,
-                SPHINCSPlusC.Signature memory vectorSignature,
+                StatelessSignatureTypes.Signature memory vectorSignature,
                 bytes memory vectorCallerHash
             ) = loadStatelessVectorCase();
             ignoredMessage;
             hash = messageToHash(vectorCallerHash);
             key = abi.encodePacked(vectorCommitment);
-            envelope = SHRINCSTestCodec.encodeStatelessEnvelope(
+            envelope = SHRINCSTestCodec.encodeCompactPayload(
                 vectorPublicKey, vectorSignature
             );
             return (verifier, key, envelope, hash);
@@ -530,14 +555,17 @@ contract SHRINCSMeasurementsTest is Test {
         );
         assertTrue(ok, "delegation session must begin");
         // line-length: allow — fmt canonical tuple head exceeds cap
-        (SPHINCSPlusC.Signature memory signature, bool completeOk) = SHRINCSAccountSigningFacade.completeStatelessSession(
-            accountSigner, sessionId
-        );
+        (
+            StatelessSignatureTypes.Signature memory signature,
+            bool completeOk
+        ) = SHRINCSAccountSigningFacade.completeStatelessSession(
+                accountSigner, sessionId
+            );
         assertTrue(completeOk, "delegation signing must complete");
 
         key = abi.encodePacked(publicKeyCommitmentWord(publicKey));
         envelope =
-            SHRINCSTestCodec.encodeStatelessEnvelope(publicKey, signature);
+            SHRINCSTestCodec.encodeCompactPayload(publicKey, signature);
     }
 
     // pinHarnessArtifact / siblingArtifact: select the active profile's
@@ -599,7 +627,7 @@ contract SHRINCSMeasurementsTest is Test {
             bytes32 commitment,
             SHRINCS.PublicKey memory publicKey,
             bytes memory message,
-            SPHINCSPlusC.Signature memory signature,
+            StatelessSignatureTypes.Signature memory signature,
             bytes memory callerHash
         )
     {
@@ -644,24 +672,26 @@ contract SHRINCSMeasurementsTest is Test {
     function convertLegacyStatelessSignature(LegacyStatelessSignature memory legacy)
         internal
         pure
-        returns (SPHINCSPlusC.Signature memory signature)
+        returns (StatelessSignatureTypes.Signature memory signature)
     {
-        FORSMinusC.ForsEntry[] memory entries =
-            new FORSMinusC.ForsEntry[](legacy.fors.entries.length);
+        // line-length: allow — fmt canonical declaration exceeds cap
+        StatelessSignatureTypes.ForsEntry[] memory entries = new StatelessSignatureTypes
+            .ForsEntry[](legacy.fors.entries.length);
         for (uint256 i = 0; i < entries.length; ++i) {
-            entries[i] = FORSMinusC.ForsEntry({
+            entries[i] = StatelessSignatureTypes.ForsEntry({
                 secretLeaf: legacy.fors.entries[i].secretLeaf,
                 authPath: legacy.fors.entries[i].authPath
             });
         }
 
         // forgefmt: disable-next-line
-        Hypertree.HypertreeLayerSignature[] memory layers =
-            new Hypertree.HypertreeLayerSignature[](legacy.hypertree.length);
+        StatelessSignatureTypes.HypertreeLayerSignature[] memory layers =
+            new StatelessSignatureTypes
+                .HypertreeLayerSignature[](legacy.hypertree.length);
         for (uint256 i = 0; i < layers.length; ++i) {
-            layers[i] = Hypertree.HypertreeLayerSignature({
+            layers[i] = StatelessSignatureTypes.HypertreeLayerSignature({
                 wotsCPkHash: legacy.hypertree[i].wotsCPkHash,
-                wotsCSignature: WOTSPlusC.WotsCSignature({
+                wotsCSignature: StatelessSignatureTypes.WotsCSignature({
                     randomizer: legacy.hypertree[i].wotsCSignature
                     .randomizer,
                     counter: legacy.hypertree[i].wotsCSignature.counter,
@@ -671,8 +701,8 @@ contract SHRINCSMeasurementsTest is Test {
             });
         }
 
-        signature = SPHINCSPlusC.Signature({
-            fors: FORSMinusC.ForsSignature({
+        signature = StatelessSignatureTypes.Signature({
+            fors: StatelessSignatureTypes.ForsSignature({
                 randomizer: legacy.fors.randomizer,
                 counter: legacy.fors.counter,
                 entries: entries

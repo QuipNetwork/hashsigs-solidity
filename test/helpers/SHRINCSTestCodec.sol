@@ -16,6 +16,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 pragma solidity ^0.8.28;
 
+import {StatelessSignatureTypes} from "./StatelessSignatureTypes.sol";
 import {SHRINCS} from "../../contracts/SHRINCS.sol";
 import {SPHINCSPlusC} from "../../contracts/SPHINCSPlusC.sol";
 
@@ -32,7 +33,7 @@ library SHRINCSTestCodec {
 
     function encodeStatelessEnvelope(
         SHRINCS.PublicKey memory publicKey,
-        SPHINCSPlusC.Signature memory signature
+        StatelessSignatureTypes.Signature memory signature
     ) internal pure returns (bytes memory envelope) {
         return abi.encode(publicKey, signature);
     }
@@ -50,5 +51,59 @@ library SHRINCSTestCodec {
                 | (uint256(addressType) << 96) | (uint256(keypair) << 64)
                 | (uint256(chain) << 32) | uint256(step)
         );
+    }
+
+    /// @dev Reference encoder for the StatelessLayout stateless payload
+    /// PK || PQ. Re-encodes any struct-form fixture without new key
+    /// material; it copies field bytes verbatim and checks no lengths, so a
+    /// malformed fixture yields a malformed (wrong-length) payload.
+    function encodeCompactPayload(
+        SHRINCS.PublicKey memory publicKey,
+        StatelessSignatureTypes.Signature memory signature
+    ) internal pure returns (bytes memory payload) {
+        return abi.encodePacked(
+            publicKey.statefulPublicKey,
+            publicKey.publicKeyCommitment,
+            publicKey.pkSeed,
+            publicKey.hypertreeRoot,
+            encodeCompactSignature(signature)
+        );
+    }
+
+    /// @dev Reference encoder for the StatelessLayout SPHINCSPlusC signature
+    /// FORS || hypertree (the PQ section).
+    function encodeCompactSignature(
+        StatelessSignatureTypes.Signature memory signature
+    ) internal pure returns (bytes memory out) {
+        out = abi.encodePacked(
+            signature.fors.randomizer, signature.fors.counter
+        );
+        for (uint256 i = 0; i < signature.fors.entries.length; ++i) {
+            out = abi.encodePacked(
+                out,
+                signature.fors.entries[i].secretLeaf,
+                concat(signature.fors.entries[i].authPath)
+            );
+        }
+        for (uint256 i = 0; i < signature.hypertree.length; ++i) {
+            out = abi.encodePacked(
+                out,
+                signature.hypertree[i].wotsCPkHash,
+                signature.hypertree[i].wotsCSignature.randomizer,
+                signature.hypertree[i].wotsCSignature.counter,
+                concat(signature.hypertree[i].wotsCSignature.chains),
+                concat(signature.hypertree[i].authPath)
+            );
+        }
+    }
+
+    function concat(bytes[] memory parts)
+        internal
+        pure
+        returns (bytes memory out)
+    {
+        for (uint256 i = 0; i < parts.length; ++i) {
+            out = abi.encodePacked(out, parts[i]);
+        }
     }
 }

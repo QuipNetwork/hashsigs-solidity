@@ -16,6 +16,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 pragma solidity ^0.8.28;
 
+import {StatelessSignatureTypes} from "./StatelessSignatureTypes.sol";
 import {SHRINCSTestCodec} from "./SHRINCSTestCodec.sol";
 
 import {SHRINCSTestSigner} from "./SHRINCSTestSigner.sol";
@@ -66,7 +67,7 @@ contract SHRINCSStatelessVectorSigner {
         bytes32 currentLayerSkSeed;
         bytes32 currentLayerPkHash;
         bytes32 currentLayerRandomizer;
-        SPHINCSPlusC.Signature signature;
+        StatelessSignatureTypes.Signature signature;
     }
 
     uint256 internal nextSessionNonce;
@@ -198,7 +199,7 @@ contract SHRINCSStatelessVectorSigner {
                 leaf
             );
             session.forsRoots.push(root);
-            FORSMinusC.ForsEntry storage entry =
+            StatelessSignatureTypes.ForsEntry storage entry =
                 session.signature.fors.entries.push();
             entry.secretLeaf = abi.encodePacked(
                 forsLeafSecret(
@@ -372,7 +373,7 @@ contract SHRINCSStatelessVectorSigner {
 
         // T6: coordinates (tree, leaf) are no longer serialized in the layer
         // signature; they remain local inputs to the address-word hashing.
-        Hypertree.HypertreeLayerSignature storage layerSig =
+        StatelessSignatureTypes.HypertreeLayerSignature storage layerSig =
             session.signature.hypertree.push();
         layerSig.wotsCPkHash = abi.encodePacked(pkHash);
 
@@ -418,8 +419,10 @@ contract SHRINCSStatelessVectorSigner {
                 fullDigest
             );
             if (digitSum == SHRINCSParams.WOTS_TARGET_SUM_STATEFUL) {
-                Hypertree.HypertreeLayerSignature storage layerSig =
-                    session.signature.hypertree[session.nextHypertreeLayer];
+                StatelessSignatureTypes.HypertreeLayerSignature storage
+                    layerSig =
+                        session.signature
+                    .hypertree[session.nextHypertreeLayer];
                 layerSig.wotsCSignature.randomizer =
                     abi.encodePacked(session.currentLayerRandomizer);
                 layerSig.wotsCSignature.counter = counter;
@@ -460,7 +463,7 @@ contract SHRINCSStatelessVectorSigner {
         uint32 layer = session.nextHypertreeLayer;
         uint64 tree = session.currentHypertreeTreeIndex;
         uint32 leaf = session.currentHypertreeLeafIndex;
-        Hypertree.HypertreeLayerSignature storage layerSig =
+        StatelessSignatureTypes.HypertreeLayerSignature storage layerSig =
             session.signature.hypertree[session.nextHypertreeLayer];
 
         while (
@@ -610,15 +613,13 @@ contract SHRINCSStatelessVectorSigner {
         out.hypertreeRoot = publicKey.hypertreeRoot;
     }
 
-    function copyStatelessSignature(SPHINCSPlusC.Signature storage signature)
-        internal
-        view
-        returns (SPHINCSPlusC.Signature memory out)
-    {
+    function copyStatelessSignature(
+        StatelessSignatureTypes.Signature storage signature
+    ) internal view returns (StatelessSignatureTypes.Signature memory out) {
         out.fors.randomizer = signature.fors.randomizer;
         out.fors.counter = signature.fors.counter;
-        out.fors.entries =
-            new FORSMinusC.ForsEntry[](signature.fors.entries.length);
+        out.fors.entries = new StatelessSignatureTypes
+            .ForsEntry[](signature.fors.entries.length);
         for (uint256 i = 0; i < signature.fors.entries.length;) {
             out.fors.entries[i].secretLeaf =
             signature.fors.entries[i].secretLeaf;
@@ -640,7 +641,7 @@ contract SHRINCSStatelessVectorSigner {
             }
         }
 
-        out.hypertree = new Hypertree
+        out.hypertree = new StatelessSignatureTypes
             .HypertreeLayerSignature[](signature.hypertree.length);
         for (uint256 i = 0; i < signature.hypertree.length;) {
             out.hypertree[i].wotsCPkHash = signature.hypertree[i].wotsCPkHash;

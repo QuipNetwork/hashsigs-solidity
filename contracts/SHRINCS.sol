@@ -20,6 +20,7 @@ import {SHRINCSParams} from "shrincs-profile/SHRINCSParams.sol";
 import {HashSuite} from "shrincs-hash/HashSuite.sol";
 import {UXMSS} from "./UXMSS.sol";
 import {SPHINCSPlusC} from "./SPHINCSPlusC.sol";
+import {StatelessLayout} from "./StatelessLayout.sol";
 
 /// @title SHRINCS
 /// @notice Storage-free verification core for the hybrid SHRINCS scheme:
@@ -32,8 +33,8 @@ import {SPHINCSPlusC} from "./SPHINCSPlusC.sol";
 /// hash-building functions return a fail-closed boolean (never a
 /// wrong-accept), and the ERC-7913 revert-vs-0xffffffff policy belongs to
 /// the calling contract. On a malformed envelope they MAY revert: the re-tag
-/// facades (statefulEnvelope, statelessActionEnvelope,
-/// prepareStatelessDelegation, ...) point calldata structs at the fields in
+/// facades (statefulEnvelope, statefulActionEnvelope, and the public key
+/// of statelessActionEnvelope) point calldata structs at the fields in
 /// place, and a framing that solc's calldata member access or a
 /// reconstruction loop's index bound cannot read Panics — that revert is
 /// the rejection channel. The guarantee is {revert, false}, never a
@@ -49,16 +50,14 @@ import {SPHINCSPlusC} from "./SPHINCSPlusC.sol";
 /// pointers and hand them straight down, with no abi.decode and no copy.
 /// verify/verifyStatefulUncheckedMessage/verifyStatelessUncheckedMessage and
 /// the whole component stack below them (UXMSS, SPHINCSPlusC, FORSMinusC,
-/// Hypertree, and the folded public-key checks) take `calldata` structs;
+/// Hypertree, and the folded public-key checks) take `calldata` structs or,
+/// on the stateless side, the fixed StatelessLayout signature as a
+/// `bytes calldata` slice;
 /// `_toUxmss` re-tags the twin signature pointer in calldata at the single
 /// stateful call boundary. The message bytes stay `memory`.
 /// The rotation/context helpers (rotateStatefulViaStateless, statelessRotate,
 /// and their message-hash builders) are likewise `calldata`-typed.
 library SHRINCS {
-    /// @dev A re-tagged stateless signature resolved its final byte before
-    /// its own start or beyond the enclosing call's calldata.
-    error InvalidStatelessSignatureSlice();
-
     // Sentinel for an unsupported hash suite. Kept as a named constant so
     // fail-closed suite checks and negative tests have a stable identifier
     // that never collides with a real suite id (keccak = 1, sha2 = 2). The
@@ -158,8 +157,9 @@ library SHRINCS {
     // single call boundary rather than copying, and the twin-drift test
     // asserts abi.encode equality so any layout change here that is not
     // mirrored in UXMSS.Signature fails closed. A SHRINCS signature is
-    // stateful by default; a stateless SHRINCS signature is exactly a
-    // SPHINCSPlusC.Signature, which is why there is no stateless twin here.
+    // stateful by default; a stateless SHRINCS signature is the fixed
+    // StatelessLayout PQ section, which is why there is no stateless twin
+    // here.
     struct Signature {
         // Per-signature randomizer committed into the stateful message
         // digest.
@@ -189,54 +189,67 @@ library SHRINCS {
         );
     }
 
-    // prepareStatelessDelegation: Encapsulate the stateless bundle checks the
-    // SHRINCSVerifier ran inline before delegating to the pinned SPHINCSPlusC
-    // sibling.
-    // 1. Re-tag the stateless envelope in place (malformed reverts below).
-    // 2. Run commitment-first bundle checks (commitment match, then shape).
-    // 3. Extract the two 32-byte stateless seed words.
-    // 4. Return the pinned-sibling delegate key and signature envelope;
-    // any failure returns (false, "", "").
+    // prepareStatelessDelegation: Shared stateless bundle check for the
+    // verifier adapter that delegates to the pinned SPHINCSPlusC sibling.
+    // Runs the bundle checks (commitment first, then shape) over the fixed
+    // PK section of a StatelessLayout payload, and returns the two stateless
+    // seed words and the PQ section as a calldata slice for the sibling.
+    // 1. Reject any payload whose length is not exactly PAYLOAD_LEN.
+    // 2. Require the declared commitment to equal the installed one.
+    // 3. Require a canonical stateful public key (validPublicKey's check;
+    // the other three PK fields are fixed 32-byte words by layout).
+    // 4. Recompute the bundle commitment from the PK fields and require it
+    // to equal the installed one.
+    /// @dev Never reverts on malformed input: the length check is the only
+    /// input guard and proves every fixed-offset read in bounds. Any
+    /// failure returns (false, 0, 0, empty slice).
     function prepareStatelessDelegation(
         bytes32 expectedPublicKeyCommitment,
-        bytes calldata envelope
+        bytes calldata payload
     )
         internal
         pure
         returns (
             bool ok,
-            bytes memory delegateKey,
-            bytes memory delegateSignature
+            bytes32 pkSeed,
+            bytes32 hypertreeRoot,
+            bytes calldata signature
         )
     {
-        (
-            SHRINCS.PublicKey calldata publicKey,
-            SPHINCSPlusC.Signature calldata signature
-        ) = SHRINCS.statelessEnvelope(envelope);
-
-        // Commitment first, then shape, mirroring the library stateless path.
-        if (!SHRINCS.matchesExpectedPublicKeyCommitment(
-                publicKey, expectedPublicKeyCommitment
-            )) return (false, "", "");
-        if (!SHRINCS.validPublicKey(publicKey)) {
-            return (false, "", "");
+        if (payload.length != StatelessLayout.PAYLOAD_LEN) {
+            return (false, bytes32(0), bytes32(0), payload[0:0]);
         }
-
-        // validPublicKey has proven both fields are exactly 32 bytes.
-        bytes calldata seed = publicKey.pkSeed;
-        bytes calldata root = publicKey.hypertreeRoot;
-        bytes32 pkSeed;
-        bytes32 hypertreeRoot;
-        // Memory-safe: reads two calldata words into stack variables; no
-        // memory is written.
-        assembly ("memory-safe") {
-            pkSeed := calldataload(seed.offset)
-            hypertreeRoot := calldataload(root.offset)
+        (
+            bytes calldata statefulPublicKey,
+            bytes calldata declaredCommitment,
+            bytes calldata pkSeedBytes,
+            bytes calldata hypertreeRootBytes
+        ) = StatelessLayout.publicKeyFields(payload);
+        // Commitment first, then shape, mirroring the library stateless path.
+        // casting to 'bytes32' is safe because publicKeyFields returns a
+        // 32-byte slice
+        // forge-lint: disable-next-line(unsafe-typecast)
+        if (bytes32(declaredCommitment) != expectedPublicKeyCommitment) {
+            return (false, bytes32(0), bytes32(0), payload[0:0]);
+        }
+        if (!SHRINCS.validStatefulPublicKeyEncoding(statefulPublicKey)) {
+            return (false, bytes32(0), bytes32(0), payload[0:0]);
+        }
+        bytes32 recomputedCommitment = SHRINCS.publicKeyCommitmentFromParts(
+            statefulPublicKey, pkSeedBytes, hypertreeRootBytes
+        );
+        if (recomputedCommitment != expectedPublicKeyCommitment) {
+            return (false, bytes32(0), bytes32(0), payload[0:0]);
         }
         return (
             true,
-            SHRINCS.encodeStatelessKey(pkSeed, hypertreeRoot),
-            SHRINCS.sliceStatelessSignatureEnvelope(signature)
+            // casting to 'bytes32' is safe because publicKeyFields returns
+            // 32-byte slices
+            // forge-lint: disable-next-line(unsafe-typecast)
+            bytes32(pkSeedBytes),
+            // forge-lint: disable-next-line(unsafe-typecast)
+            bytes32(hypertreeRootBytes),
+            payload[StatelessLayout.PK_LEN:StatelessLayout.PAYLOAD_LEN]
         );
     }
 
@@ -276,7 +289,7 @@ library SHRINCS {
         bytes32 expectedPublicKeyCommitment,
         SHRINCS.PublicKey calldata publicKey,
         SHRINCS.ActionContext memory context,
-        SPHINCSPlusC.Signature calldata signature
+        bytes calldata signature
     ) internal view returns (bool) {
         // Reject malformed or unscoped action contexts before hashing them.
         if (!validActionContext(context)) return false;
@@ -307,7 +320,7 @@ library SHRINCS {
         bytes32 expectedPublicKeyCommitment,
         SHRINCS.PublicKey calldata currentPublicKey,
         SHRINCS.RotationContext memory context,
-        SPHINCSPlusC.Signature calldata recoverySignature,
+        bytes calldata recoverySignature,
         SHRINCS.StatefulRotationTarget calldata nextStatefulKey
     ) internal view returns (bytes32 nextPublicKeyCommitment) {
         if (!SHRINCS.validPublicKey(currentPublicKey)) {
@@ -411,7 +424,7 @@ library SHRINCS {
         bytes32 expectedPublicKeyCommitment,
         SHRINCS.PublicKey calldata currentPublicKey,
         SHRINCS.RotationContext memory context,
-        SPHINCSPlusC.Signature calldata recoverySignature,
+        bytes calldata recoverySignature,
         SHRINCS.RotationTarget calldata nextKey
     ) internal view returns (bytes32 nextPublicKeyCommitment) {
         if (!SHRINCS.validPublicKey(currentPublicKey)) {
@@ -543,9 +556,9 @@ library SHRINCS {
     // so encoder and decoder cannot drift.
     //
     // Revert model: the production verify paths do not abi.decode. They
-    // re-tag the calldata envelope (statefulEnvelope, statelessEnvelope,
-    // statefulActionEnvelope, statelessActionEnvelope; the stateless
-    // signature re-tag lives on SPHINCSPlusC) into typed calldata struct
+    // re-tag the calldata envelope (statefulEnvelope,
+    // statefulActionEnvelope, and the public key of
+    // statelessActionEnvelope) into typed calldata struct
     // pointers without copying or validating; each re-tag's own NatSpec
     // carries the safety story. Rejection is downstream: solc-generated
     // member access reverts on out-of-bounds offsets < 2^64,
@@ -633,73 +646,6 @@ library SHRINCS {
         return abi.encode(pkSeed, hypertreeRoot);
     }
 
-    /// @notice Slice-copy re-encode of a re-tagged stateless signature into
-    /// the SPHINCSPlusCVerifier signature envelope, with no field-by-field
-    /// memory materialization.
-    /// @dev Byte-identical to encodeStatelessSignatureEnvelope's
-    /// abi.encode(signature) for every canonically framed signature:
-    /// abi.encode of one dynamic value is a single 0x20 head offset word
-    /// followed by that value's canonical body, and a re-tagged calldata
-    /// signature already holds its canonical body contiguously, so the
-    /// envelope is that head word plus ONE bulk calldatacopy of the body.
-    /// The body length is the signature's own extent, derived from
-    /// solc-checked members: hypertree is Signature's last field and authPath
-    /// is HypertreeLayerSignature's last field, so the canonical encoding
-    /// ends at the padded end of the last layer's last authPath element.
-    /// Reading that end follows the nested calldata offsets solc resolves, so
-    /// the copy spans the struct's true extent even when the outer envelope
-    /// was truncated into adjacent calldata (matching abi.encode, which
-    /// re-serializes from the in-place field reads; see the contract-level
-    /// framing-malleability note). A malformed signature with an empty
-    /// hypertree or empty last-layer authPath Panics on the index read and
-    /// reverts, fail-closed within the verifier's documented {revert, false}
-    /// model.
-    /// @param signature Re-tagged stateless signature calldata pointer.
-    /// @return envelope The abi-encoded stateless-signature envelope bytes.
-    function sliceStatelessSignatureEnvelope(
-        SPHINCSPlusC.Signature calldata signature
-    ) internal pure returns (bytes memory envelope) {
-        // hypertree is Signature's last field; authPath is the last field of
-        // its element; so the canonical body ends at the last layer's last
-        // authPath element. solc bounds-checks both index reads: an empty
-        // hypertree or empty authPath Panics and reverts (fail-closed).
-        uint256 lastLayer = signature.hypertree.length - 1;
-        uint256 lastPath = signature.hypertree[lastLayer].authPath.length - 1;
-        bytes calldata tail =
-            signature.hypertree[lastLayer].authPath[lastPath];
-        uint256 signatureStart;
-        uint256 bodyEnd;
-        assembly ("memory-safe") {
-            signatureStart := signature
-            bodyEnd := add(tail.offset, and(add(tail.length, 31), not(31)))
-        }
-        // solc validates nested calldata tails against calldatasize(), but
-        // does not prove that independently resolved pointers are ordered.
-        // Reject before subtracting so a wrapped/reordered tail cannot turn
-        // into a near-2^256 calldatacopy and consume all forwarded gas.
-        if (bodyEnd < signatureStart || bodyEnd > msg.data.length) {
-            revert InvalidStatelessSignatureSlice();
-        }
-        // Memory-safe: allocates the envelope at the free-memory pointer,
-        // writes its length and the single 0x20 head offset word, bulk-copies
-        // the signature's canonical body from calldata, and bumps the
-        // free-memory pointer past the (word-aligned) allocation.
-        assembly ("memory-safe") {
-            // Body = last authPath element's padded end - the signature's
-            // calldata start. Accepted non-canonical framings can make this
-            // length non-word-aligned, so reserve its rounded allocation.
-            let body := sub(bodyEnd, signatureStart)
-            envelope := mload(0x40)
-            mstore(envelope, add(0x20, body))
-            mstore(add(envelope, 0x20), 0x20)
-            calldatacopy(add(envelope, 0x40), signatureStart, body)
-            mstore(
-                0x40,
-                add(envelope, and(add(add(0x40, body), 31), not(31)))
-            )
-        }
-    }
-
     /// @notice Zero-copy re-tag of a stateful envelope into typed calldata
     /// struct pointers.
     /// @dev Envelope layout is abi.encode(PublicKey, SHRINCS.Signature): the
@@ -735,35 +681,6 @@ library SHRINCS {
         returns (
             SHRINCS.PublicKey calldata publicKey,
             SHRINCS.Signature calldata signature
-        )
-    {
-        // Pure calldata re-tag: reads two offset words into two calldata
-        // pointers; no memory is read or written.
-        assembly ("memory-safe") {
-            publicKey := add(payload.offset, calldataload(payload.offset))
-            signature := add(
-                payload.offset,
-                calldataload(add(payload.offset, 0x20))
-            )
-        }
-    }
-
-    /// @notice Zero-copy re-tag of a stateless envelope into typed calldata
-    /// struct pointers.
-    /// @dev Envelope layout is abi.encode(PublicKey, SPHINCSPlusC.Signature):
-    /// the head is two offset words, one per dynamic struct. Same re-tag and
-    /// same safety story as statefulEnvelope (E1a/E2 revert, E1b lands in
-    /// {revert, false} via the downstream Panic backstop plus the KEEP
-    /// guards, encoding malleability accepted by design).
-    /// @param payload The abi-encoded stateless envelope calldata.
-    /// @return publicKey Calldata pointer to the public-key bundle.
-    /// @return signature Calldata pointer to the stateless signature.
-    function statelessEnvelope(bytes calldata payload)
-        internal
-        pure
-        returns (
-            SHRINCS.PublicKey calldata publicKey,
-            SPHINCSPlusC.Signature calldata signature
         )
     {
         // Pure calldata re-tag: reads two offset words into two calldata
@@ -819,16 +736,24 @@ library SHRINCS {
     }
 
     /// @notice Zero-copy re-tag of a stateless account-action envelope into
-    /// typed calldata pointers and the two inline action words.
+    /// a typed public-key pointer, the two inline action words, and the
+    /// fixed-layout stateless signature slice.
     /// @dev Envelope layout is
     /// abi.encode(PublicKey, bytes32 actionType, bytes32 payloadHash,
-    /// SPHINCSPlusC.Signature): the same four-word head shape and the same
-    /// safety story as statefulActionEnvelope.
+    /// bytes signature), where `signature` is the StatelessLayout PQ section:
+    /// the same four-word head shape and the same safety story as
+    /// statefulActionEnvelope. This re-tag reads all four head words without
+    /// copying or validating; it never reverts on its own. For the `bytes`
+    /// field, the head word is the offset of its length word, and the body
+    /// follows that word. Encoding malleability is accepted by design:
+    /// SPHINCSPlusC.verify rejects any signature length other than PQ_LEN,
+    /// and a body that runs past the end of calldata reads as zero, so a
+    /// malformed envelope lands in {revert, false}, never a wrong accept.
     /// @param payload The abi-encoded stateless action envelope calldata.
     /// @return publicKey Calldata pointer to the public-key bundle.
     /// @return actionType The inline action-type word.
     /// @return payloadHash The inline payload-hash word.
-    /// @return signature Calldata pointer to the stateless signature.
+    /// @return signature Calldata slice of the fixed-layout signature.
     function statelessActionEnvelope(bytes calldata payload)
         internal
         pure
@@ -836,19 +761,25 @@ library SHRINCS {
             SHRINCS.PublicKey calldata publicKey,
             bytes32 actionType,
             bytes32 payloadHash,
-            SPHINCSPlusC.Signature calldata signature
+            bytes calldata signature
         )
     {
-        // Pure calldata re-tag: reads two offset words into two calldata
-        // pointers and two inline words; no memory is read or written.
+        // Pure calldata re-tag: reads two offset words into a calldata
+        // pointer and a calldata slice, plus two inline words; no memory is
+        // read or written.
         assembly ("memory-safe") {
             publicKey := add(payload.offset, calldataload(payload.offset))
             actionType := calldataload(add(payload.offset, 0x20))
             payloadHash := calldataload(add(payload.offset, 0x40))
-            signature := add(
-                payload.offset,
-                calldataload(add(payload.offset, 0x60))
-            )
+            // The signature head word points at the `bytes` length word;
+            // the body starts one word later.
+            let signatureHead :=
+                add(payload.offset, calldataload(add(payload.offset, 0x60)))
+            // Slither reads these as two writes to `signature`, but they set
+            // the slice's two separate fields, offset and length.
+            // slither-disable-next-line write-after-write
+            signature.offset := add(signatureHead, 0x20)
+            signature.length := calldataload(signatureHead)
         }
     }
 
@@ -1209,7 +1140,7 @@ library SHRINCS {
         bytes32 expectedPublicKeyCommitment,
         SHRINCS.PublicKey calldata publicKey,
         bytes memory message,
-        SPHINCSPlusC.Signature calldata signature
+        bytes calldata signature
     ) internal view returns (bool) {
         // The current public key must match the installed bundle commitment
         // expected by the caller.

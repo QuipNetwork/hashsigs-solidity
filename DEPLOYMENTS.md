@@ -298,10 +298,10 @@ script asserts the sibling is present before broadcasting.
 | Build profile | `production` |
 | CREATE3 salt label | `QUIP:SHRINCS256sKeccak:V4.0` |
 | `PROFILE_TAG()` | `keccak256("shrincs-256s-keccak")` |
-| `VERSION_TAG()` | `keccak256("quip.shrincs-verifier.v4")` |
+| `VERSION_TAG()` | `keccak256("quip.shrincs-verifier.v5")` |
 | Address | `0xF2f9E6D692da41b089c3c261c41509669eEc5567` |
 | Stateless delegate | `SPHINCSPlusC256sKeccak` (below) |
-| Runtime codehash | `0xe9319929e0ec163221e849962606feead3e41865677b63a96662b2ecdad78426` |
+| Runtime codehash | `0xe65b42c6d7f00748c5ab223824ed3290835fbebbbca01c4276585a4940f8883a` |
 | Chains deployed | *(none yet)* |
 
 Each SHRINCS verifier's `verifyStateless` delegates to the pinned
@@ -314,8 +314,9 @@ The stateless delegates. Each SHRINCS verifier pins its profile's sibling
 address (its `SPHINCS_PLUS_C_VERIFIER` constant) and forwards stateless
 verification to it. A SPHINCSPlusC verifier is also usable on its own as
 a bare ERC-7913 stateless verifier: `key` is
-`abi.encode(bytes32 pkSeed, bytes32 hypertreeRoot)` and the signature
-envelope is `abi.encode(StatelessSignature)`, with no commitment logic.
+`abi.encode(bytes32 pkSeed, bytes32 hypertreeRoot)` and the signature is
+the fixed-layout `StatelessLayout` PQ section (see
+`docs/compact-stateless-encoding.md`), with no commitment logic.
 
 | Field | 256s |
 |---|---|
@@ -323,11 +324,11 @@ envelope is `abi.encode(StatelessSignature)`, with no commitment logic.
 | Build profile | `production` |
 | CREATE3 salt label | `QUIP:SPHINCSPlusC256sKeccak:V3.0` |
 | `PROFILE_TAG()` | `keccak256("shrincs-256s-keccak")` |
-| `VERSION_TAG()` | `keccak256("quip.sphincsplusc-verifier.v3")` |
+| `VERSION_TAG()` | `keccak256("quip.sphincsplusc-verifier.v4")` |
 | Address | `0xe52707C5D76E2F7c3314cF3dcc340eB9BbAE3864` |
 | Key format | `abi.encode(pkSeed, hypertreeRoot)` |
-| Signature envelope | `abi.encode(StatelessSignature)` |
-| Runtime codehash | `0xe8d1cd0765874bac8238d6c8790c9916d0b2a332e5abe7fd50d8ecec48a71954` |
+| Signature format | fixed `StatelessLayout` PQ section (`PQ_LEN` bytes) |
+| Runtime codehash | `0xf85c8a48ba654fe1111a0a180f46d29918b640c7e0380898cbcc4c05560a8f70` |
 | Chains deployed | *(none yet)* |
 
 ### Experimental 128-bit profiles — not deployable
@@ -362,10 +363,10 @@ deploy.
 | Build profile | `production-256s-sha2` | `production-256s-sha2` |
 | CREATE3 salt label | `QUIP:SHRINCS256sSha2:V4.0` | `QUIP:SPHINCSPlusC256sSha2:V3.0` |
 | `PROFILE_TAG()` | `keccak256("shrincs-256s-sha2")` | `keccak256("shrincs-256s-sha2")` |
-| `VERSION_TAG()` | `keccak256("quip.shrincs-verifier.v4")` | `keccak256("quip.sphincsplusc-verifier.v3")` |
+| `VERSION_TAG()` | `keccak256("quip.shrincs-verifier.v5")` | `keccak256("quip.sphincsplusc-verifier.v4")` |
 | Address | `0x10eE478959bD9cd9E99573cf208D217d704C2FF5` | `0x55346bdc46Cf36C844c0f708041C916c0B65718f` |
 | Stateless delegate | `SPHINCSPlusC256sSha2` (right) | — |
-| Runtime codehash | `0x6b72096a091dbe8bb23b698f034a77f031d6b6a65cc5fb962255885eb3ad9560` | `0x0b8695da83eb5afcfe6a63b48a5001cb6b4813082c23434146324d8f16253e6a` |
+| Runtime codehash | `0x2fdea19ae92cfd251372b81b2aa6f021e95316daf057207376f41e45f6c5a7c8` | `0xfeebef695cd40c3771dc103a1a9cb2a8147a9fb0e85e0ed1a2ddb5e991d6a9fe` |
 | Chains deployed | *(none yet)* | *(none yet)* |
 
 ## Superseded: permissionless-salt deployments

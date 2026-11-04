@@ -6,6 +6,11 @@ via_ir = true
 optimizer = true
 optimizer_runs = 200
 gas_limit = "18446744073709551615" # u64::MAX
+# Run each test as one transaction, on every forge version. Forge 1.8.1
+# changed this default to true, which clears transient storage between a
+# test's calls (breaking the attestation tests) and adds base-transaction and
+# calldata cost to the measured gas. CI's forge 1.7.1 defaults to false.
+isolate = false
 # Strip solc metadata from every artifact (inherited by all profiles).
 # Deploys go through the pre-deployed CreateX singleton (see
 # DeployBase.s.sol), so no compiled artifact is address-load-bearing —

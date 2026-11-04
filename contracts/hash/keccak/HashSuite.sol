@@ -317,7 +317,7 @@ library HashSuite {
     }
 
     // hashWotsCPk32: Finalizer over the caller-built "wots-c-pk" buffer.
-    // Hypertree.verifyWotsC32 fills [tag | pkSeed | segments] into a
+    // Hypertree._verifyWotsC32 fills [tag | pkSeed | segments] into a
     // memory-safe scratch region and passes its (ptr, len); this hashes it
     // and truncates to HASH_LEN. The buffer construction is suite-
     // independent and stays in the caller.

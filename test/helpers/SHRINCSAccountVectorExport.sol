@@ -16,6 +16,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 pragma solidity ^0.8.28;
 
+import {StatelessSignatureTypes} from "./StatelessSignatureTypes.sol";
+import {SHRINCSTestCodec} from "./SHRINCSTestCodec.sol";
 import {SHRINCS} from "../../contracts/SHRINCS.sol";
 import {HashSuite} from "shrincs-hash/HashSuite.sol";
 import {SPHINCSPlusC} from "../../contracts/SPHINCSPlusC.sol";
@@ -47,7 +49,7 @@ library SHRINCSAccountVectorExport {
         SHRINCS.ActionContext context;
         bytes32 actionType;
         bytes32 payloadHash;
-        SPHINCSPlusC.Signature signature;
+        StatelessSignatureTypes.Signature signature;
         bytes message;
         bytes verifyCalldata;
         bytes erc1271Envelope;
@@ -58,7 +60,7 @@ library SHRINCSAccountVectorExport {
         SHRINCS.PublicKey currentPublicKey;
         SHRINCS.RotationContext context;
         SHRINCS.StatefulRotationTarget nextKey;
-        SPHINCSPlusC.Signature recoverySignature;
+        StatelessSignatureTypes.Signature recoverySignature;
         bytes message;
         bytes rotateCalldata;
     }
@@ -68,7 +70,7 @@ library SHRINCSAccountVectorExport {
         SHRINCS.PublicKey currentPublicKey;
         SHRINCS.RotationContext context;
         SHRINCS.RotationTarget nextKey;
-        SPHINCSPlusC.Signature recoverySignature;
+        StatelessSignatureTypes.Signature recoverySignature;
         bytes message;
         bytes rotateCalldata;
     }
@@ -110,7 +112,7 @@ library SHRINCSAccountVectorExport {
         SHRINCS.ActionContext memory context,
         bytes32 actionType,
         bytes32 payloadHash,
-        SPHINCSPlusC.Signature memory signature
+        StatelessSignatureTypes.Signature memory signature
     ) internal view returns (StatelessActionVector memory vector_) {
         bytes32 current = account.currentSHRINCSPublicKey();
         bytes memory message = abi.encodePacked(
@@ -126,7 +128,12 @@ library SHRINCSAccountVectorExport {
             message: message,
             verifyCalldata: abi.encodeCall(
                 account.verifyStatelessAction,
-                (publicKey, actionType, payloadHash, signature)
+                (
+                    publicKey,
+                    actionType,
+                    payloadHash,
+                    SHRINCSTestCodec.encodeCompactSignature(signature)
+                )
             ),
             // line-length: allow — fmt canonical field head exceeds cap
             erc1271Envelope: SHRINCSAccountSigningFacade.encodeStateless1271Envelope(
@@ -140,7 +147,7 @@ library SHRINCSAccountVectorExport {
         SHRINCS.PublicKey memory currentPublicKey,
         SHRINCS.RotationContext memory context,
         SHRINCS.StatefulRotationTarget memory nextKey,
-        SPHINCSPlusC.Signature memory recoverySignature
+        StatelessSignatureTypes.Signature memory recoverySignature
     ) internal view returns (StatefulOnlyRotationVector memory vector_) {
         bytes32 current = account.currentSHRINCSPublicKey();
         bytes memory message = abi.encodePacked(
@@ -166,7 +173,13 @@ library SHRINCSAccountVectorExport {
             message: message,
             rotateCalldata: abi.encodeCall(
                 account.rotateToFreshKey,
-                (currentPublicKey, recoverySignature, nextKey)
+                (
+                    currentPublicKey,
+                    SHRINCSTestCodec.encodeCompactSignature(
+                        recoverySignature
+                    ),
+                    nextKey
+                )
             )
         });
     }
@@ -176,7 +189,7 @@ library SHRINCSAccountVectorExport {
         SHRINCS.PublicKey memory currentPublicKey,
         SHRINCS.RotationContext memory context,
         SHRINCS.RotationTarget memory nextKey,
-        SPHINCSPlusC.Signature memory recoverySignature
+        StatelessSignatureTypes.Signature memory recoverySignature
     ) internal view returns (FullRotationVector memory vector_) {
         bytes32 current = account.currentSHRINCSPublicKey();
         bytes memory message = abi.encodePacked(
@@ -202,7 +215,13 @@ library SHRINCSAccountVectorExport {
             message: message,
             rotateCalldata: abi.encodeCall(
                 account.rotateFullKey,
-                (currentPublicKey, recoverySignature, nextKey)
+                (
+                    currentPublicKey,
+                    SHRINCSTestCodec.encodeCompactSignature(
+                        recoverySignature
+                    ),
+                    nextKey
+                )
             )
         });
     }

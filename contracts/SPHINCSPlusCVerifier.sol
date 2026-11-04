@@ -27,28 +27,19 @@ import {SPHINCSPlusC} from "./SPHINCSPlusC.sol";
 /// layers to a pinned public root.
 /// @dev Trustless by construction: no owner, no storage, no constructor, no
 /// upgradability. `key` is abi.encode(bytes32 pkSeed, bytes32 hypertreeRoot)
-/// (64 bytes); `signature` is the stateless-signature envelope
-/// (abi.encode(SPHINCSPlusC.Signature)). No commitment logic anywhere in it:
-/// the caller (or the SHRINCSVerifier delegating here) owns the bundle and
-/// commitment binding.
+/// (64 bytes); `signature` is the fixed-layout FORS || hypertree signature
+/// described in StatelessLayout (StatelessLayout.PQ_LEN bytes). No commitment
+/// logic anywhere in it: the caller (or the SHRINCSVerifier delegating here)
+/// owns the bundle and commitment binding.
 ///
-/// Revert model (same as the SHRINCSVerifier). A malformed key (wrong
-/// length) returns 0xffffffff through the length-guarded key decoder; a
-/// malformed envelope reverts downstream through solc's calldata member
-/// access on the re-tagged struct (the canonicity walk is gone; a short
-/// buffer, out-of-range offset or length, or dirty value-type high bits
-/// reverts there); a well-formed but invalid signature returns 0xffffffff. No
-/// try/catch anywhere. Every other failure, including an inner out-of-gas,
-/// reverts to the caller; ERC-7913 permits this. Acceptance is wider than
-/// abi.decode's: any framing whose in-place field reads reproduce a valid
-/// signature's field values verifies. The reads are bounds-checked against
-/// calldatasize, not the envelope slice, so they may read into adjacent
-/// calldata such as the outer ABI padding, and under masked-hash profiles a
-/// tail-truncated envelope can still verify. This is pure encoding
-/// malleability, never a wrong-accept; consumers must key on decoded fields,
-/// not envelope bytes. Verification runs in-contract through the
-/// calldata-typed SPHINCSPlusC library, verifying the re-tagged envelope in
-/// place with no external call.
+/// Revert model. A malformed key (wrong length), a signature of the wrong
+/// length, and a well-formed but invalid signature all return 0xffffffff:
+/// the single length check proves every fixed-offset read in bounds, so
+/// there is no reverting decode. No try/catch anywhere. Out-of-gas reverts
+/// to the caller; ERC-7913 permits this. Every word is read from a fixed
+/// offset inside the signature, never from adjacent calldata, so the
+/// encoding has no framing malleability. Verification runs in-contract
+/// through the SPHINCSPlusC library with no external call.
 ///
 /// Caller obligations. The shared SPHINCSPlusC verification stack is `view`
 /// because it also compiles with the SHA-256 suite. Its hashing helpers use
@@ -71,27 +62,23 @@ abstract contract SPHINCSPlusCVerifier is IERC7913SignatureVerifier {
     // Shared across profiles: it names the ERC-7913 key/envelope format for
     // the stateless SPHINCSPlusC scheme, not the parameter set. The
     // per-profile parameter identity lives in each subclass's PROFILE_TAG.
+    // v4: the signature is the fixed StatelessLayout layout.
     bytes32 public constant VERSION_TAG =
-        keccak256("quip.sphincsplusc-verifier.v3");
+        keccak256("quip.sphincsplusc-verifier.v4");
     // Any non-magic value denotes signature failure.
     bytes4 private constant INVALID_SIGNATURE = 0xffffffff;
 
     /// @notice ERC-7913 verification entrypoint for stateless SPHINCSPlusC
     /// signatures.
-    /// @dev Decodes the 64-byte key into two calldata seed slices (wrong
-    /// length -> 0xffffffff) and re-tags the stateless-signature envelope in
-    /// place (a malformed envelope reverts downstream), then hands the seed
-    /// slices and the re-tagged signature to the calldata-typed SPHINCSPlusC
-    /// library, which verifies FORS-C plus the hypertree over the 32 hash
-    /// bytes under the public seed and root. No call, no try/catch: an
-    /// execution failure, including out-of-gas, reverts. See the
-    /// contract-level revert model.
+    /// @dev Decodes the 64-byte key into two calldata seed slices, then
+    /// verifies FORS-C plus the hypertree over the 32 hash bytes under the
+    /// public seed and root, reading the fixed-layout signature in place.
+    /// See the contract-level revert model.
     /// @param key abi.encode(bytes32 pkSeed, bytes32 hypertreeRoot).
     /// @param hash The 32-byte message hash to verify.
-    /// @param signature The stateless-signature envelope.
-    /// @return The verify selector on success; 0xffffffff for a malformed key
-    /// (wrong length) or a well-formed but invalid signature. A malformed
-    /// envelope and other execution failures revert.
+    /// @param signature The stateless signature (StatelessLayout.PQ_LEN
+    /// bytes).
+    /// @return The verify selector on success; 0xffffffff otherwise.
     function verify(
         bytes calldata key,
         bytes32 hash,
@@ -100,11 +87,7 @@ abstract contract SPHINCSPlusCVerifier is IERC7913SignatureVerifier {
         (bytes calldata pkSeed, bytes calldata hypertreeRoot, bool okKey) =
             SPHINCSPlusC.decodeKey(key);
         if (!okKey) return INVALID_SIGNATURE;
-
-        SPHINCSPlusC.Signature calldata signature_ =
-            SPHINCSPlusC.signatureEnvelope(signature);
-
-        if (SPHINCSPlusC.verify(pkSeed, hypertreeRoot, hash, signature_)) {
+        if (SPHINCSPlusC.verify(pkSeed, hypertreeRoot, hash, signature)) {
             return IERC7913SignatureVerifier.verify.selector;
         }
         return INVALID_SIGNATURE;

@@ -2,6 +2,77 @@
 
 ## Unreleased
 
+Package version is 0.4.0. The stateless verifier signature format
+changes incompatibly, a breaking change under CODINGSTANDARDS section 7.
+The pre-1.0 minor version advances from 0.3.0.
+
+### Changed
+- Breaking: `SHRINCSVerifier.verifyStateless` and
+  `SPHINCSPlusCVerifier.verify` now take the fixed-layout stateless
+  signature instead of the ABI envelope (QUI-1328). The ABI envelope was
+  91,680 bytes on 256s and exceeded the WalletConnect relay payload cap.
+  The fixed layout is 29,256 bytes on 256s (`PK || PQ`) and 29,092 bytes
+  for the SPHINCSPlusC signature (`PQ`). `contracts/StatelessLayout.sol`
+  defines it and every size derives from `SHRINCSParams`. See
+  `docs/compact-stateless-encoding.md`.
+- Revert model on both stateless entry points: a wrong signature
+  length, a malformed key, or a failed check returns `0xffffffff`. Only
+  out-of-gas reverts, and `verifyStateless` still reverts on an
+  undeployed sibling. The ABI envelope's framing malleability, including
+  the masked-profile tail truncation, is gone.
+- `SHRINCS.prepareStatelessDelegation` takes the fixed-layout payload
+  and returns `(ok, pkSeed, hypertreeRoot, signature)` with the PQ section
+  as a calldata slice.
+- `VERSION_TAG` is `quip.shrincs-verifier.v5` and
+  `quip.sphincsplusc-verifier.v4`. Runtime codehash pins for the four
+  256s verifiers changed (deploy scripts and `DEPLOYMENTS.md`). CREATE3
+  salts and addresses did not change; no V3/V4 address is deployed.
+- Measured on 256s keccak with forge 1.7.1, the version CI pins: the
+  `stateless.verify_stateless_delegation_gas` measurement fell from
+  1,660,710 to 1,453,718 gas. That is execution only. Including the base
+  transaction and calldata cost, it fell from 2,433,134 to 1,945,126 gas
+  (forge 1.8.1, which isolates calls by default).
+  Production runtime is 4,685 bytes (SHRINCS)
+  and 3,720 bytes (SPHINCSPlusC), from 4,581 and 4,148.
+
+- Breaking: the `SHRINCS` library stateless functions
+  (`verifyStateless`, `rotateStatefulViaStateless`, `statelessRotate`,
+  `verifyStatelessUncheckedMessage`) take the fixed-layout signature as
+  `bytes calldata`. The example wallet's `verifyStatelessAction`,
+  `rotateToFreshKey`, and `rotateFullKey` follow, and its stateless
+  ERC-1271 action envelope carries the signature as a trailing `bytes`
+  field. `SHRINCS.statelessActionEnvelope` re-tags that field in place
+  with the same unvalidated safety story as `statefulActionEnvelope`.
+- `SPHINCSPlusC.verify`, `FORSMinusC.verifyForsCAndReturnRoot` and
+  `forsEntryRoot32`, and `Hypertree.verifyHypertree` read the fixed
+  layout.
+- Breaking: `Hypertree.verifyWotsC32` and `hypertreeRootFromPath32` are
+  now `private` (`_verifyWotsC32`, `_hypertreeRootFromPath32`). They rely
+  on `verifyHypertree`'s length check and do not check lengths themselves.
+  See `DECISIONS_REQUIRED.md`.
+
+### Added
+- Golden vectors `test/test_vectors/stateless-compact-256s.json` for
+  the SDK encoder. Test-only struct types
+  `test/helpers/StatelessSignatureTypes.sol` and encoders
+  `SHRINCSTestCodec.encodeCompactPayload` and `encodeCompactSignature`.
+
+### Removed
+- Every struct-typed stateless type and code path:
+  `SPHINCSPlusC.Signature`, `FORSMinusC.ForsSignature` and `ForsEntry`,
+  `Hypertree.HypertreeLayerSignature`, `WOTSPlusC.WotsCSignature`, the
+  struct-typed FORS-C and hypertree loops, `SHRINCS.statelessEnvelope`,
+  `SHRINCS.sliceStatelessSignatureEnvelope` and its
+  `InvalidStatelessSignatureSlice` error, and
+  `SPHINCSPlusC.signatureEnvelope`, `statelessSignatureEnvelope`, and
+  `encodeStatelessSignatureEnvelope`.
+- Tests that covered only removed code: `Issue10SliceBounds`,
+  `Issue11SliceAlignment`, `SHRINCSStatelessSliceCopy`, the struct
+  hypertree-path cases in `Issue05HelperValidation`, and the stateless and
+  signature-only ABI re-tag cases in `SHRINCSCalldataRetag`.
+
+## 0.3.0 - 2026-10-31
+
 Package version is 0.3.0. Removing public library functions is a
 breaking change under CODINGSTANDARDS section 7. The pre-1.0 minor
 version advances from 0.2.0.

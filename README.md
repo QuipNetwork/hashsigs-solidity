@@ -1175,18 +1175,22 @@ encoding.
 
 | Measurement | default | 128s-q18 | 128s-q20 | 256s-sha2 |
 | --- | --- | --- | --- | --- |
-| `stateful.canonical_wrapper_call_gas` | 190,792 | 117,759 | 117,759 | 281,063 |
-| `stateful.erc1271_call_gas` | 167,779 | 94,746 | 94,746 | 258,050 |
-| `stateless.canonical_wrapper_call_gas` | 1,629,049 | 192,109† | 192,109† | 2,420,861 |
-| `stateless.erc1271_call_gas` | 1,606,819 | 191,906† | 191,906† | 2,398,565 |
-| `stateless.verify_stateless_delegation_gas` | 1,660,931 | 204,614 | 204,614 | 2,455,228 |
+| `stateful.canonical_wrapper_call_gas` | 190,996 | 115,133 | 115,133 | 281,270 |
+| `stateful.erc1271_call_gas` | 168,057 | 92,194 | 92,194 | 258,331 |
+| `stateless.canonical_wrapper_call_gas` | 1,504,294 | 160,022† | 159,878† | 2,268,892 |
+| `stateless.erc1271_call_gas` | 1,482,246 | 159,715† | 159,571† | 2,246,439 |
+| `stateless.verify_stateless_delegation_gas` | 1,453,718 | 167,945 | 167,705 | 2,211,622 |
 
 † raw `SHRINCS.verifyStatelessUncheckedMessage` call (wrapper context-hash derivation excluded); see README.md "Gas Measurements" for detail.
 
-Measured 2026-07-13 at each profile's own solc/`via_ir`/optimizer
+Measured 2026-11-04 with forge 1.7.1, the version CI pins, at each
+profile's own solc/`via_ir`/optimizer
 settings (default and 256s-sha2: optimizer runs 200; 128s-q18/q20 share
 the same settings). Regenerate this table with `scripts/gas-report.sh`,
 which runs every profile's `SHRINCSMeasurements` suite and re-emits it.
+The figures are execution gas. Forge 1.8.1 isolates calls by default, which
+adds the base transaction and calldata cost to each figure (1,945,126 for
+the default-profile delegation row).
 
 The default-profile stateless figures fall ~50k from earlier baselines:
 the T6 wire change drops the carried per-layer tree/leaf coordinates
@@ -1239,7 +1243,7 @@ These figures require a clean full build per profile, which
 `scripts/gas-report.sh` performs; running the single-profile command above
 over an `out/` directory a different profile already populated can read
 stale harness bytecode and shift a cell (the delegation row drifts by a few
-hundred gas from its 1,660,931 clean-build value this way).
+hundred gas from its 1,453,718 clean-build value this way).
 
 The stateful entrypoints make no external call, so their execution
 failures (including out-of-gas) simply revert. The stateless delegation

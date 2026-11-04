@@ -16,6 +16,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 pragma solidity ^0.8.28;
 
+import {StatelessSignatureTypes} from "./StatelessSignatureTypes.sol";
 import {SHRINCS} from "../../contracts/SHRINCS.sol";
 import {HashSuite} from "shrincs-hash/HashSuite.sol";
 import {SPHINCSPlusC} from "../../contracts/SPHINCSPlusC.sol";
@@ -29,6 +30,7 @@ import {
     SHRINCSStatelessVectorSigningFacade
 } from "./SHRINCSStatelessVectorSigningFacade.sol";
 import {SHRINCSTestSigner} from "./SHRINCSTestSigner.sol";
+import {SHRINCSTestCodec} from "./SHRINCSTestCodec.sol";
 
 /// @notice TEST-ONLY account-aware signing facade for the canonical wrapper
 /// flows.
@@ -241,11 +243,16 @@ library SHRINCSAccountSigningFacade {
         SHRINCS.PublicKey memory publicKey,
         bytes32 actionType,
         bytes32 payloadHash,
-        SPHINCSPlusC.Signature memory signature
+        StatelessSignatureTypes.Signature memory signature
     ) internal pure returns (bytes memory) {
         return abi.encodePacked(
             bytes1(ERC1271_MODE_STATELESS_ACTION),
-            abi.encode(publicKey, actionType, payloadHash, signature)
+            abi.encode(
+                publicKey,
+                actionType,
+                payloadHash,
+                SHRINCSTestCodec.encodeCompactSignature(signature)
+            )
         );
     }
 
@@ -280,7 +287,10 @@ library SHRINCSAccountSigningFacade {
     function completeStatelessSession(
         SHRINCSStatelessVectorSigner signer,
         bytes32 sessionId
-    ) internal returns (SPHINCSPlusC.Signature memory signature, bool ok) {
+    )
+        internal
+        returns (StatelessSignatureTypes.Signature memory signature, bool ok)
+    {
         (, signature, ok) =
             SHRINCSStatelessVectorSigningFacade.completeSession(
                 signer, sessionId

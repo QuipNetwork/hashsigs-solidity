@@ -16,76 +16,147 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 pragma solidity ^0.8.28;
 
-import {Test} from "forge-std/Test.sol";
 import {FORSMinusC} from "../contracts/FORSMinusC.sol";
-import {SHRINCSParams} from "shrincs-profile/SHRINCSParams.sol";
+import {SPHINCSPlusC} from "../contracts/SPHINCSPlusC.sol";
+import {StatelessLayout} from "../contracts/StatelessLayout.sol";
+import {SHRINCSCompactFixtures} from "./helpers/SHRINCSCompactFixtures.sol";
 
 contract Issue08ForsShapeHarness {
     function verifyShape(
         bytes calldata pkSeed,
         bytes calldata hypertreeRoot,
-        FORSMinusC.ForsSignature calldata signature
+        bytes calldata fors
     ) external view returns (bool ok) {
         (,,, ok) = FORSMinusC.verifyForsCAndReturnRoot(
-            pkSeed, hypertreeRoot, bytes("issue08-shape"), signature
+            pkSeed, hypertreeRoot, bytes("issue08-shape"), fors
+        );
+    }
+
+    function verifySigned(
+        bytes calldata key,
+        bytes32 hash,
+        bytes calldata fors
+    ) external view returns (bool ok) {
+        (bytes calldata pkSeed, bytes calldata hypertreeRoot, bool okKey) =
+            SPHINCSPlusC.decodeKey(key);
+        require(okKey, "key");
+        (,,, ok) = FORSMinusC.verifyForsCAndReturnRoot(
+            pkSeed, hypertreeRoot, SPHINCSPlusC.toMessage(hash), fors
         );
     }
 }
 
-contract Issue08ForsShapeValidationTest is Test {
+/// @notice Issue 08: a FORS-C signature of the wrong shape is rejected
+/// without reverting. In the fixed StatelessLayout encoding the shape is
+/// the single slice length, so every length other than FORS_LEN fails.
+contract Issue08ForsShapeValidationTest is SHRINCSCompactFixtures {
     Issue08ForsShapeHarness internal harness;
+    bytes internal sphincsKey;
+    bytes32 internal rawMessage;
+    bytes internal forsSection;
 
     function setUp() public {
         harness = new Issue08ForsShapeHarness();
+        deployVerifiers();
+        CompactCase memory valid = loadCase("valid");
+        sphincsKey = valid.sphincsKey;
+        rawMessage = valid.rawMessage;
+        forsSection =
+            byteRange(valid.compactSignature, 0, StatelessLayout.FORS_LEN);
+    }
+
+    function testAcceptsExactEntries() public view {
+        assertTrue(_verifySigned(forsSection));
     }
 
     function testRejectsShortEntriesWithoutReverting() public view {
-        uint256 signedTrees = uint256(SHRINCSParams.NUM_FORS_TREES) - 1;
-        FORSMinusC.ForsSignature memory signature =
-            _signature(signedTrees - 1, new bytes(32));
-        assertFalse(_verify(signature));
-    }
-
-    function testRejectsLongEntriesWithoutReverting() public view {
-        uint256 signedTrees = uint256(SHRINCSParams.NUM_FORS_TREES) - 1;
-        FORSMinusC.ForsSignature memory signature =
-            _signature(signedTrees + 1, new bytes(32));
-        assertFalse(_verify(signature));
-    }
-
-    // line-length: allow — forge fmt keeps the descriptive name
-    function testFuzzRejectsEveryWrongRandomizerLength(bytes calldata randomizer)
-        public
-        view
-    {
-        vm.assume(randomizer.length != 32);
-        uint256 signedTrees = uint256(SHRINCSParams.NUM_FORS_TREES) - 1;
-        FORSMinusC.ForsSignature memory signature =
-            _signature(signedTrees, randomizer);
-        assertFalse(_verify(signature));
-    }
-
-    function _verify(FORSMinusC.ForsSignature memory signature)
-        internal
-        view
-        returns (bool)
-    {
-        return harness.verifyShape(
-            abi.encodePacked(bytes32(uint256(1))),
-            abi.encodePacked(bytes32(uint256(2))),
-            signature
+        bytes memory valid = forsSection;
+        assertFalse(
+            _verifySigned(
+                byteRange(
+                    valid, 0, valid.length - StatelessLayout.FORS_ENTRY_LEN
+                )
+            ),
+            "one entry missing"
+        );
+        assertFalse(
+            _verifySigned(
+                byteRange(valid, 0, StatelessLayout.FORS_ENTRIES_OFFSET)
+            ),
+            "no entries"
         );
     }
 
-    function _signature(uint256 entriesLength, bytes memory randomizer)
-        internal
-        pure
-        returns (FORSMinusC.ForsSignature memory)
+    /// @dev Extra entries are never read, so without the length guard this
+    /// valid section would still verify.
+    function testRejectsLongEntriesWithoutReverting() public view {
+        bytes memory valid = forsSection;
+        assertFalse(
+            _verifySigned(
+                bytes.concat(
+                    valid,
+                    byteRange(
+                        valid,
+                        StatelessLayout.FORS_ENTRIES_OFFSET,
+                        StatelessLayout.FORS_ENTRIES_OFFSET
+                            + StatelessLayout.FORS_ENTRY_LEN
+                    )
+                )
+            )
+        );
+    }
+
+    /// @dev The fixed layout has no randomizer length field: a randomizer of
+    /// any other length changes the section's total length.
+    function testFuzzRejectsEveryWrongRandomizerLength(uint256 length)
+        public
+        view
     {
-        return FORSMinusC.ForsSignature({
-            randomizer: randomizer,
-            counter: 0,
-            entries: new FORSMinusC.ForsEntry[](entriesLength)
-        });
+        length = bound(length, 0, 64);
+        vm.assume(length != 32);
+        bytes memory valid = forsSection;
+        bytes memory randomizer = length < 32
+            ? byteRange(valid, 0, length)
+            : bytes.concat(byteRange(valid, 0, 32), new bytes(length - 32));
+        assertFalse(
+            _verifySigned(
+                bytes.concat(
+                    randomizer,
+                    byteRange(
+                        valid,
+                        StatelessLayout.FORS_COUNTER_OFFSET,
+                        valid.length
+                    )
+                )
+            )
+        );
+    }
+
+    function testRejectsShortSliceWithoutReverting() public view {
+        assertFalse(_verify(new bytes(StatelessLayout.FORS_LEN - 1)));
+    }
+
+    function testRejectsLongSliceWithoutReverting() public view {
+        assertFalse(_verify(new bytes(StatelessLayout.FORS_LEN + 1)));
+    }
+
+    function testFuzzRejectsEveryWrongLength(bytes calldata fors)
+        public
+        view
+    {
+        vm.assume(fors.length != StatelessLayout.FORS_LEN);
+        assertFalse(_verify(fors));
+    }
+
+    function _verifySigned(bytes memory fors) internal view returns (bool) {
+        return harness.verifySigned(sphincsKey, rawMessage, fors);
+    }
+
+    function _verify(bytes memory fors) internal view returns (bool) {
+        return harness.verifyShape(
+            abi.encodePacked(bytes32(uint256(1))),
+            abi.encodePacked(bytes32(uint256(2))),
+            fors
+        );
     }
 }

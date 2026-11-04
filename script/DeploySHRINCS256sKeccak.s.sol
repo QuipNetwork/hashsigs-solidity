@@ -62,7 +62,7 @@ contract DeploySHRINCS256sKeccak is CreateXDeployer {
     // as an argument; SHRINCSPinned256s.t.sol asserts the two stay
     // equal.
     bytes32 internal constant SPHINCS_PLUS_C_CODEHASH =
-        0xe8d1cd0765874bac8238d6c8790c9916d0b2a332e5abe7fd50d8ecec48a71954;
+        0xf85c8a48ba654fe1111a0a180f46d29918b640c7e0380898cbcc4c05560a8f70;
 
     // Pinned runtime codehash of this artifact (production profile). _deploy
     // fails closed if the CREATE3 address is occupied by code whose hash
@@ -71,7 +71,7 @@ contract DeploySHRINCS256sKeccak is CreateXDeployer {
     // hash is chain-invariant and is the value published in DEPLOYMENTS.md;
     // regenerate per DEPLOYMENTS.md.
     bytes32 internal constant RUNTIME_CODEHASH =
-        0xe9319929e0ec163221e849962606feead3e41865677b63a96662b2ecdad78426;
+        0xe65b42c6d7f00748c5ab223824ed3290835fbebbbca01c4276585a4940f8883a;
 
     function run() external {
         // Assert the build profile FIRST so a wrong-profile run fails

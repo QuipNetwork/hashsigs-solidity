@@ -20,6 +20,13 @@ rejects a wrong-length randomizer and a wrong-count FORS entry list.
 Extra trailing bytes are unused encoding malleability.
 Self-authentication traces still use some historical line numbers.
 
+Note (0.4.0): the stateless signature is now the fixed StatelessLayout
+encoding read at constant offsets behind one length check (see
+`docs/compact-stateless-encoding.md`). The struct-typed stateless
+re-tags, the FORS and hypertree array-shape guards, and
+`sliceStatelessSignatureEnvelope` (row 45) no longer exist, so the rows
+that review them are historical. The stateful rows are unchanged.
+
 Classes: **S** = soundness (dropping admits a wrong-accept, directly or
 under a stated condition), **A** = API contract (non-reverting
 0xffffffff model; ERC-7913 permits plain reverts instead), **M** =

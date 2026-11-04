@@ -16,6 +16,10 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 pragma solidity ^0.8.28;
 
+import {SHRINCSTestCodec} from "./helpers/SHRINCSTestCodec.sol";
+import {
+    StatelessSignatureTypes
+} from "./helpers/StatelessSignatureTypes.sol";
 import {Test} from "../lib/forge-std/src/Test.sol";
 import {SHRINCS} from "../contracts/SHRINCS.sol";
 import {SPHINCSPlusC} from "../contracts/SPHINCSPlusC.sol";
@@ -232,10 +236,13 @@ contract SHRINCSAccountHandler is Test {
     function actGarbageStateless(bytes32 actionType, bytes32 payloadHash)
         external
     {
-        SPHINCSPlusC.Signature memory signature;
+        StatelessSignatureTypes.Signature memory signature;
         bytes32 digestBefore = _stateDigest();
         try account.verifyStatelessAction(
-            publicKeyOf[0], actionType, payloadHash, signature
+            publicKeyOf[0],
+            actionType,
+            payloadHash,
+            SHRINCSTestCodec.encodeCompactSignature(signature)
         ) returns (
             bool ok
         ) {
@@ -260,10 +267,12 @@ contract SHRINCSAccountHandler is Test {
         (uint256 keyIndex, bool found) = _currentKeyIndex();
         if (!found) return;
         uint256 targetIndex = bound(targetSelector, 0, KEY_COUNT - 1);
-        SPHINCSPlusC.Signature memory signature;
+        StatelessSignatureTypes.Signature memory signature;
         bytes32 digestBefore = _stateDigest();
         try account.rotateFullKey(
-            publicKeyOf[keyIndex], signature, _fullTarget(targetIndex)
+            publicKeyOf[keyIndex],
+            SHRINCSTestCodec.encodeCompactSignature(signature),
+            _fullTarget(targetIndex)
         ) returns (
             bool ok
         ) {

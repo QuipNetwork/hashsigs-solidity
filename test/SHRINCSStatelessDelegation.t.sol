@@ -16,6 +16,9 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 pragma solidity ^0.8.28;
 
+import {
+    StatelessSignatureTypes
+} from "./helpers/StatelessSignatureTypes.sol";
 import {SHRINCSTestCodec} from "./helpers/SHRINCSTestCodec.sol";
 
 import {Test} from "../lib/forge-std/src/Test.sol";
@@ -27,6 +30,7 @@ import {SPHINCSPlusC} from "../contracts/SPHINCSPlusC.sol";
 import {FORSMinusC} from "../contracts/FORSMinusC.sol";
 import {Hypertree} from "../contracts/Hypertree.sol";
 import {WOTSPlusC} from "../contracts/WOTSPlusC.sol";
+import {StatelessLayout} from "../contracts/StatelessLayout.sol";
 import {SHRINCSParams} from "shrincs-profile/SHRINCSParams.sol";
 import {SHRINCSTestSigner} from "./helpers/SHRINCSTestSigner.sol";
 import {
@@ -122,13 +126,13 @@ contract SHRINCSStatelessDelegationTest is Test {
 
     bytes32 internal signedHash;
     bytes internal validKey;
-    bytes internal validEnvelope;
+    bytes internal validPayload;
 
     function setUp() public {
         signer = new DelegationSigner();
         // Build the valid stateless fixture first (in a dedicated frame) so
         // its ~90 KB working set does not stack under later allocations.
-        (validKey, validEnvelope, signedHash) = this.buildValidFixture();
+        (validKey, validPayload, signedHash) = this.buildValidFixture();
 
         // Deploy the active profile's concrete SHRINCS verifier (its pin
         // harness) and the SPHINCSPlusC sibling exactly where it delegates,
@@ -139,7 +143,7 @@ contract SHRINCSStatelessDelegationTest is Test {
 
     function testVerifyStatelessValidSignatureReturnsSelector() public view {
         assertEq(
-            verifier.verifyStateless(validKey, signedHash, validEnvelope),
+            verifier.verifyStateless(validKey, signedHash, validPayload),
             IERC7913SignatureVerifier.verify.selector,
             "valid stateless signature must delegate and verify"
         );
@@ -149,7 +153,7 @@ contract SHRINCSStatelessDelegationTest is Test {
         bytes memory wrongKey =
             abi.encodePacked(keccak256("some other commitment"));
         assertEq(
-            verifier.verifyStateless(wrongKey, signedHash, validEnvelope),
+            verifier.verifyStateless(wrongKey, signedHash, validPayload),
             INVALID_SIGNATURE,
             "wrong commitment must be rejected before delegation"
         );
@@ -158,70 +162,61 @@ contract SHRINCSStatelessDelegationTest is Test {
     function testVerifyStatelessRejectsBadKeyLength() public view {
         bytes memory badKey = hex"1234";
         assertEq(
-            verifier.verifyStateless(badKey, signedHash, validEnvelope),
+            verifier.verifyStateless(badKey, signedHash, validPayload),
             INVALID_SIGNATURE,
             "malformed key must be rejected"
         );
     }
 
-    // Re-tag model: a one-byte truncation leaves every re-tagged offset and
-    // length in bounds, so the bundle check passes and the delegate
-    // signature is rebuilt from the same fields. On an UNMASKED profile
-    // (HASH_LEN == 32) the last node loses a byte, the sibling's FORS-C plus
-    // hypertree reconstruction fails, and verifyStateless returns 0xffffffff
-    // without reverting (a malformed case moving within {revert, false}). On
-    // a MASKED-hash profile (HASH_LEN != 32) maskHash already zeroes the low
-    // bytes, so the stripped tail read back from the outer ABI zero-padding
-    // is bit-identical and the signature still verifies — pure encoding
-    // malleability over the SAME authorized hash, never a wrong-accept. Same
-    // discriminator and outcome as SHRINCSVerifier's stateful
-    // testTailTruncationAcceptedUnderMaskedProfile, here on the stateless
-    // delegation path (closing the masked stateless-truncation gap).
-    function testVerifyStatelessTailTruncationMatchesProfile() public view {
-        bytes4 expected = SHRINCSParams.HASH_LEN != 32
-            ? IERC7913SignatureVerifier.verify.selector
-            : INVALID_SIGNATURE;
-
-        bytes memory truncated = validEnvelope;
+    // Fixed layout: a payload one byte short fails the single length check
+    // and returns 0xffffffff on every profile, masked or not. The ABI
+    // envelope's masked-profile tail malleability no longer exists.
+    function testVerifyStatelessRejectsTailTruncation() public view {
+        bytes memory truncated = validPayload;
         assembly {
             mstore(truncated, sub(mload(truncated), 1))
         }
         assertEq(
             verifier.verifyStateless(validKey, signedHash, truncated),
-            expected,
-            "1-byte tail truncation outcome must match the profile"
+            INVALID_SIGNATURE,
+            "1-byte tail truncation must be rejected"
         );
     }
 
-    // Pins the delegation slice-build behavior change (epic Z5). The
-    // signature's public-key bundle is the valid fixture's, so the commitment
-    // and validPublicKey checks pass and prepareStatelessDelegation reaches
-    // SHRINCS.sliceStatelessSignatureEnvelope. That build indexes the
-    // last hypertree layer's last authPath element; on an empty last-layer
-    // authPath (or an empty hypertree) the index reads Panic. verifyStateless
-    // wraps the delegation build in no try/catch, so the Panic propagates and
-    // the call lands in {revert, false} — never a wrong-accept. The prior
-    // canonicity walk rejected these at a sibling-side length check; nothing
-    // else pins the new revert. Panic-revert is the expected arm here.
-    function testVerifyStatelessSliceBuildRevertsOnMalformedAuthPath()
-        public
-    {
+    // Fixed layout: the two shapes a dropped array in an encoder produces. An
+    // empty last-layer authPath leaves the payload h' * 32 bytes short and an
+    // empty hypertree leaves it HYPERTREE_LEN bytes short, so each fails the
+    // single length check and returns 0xffffffff. Neither may revert.
+    function testVerifyStatelessRejectsMissingAuthPathAndHypertree() public {
         (bytes memory emptyAuthPath, bytes memory emptyHypertree) =
-            this.buildMalformedEnvelopes();
-        assertTrue(
-            verifyStatelessRejected(emptyAuthPath),
-            "empty last-layer authPath must not wrong-accept"
+            this.buildMalformedPayloads();
+        assertEq(
+            emptyAuthPath.length,
+            StatelessLayout.PAYLOAD_LEN - StatelessLayout.SUBTREE_HEIGHT
+                * 32,
+            "empty authPath payload length"
         );
-        assertTrue(
-            verifyStatelessRejected(emptyHypertree),
-            "empty hypertree must not wrong-accept"
+        assertEq(
+            emptyHypertree.length,
+            StatelessLayout.PAYLOAD_LEN - StatelessLayout.HYPERTREE_LEN,
+            "empty hypertree payload length"
+        );
+        assertEq(
+            verifier.verifyStateless(validKey, signedHash, emptyAuthPath),
+            INVALID_SIGNATURE,
+            "empty last-layer authPath must be rejected"
+        );
+        assertEq(
+            verifier.verifyStateless(validKey, signedHash, emptyHypertree),
+            INVALID_SIGNATURE,
+            "empty hypertree must be rejected"
         );
     }
 
     function testVerifyStatelessRejectsTamperedHash() public view {
         assertEq(
             verifier.verifyStateless(
-                validKey, keccak256("other hash"), validEnvelope
+                validKey, keccak256("other hash"), validPayload
             ),
             INVALID_SIGNATURE,
             "a hash the signature does not authorize must fail"
@@ -245,7 +240,7 @@ contract SHRINCSStatelessDelegationTest is Test {
     function testVerifyStatelessRejectsSignatureUnderSiblingCommitment()
         public
     {
-        (bytes32 siblingCommitment, bytes memory siblingEnvelope) =
+        (bytes32 siblingCommitment, bytes memory siblingPayload) =
             this.buildSiblingCase();
         bytes32 validCommitment = abi.decode(validKey, (bytes32));
         assertTrue(
@@ -257,9 +252,9 @@ contract SHRINCSStatelessDelegationTest is Test {
         // hand the pinned sibling the identical delegate key, so a rejection
         // below can only come from the message binding.
         (bool validOk, bytes memory validDelegateKey) =
-            this.probeStatelessDelegation(validEnvelope, validCommitment);
+            this.probeStatelessDelegation(validPayload, validCommitment);
         (bool siblingOk, bytes memory siblingDelegateKey) =
-            this.probeStatelessDelegation(siblingEnvelope, siblingCommitment);
+            this.probeStatelessDelegation(siblingPayload, siblingCommitment);
         assertTrue(validOk, "valid bundle must reach delegation");
         assertTrue(siblingOk, "sibling bundle must reach delegation");
         assertEq(
@@ -272,7 +267,7 @@ contract SHRINCSStatelessDelegationTest is Test {
             verifier.verifyStateless(
                 abi.encodePacked(siblingCommitment),
                 signedHash,
-                siblingEnvelope
+                siblingPayload
             ),
             INVALID_SIGNATURE,
             "a signature made under a sibling commitment must be rejected"
@@ -298,7 +293,7 @@ contract SHRINCSStatelessDelegationTest is Test {
         bytes4 selector = IERC7913SignatureVerifier.verify.selector;
         // Full gas: the valid stateless signature delegates and verifies.
         assertEq(
-            verifier.verifyStateless(validKey, signedHash, validEnvelope),
+            verifier.verifyStateless(validKey, signedHash, validPayload),
             selector,
             "control: valid stateless signature verifies with ample gas"
         );
@@ -308,11 +303,11 @@ contract SHRINCSStatelessDelegationTest is Test {
         // this frame), so which budget first strands the delegation varies by
         // profile; the sweep does not depend on the exact strand point.
         uint256 gasBefore = gasleft();
-        verifier.verifyStateless(validKey, signedHash, validEnvelope);
+        verifier.verifyStateless(validKey, signedHash, validPayload);
         uint256 happyGas = gasBefore - gasleft();
 
         bytes memory callData = abi.encodeCall(
-            verifier.verifyStateless, (validKey, signedHash, validEnvelope)
+            verifier.verifyStateless, (validKey, signedHash, validPayload)
         );
         bool sawStrand = false;
         // Budgets 62/64 .. 2/64 of the measured happy cost (step 4/64).
@@ -342,7 +337,7 @@ contract SHRINCSStatelessDelegationTest is Test {
     }
 
     /// @dev Builds the valid stateless fixture: the ERC-7913 key (the 32-byte
-    /// bundle commitment), the stateless envelope, and the raw 32-byte hash
+    /// bundle commitment), the stateless payload, and the raw 32-byte hash
     /// message verifyStateless passes to the pinned verifier. External so it
     /// runs in its own memory frame.
     function buildValidFixture()
@@ -351,42 +346,36 @@ contract SHRINCSStatelessDelegationTest is Test {
     {
         (
             SHRINCS.PublicKey memory publicKey,
-            SPHINCSPlusC.Signature memory signature,
+            StatelessSignatureTypes.Signature memory signature,
             bytes32 commitment,
             bytes32 messageHash
         ) = obtainValidCase();
         key = abi.encodePacked(commitment);
         envelope =
-            SHRINCSTestCodec.encodeStatelessEnvelope(publicKey, signature);
+            SHRINCSTestCodec.encodeCompactPayload(publicKey, signature);
         hash = messageHash;
     }
 
-    /// @dev Builds two envelopes whose public-key bundle is the valid case's
-    /// (so the installed-commitment and validPublicKey checks pass) but whose
-    /// stateless signature is malformed so the delegation slice-build Panics:
-    /// one with an empty last-layer authPath, one with an empty hypertree.
-    /// External so the large working set runs in its own memory frame.
-    function buildMalformedEnvelopes()
+    /// @dev Builds the two dropped-array payloads. External so the large
+    /// working set runs in its own memory frame.
+    function buildMalformedPayloads()
         external
         returns (bytes memory emptyAuthPath, bytes memory emptyHypertree)
     {
         (
             SHRINCS.PublicKey memory publicKey,
-            SPHINCSPlusC.Signature memory signature,,
+            StatelessSignatureTypes.Signature memory signature,,
         ) = obtainValidCase();
 
-        // Empty the last layer's authPath: slice-build's authPath[last] index
-        // read Panics; the bundle is untouched so it reaches the slice build.
         uint256 last = signature.hypertree.length - 1;
         signature.hypertree[last].authPath = new bytes[](0);
         emptyAuthPath =
-            SHRINCSTestCodec.encodeStatelessEnvelope(publicKey, signature);
+            SHRINCSTestCodec.encodeCompactPayload(publicKey, signature);
 
-        // Empty the whole hypertree: slice-build's hypertree[last] index read
-        // Panics.
-        signature.hypertree = new Hypertree.HypertreeLayerSignature[](0);
+        signature.hypertree =
+            new StatelessSignatureTypes.HypertreeLayerSignature[](0);
         emptyHypertree =
-            SHRINCSTestCodec.encodeStatelessEnvelope(publicKey, signature);
+            SHRINCSTestCodec.encodeCompactPayload(publicKey, signature);
     }
 
     /// @dev Builds bundle B for the sibling-commitment replay: the valid
@@ -401,7 +390,7 @@ contract SHRINCSStatelessDelegationTest is Test {
     {
         (
             SHRINCS.PublicKey memory publicKey,
-            SPHINCSPlusC.Signature memory signature,,
+            StatelessSignatureTypes.Signature memory signature,,
         ) = obtainValidCase();
 
         publicKey.statefulPublicKey =
@@ -413,19 +402,22 @@ contract SHRINCSStatelessDelegationTest is Test {
         );
         publicKey.publicKeyCommitment = abi.encodePacked(commitment);
         envelope =
-            SHRINCSTestCodec.encodeStatelessEnvelope(publicKey, signature);
+            SHRINCSTestCodec.encodeCompactPayload(publicKey, signature);
     }
 
     /// @dev Calldata probe over SHRINCS.prepareStatelessDelegation: reports
-    /// whether an envelope clears the commitment-vs-key and validPublicKey
-    /// checks and which delegate key it hands the pinned sibling. External
-    /// because prepareStatelessDelegation re-tags a calldata envelope.
+    /// whether a payload clears the commitment and bundle-shape checks and
+    /// which delegate key it hands the pinned sibling. External because
+    /// prepareStatelessDelegation reads a calldata payload.
     function probeStatelessDelegation(
-        bytes calldata envelope,
+        bytes calldata payload,
         bytes32 commitment
     ) external pure returns (bool ok, bytes memory delegateKey) {
-        (ok, delegateKey,) =
-            SHRINCS.prepareStatelessDelegation(commitment, envelope);
+        bytes32 pkSeed;
+        bytes32 hypertreeRoot;
+        (ok, pkSeed, hypertreeRoot,) =
+            SHRINCS.prepareStatelessDelegation(commitment, payload);
+        delegateKey = SHRINCS.encodeStatelessKey(pkSeed, hypertreeRoot);
     }
 
     /// @dev The valid stateless case for the active profile: in-Solidity
@@ -438,7 +430,7 @@ contract SHRINCSStatelessDelegationTest is Test {
         internal
         returns (
             SHRINCS.PublicKey memory publicKey,
-            SPHINCSPlusC.Signature memory signature,
+            StatelessSignatureTypes.Signature memory signature,
             bytes32 commitment,
             bytes32 hash
         )
@@ -480,25 +472,6 @@ contract SHRINCSStatelessDelegationTest is Test {
         require(completeOk, "complete");
         commitment =
             SHRINCSAccountSigningFacade.publicKeyCommitmentWord(publicKey);
-    }
-
-    /// @dev Outcome-only rejection check for the slice-build pin: a revert
-    /// (Panic) and a `0xffffffff` return are the same safe outcome. Returns
-    /// true iff verifyStateless did NOT wrong-accept.
-    function verifyStatelessRejected(bytes memory envelope)
-        internal
-        view
-        returns (bool)
-    {
-        try verifier.verifyStateless(
-            validKey, signedHash, envelope
-        ) returns (
-            bytes4 selector
-        ) {
-            return selector == INVALID_SIGNATURE;
-        } catch {
-            return true;
-        }
     }
 
     // pinHarnessArtifact / siblingArtifact: select the active profile's
@@ -559,7 +532,7 @@ contract SHRINCSStatelessDelegationTest is Test {
             bytes32 commitment,
             SHRINCS.PublicKey memory publicKey,
             bytes memory message,
-            SPHINCSPlusC.Signature memory signature
+            StatelessSignatureTypes.Signature memory signature
         )
     {
         string memory vectors = vm.readFile(statelessVectorPath());
@@ -601,24 +574,26 @@ contract SHRINCSStatelessDelegationTest is Test {
     function convertLegacyStatelessSignature(LegacyStatelessSignature memory legacy)
         internal
         pure
-        returns (SPHINCSPlusC.Signature memory signature)
+        returns (StatelessSignatureTypes.Signature memory signature)
     {
-        FORSMinusC.ForsEntry[] memory entries =
-            new FORSMinusC.ForsEntry[](legacy.fors.entries.length);
+        // line-length: allow — fmt canonical declaration exceeds cap
+        StatelessSignatureTypes.ForsEntry[] memory entries = new StatelessSignatureTypes
+            .ForsEntry[](legacy.fors.entries.length);
         for (uint256 i = 0; i < entries.length; ++i) {
-            entries[i] = FORSMinusC.ForsEntry({
+            entries[i] = StatelessSignatureTypes.ForsEntry({
                 secretLeaf: legacy.fors.entries[i].secretLeaf,
                 authPath: legacy.fors.entries[i].authPath
             });
         }
 
         // forgefmt: disable-next-line
-        Hypertree.HypertreeLayerSignature[] memory layers =
-            new Hypertree.HypertreeLayerSignature[](legacy.hypertree.length);
+        StatelessSignatureTypes.HypertreeLayerSignature[] memory layers =
+            new StatelessSignatureTypes
+                .HypertreeLayerSignature[](legacy.hypertree.length);
         for (uint256 i = 0; i < layers.length; ++i) {
-            layers[i] = Hypertree.HypertreeLayerSignature({
+            layers[i] = StatelessSignatureTypes.HypertreeLayerSignature({
                 wotsCPkHash: legacy.hypertree[i].wotsCPkHash,
-                wotsCSignature: WOTSPlusC.WotsCSignature({
+                wotsCSignature: StatelessSignatureTypes.WotsCSignature({
                     randomizer: legacy.hypertree[i].wotsCSignature
                     .randomizer,
                     counter: legacy.hypertree[i].wotsCSignature.counter,
@@ -628,8 +603,8 @@ contract SHRINCSStatelessDelegationTest is Test {
             });
         }
 
-        signature = SPHINCSPlusC.Signature({
-            fors: FORSMinusC.ForsSignature({
+        signature = StatelessSignatureTypes.Signature({
+            fors: StatelessSignatureTypes.ForsSignature({
                 randomizer: legacy.fors.randomizer,
                 counter: legacy.fors.counter,
                 entries: entries

@@ -16,6 +16,9 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 pragma solidity ^0.8.28;
 
+import {
+    StatelessSignatureTypes
+} from "./helpers/StatelessSignatureTypes.sol";
 import {SHRINCSTestCodec} from "./helpers/SHRINCSTestCodec.sol";
 
 import {Test} from "../lib/forge-std/src/Test.sol";
@@ -301,7 +304,7 @@ contract SHRINCSConsumerExamplesTest is Test {
         );
         assertTrue(beginOk, "stateless begin must succeed");
 
-        SPHINCSPlusC.Signature memory signature;
+        StatelessSignatureTypes.Signature memory signature;
         bool completeOk;
         (signature, completeOk) =
             SHRINCSAccountSigningFacade.completeStatelessSession(
@@ -318,7 +321,7 @@ contract SHRINCSConsumerExamplesTest is Test {
 
         bytes memory key = publicKey.publicKeyCommitment;
         validEnvelope =
-            SHRINCSTestCodec.encodeStatelessEnvelope(publicKey, signature);
+            SHRINCSTestCodec.encodeCompactPayload(publicKey, signature);
         consumer = new SHRINCSStatelessConsumerExample(
             address(statelessVerifier), key
         );
