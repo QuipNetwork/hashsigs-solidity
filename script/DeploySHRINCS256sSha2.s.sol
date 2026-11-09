@@ -37,7 +37,7 @@ contract DeploySHRINCS256sSha2 is CreateXDeployer {
         abi.encodePacked(
             bytes20(DEPLOYER),
             SALT_FLAG,
-            bytes11(keccak256("QUIP:SHRINCS256sSha2:V4.0"))
+            bytes11(keccak256("QUIP:SHRINCS256sSha2:V5.0"))
         )
     );
 
@@ -49,11 +49,11 @@ contract DeploySHRINCS256sSha2 is CreateXDeployer {
         abi.encodePacked(
             bytes20(DEPLOYER),
             SALT_FLAG,
-            bytes11(keccak256("QUIP:SPHINCSPlusC256sSha2:V3.0"))
+            bytes11(keccak256("QUIP:SPHINCSPlusC256sSha2:V4.0"))
         )
     );
     address internal constant SPHINCS_PLUS_C =
-        0x55346bdc46Cf36C844c0f708041C916c0B65718f;
+        0x04769450b5ddc401f7DEFD0f05AaE47b6871C35f;
 
     // Pinned runtime codehash of the SPHINCSPlusC sibling artifact
     // (production profile). Duplicated from
@@ -71,7 +71,7 @@ contract DeploySHRINCS256sSha2 is CreateXDeployer {
     // hash is chain-invariant and is the value published in DEPLOYMENTS.md;
     // regenerate per DEPLOYMENTS.md.
     bytes32 internal constant RUNTIME_CODEHASH =
-        0x2fdea19ae92cfd251372b81b2aa6f021e95316daf057207376f41e45f6c5a7c8;
+        0xb9ccfe85af68a63a0ad5c5fcc0a01f7d95e22f3ef93108622b2da73819fb826c;
 
     function run() external {
         // Assert the build profile FIRST so a wrong-profile run fails

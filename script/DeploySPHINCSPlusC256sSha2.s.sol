@@ -37,7 +37,7 @@ contract DeploySPHINCSPlusC256sSha2 is CreateXDeployer {
         abi.encodePacked(
             bytes20(DEPLOYER),
             SALT_FLAG,
-            bytes11(keccak256("QUIP:SPHINCSPlusC256sSha2:V3.0"))
+            bytes11(keccak256("QUIP:SPHINCSPlusC256sSha2:V4.0"))
         )
     );
 

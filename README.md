@@ -1188,9 +1188,9 @@ profile's own solc/`via_ir`/optimizer
 settings (default and 256s-sha2: optimizer runs 200; 128s-q18/q20 share
 the same settings). Regenerate this table with `scripts/gas-report.sh`,
 which runs every profile's `SHRINCSMeasurements` suite and re-emits it.
-The figures are execution gas. Forge 1.8.1 isolates calls by default, which
-adds the base transaction and calldata cost to each figure (1,945,126 for
-the default-profile delegation row).
+The figures are execution gas: `foundry.toml` sets `isolate = false`. With
+`isolate = true`, each figure also includes the base transaction and
+calldata cost (1,945,126 for the default-profile delegation row).
 
 The default-profile stateless figures fall ~50k from earlier baselines:
 the T6 wire change drops the carried per-layer tree/leaf coordinates

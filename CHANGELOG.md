@@ -26,12 +26,14 @@ The pre-1.0 minor version advances from 0.3.0.
 - `VERSION_TAG` is `quip.shrincs-verifier.v5` and
   `quip.sphincsplusc-verifier.v4`. Runtime codehash pins for the four
   256s verifiers changed (deploy scripts and `DEPLOYMENTS.md`). CREATE3
-  salts and addresses did not change; no V3/V4 address is deployed.
+  salt labels move to `SPHINCSPlusC*:V4.0` and `SHRINCS*:V5.0`, giving
+  new addresses: the V3/V4 keccak addresses already hold the v0.3.0
+  bytecode on Ethereum, Base, Base Sepolia, and OP Sepolia.
 - Measured on 256s keccak with forge 1.7.1, the version CI pins: the
   `stateless.verify_stateless_delegation_gas` measurement fell from
   1,660,710 to 1,453,718 gas. That is execution only. Including the base
-  transaction and calldata cost, it fell from 2,433,134 to 1,945,126 gas
-  (forge 1.8.1, which isolates calls by default).
+  transaction and calldata cost (`isolate = true`), it fell from 2,433,134
+  to 1,945,126 gas.
   Production runtime is 4,685 bytes (SHRINCS)
   and 3,720 bytes (SPHINCSPlusC), from 4,581 and 4,148.
 

@@ -40,7 +40,7 @@ contract SHRINCS256sKeccak is SHRINCSVerifier {
     //   CREATEX = 0xba5Ed099633D3B313e4D5F7bdc1305d3c28ba5Ed (canonical
     //     CreateX singleton, pre-deployed at that address on every chain)
     //   raw salt = [20B DEPLOYER][0x00 flag][leading 11B of
-    //     keccak256("QUIP:SPHINCSPlusC256sKeccak:V3.0")],
+    //     keccak256("QUIP:SPHINCSPlusC256sKeccak:V4.0")],
     //     which CreateX guards to
     //     keccak256(abi.encode(DEPLOYER, raw salt)) — its
     //     permissioned mode, so only DEPLOYER can deploy here
@@ -48,7 +48,7 @@ contract SHRINCS256sKeccak is SHRINCSVerifier {
     // Pinned by test/SHRINCSPinned256s.t.sol (profile-gated) so C8's
     // deploy scripts cannot drift from this constant.
     address internal constant SPHINCS_PLUS_C_VERIFIER =
-        0xe52707C5D76E2F7c3314cF3dcc340eB9BbAE3864;
+        0xD0bADF4aF24f2CaF2AAf82a31c7296002CcD62e4;
 
     function _pinnedSphincsPlusC() internal pure override returns (address) {
         return SPHINCS_PLUS_C_VERIFIER;

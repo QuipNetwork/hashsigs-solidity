@@ -31,10 +31,10 @@ contract CreateXSaltInvariantsTest is Test {
     // Every canonical salt label. Order is the DEPLOYMENTS.md table order.
     function _labels() internal pure returns (string[4] memory) {
         return [
-            "QUIP:SPHINCSPlusC256sKeccak:V3.0",
-            "QUIP:SPHINCSPlusC256sSha2:V3.0",
-            "QUIP:SHRINCS256sKeccak:V4.0",
-            "QUIP:SHRINCS256sSha2:V4.0"
+            "QUIP:SPHINCSPlusC256sKeccak:V4.0",
+            "QUIP:SPHINCSPlusC256sSha2:V4.0",
+            "QUIP:SHRINCS256sKeccak:V5.0",
+            "QUIP:SHRINCS256sSha2:V5.0"
         ];
     }
 
@@ -43,10 +43,10 @@ contract CreateXSaltInvariantsTest is Test {
     // edits a label, the deployer, the flag byte, or the entropy width.
     function _addresses() internal pure returns (address[4] memory) {
         return [
-            0xe52707C5D76E2F7c3314cF3dcc340eB9BbAE3864,
-            0x55346bdc46Cf36C844c0f708041C916c0B65718f,
-            0xF2f9E6D692da41b089c3c261c41509669eEc5567,
-            0x10eE478959bD9cd9E99573cf208D217d704C2FF5
+            0xD0bADF4aF24f2CaF2AAf82a31c7296002CcD62e4,
+            0x04769450b5ddc401f7DEFD0f05AaE47b6871C35f,
+            0x650fE657d289F354352243100ae5d5c3cAe214B7,
+            0x5484f259DFe230C7f8A42A6209DF657bD5d00b2A
         ];
     }
 
