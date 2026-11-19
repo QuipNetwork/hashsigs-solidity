@@ -71,6 +71,11 @@ format-and-checks:
 # signing suites stay skipped (the test signers are keccak-hardcoded).
 build-lint-test:
   extends: .foundry
+  tags:
+    - docker
+    - linux
+    - x86_64
+    - amd64
   rules:
     - if: $CI_PIPELINE_SOURCE != "schedule"
   parallel:
@@ -106,6 +111,11 @@ build-lint-test:
 slither:
   stage: analyze
   image: python:3.12-slim
+  tags:
+    - docker
+    - linux
+    - x86_64
+    - amd64
   rules:
     - if: $CI_PIPELINE_SOURCE != "schedule"
   parallel:
@@ -160,6 +170,11 @@ fuzz-deep:
   image:
     name: ghcr.io/foundry-rs/foundry:v1.7.1
     entrypoint: [""]
+  tags:
+    - docker
+    - linux
+    - x86_64
+    - amd64
   rules:
     - if: $CI_PIPELINE_SOURCE == "schedule"
   timeout: 5h
@@ -198,6 +213,7 @@ medusa:
     - docker
     - linux
     - x86_64
+    - amd64
   rules:
     - if: $CI_PIPELINE_SOURCE == "schedule"
   timeout: 5h
@@ -230,6 +246,7 @@ hevm:
     - docker
     - linux
     - x86_64
+    - amd64
   rules:
     - if: $CI_PIPELINE_SOURCE == "schedule"
   timeout: 90m
